@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>First open</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#5F7046}a:hover{color:#45533A}
+</style>
+</helmet>
+<div style="width: 390px; height: 844px; box-sizing: border-box; background: #F6F0E4; color: #332A23; font-family: Inter, system-ui, sans-serif; display: flex; flex-direction: column; overflow: hidden">
+
+  <div style="flex: 1; padding: 120px 28px 0 28px; display: flex; flex-direction: column; gap: 28px">
+    <div style="font-size: 12px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: #7A6E60">Let&#39;s start somewhere easy</div>
+    <h1 style="margin: 0; font-family: Fraunces, Georgia, serif; font-weight: 500; font-size: 40px; line-height: 1.1; letter-spacing: -0.015em">Tell me about the house you grew up in.</h1>
+    <p style="margin: 0; font-size: 17px; line-height: 1.55; color: #574C42">Where it was, who was in it, what it smelled like on a Sunday. There&#39;s no wrong way to do this — just talk, and I&#39;ll listen.</p>
+
+    <div style="display: flex; flex-direction: column; gap: 8px; margin-top: 8px">
+      <div style="font-size: 12px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: #7A6E60">Or start with</div>
+      <div style="display: flex; flex-wrap: wrap; gap: 8px">
+        <button type="button" style="height: 40px; padding: 0 14px; border-radius: 999px; border: 1px solid #D8CDB6; background: transparent; font: 500 14px Inter, system-ui, sans-serif; color: #332A23">A trip you still think about</button>
+        <button type="button" style="height: 40px; padding: 0 14px; border-radius: 999px; border: 1px solid #D8CDB6; background: transparent; font: 500 14px Inter, system-ui, sans-serif; color: #332A23">How you met someone</button>
+        <button type="button" style="height: 40px; padding: 0 14px; border-radius: 999px; border: 1px solid #D8CDB6; background: transparent; font: 500 14px Inter, system-ui, sans-serif; color: #332A23">Something from last week</button>
+      </div>
+    </div>
+  </div>
+
+  <div style="padding: 0 28px 48px 28px; display: flex; flex-direction: column; align-items: center; gap: 16px">
+    <a href="Onboard2.dc.html" aria-label="Start talking" style="width: 84px; height: 84px; border-radius: 42px; background: #332A23; display: flex; align-items: center; justify-content: center; text-decoration: none; box-shadow: 0 0 0 12px rgba(95,112,70,0.14)">
+      <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10a7 7 0 0 0 14 0M12 17v5M8 22h8"/></svg>
+    </a>
+    <div style="font-size: 13px; color: #7A6E60">Tap to talk · or <a href="#type" style="font-weight: 500">type instead</a></div>
+    <div style="font-size: 12px; color: #A89A85; text-align: center; line-height: 1.5">Everything stays private until you choose to share it.</div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 740 350" role="img" aria-label="Data flow on a grid: microphone, voice activity detection and speech-to-text on the device feed the interviewer on a stateless server in real time; device memory (audio, transcript, timeline, people, curiosity list) supplies context to the interviewer and the transcript to the extractor; the interviewer returns reply text to text-to-speech and the speaker; the extractor returns candidates to the resolver, which writes events to the timeline store, which updates device memory.">
+<defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="#332A23"/></marker></defs>
+<rect x="12" y="20" width="420" height="314" rx="12" fill="none" stroke="#332A23" stroke-opacity=".35" stroke-dasharray="5 4"/>
+<text x="24" y="40" font-size="11" font-weight="600" fill="#332A23" fill-opacity=".7">DEVICE · keeps all data</text>
+<rect x="460" y="20" width="268" height="314" rx="12" fill="none" stroke="#C8893F" stroke-width="1.5" stroke-dasharray="5 4"/>
+<text x="472" y="40" font-size="11" font-weight="600" fill="#8A5A1E">SERVER · stateless, keeps nothing</text>
+<g font-size="12" fill="#332A23">
+<rect x="50" y="64" width="90" height="40" rx="8" fill="none" stroke="#332A23"/><text x="95" y="88" text-anchor="middle">Microphone</text>
+<rect x="170" y="64" width="90" height="40" rx="8" fill="none" stroke="#332A23"/><text x="215" y="82" text-anchor="middle">VAD</text><text x="215" y="96" text-anchor="middle" font-size="10" fill-opacity=".7">+ end-of-thought check</text>
+<rect x="290" y="64" width="120" height="40" rx="8" fill="none" stroke="#332A23"/><text x="350" y="82" text-anchor="middle">Speech-to-text</text><text x="350" y="96" text-anchor="middle" font-size="10" fill-opacity=".7">streaming · word times</text>
+<rect x="490" y="64" width="210" height="40" rx="8" fill="none" stroke="#C8893F"/><text x="595" y="82" text-anchor="middle">Interviewer (text model)</text><text x="595" y="96" text-anchor="middle" font-size="10" fill-opacity=".7">stance · arc · turn policy</text>
+<rect x="50" y="124" width="360" height="32" rx="8" fill="#332A23" fill-opacity=".06" stroke="#332A23" stroke-opacity=".5"/><text x="230" y="144" text-anchor="middle" font-size="11" font-weight="600">Device memory · audio · transcript · timeline · people · curiosity list</text>
+<rect x="170" y="178" width="100" height="40" rx="8" fill="none" stroke="#332A23"/><text x="220" y="202" text-anchor="middle">Speaker</text>
+<rect x="290" y="178" width="120" height="40" rx="8" fill="none" stroke="#332A23"/><text x="350" y="202" text-anchor="middle">Text-to-speech</text>
+<rect x="50" y="238" width="90" height="40" rx="8" fill="#5F7046" fill-opacity=".18" stroke="#5F7046"/><text x="95" y="256" text-anchor="middle" font-weight="600">Timeline</text><text x="95" y="270" text-anchor="middle" font-weight="600">store</text>
+<rect x="170" y="238" width="100" height="40" rx="8" fill="none" stroke="#332A23"/><text x="220" y="256" text-anchor="middle">Resolver</text><text x="220" y="270" text-anchor="middle" font-size="10" fill-opacity=".7">anchors → ranges</text>
+<rect x="490" y="238" width="210" height="40" rx="8" fill="none" stroke="#C8893F"/><text x="595" y="256" text-anchor="middle">Extractor (text model)</text><text x="595" y="270" text-anchor="middle" font-size="10" fill-opacity=".7">events · people · places · anchors</text>
+</g>
+<g stroke="#332A23" stroke-width="1.4" fill="none" marker-end="url(#arrow)">
+<line x1="140" y1="84" x2="168" y2="84"/>
+<line x1="260" y1="84" x2="288" y2="84"/>
+<line x1="410" y1="84" x2="488" y2="84"/>
+<line x1="350" y1="104" x2="350" y2="122"/>
+<path d="M410 140 H520 V106"/>
+<path d="M595 104 V198 H412"/>
+<line x1="290" y1="198" x2="272" y2="198"/>
+<line x1="490" y1="258" x2="272" y2="258"/>
+<line x1="170" y1="258" x2="142" y2="258"/>
+<line x1="95" y1="238" x2="95" y2="158"/>
+<path d="M50 140 H32 V306 H595 V280"/>
+</g>
+<g font-size="10" fill="#332A23" fill-opacity=".75">
+<text x="449" y="76" text-anchor="middle">segment + pause · live</text>
+<text x="365" y="117" text-anchor="start">saved</text>
+<text x="465" y="135" text-anchor="middle">context</text>
+<text x="605" y="150" text-anchor="start">reply text,</text>
+<text x="605" y="162" text-anchor="start">or nothing</text>
+<text x="380" y="250" text-anchor="middle">candidates</text>
+<text x="156" y="250" text-anchor="middle">events</text>
+<text x="100" y="200" text-anchor="start">updates</text>
+<text x="320" y="322" text-anchor="middle">transcript segment, after each turn (not blocking the conversation)</text>
+</g>
+</svg>

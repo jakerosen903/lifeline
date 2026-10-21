@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Fuzzy time B — Ranges</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#5F7046}a:hover{color:#45533A}
+</style>
+</helmet>
+<div style="width: 390px; height: 844px; box-sizing: border-box; background: #F6F0E4; color: #332A23; font-family: Inter, system-ui, sans-serif; display: flex; flex-direction: column; overflow: hidden">
+
+  <div style="padding: 64px 24px 0 24px; display: flex; flex-direction: column; gap: 6px">
+    <div style="font-size: 12px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: #7A6E60">Childhood · 1986 – 2004</div>
+    <h1 style="margin: 0; font-family: Fraunces, Georgia, serif; font-weight: 500; font-size: 30px; line-height: 1.15; letter-spacing: -0.01em">Growing up in Fresno</h1>
+  </div>
+
+  <div style="flex: 1; padding: 22px 24px 0 24px; display: flex; gap: 14px; overflow: hidden">
+    <div style="width: 40px; flex: none; display: flex; flex-direction: column; justify-content: space-between; padding: 6px 0 24px 0; font-size: 12px; color: #7A6E60; font-weight: 500; text-align: right">
+      <span>1994</span><span>1996</span><span>1998</span><span>2000</span><span>2002</span><span>2004</span>
+    </div>
+    <div style="flex: 1; position: relative; border-left: 2px solid #E3D8C3">
+
+      <div style="position: absolute; left: -7px; top: 8px; width: 12px; height: 12px; border-radius: 6px; background: #5F7046; outline: 4px solid #F6F0E4"></div>
+      <div style="position: absolute; left: 14px; top: 4px; display: flex; flex-direction: column; gap: 2px">
+        <div style="font-size: 15px; font-weight: 500">Maya is born</div>
+        <div style="font-size: 12px; color: #7A6E60">March 1994 · exact</div>
+      </div>
+
+      <div style="position: absolute; left: -5px; top: 108px; width: 8px; height: 180px; border-radius: 4px; background: #EAD2AC"></div>
+      <div style="position: absolute; left: -5px; top: 150px; width: 8px; height: 56px; border-radius: 4px; background: #C8893F"></div>
+      <div style="position: absolute; left: 14px; top: 140px; right: 0; background: #FFFDF8; border: 1px solid #E3D8C3; border-radius: 16px; padding: 12px 14px; display: flex; flex-direction: column; gap: 6px; box-shadow: 0 8px 24px rgba(51,42,35,0.06)">
+        <div style="font-size: 15px; font-weight: 500; line-height: 1.3">Maya and the carsick foothills</div>
+        <div style="font-size: 12px; color: #8A5A1E">Probably 1997–98 · could be 1996–2001</div>
+        <div style="font-size: 12px; color: #7A6E60">Family trips to Yosemite</div>
+      </div>
+
+      <div style="position: absolute; left: -7px; top: 320px; width: 12px; height: 12px; border-radius: 6px; background: #5F7046; outline: 4px solid #F6F0E4"></div>
+      <div style="position: absolute; left: 14px; top: 316px; display: flex; flex-direction: column; gap: 2px">
+        <div style="font-size: 15px; font-weight: 500">Dad fell in at Mirror Lake</div>
+        <div style="font-size: 12px; color: #7A6E60">August 2000 · from a photo</div>
+      </div>
+
+      <div style="position: absolute; left: -5px; top: 300px; width: 8px; height: 150px; border-radius: 4px; background: #E9E6D2"></div>
+      <div style="position: absolute; left: 14px; top: 372px; display: flex; flex-direction: column; gap: 2px">
+        <div style="font-size: 15px; font-weight: 500">First time on stage</div>
+        <div style="font-size: 12px; color: #6A7651">Sometime in middle school</div>
+      </div>
+
+      <div style="position: absolute; left: -7px; top: 480px; width: 12px; height: 12px; border-radius: 6px; background: #5F7046; outline: 4px solid #F6F0E4"></div>
+      <div style="position: absolute; left: 14px; top: 476px; display: flex; flex-direction: column; gap: 2px">
+        <div style="font-size: 15px; font-weight: 500">High school graduation</div>
+        <div style="font-size: 12px; color: #7A6E60">June 2004 · exact</div>
+      </div>
+    </div>
+  </div>
+
+  <div style="padding: 12px 24px 34px 24px; display: flex; flex-direction: column; gap: 10px">
+    <div style="display: flex; align-items: center; gap: 14px; font-size: 12px; color: #7A6E60">
+      <span style="display: flex; align-items: center; gap: 6px"><span style="width: 10px; height: 10px; border-radius: 5px; background: #5F7046"></span>Exact</span>
+      <span style="display: flex; align-items: center; gap: 6px"><span style="width: 18px; height: 8px; border-radius: 4px; background: #C8893F"></span>Likely</span>
+      <span style="display: flex; align-items: center; gap: 6px"><span style="width: 18px; height: 8px; border-radius: 4px; background: #EAD2AC"></span>Possible</span>
+    </div>
+    <div style="background: #332A23; color: #FFFFFF; border-radius: 16px; padding: 14px 16px; display: flex; align-items: center; gap: 12px">
+      <div style="flex: 1; display: flex; flex-direction: column; gap: 2px">
+        <div style="font-size: 12px; color: #C9BBA6">Narrow it down</div>
+        <div style="font-size: 14px; font-weight: 500">Was the carsick trip before or after Dad fell in?</div>
+      </div>
+      <div style="display: flex; gap: 6px">
+        <button type="button" style="height: 36px; padding: 0 12px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.25); background: transparent; color: #FFFFFF; font: 600 13px Inter, system-ui, sans-serif">Before</button>
+        <button type="button" style="height: 36px; padding: 0 12px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.25); background: transparent; color: #FFFFFF; font: 600 13px Inter, system-ui, sans-serif">After</button>
+      </div>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

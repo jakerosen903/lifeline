@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Refine when it happened</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#5F7046}a:hover{color:#45533A}
+</style>
+</helmet>
+<div style="width: 390px; height: 844px; box-sizing: border-box; background: #F6F0E4; color: #332A23; font-family: Inter, system-ui, sans-serif; display: flex; flex-direction: column; overflow: hidden">
+
+  <div style="display: flex; align-items: center; justify-content: space-between; padding: 64px 20px 0 20px">
+    <a href="Event.dc.html" aria-label="Back to memory" style="width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; border-radius: 22px; background: #ECE3D2; text-decoration: none">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#332A23" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>
+    </a>
+    <div style="font-size: 12px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: #7A6E60">When was this?</div>
+    <div style="width: 44px"></div>
+  </div>
+
+  <div style="padding: 24px 24px 0 24px; display: flex; flex-direction: column; gap: 8px">
+    <h1 style="margin: 0; font-family: Fraunces, Georgia, serif; font-weight: 500; font-size: 26px; line-height: 1.2; letter-spacing: -0.01em">The bear at the campsite</h1>
+    <div style="display: flex; align-items: center; gap: 8px; font-size: 13px; color: #7A6E60">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#8A5A1E" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7h18v12a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2zM3 7l2-4h14l2 4M9 11h6"/></svg>
+      <span>Part of <span style="color: #8A5A1E; font-weight: 500">Family trips to Yosemite</span> · 1996 → 2023, 14 memories</span>
+    </div>
+  </div>
+
+  <div style="flex: 1; padding: 26px 24px 0 24px; display: flex; flex-direction: column; gap: 24px; overflow: hidden">
+
+    <div style="display: flex; flex-direction: column; gap: 12px">
+      <div style="display: flex; justify-content: space-between; align-items: baseline">
+        <span style="font-size: 12px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: #7A6E60">Best guess so far</span>
+        <span style="font-size: 14px; font-weight: 600; color: #8A5A1E">1997 – 2001</span>
+      </div>
+      <div style="position: relative; height: 56px">
+        <div style="position: absolute; left: 0; right: 0; top: 30px; height: 2px; background: #E3D8C3"></div>
+        <div style="position: absolute; left: 0; right: 0; top: 26px; height: 10px; border-radius: 5px; background: #EAD2AC"></div>
+        <div style="position: absolute; left: 4%; width: 18%; top: 26px; height: 10px; border-radius: 5px; background: #C8893F"></div>
+        <div style="position: absolute; left: 4%; top: 18px; width: 26px; height: 26px; margin-left: -13px; border-radius: 13px; background: #FFFDF8; border: 2px solid #C8893F; box-sizing: border-box"></div>
+        <div style="position: absolute; left: 22%; top: 18px; width: 26px; height: 26px; margin-left: -13px; border-radius: 13px; background: #FFFDF8; border: 2px solid #C8893F; box-sizing: border-box"></div>
+        <div style="position: absolute; left: 0; right: 0; top: 44px; display: flex; justify-content: space-between; font-size: 11px; color: #7A6E60"><span>1996</span><span>2003</span><span>2010</span><span>2017</span><span>2023</span></div>
+      </div>
+      <div style="font-size: 13px; color: #7A6E60; line-height: 1.5">The whole collection runs 1996 to 2023, but you said Maya was “little,” which puts this before 2002.</div>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 10px">
+      <div style="font-size: 12px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: #7A6E60">Narrow it down</div>
+      <button type="button" style="min-height: 56px; border-radius: 14px; border: 1px solid #E3D8C3; background: #FFFDF8; display: flex; align-items: center; gap: 12px; padding: 12px 14px; text-align: left; font: 400 14px Inter, system-ui, sans-serif; color: #332A23">
+        <span style="flex: 1; line-height: 1.4">Was this the same trip Dad fell in at Mirror Lake? <span style="color: #7A6E60">(2000)</span></span>
+        <span style="display: flex; gap: 6px"><span style="font-size: 13px; font-weight: 600; padding: 7px 10px; border-radius: 8px; background: #ECE3D2">Yes</span><span style="font-size: 13px; font-weight: 600; padding: 7px 10px; border-radius: 8px; background: #ECE3D2">No</span></span>
+      </button>
+      <button type="button" style="min-height: 56px; border-radius: 14px; border: 1px solid #E3D8C3; background: #FFFDF8; display: flex; align-items: center; gap: 12px; padding: 12px 14px; text-align: left; font: 400 14px Inter, system-ui, sans-serif; color: #332A23">
+        <span style="flex: 1; line-height: 1.4">Before or after the green station wagon died? <span style="color: #7A6E60">(1999)</span></span>
+        <span style="display: flex; gap: 6px"><span style="font-size: 13px; font-weight: 600; padding: 7px 10px; border-radius: 8px; background: #ECE3D2">Before</span><span style="font-size: 13px; font-weight: 600; padding: 7px 10px; border-radius: 8px; background: #ECE3D2">After</span></span>
+      </button>
+      <button type="button" style="min-height: 48px; border-radius: 14px; border: 1px dashed #D8CDB6; background: transparent; display: flex; align-items: center; gap: 10px; padding: 12px 14px; text-align: left; font: 500 14px Inter, system-ui, sans-serif; color: #5F7046">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#5F7046" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 15l5-5 4 4 3-3 6 6"/></svg>
+        Add a photo — I&#39;ll read the date from it
+      </button>
+      <button type="button" style="min-height: 48px; border-radius: 14px; border: none; background: transparent; display: flex; align-items: center; gap: 10px; padding: 8px 14px; text-align: left; font: 500 14px Inter, system-ui, sans-serif; color: #7A6E60">I actually know the year</button>
+    </div>
+  </div>
+
+  <div style="padding: 12px 24px 40px 24px; display: flex; flex-direction: column; gap: 8px">
+    <a href="Event.dc.html" style="height: 52px; border-radius: 14px; background: #5F7046; color: #FFFFFF; display: flex; align-items: center; justify-content: center; font-size: 15px; font-weight: 600; text-decoration: none">Keep “1997 – 2001” for now</a>
+    <div style="font-size: 12px; color: #A89A85; text-align: center">You can always come back to this.</div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

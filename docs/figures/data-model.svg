@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 300" role="img" aria-label="Data model on a grid: Event at the center with fields title, narrative, earliest, latest, likely, confidence; orthogonal links to Source, Person and Place on the left and Chapter, Collection and Photo on the right; a loop below Event for relative anchors (before, after, during).">
+<defs><marker id="arrowD" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="#332A23"/></marker></defs>
+<g font-size="12" fill="#332A23">
+<rect x="260" y="90" width="200" height="120" rx="10" fill="#5F7046" fill-opacity=".14" stroke="#5F7046" stroke-width="1.5"/>
+<text x="360" y="112" text-anchor="middle" font-weight="600" font-size="14">Event</text>
+<text x="360" y="132" text-anchor="middle" font-size="11">title · narrative</text>
+<text x="360" y="148" text-anchor="middle" font-size="11">earliest · latest · likely</text>
+<text x="360" y="164" text-anchor="middle" font-size="11">confidence · visibility</text>
+<text x="360" y="180" text-anchor="middle" font-size="11">themes (joy, loss, turning point)</text>
+<text x="360" y="198" text-anchor="middle" font-size="10" fill-opacity=".7">a range, never a point</text>
+<rect x="30" y="30" width="150" height="56" rx="10" fill="none" stroke="#332A23"/>
+<text x="105" y="52" text-anchor="middle" font-weight="600">Source</text>
+<text x="105" y="70" text-anchor="middle" font-size="11">audio segment · transcript span</text>
+<rect x="30" y="122" width="150" height="56" rx="10" fill="none" stroke="#332A23"/>
+<text x="105" y="144" text-anchor="middle" font-weight="600">Person</text>
+<text x="105" y="162" text-anchor="middle" font-size="11">name · aliases · contact link</text>
+<rect x="30" y="214" width="150" height="56" rx="10" fill="none" stroke="#332A23"/>
+<text x="105" y="236" text-anchor="middle" font-weight="600">Place</text>
+<text x="105" y="254" text-anchor="middle" font-size="11">name · optional coordinates</text>
+<rect x="540" y="30" width="150" height="56" rx="10" fill="none" stroke="#332A23"/>
+<text x="615" y="52" text-anchor="middle" font-weight="600">Chapter</text>
+<text x="615" y="70" text-anchor="middle" font-size="11">person’s own title · span</text>
+<rect x="540" y="122" width="150" height="56" rx="10" fill="none" stroke="#C8893F"/>
+<text x="615" y="144" text-anchor="middle" font-weight="600">Collection</text>
+<text x="615" y="162" text-anchor="middle" font-size="11">“Family trips” · span derived</text>
+<rect x="540" y="214" width="150" height="56" rx="10" fill="none" stroke="#332A23" stroke-dasharray="4 3"/>
+<text x="615" y="236" text-anchor="middle" font-weight="600">Photo (Phase 2)</text>
+<text x="615" y="254" text-anchor="middle" font-size="11">EXIF date · location · tags</text>
+</g>
+<g stroke="#332A23" stroke-width="1.3" fill="none" marker-end="url(#arrowD)">
+<path d="M260 110 H220 V58 H182"/>
+<line x1="260" y1="150" x2="182" y2="150"/>
+<path d="M260 190 H220 V242 H182"/>
+<path d="M460 110 H500 V58 H538"/>
+<line x1="460" y1="150" x2="538" y2="150"/>
+<path d="M460 190 H500 V242 H538"/>
+<path d="M400 210 V240 H320 V212"/>
+</g>
+<g font-size="10" fill="#332A23" fill-opacity=".75">
+<text x="226" y="84" text-anchor="start">came from (1+)</text>
+<text x="221" y="142" text-anchor="middle">present (0+)</text>
+<text x="226" y="222" text-anchor="start">at (0–1)</text>
+<text x="494" y="84" text-anchor="end">in (0–1)</text>
+<text x="499" y="142" text-anchor="middle">member of (0+)</text>
+<text x="494" y="222" text-anchor="end">shown by (0+)</text>
+<text x="360" y="258" text-anchor="middle">relative anchor: before · after · during · same trip</text>
+</g>
+</svg>
