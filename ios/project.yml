@@ -1,0 +1,58 @@
+name: Lifeline
+options:
+  bundleIdPrefix: $(BUNDLE_ID_PREFIX)
+  deploymentTarget:
+    iOS: "26.0"
+  xcodeVersion: "27.1"
+  generateEmptyDirectories: true
+configFiles:
+  Debug: Config/Local.xcconfig
+  Release: Config/Local.xcconfig
+packages:
+  LifelineKit:
+    path: LifelineKit
+targets:
+  Lifeline:
+    type: application
+    platform: iOS
+    sources: [Lifeline]
+    dependencies:
+      - package: LifelineKit
+        product: LifelineKit
+    settings:
+      base:
+        SWIFT_VERSION: "6.0"
+        SWIFT_STRICT_CONCURRENCY: complete
+        PRODUCT_BUNDLE_IDENTIFIER: $(BUNDLE_ID_PREFIX).lifeline
+        CODE_SIGN_STYLE: Automatic
+        GENERATE_INFOPLIST_FILE: false
+    info:
+      path: Lifeline/Info.plist
+      properties:
+        UIBackgroundModes: [audio]
+        NSMicrophoneUsageDescription: "Lifeline records your sessions so you can hear them again."
+        NSSpeechRecognitionUsageDescription: "Lifeline transcribes your sessions on this device."
+        UILaunchScreen: {}
+        UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
+  LifelineUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources: [LifelineUITests]
+    dependencies:
+      - target: Lifeline
+    settings:
+      base:
+        SWIFT_VERSION: "6.0"
+        TEST_TARGET_NAME: Lifeline
+        GENERATE_INFOPLIST_FILE: true
+schemes:
+  Lifeline:
+    build:
+      targets:
+        Lifeline: all
+        LifelineUITests: [test]
+    run:
+      config: Debug
+    test:
+      config: Debug
+      targets: [LifelineUITests]

@@ -27,8 +27,8 @@ A voice-first app: a person tells stories from their life, a timeline fills in, 
 
 ## Layout
 
-- `ios/` — the app (not yet created)
-- `server/` — interviewer and extractor service (not yet created)
+- `ios/` — `Lifeline/` app target (views, view models, composition root), `LifelineUITests/`, `LifelineKit/` Swift package (all logic; builds on macOS too; `swift test` runs its tests). The Xcode project is generated: run `xcodegen generate` in `ios/` after changing `project.yml`. Simulator runs need an iOS 26 runtime (iPhone 17 Pro, iOS 26.3 on the owner's Mac).
+- `server/` — not in V1 (see `docs/DECISIONS.md`)
 - `docs/` — everything above
 - `docs/experiments/` — research protocols and results; the recording study comes first
 
