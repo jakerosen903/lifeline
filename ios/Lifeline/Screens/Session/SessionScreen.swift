@@ -72,7 +72,20 @@ struct SessionScreen: View {
         }
     }
 
+    @ViewBuilder
     private var footer: some View {
+        if let startError = viewModel.startError {
+            VStack(spacing: 12) {
+                Text(startError).foregroundStyle(.red).accessibilityIdentifier("session.startError")
+                Button("Close") { onEnded() }.accessibilityIdentifier("session.close")
+            }
+            .padding(24)
+        } else {
+            stopButton
+        }
+    }
+
+    private var stopButton: some View {
         Button {
             Task {
                 await viewModel.stop()
@@ -86,7 +99,7 @@ struct SessionScreen: View {
                 .background(RoundedRectangle(cornerRadius: 16).fill(Theme.sand))
                 .foregroundStyle(Theme.ink)
         }
-        .disabled(viewModel.isStopping)
+        .disabled(viewModel.isStopping || viewModel.recorderNotStarted)
         .accessibilityIdentifier("session.stop")
         .padding(24)
     }

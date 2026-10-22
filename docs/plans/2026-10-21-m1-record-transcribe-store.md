@@ -15,7 +15,7 @@
 - Minimum iOS 26. `LifelineKit` must compile for iOS 26 and macOS 26. Platform code (speech, audio capture) sits behind protocols with `#if os(iOS)` implementations.
 - Swift 6 language mode, strict concurrency complete, in the package and the app.
 - The app target must contain only views, view models and the composition root. All logic lives in `LifelineKit`.
-- Audio file: m4a, AAC, 24 kHz, mono, at `Application Support/Lifeline/audio/<sessionID>.m4a`, excluded from iCloud backup.
+- Audio file: fragmented m4a (AVAssetWriter, 5 s fragments, so a kill loses at most 5 s), AAC, 24 kHz, mono, at `Application Support/Lifeline/audio/<sessionID>.m4a`, excluded from iCloud backup.
 - Segmenter defaults: `pauseThreshold` 1.8 s, `minSegmentSpeech` 3 s. Configuration, not literals in logic.
 - All IDs are UUID strings. All times ISO-8601 UTC. All audio offsets are integer milliseconds from the start of the session file.
 - `UIBackgroundModes: audio`; `AVAudioSession` category `.record`, mode `.spokenAudio`.
@@ -29,7 +29,7 @@
 Each line names an input the spec implies but no acceptance criterion exercises, and the task whose tests pin it.
 
 1. **A phone call or Siri interrupts the session.** Recording must pause, the open segment must close, and recording must resume on the same clock so file time stays continuous. Task 6 (`AudioFileWriterTests.appendAfterGapKeepsFileTimeContinuous`) and Task 4 (`interruptionClosesOpenSegment`).
-2. **Final transcript results arrive after the segment closed, or a result spans the boundary.** Words must land in the segment whose range contains their start time; none may be lost or duplicated. Task 4 (`lateFinalWordsGoToTheSegmentTheyStartIn`).
+2. **Final transcript results arrive after the segment closed, at Stop, or a result spans the boundary.** A word belongs to the first segment that closes after it starts; that segment's range widens to contain it, so every stored word starts inside its segment. Words that arrive while stopping become a last segment. None may be lost or duplicated. Task 4 (`wordsAfterASegmentEndWidenTheNextSegment`, `wordsArrivingDuringStopAreStored`).
 3. **Silence only, or speech shorter than `minSegmentSpeech`.** No empty segment rows. Task 3 (`silenceOnlyProducesNoSegment`, `shortBlipDoesNotCloseASegment`).
 4. **The app is killed mid-session.** The session row and audio written so far must survive, and the next launch must close the session rather than leave it open forever. M4 turns this into resume-to-wind-down; M1 closes it. Task 5 (`recoverUnfinishedSessionsSetsEndedAt`).
 5. **The on-device speech model for the locale is not installed.** The first session must request the download and wait, not fail silently. Task 7 (`TranscriberAvailabilityTests`) plus the device checklist in Task 9.
@@ -312,7 +312,7 @@ git commit -m "Add energy-gate Segmenter"
   - `protocol Transcriber: Sendable { func start(format: AVAudioFormat) async throws -> AsyncStream<TranscriptResult>; func feed(_ chunk: AudioChunk) async; func finalize(throughMs: Milliseconds) async; func finish() async }`
   - `actor ListenOnlyVoiceSession: VoiceSession { init(source: any AudioSource, sink: any AudioSink, transcriber: any Transcriber, segmenter: SegmenterConfig = .init(), log: @Sendable (String) -> Void = { _ in }) }`
 
-Behaviour the tests pin: every chunk goes to the sink, the transcriber and the segmenter, in that order; `segmentEnded` from the segmenter triggers `transcriber.finalize(throughMs:)` and then one `segmentClosed` carrying every final word whose `range.start` lies inside the segment range, in time order; final words outside any closed segment are held for the next segment; `userPaused` is emitted on each `segmentEnded`; `interrupted` from the source flushes the segmenter at the last chunk end and forwards `.interrupted`; `stop()` flushes, finishes the transcriber, closes the sink and ends the stream; every `pauseObserved(ms)` from the segmenter calls `log("pause \(ms)")` and emits nothing; `say`, `acknowledge`, `interrupt` only call `log`.
+Behaviour the tests pin: every chunk goes to the sink, the transcriber and the segmenter, in that order; `segmentEnded` from the segmenter triggers `transcriber.finalize(throughMs:)` (not awaited; bounded by the close deadline) and then one `segmentClosed` carrying every unclaimed final word whose `range.start` lies before the segment end, in time order; the segment's start widens to the earliest such word; final words after the segment end are held for the next segment; at `stop()` the transcriber is drained first and any remaining words become one last segment; `userPaused` is emitted on each `segmentEnded`; `interrupted` from the source flushes the segmenter at the last chunk end and forwards `.interrupted`; `stop()` flushes, finishes the transcriber, closes the sink and ends the stream; every `pauseObserved(ms)` from the segmenter calls `log("pause \(ms)")` and emits nothing; `say`, `acknowledge`, `interrupt` only call `log`.
 
 - [ ] **Step 1: Write the fakes**
 
@@ -672,8 +672,12 @@ Expected: `** BUILD SUCCEEDED **`. Launch in the simulator and confirm About you
 5. Receive a phone call or trigger Siri during speech. Expected: "Paused" shows, then recording resumes, and the next segment's timestamps continue from where the file left off.
 6. Record a 30-minute session with the screen off. Tap Stop.
 7. Home shows the session with its duration. Open it. Tap a segment. Expected: that span of audio plays and the words match.
-8. Force-quit the app during a session. Relaunch. Expected: the session appears in Home with an end time, and its audio up to the kill plays.
+8. Force-quit the app during a session. Relaunch. Expected: the session appears in Home with an end time, and its audio up to the kill (minus at most 5 s) plays.
 9. Check Settings shows the saved birthday.
+10. Record, then play a moment with the silent switch on. Expected: audio plays.
+11. Connect or disconnect Bluetooth headphones mid-session. Expected: recording continues, timestamps stay continuous.
+12. On a phone with no speech model installed, tap Start. Expected: the session screen says the model is downloading, then transcripts appear.
+13. Tap Start twice quickly. Expected: one session, one recorder.
 
 Record the outcome of each item in the commit body of Step 8, including the pause distribution file's first lines.
 

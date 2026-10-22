@@ -65,23 +65,56 @@ private func collect(_ events: AsyncStream<VoiceEvent>, count: Int, timeoutMs: I
     #expect(h.tr.finalizedThrough == [4_000])
 }
 
-@Test func lateFinalWordsGoToTheSegmentTheyStartIn() async throws {
+@Test func wordsAfterASegmentEndWidenTheNextSegment() async throws {
     let h = Harness()
     let events = try await h.vs.start(writingTo: URL(fileURLWithPath: "/dev/null"))
     h.src.push(speechMs: 0..<4_000, silenceMs: 4_000..<6_000)
-    // Wait until the session asked for finalization, then deliver the final late.
+    // Wait until the session asked for finalization, then deliver the final late (during the grace wait).
     for _ in 0..<50 where h.tr.finalizedThrough.isEmpty { try await Task.sleep(for: .milliseconds(20)) }
     #expect(h.tr.finalizedThrough == [4_000])
     h.tr.push(TranscriptResult(text: "we moved house later", words: [w("we", 3_000, 3_400), w("moved", 3_400, 3_900), w("house", 3_900, 4_200), w("later", 4_100, 4_400)], range: MsRange(start: 3_000, end: 4_400), isFinal: true))
     let closed = try await firstEvent(events) { if case .segmentClosed = $0 { true } else { false } }
     guard case .segmentClosed(let seg) = closed else { Issue.record("not a segmentClosed"); return }
     #expect(seg.words.map(\.text) == ["we", "moved", "house"])   // "later" starts at 4_100, outside 0..<4_000
-    // The held word lands in the next segment.
+    #expect(seg.range == MsRange(start: 0, end: 4_000))
+    // The held word lands in the next segment, whose range widens to contain it.
     h.src.push(speechMs: 6_000..<10_000, silenceMs: 10_000..<12_000)
     h.tr.push(TranscriptResult(text: "", words: [], range: MsRange(start: 10_000, end: 10_000), isFinal: true))
     let next = try await firstEvent(events) { if case .segmentClosed = $0 { true } else { false } }
     guard case .segmentClosed(let seg2) = next else { return }
     #expect(seg2.words.map(\.text) == ["later"])
+    #expect(seg2.range == MsRange(start: 4_100, end: 10_000))
+    #expect(seg2.words.allSatisfy { seg2.range.contains($0.range.start) })
+}
+
+@Test func wordsArrivingDuringStopAreStored() async throws {
+    let h = Harness()
+    let events = try await h.vs.start(writingTo: URL(fileURLWithPath: "/dev/null"))
+    h.src.push(speechMs: 0..<4_000)
+    for _ in 0..<50 where h.tr.fed.count < 40 { try await Task.sleep(for: .milliseconds(20)) }
+    // The last finals only arrive once the transcriber is told to finish: a closing remark after the last pause.
+    h.tr.resultsOnFinish.withLock { $0 = [TranscriptResult(text: "a tail", words: [w("a", 0, 500), w("tail", 4_100, 4_500)], range: MsRange(start: 0, end: 4_500), isFinal: true)] }
+    try await h.vs.stop()
+    var closed: [SegmentTranscript] = []
+    for await e in events { if case .segmentClosed(let s) = e { closed.append(s) } }
+    #expect(closed.map(\.range) == [MsRange(start: 0, end: 4_000), MsRange(start: 4_100, end: 4_500)])
+    #expect(closed.map { $0.words.map(\.text) } == [["a"], ["tail"]])
+}
+
+@Test func hungFinalizeDoesNotBlockSegmentCloseOrStop() async throws {
+    let h = Harness()
+    h.tr.finalizeDelay.withLock { $0 = .seconds(60) }
+    let events = try await h.vs.start(writingTo: URL(fileURLWithPath: "/dev/null"))
+    h.src.push(speechMs: 0..<4_000, silenceMs: 4_000..<6_000)
+    let closed = try await firstEvent(events) { if case .segmentClosed = $0 { true } else { false } }
+    guard case .segmentClosed(let seg) = closed else { Issue.record("not a segmentClosed"); return }
+    #expect(seg.range == MsRange(start: 0, end: 4_000))
+    try await withThrowingTaskGroup(of: Void.self) { group in
+        group.addTask { try await h.vs.stop() }
+        group.addTask { try await Task.sleep(for: .seconds(3)); Issue.record("stop() hung behind finalize") }
+        try await group.next()
+        group.cancelAll()
+    }
 }
 
 @Test func interruptionClosesOpenSegment() async throws {

@@ -32,8 +32,15 @@ final class HomeViewModel {
         }
     }
 
-    /// Asks for the microphone, activates audio, starts a recorder and presents the session screen.
+    private var isStarting = false
+
+    /// Asks for the microphone, activates audio, presents the session screen, then starts the
+    /// recorder inside it so the owner sees the speech-model download and any start error.
+    /// A second tap while starting or recording does nothing.
     func startSession() async {
+        guard !isStarting, activeSession == nil else { return }
+        isStarting = true
+        defer { isStarting = false }
         error = nil
         guard await deps.requestMicrophone() else {
             error = "Lifeline needs the microphone to record. Allow it in Settings."
@@ -41,13 +48,13 @@ final class HomeViewModel {
         }
         do {
             try deps.activateAudio()
-            let vm = SessionViewModel(deps: deps)
-            try await vm.start()
-            activeSession = vm
         } catch {
-            deps.deactivateAudio()
-            self.error = "Could not start: \(error.localizedDescription)"
+            self.error = "Could not start audio: \(error.localizedDescription)"
+            return
         }
+        let vm = SessionViewModel(deps: deps)
+        activeSession = vm
+        await vm.start()
     }
 
     func sessionEnded() {

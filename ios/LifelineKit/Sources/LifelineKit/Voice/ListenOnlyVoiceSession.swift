@@ -25,7 +25,8 @@ public actor ListenOnlyVoiceSession: VoiceSession {
     private var events: AsyncStream<VoiceEvent>.Continuation?
     private var sourceTask: Task<Void, Never>?
     private var resultsTask: Task<Void, Never>?
-    private var closeWaiter: (segmentEndMs: Milliseconds, deadline: ContinuousClock.Instant, continuation: CheckedContinuation<Void, Never>)?
+    private var closeWaiter: (segmentEndMs: Milliseconds, deadline: ContinuousClock.Instant, generation: Int, continuation: CheckedContinuation<Void, Never>)?
+    private var waiterGeneration = 0
     private var graceTimer: Task<Void, Never>?
 
     public init(source: any AudioSource, sink: any AudioSink, transcriber: any Transcriber,
@@ -56,12 +57,25 @@ public actor ListenOnlyVoiceSession: VoiceSession {
         return stream
     }
 
+    /// Order matters: drain the transcriber completely, then close the last segment(s), so the
+    /// owner's closing words (which often arrive only at finish) are stored and not dropped.
     public func stop() async throws {
         await source.stop()
         await sourceTask?.value
-        await closeSegments(segmenter.flush(atMs: lastChunkEndMs))
+        var closing: [MsRange] = []
+        for event in segmenter.flush(atMs: lastChunkEndMs) {
+            if case .segmentEnded(let range) = event { closing.append(range) } else { await closeSegments([event]) }
+        }
         await transcriber.finish()
         await resultsTask?.value
+        for range in closing {
+            emit(.userPaused(afterMs: range.end))
+            emit(.segmentClosed(takeSegment(range)))
+        }
+        if let first = pendingWords.first, let last = pendingWords.last {
+            // Words after the last closed segment: a short closing remark, or late finals. Keep them.
+            emit(.segmentClosed(takeSegment(MsRange(start: first.range.start, end: max(last.range.end, lastChunkEndMs)))))
+        }
         try await sink.close()
         events?.finish()
         events = nil
@@ -97,19 +111,24 @@ public actor ListenOnlyVoiceSession: VoiceSession {
                 log("pause \(ms)")
             case .segmentEnded(let range):
                 emit(.userPaused(afterMs: range.end))
-                await transcriber.finalize(throughMs: range.end)
+                // Not awaited: a finalize that never returns must not block capture or stop().
+                let transcriber = self.transcriber
+                Task { await transcriber.finalize(throughMs: min(range.end, lastChunkEndMs)) }
                 await waitForFinals(throughMs: range.end)
                 emit(.segmentClosed(takeSegment(range)))
             }
         }
     }
 
-    /// Every unclaimed word that starts before the segment's end belongs to it. Words that
-    /// start later are held for the next segment. Earlier stragglers (from an abandoned blip)
-    /// are kept rather than lost.
+    /// Every unclaimed word that starts before the segment's end belongs to it. Words that start
+    /// later are held for the next segment. A segment widens its start to contain a straggler
+    /// (a word after the previous segment's end, or from an abandoned short blip), so every
+    /// stored word starts inside its segment's range and nothing the owner said is lost.
     private func takeSegment(_ range: MsRange) -> SegmentTranscript {
         let (inside, held) = pendingWords.stablePartition { $0.range.start < range.end }
         pendingWords = held
+        var range = range
+        if let earliest = inside.map(\.range.start).min() { range.start = min(range.start, earliest) }
         return SegmentTranscript(range: range, text: inside.map(\.text).joined(separator: " "), words: inside)
     }
 
@@ -133,8 +152,9 @@ public actor ListenOnlyVoiceSession: VoiceSession {
 
     private func waitForFinals(throughMs: Milliseconds) async {
         if pendingWords.contains(where: { $0.range.end >= throughMs }) { return }
+        waiterGeneration += 1
         await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
-            closeWaiter = (throughMs, .now + .milliseconds(timing.finalizeTimeoutMs), continuation)
+            closeWaiter = (throughMs, .now + .milliseconds(timing.finalizeTimeoutMs), waiterGeneration, continuation)
             restartGraceTimer()
         }
     }
@@ -143,14 +163,17 @@ public actor ListenOnlyVoiceSession: VoiceSession {
         graceTimer?.cancel()
         guard let waiter = closeWaiter else { return }
         let wait = min(.milliseconds(timing.finalizeGraceMs), waiter.deadline - .now)
+        let generation = waiter.generation
         graceTimer = Task { [weak self] in
             try? await Task.sleep(for: max(wait, .zero))
             guard !Task.isCancelled else { return }
-            await self?.resumeCloseWaiter()
+            await self?.resumeCloseWaiter(ifGeneration: generation)
         }
     }
 
-    private func resumeCloseWaiter() {
+    /// A stale timer (from an earlier waiter) must not close a newer segment early.
+    private func resumeCloseWaiter(ifGeneration generation: Int? = nil) {
+        if let generation, closeWaiter?.generation != generation { return }
         graceTimer?.cancel()
         graceTimer = nil
         closeWaiter?.continuation.resume()

@@ -25,6 +25,7 @@ final class SessionDetailViewModel {
             return
         }
         do {
+            try deps.activatePlayback()   // .record would silence output; the default obeys the silent switch
             try player.play(url: try deps.audioURL(for: session), range: segment.range)
             error = nil
         } catch {

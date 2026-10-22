@@ -8,6 +8,7 @@ final class SessionViewModel: Identifiable {
     private(set) var state = RecorderState()
     private(set) var transcriberStatus: TranscriberAvailability?
     private(set) var isStopping = false
+    private(set) var startError: String?
     private(set) var stopError: String?
 
     private let deps: Dependencies
@@ -19,25 +20,36 @@ final class SessionViewModel: Identifiable {
     }
 
     var startedAt: Date { state.startedAt ?? .now }
+    /// True until start() has created the recorder; Stop is disabled meanwhile.
+    var recorderNotStarted: Bool { recorder == nil }
 
+    /// Errors first, then an interruption, then the download hint: a stuck hint must not hide a failure.
     var statusLine: String? {
+        if let error = state.error ?? stopError { return error }
         if state.isInterrupted { return "Paused" }
         if transcriberStatus == .needsDownload { return "Getting the speech model ready…" }
         if transcriberStatus == .unsupportedLocale { return "On-device transcription is not available for your language." }
-        return state.error
+        return nil
     }
 
-    func start() async throws {
-        let box = StatusBox()
-        let recorder = deps.makeRecorder { status in Task { await box.set(status) } }
+    /// Starts the recorder. A failure is shown on the session screen, not thrown past it.
+    func start() async {
+        let (statuses, statusContinuation) = AsyncStream<TranscriberAvailability>.makeStream()
+        let recorder = deps.makeRecorder { status in statusContinuation.yield(status) }
         self.recorder = recorder
         observation = Task { [weak self] in
             await withTaskGroup(of: Void.self) { group in
                 group.addTask { for await s in recorder.states { await self?.apply(s) } }
-                group.addTask { for await status in box.stream { await self?.apply(status) } }
+                group.addTask { for await status in statuses { await self?.apply(status) } }
             }
         }
-        try await recorder.start()
+        do {
+            try await recorder.start()
+        } catch {
+            startError = "Could not start recording: \(error.localizedDescription)"
+            observation?.cancel()
+            self.recorder = nil
+        }
     }
 
     func stop() async {
@@ -49,12 +61,4 @@ final class SessionViewModel: Identifiable {
 
     private func apply(_ s: RecorderState) { state = s }
     private func apply(_ status: TranscriberAvailability) { transcriberStatus = status }
-}
-
-/// Bridges the transcriber's status callback onto a stream the view model can observe.
-private actor StatusBox {
-    let stream: AsyncStream<TranscriberAvailability>
-    private let continuation: AsyncStream<TranscriberAvailability>.Continuation
-    init() { (stream, continuation) = AsyncStream.makeStream() }
-    func set(_ s: TranscriberAvailability) { continuation.yield(s) }
 }

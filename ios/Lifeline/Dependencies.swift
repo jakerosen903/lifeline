@@ -9,6 +9,7 @@ struct Dependencies {
     let audioRoot: URL
     let makeVoiceSession: @Sendable (_ onStatus: @escaping @Sendable (TranscriberAvailability) -> Void) -> any VoiceSession
     let activateAudio: @Sendable () throws -> Void
+    let activatePlayback: @Sendable () throws -> Void
     let deactivateAudio: @Sendable () -> Void
     let requestMicrophone: @Sendable () async -> Bool
 
@@ -46,6 +47,7 @@ struct Dependencies {
                     })
             },
             activateAudio: { try AudioSessionConfigurator.activateForRecording() },
+            activatePlayback: { try AudioSessionConfigurator.activateForPlayback() },
             deactivateAudio: { AudioSessionConfigurator.deactivate() },
             requestMicrophone: { await AudioSessionConfigurator.requestMicrophoneAccess() })
     }
@@ -63,6 +65,7 @@ struct Dependencies {
                 return ScriptedVoiceSession(intervalMs: 800)
             },
             activateAudio: {},
+            activatePlayback: {},
             deactivateAudio: {},
             requestMicrophone: { true })
     }

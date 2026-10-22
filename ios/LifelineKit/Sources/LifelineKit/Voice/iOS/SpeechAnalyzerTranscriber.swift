@@ -3,8 +3,8 @@ import AVFoundation
 import CoreMedia
 import Speech
 
-/// On-device transcription with the iOS 26 Speech framework. Analyzer time starts at zero
-/// with the first buffer, so it equals file time as long as every chunk the sink gets is fed here.
+/// On-device transcription with the iOS 26 Speech framework. Every buffer is stamped with its
+/// file time, so word timestamps are file timestamps.
 public actor SpeechAnalyzerTranscriber: Transcriber {
     public enum Error: Swift.Error {
         case unsupportedLocale(Locale)
@@ -26,19 +26,23 @@ public actor SpeechAnalyzerTranscriber: Transcriber {
     }
 
     public func start(format: AVAudioFormat) async throws -> AsyncStream<TranscriptResult> {
-        let transcriber = SpeechTranscriber(locale: locale, transcriptionOptions: [],
+        // `Locale.current` may carry region or calendar extensions; the framework knows the
+        // equivalent locale it actually supports. Use that one everywhere.
+        let supportedLocale = await SpeechTranscriber.supportedLocale(equivalentTo: locale)
+        let installed = await SpeechTranscriber.installedLocales.contains { installedLocale in
+            supportedLocale.map { $0.identifier(.bcp47) == installedLocale.identifier(.bcp47) } ?? false
+        }
+        let availability = TranscriberAvailability.decide(isSupported: supportedLocale != nil, isInstalled: installed)
+        onStatus(availability)
+        guard let supportedLocale else { throw Error.unsupportedLocale(locale) }
+
+        let transcriber = SpeechTranscriber(locale: supportedLocale, transcriptionOptions: [],
                                             reportingOptions: [.volatileResults], attributeOptions: [.audioTimeRange])
         self.transcriber = transcriber
-
-        let supported = await SpeechTranscriber.supportedLocale(equivalentTo: locale) != nil
-        let installed = await SpeechTranscriber.installedLocales.contains { $0.identifier(.bcp47) == locale.identifier(.bcp47) }
-        let availability = TranscriberAvailability.decide(isSupported: supported, isInstalled: installed)
-        onStatus(availability)
-        guard availability != .unsupportedLocale else { throw Error.unsupportedLocale(locale) }
         if let request = try await AssetInventory.assetInstallationRequest(supporting: [transcriber]) {
             try await request.downloadAndInstall()
-            onStatus(.ready)
         }
+        onStatus(.ready)
 
         guard let best = await SpeechAnalyzer.bestAvailableAudioFormat(compatibleWith: [transcriber], considering: format) else {
             throw Error.noCompatibleFormat
@@ -68,11 +72,13 @@ public actor SpeechAnalyzerTranscriber: Transcriber {
         return results
     }
 
+    /// The chunk's file time is passed explicitly, so analyzer time equals file time by
+    /// construction even if a conversion drops frames or the converter adds priming latency.
     public func feed(_ chunk: AudioChunk) {
         guard let input else { return }
         let buffer = converter == nil ? chunk.buffer : converted(chunk.buffer)
         guard let buffer, buffer.frameLength > 0 else { return }
-        input.yield(AnalyzerInput(buffer: buffer))
+        input.yield(AnalyzerInput(buffer: buffer, bufferStartTime: CMTime(value: CMTimeValue(chunk.startMs), timescale: 1_000)))
     }
 
     public func finalize(throughMs: Milliseconds) async {
