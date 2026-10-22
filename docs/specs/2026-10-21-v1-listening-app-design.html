@@ -1,0 +1,715 @@
+<title>Lifeline V1 Design</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/* Layout: one reading column, ~68ch, with figures allowed to run wider. Project palette from docs/design. */
+:root{
+  --bg:#F6F0E4; --fg:#332A23; --muted:#7A6E60; --panel:#ECE3D2; --panel-2:#FFFFFF; --line:#D8CDB6;
+  --olive:#5F7046; --olive-ink:#FFFFFF; --ochre:#C8893F; --ochre-soft:#EAD2AC; --ochre-deep:#8A5A1E;
+  --danger:#9C4A3A;
+  --display:"Fraunces",Georgia,"Times New Roman",serif;
+  --body:"Inter",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#1F1A16; --fg:#F0E8DA; --muted:#B3A595; --panel:#2C2520; --panel-2:#352D27; --line:#4A3F36;
+    --olive:#8FA36E; --olive-ink:#1F1A16; --ochre:#E0A560; --ochre-soft:#5A4022; --ochre-deep:#F0C080;
+    --danger:#D98574; color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#1F1A16; --fg:#F0E8DA; --muted:#B3A595; --panel:#2C2520; --panel-2:#352D27; --line:#4A3F36;
+  --olive:#8FA36E; --olive-ink:#1F1A16; --ochre:#E0A560; --ochre-soft:#5A4022; --ochre-deep:#F0C080;
+  --danger:#D98574; color-scheme:dark;
+}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font-family:var(--body);font-size:16px;line-height:1.55;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:0 64px}
+.wrap{max-width:860px;margin:0 auto}
+header.hero{padding-block:56px 24px;border-bottom:1px solid var(--line)}
+.eyebrow{font-size:12px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--olive)}
+h1{font-family:var(--display);font-weight:500;font-size:clamp(34px,6vw,52px);line-height:1.08;letter-spacing:-.01em;margin:10px 0 14px;text-wrap:balance}
+h2{font-family:var(--display);font-weight:500;font-size:28px;line-height:1.2;margin:56px 0 12px;text-wrap:balance}
+h3{font-family:var(--body);font-weight:600;font-size:15px;letter-spacing:.02em;margin:28px 0 8px}
+p{max-width:68ch;margin:0 0 14px}
+.lede{font-size:19px;color:var(--fg);max-width:60ch}
+.meta{display:flex;flex-wrap:wrap;gap:8px 20px;font-size:13px;color:var(--muted);margin-top:8px}
+.serves{font-size:13px;color:var(--muted);border-top:1px dashed var(--line);padding-top:8px;margin-top:18px;max-width:68ch}
+.serves b{color:var(--olive);font-weight:600}
+ul,ol{max-width:68ch;padding-left:22px;margin:0 0 14px}
+li{margin-bottom:6px}
+nav.toc{display:flex;flex-wrap:wrap;gap:6px 14px;padding-block:14px;font-size:13px}
+nav.toc a{color:var(--olive);text-decoration:none;border-bottom:1px solid transparent}
+nav.toc a:hover{border-bottom-color:var(--olive)}
+a{color:var(--olive)}
+figure{margin:22px 0 26px;padding:18px;background:var(--panel);border-radius:14px;overflow-x:auto}
+figure svg{max-width:100%;height:auto;display:block;margin:0 auto}
+figcaption{font-size:13px;color:var(--muted);margin-top:12px;max-width:68ch}
+.controls{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px;align-items:center}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:999px;overflow:hidden;background:var(--panel-2)}
+.seg button{appearance:none;border:0;background:transparent;color:var(--fg);font:500 13px var(--body);padding:8px 14px;cursor:pointer}
+.seg button[aria-pressed="true"]{background:var(--olive);color:var(--olive-ink)}
+.seg button:focus-visible,button:focus-visible,input:focus-visible,[tabindex]:focus-visible{outline:2px solid var(--ochre);outline-offset:2px}
+.btn{appearance:none;border:1px solid var(--line);background:var(--panel-2);color:var(--fg);font:500 13px var(--body);padding:8px 14px;border-radius:999px;cursor:pointer}
+.btn.primary{background:var(--olive);color:var(--olive-ink);border-color:var(--olive)}
+.btn:disabled{opacity:.45;cursor:default}
+.note{background:var(--panel-2);border:1px solid var(--line);border-radius:12px;padding:12px 14px;font-size:14px;margin-top:10px;min-height:44px}
+.note b{font-weight:600}
+table{border-collapse:collapse;width:100%;font-size:14px;margin:12px 0 18px}
+.tablewrap{overflow-x:auto}
+th,td{text-align:left;vertical-align:top;padding:9px 10px;border-bottom:1px solid var(--line)}
+th{font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:600}
+td code,p code,li code{font-family:var(--mono);font-size:.88em;background:var(--panel);padding:1px 5px;border-radius:5px}
+pre{background:var(--panel);border-radius:12px;padding:14px;overflow-x:auto;font-family:var(--mono);font-size:13px;line-height:1.5;max-width:100%}
+details{border:1px solid var(--line);border-radius:12px;background:var(--panel-2);margin-bottom:8px}
+summary{cursor:pointer;padding:12px 14px;font-weight:500;list-style:none;display:flex;gap:10px;align-items:baseline}
+summary::-webkit-details-marker{display:none}
+summary::before{content:"+";font-family:var(--mono);color:var(--olive);width:1em}
+details[open] summary::before{content:"–"}
+details .body{padding:0 14px 14px;font-size:14px;color:var(--fg)}
+details .body p{margin-bottom:8px}
+.tag{display:inline-block;font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;padding:2px 8px;border-radius:999px;background:var(--panel);color:var(--muted)}
+.tag.owner{background:var(--olive);color:var(--olive-ink)}
+.tag.builder{background:var(--ochre-soft);color:var(--ochre-deep)}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px;margin:12px 0 18px}
+.card{background:var(--panel-2);border:1px solid var(--line);border-radius:14px;padding:14px 16px;min-width:0}
+.card h4{margin:0 0 6px;font-family:var(--display);font-weight:500;font-size:19px}
+.card p{font-size:14px;margin-bottom:6px}
+.goal-list li{padding-left:4px}
+.anti{border-left:3px solid var(--danger);padding-left:12px}
+.range-bar{height:14px;border-radius:7px;background:var(--panel-2);border:1px solid var(--line);position:relative;overflow:hidden}
+.range-bar .possible{position:absolute;top:0;bottom:0;background:var(--ochre-soft)}
+.range-bar .likely{position:absolute;top:0;bottom:0;background:var(--ochre)}
+.axis{display:flex;justify-content:space-between;font-size:11px;color:var(--muted);font-variant-numeric:tabular-nums;margin-top:4px}
+.slider{width:100%;accent-color:var(--olive)}
+.stage-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px}
+@media (max-width:560px){.stage-row{grid-template-columns:1fr}}
+.stage-box{background:var(--panel-2);border:1px solid var(--line);border-radius:12px;padding:10px 12px;font-size:14px}
+.stage-box h5{margin:0 0 4px;font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:600}
+.timeline-track{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin:14px 0 18px}
+@media (max-width:700px){.timeline-track{grid-template-columns:1fr}}
+.ms{background:var(--panel-2);border:1px solid var(--line);border-radius:12px;padding:12px;font-size:13px;min-width:0}
+.ms .n{font-family:var(--display);font-size:22px;color:var(--olive)}
+.ms b{display:block;margin:2px 0 6px;font-size:14px}
+.ms p{font-size:13px;margin:0;color:var(--muted)}
+.question{background:var(--ochre-soft);border-radius:12px;padding:14px 16px;margin-bottom:10px;color:var(--fg)}
+.question b{color:var(--ochre-deep)}
+footer{margin-top:64px;padding-top:16px;border-top:1px solid var(--line);font-size:13px;color:var(--muted)}
+.ent{cursor:pointer}
+.ent rect{fill:var(--panel-2);stroke:currentColor;stroke-width:1}
+.ent.on rect{stroke:var(--olive);stroke-width:2.5}
+.ent text{fill:currentColor}
+@media (prefers-reduced-motion:no-preference){.range-bar .possible,.range-bar .likely{transition:left .35s ease,width .35s ease}}
+</style>
+
+<div class="wrap">
+<header class="hero">
+  <div class="eyebrow">Life Timeline · Design document · Draft for review</div>
+  <h1>V1: the listening app</h1>
+  <p class="lede">One iPhone. One life: the owner's. The owner talks. The app listens, writes the words down, finds the memories, places them with honest uncertainty, and lands the session. It does not speak back yet.</p>
+  <div class="meta"><span>2026-10-21</span><span>Language: ASD-STE100</span><span>Source: <code>docs/specs/2026-10-21-v1-listening-app-design.md</code></span></div>
+  <nav class="toc" aria-label="Sections">
+    <a href="#intent">1 Intent</a><a href="#goals">2 Goals</a><a href="#experience">3 Experience</a><a href="#arch">4 Architecture</a><a href="#ios">5 iOS internals</a><a href="#data">6 Data model</a><a href="#extract">7 Extraction</a><a href="#resolve">8 Resolution</a><a href="#arc">9 Session arc</a><a href="#cli">10 CLI and tests</a><a href="#milestones">11 Milestones</a><a href="#decisions">12 Decisions</a><a href="#open">14 Open questions</a>
+  </nav>
+</header>
+
+<section id="intent">
+  <h2>1. Intent</h2>
+  <p>V1 is one iPhone and one life. The owner opens the app and talks. A timeline fills in. The app listens, transcribes, extracts memories, places them as ranges, and ends every session with a landing. It does not speak back.</p>
+  <p>The reason to build this first is calibration. The recording study is deferred (see <a href="#decisions">section 12</a>). The owner's own sessions replace it. They give real speech, real pauses, and real extraction errors. So V1 must keep the raw audio and the transcript as the source of truth. V1 must be able to run extraction again over old sessions with a new prompt. This rule shapes the data model more than any screen does.</p>
+  <h3>Who decided what</h3>
+  <p><span class="tag owner">Owner</span> iPhone app. Listen-only for V1. No separate server for V1. Anthropic Console API as the model provider. The recording study runs after V1 exists. Every interface must leave the door open to the full voice interviewer.</p>
+  <p><span class="tag builder">Builder</span> The iOS internals in section 5. The data model in section 6. Extraction and resolution in sections 7 and 8. The milestones in section 11. These are proposals. The owner redlines them.</p>
+  <p class="serves">Serves <b>P5</b> uncertainty is shown · <b>P8</b> every session lands</p>
+</section>
+
+<section id="goals">
+  <h2>2. Goals, non-goals, anti-goals</h2>
+  <div class="grid2">
+    <div class="card"><h4>Goals</h4>
+      <ol class="goal-list">
+        <li>Record a 30 to 60 minute session with the screen off.</li>
+        <li>Transcribe on the device with word timestamps. Keep the audio.</li>
+        <li>After each completed thought, extract candidate memories, people, places and time anchors. Show them as one-tap cards.</li>
+        <li>Resolve a name to a person once. The link holds across memories.</li>
+        <li>Place memories as ranges, never points. Show inferred values as guesses.</li>
+        <li>End every session with a summary in the owner's words and a keep / private / let go choice.</li>
+        <li>Show the timeline: chapters, ranges, and the shelf for unplaced memories. Play a memory's own audio.</li>
+        <li>Run extraction and resolution again over any past session, from the command line, without the phone.</li>
+      </ol></div>
+    <div class="card"><h4>Non-goals for V1</h4>
+      <p>Designed for. Not built.</p>
+      <ul>
+        <li>Spoken replies, acknowledgements, text-to-speech.</li>
+        <li>The end-of-thought classifier model. V1 uses a silence threshold.</li>
+        <li>Reflections and interviewer questions during the session.</li>
+        <li>Photos, music, family sharing, web viewer.</li>
+        <li>Chapter replay as a narrated story.</li>
+        <li>Detection of crying or other acoustic distress signals.</li>
+        <li>Memory kinds and domains: fact, feeling, goal, event; relationships, health, education, travel. See section 6.</li>
+      </ul></div>
+    <div class="card anti"><h4>Anti-goals</h4>
+      <p>V1 fails if it does one of these, even if it works.</p>
+      <ul>
+        <li>Shows an inferred date, name or place as a fact.</li>
+        <li>Fills in a detail the owner did not say.</li>
+        <li>Asks a form-style question for a baseline fact during a session. The optional "About you" screen at first open is the one place for typed facts.</li>
+        <li>Ends a session without the landing.</li>
+        <li>Keeps audio the owner chose to let go.</li>
+        <li>Sends audio off the device.</li>
+      </ul></div>
+  </div>
+</section>
+
+<section id="experience">
+  <h2>3. The owner's experience</h2>
+  <p>Each step below matches a screen in <code>docs/design/</code>. Select a step to read it.</p>
+  <figure>
+    <div class="controls" role="tablist" aria-label="Owner's experience steps">
+      <div class="seg" id="exp-seg">
+        <button type="button" role="tab" aria-pressed="true" data-k="open">First open</button>
+        <button type="button" role="tab" aria-pressed="false" data-k="session">Session</button>
+        <button type="button" role="tab" aria-pressed="false" data-k="landing">Landing</button>
+        <button type="button" role="tab" aria-pressed="false" data-k="timeline">Timeline</button>
+        <button type="button" role="tab" aria-pressed="false" data-k="memory">Memory</button>
+        <button type="button" role="tab" aria-pressed="false" data-k="people">People</button>
+      </div>
+    </div>
+    <svg id="exp-svg" viewBox="0 0 720 150" role="img" aria-label="Six screens in the order the owner meets them: first open, session, landing, timeline, memory, people">
+      <defs><marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="currentColor"/></marker></defs>
+      <g font-family="Inter,system-ui,sans-serif" font-size="12" fill="currentColor">
+        <g class="step" data-k="open"><rect x="10" y="40" width="100" height="60" rx="10" fill="none" stroke="currentColor"/><text x="60" y="66" text-anchor="middle">One question</text><text x="60" y="84" text-anchor="middle" font-size="11" opacity=".7">Onboard1</text></g>
+        <line x1="112" y1="70" x2="128" y2="70" stroke="currentColor" marker-end="url(#ar)"/>
+        <g class="step" data-k="session"><rect x="130" y="40" width="100" height="60" rx="10" fill="none" stroke="currentColor"/><text x="180" y="66" text-anchor="middle">Talk, cards</text><text x="180" y="84" text-anchor="middle" font-size="11" opacity=".7">Main · Onboard2</text></g>
+        <line x1="232" y1="70" x2="248" y2="70" stroke="currentColor" marker-end="url(#ar)"/>
+        <g class="step" data-k="landing"><rect x="250" y="40" width="100" height="60" rx="10" fill="none" stroke="currentColor"/><text x="300" y="66" text-anchor="middle">Keep / let go</text><text x="300" y="84" text-anchor="middle" font-size="11" opacity=".7">WindDown</text></g>
+        <line x1="352" y1="70" x2="368" y2="70" stroke="currentColor" marker-end="url(#ar)"/>
+        <g class="step" data-k="timeline"><rect x="370" y="40" width="100" height="60" rx="10" fill="none" stroke="currentColor"/><text x="420" y="66" text-anchor="middle">Chapters, bands</text><text x="420" y="84" text-anchor="middle" font-size="11" opacity=".7">Timeline</text></g>
+        <line x1="472" y1="70" x2="488" y2="70" stroke="currentColor" marker-end="url(#ar)"/>
+        <g class="step" data-k="memory"><rect x="490" y="40" width="100" height="60" rx="10" fill="none" stroke="currentColor"/><text x="540" y="66" text-anchor="middle">Own audio</text><text x="540" y="84" text-anchor="middle" font-size="11" opacity=".7">Event · Refine</text></g>
+        <line x1="592" y1="70" x2="608" y2="70" stroke="currentColor" marker-end="url(#ar)"/>
+        <g class="step" data-k="people"><rect x="610" y="40" width="100" height="60" rx="10" fill="none" stroke="currentColor"/><text x="660" y="66" text-anchor="middle">Who's this?</text><text x="660" y="84" text-anchor="middle" font-size="11" opacity=".7">People</text></g>
+        <path d="M660 102 C660 135, 180 135, 180 102" fill="none" stroke="currentColor" stroke-dasharray="4 4" marker-end="url(#ar)"/>
+        <text x="420" y="138" text-anchor="middle" font-size="11" opacity=".7">resolved people return to the next session's context packet</text>
+      </g>
+    </svg>
+    <div class="note" id="exp-note"></div>
+    <figcaption>The order the owner meets the screens. The dashed return shows that People feeds every later session.</figcaption>
+  </figure>
+  <p class="serves">Serves <b>P1</b> the person is the author · <b>P2</b> scenes, not facts · <b>P5</b> · <b>P8</b></p>
+</section>
+
+<section id="arch">
+  <h2>4. Architecture</h2>
+  <p>The app target holds views, view models and the composition root. All logic lives in a Swift package, LifelineKit. The package compiles for iOS and for macOS. The command line tool and the tests use the same code as the app.</p>
+  <figure>
+    <div class="controls">
+      <span class="eyebrow" style="margin-right:6px">Show</span>
+      <div class="seg" id="arch-seg">
+        <button type="button" aria-pressed="true" data-k="v1">V1: direct API</button>
+        <button type="button" aria-pressed="false" data-k="later">Later: own server</button>
+      </div>
+    </div>
+    <svg viewBox="0 0 760 330" role="img" aria-label="LifelineKit modules inside the iPhone; the ExtractionService protocol is the one boundary that changes when a server is added">
+      <defs><marker id="ar2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="currentColor"/></marker></defs>
+      <g font-family="Inter,system-ui,sans-serif" font-size="12" fill="currentColor">
+        <rect x="10" y="10" width="470" height="310" rx="14" fill="none" stroke="currentColor" stroke-dasharray="5 4"/>
+        <text x="24" y="32" font-size="11" letter-spacing="1" opacity=".7">IPHONE</text>
+        <rect x="24" y="44" width="200" height="40" rx="8" fill="none" stroke="currentColor"/><text x="124" y="68" text-anchor="middle">App: SwiftUI views + root</text>
+        <rect x="24" y="100" width="440" height="206" rx="10" fill="none" stroke="currentColor"/>
+        <text x="38" y="120" font-size="11" letter-spacing="1" opacity=".7">LIFELINEKIT (Swift package, iOS + macOS)</text>
+        <g id="mods">
+          <rect x="38" y="132" width="120" height="34" rx="7" fill="none" stroke="currentColor"/><text x="98" y="153" text-anchor="middle">Voice</text>
+          <rect x="168" y="132" width="120" height="34" rx="7" fill="none" stroke="currentColor"/><text x="228" y="153" text-anchor="middle">Store (SQLite)</text>
+          <rect x="298" y="132" width="150" height="34" rx="7" fill="none" stroke="currentColor"/><text x="373" y="153" text-anchor="middle">Domain + Resolution</text>
+          <rect x="38" y="178" width="120" height="34" rx="7" fill="none" stroke="currentColor"/><text x="98" y="199" text-anchor="middle">Arc + Fixed text</text>
+          <rect x="168" y="178" width="120" height="34" rx="7" fill="none" stroke="currentColor"/><text x="228" y="199" text-anchor="middle">CLI (macOS)</text>
+          <rect x="298" y="178" width="150" height="34" rx="7" fill="none" stroke="var(--olive)" stroke-width="2"/><text x="373" y="199" text-anchor="middle">Extraction</text>
+        </g>
+        <rect x="38" y="236" width="410" height="54" rx="8" fill="none" stroke="currentColor"/>
+        <text x="52" y="257" font-weight="600">protocol ExtractionService</text>
+        <text x="52" y="276" font-size="11" opacity=".8">extract(segment, packet) → candidates · turn(segment, packet) → reply (later)</text>
+        <line x1="124" y1="84" x2="124" y2="100" stroke="currentColor" marker-end="url(#ar2)"/>
+        <text x="132" y="96" font-size="11" opacity=".7">injects implementation</text>
+        <g id="arch-v1">
+          <line x1="448" y1="263" x2="560" y2="263" stroke="var(--olive)" stroke-width="2" marker-end="url(#ar2)"/>
+          <text x="504" y="255" text-anchor="middle" font-size="11" fill="var(--olive)">AnthropicExtractionService</text>
+          <text x="504" y="281" text-anchor="middle" font-size="11" opacity=".7">HTTPS · text only · no audio</text>
+          <rect x="562" y="238" width="180" height="50" rx="10" fill="none" stroke="currentColor"/>
+          <text x="652" y="259" text-anchor="middle">Anthropic Messages API</text>
+          <text x="652" y="276" text-anchor="middle" font-size="11" opacity=".7">stateless by nature</text>
+        </g>
+        <g id="arch-later" hidden>
+          <line x1="448" y1="263" x2="560" y2="263" stroke="var(--ochre)" stroke-width="2" marker-end="url(#ar2)"/>
+          <text x="504" y="255" text-anchor="middle" font-size="11" fill="var(--ochre)">RemoteExtractionService</text>
+          <text x="504" y="281" text-anchor="middle" font-size="11" opacity=".7">POST /extract · POST /turn</text>
+          <rect x="562" y="120" width="180" height="168" rx="10" fill="none" stroke="var(--ochre)" stroke-width="2"/>
+          <text x="576" y="140" font-size="11" letter-spacing="1" opacity=".7">YOUR SERVER</text>
+          <rect x="576" y="150" width="152" height="40" rx="7" fill="none" stroke="currentColor"/><text x="652" y="174" text-anchor="middle">LifelineKit Extraction</text>
+          <text x="652" y="206" text-anchor="middle" font-size="11" opacity=".8">same prompt, same schema</text>
+          <text x="652" y="222" text-anchor="middle" font-size="11" opacity=".8">keeps the key, keeps nothing else</text>
+          <line x1="652" y1="236" x2="652" y2="250" stroke="currentColor" marker-end="url(#ar2)"/>
+          <rect x="576" y="252" width="152" height="30" rx="7" fill="none" stroke="currentColor"/><text x="652" y="271" text-anchor="middle" font-size="11">Anthropic Messages API</text>
+        </g>
+      </g>
+    </svg>
+    <div class="note" id="arch-note"></div>
+    <figcaption>What changes between V1 and the server version: one conformer of <code>ExtractionService</code> and one line in the composition root. The data model, the UI and the pipeline do not move.</figcaption>
+  </figure>
+  <h3>Rules</h3>
+  <ul>
+    <li>The App target must contain only views, view models and the composition root.</li>
+    <li>LifelineKit must compile for iOS and macOS. Speech and audio capture sit behind protocols with <code>#if os(iOS)</code> implementations.</li>
+    <li>The app must talk to the model only through <code>ExtractionService</code>.</li>
+    <li>No module may import the Anthropic client except Extraction.</li>
+  </ul>
+  <p class="serves">Serves <b>P5</b> uncertainty is a domain type, not a UI trick · the data posture</p>
+</section>
+
+<section id="ios">
+  <h2>5. iOS internals</h2>
+  <p><span class="tag builder">Builder proposals</span> The owner redlines each row. Open a row to see the reason and the alternative.</p>
+  <details><summary>Minimum iOS: <span>iOS 26</span></summary><div class="body"><p><b>Why.</b> <code>SpeechAnalyzer</code> and <code>SpeechTranscriber</code> (Speech framework, iOS 26) give on-device transcription with per-result audio time ranges and no one-minute cap. The owner's phone runs it.</p><p><b>Alternative.</b> iOS 18 with <code>SFSpeechRecognizer</code> and on-device recognition. It works, but it has session limits and weaker timestamps.</p></div></details>
+  <details><summary>Audio capture: one <span>AVAudioEngine</span> tap, two consumers</summary><div class="body"><p><b>Why.</b> The tap feeds the transcriber's input stream and an <code>AVAudioFile</code> writer (m4a, AAC, 24 kHz mono). One tap gives one clock. The file and the transcript share it.</p><p><b>Alternative.</b> <code>AVAudioRecorder</code> plus a separate recognizer tap. That gives two clocks to reconcile.</p></div></details>
+  <details><summary>Background: <span>audio background mode</span></summary><div class="body"><p><code>UIBackgroundModes: audio</code>. <code>AVAudioSession</code> category <code>.record</code>, mode <code>.spokenAudio</code>. The app must pause the segment on an interruption or a route change and resume after it. Screen-off recording is the reason the app is native.</p></div></details>
+  <details><summary>Silence detection: <span>energy gate</span>, not a model</summary><div class="body"><p>An RMS energy threshold on the input tap, debounced. A segment ends after <code>pauseThreshold</code> (default 1.8 s) of silence that follows at least <code>minSegmentSpeech</code> (default 3 s) of speech.</p><p><b>Why.</b> Cheap, on-device, tunable. The app logs the pause distribution. That log calibrates the later end-of-thought model.</p><p><b>Alternative.</b> A Core ML voice activity detector can replace the gate behind the same protocol. Apple's own detector is not public API.</p></div></details>
+  <details><summary>Word timestamps: <span>SpeechTranscriber audioTimeRange</span></summary><div class="body"><p>Store each attributed run as a word row with start and end milliseconds. Replay highlighting and let-go deletion need word-level spans.</p></div></details>
+  <details><summary>Storage: <span>SQLite via GRDB.swift</span></summary><div class="body"><p><b>Why.</b> The data model is relational with typed edges and derived spans. GRDB keeps the schema visible in code. Migrations live in code. <code>ValueObservation</code> drives SwiftUI. The CLI opens the same file.</p><p><b>Alternative.</b> SwiftData. Faster to start. The schema is less explicit. It is awkward for the CLI and for raw SQL on ranges.</p></div></details>
+  <details><summary>App architecture: <span>SwiftUI + @Observable</span>, one view model per screen</summary><div class="body"><p>Dependencies are injected with a <code>Dependencies</code> struct from the composition root. A small app, testable, no framework.</p><p><b>Alternative.</b> TCA. More structure than V1 needs.</p></div></details>
+  <details><summary>Concurrency: <span>Swift 6 strict</span>, VoiceSession as an actor</summary><div class="body"><p><code>VoiceSession</code> emits an <code>AsyncStream&lt;VoiceEvent&gt;</code>. Extraction runs on one serialized background task queue per session. Candidates arrive in order.</p></div></details>
+  <details><summary>Model client: <span>URLSession</span> to the Messages API</summary><div class="body"><p>There is no official Swift SDK. Use <code>Codable</code> request and response types. Use structured outputs through <code>output_config.format</code> with the extractor JSON schema. Smallest dependency, schema-validated output.</p><p><b>Alternative.</b> Community Swift SDKs. Not vetted.</p></div></details>
+  <details><summary>API key: <span>gitignored xcconfig</span> → Info.plist → Keychain</summary><div class="body"><p>Simple for one developer. Nothing in source. The app copies the key into the Keychain on first launch and reads it from there.</p></div></details>
+  <details><summary>Audio location: <span>Application Support</span>, excluded from iCloud backup</summary><div class="body"><p><code>Application Support/Lifeline/audio/&lt;sessionID&gt;.m4a</code>. Hours of audio must not surprise a backup. The owner can enable backup.</p></div></details>
+  <details><summary>Deletion: <span>cut the span out of the file</span></summary><div class="body"><p>Let go rewrites the session file with a time-range composition (<code>AVAssetExportSession</code>) and deletes the word rows. A tombstone records that a span was removed. The tombstone holds no content.</p><p><b>Rejected.</b> Keep the whole file and mark the span hidden. That violates the anti-goal.</p></div></details>
+  <p class="serves">Serves <b>P5</b> · <b>P8</b> · the data posture</p>
+</section>
+
+<section id="data">
+  <h2>6. Data model</h2>
+  <p>SQLite. All IDs are UUID strings. All times are ISO-8601 UTC. All audio offsets are integer milliseconds from the start of the session file. Select a table to see its columns.</p>
+  <figure>
+    <svg id="er" viewBox="0 0 760 360" role="img" aria-label="Entity diagram: session holds segments and words; candidates come from segments; a memory has spans into segments, people, places, anchors and an optional chapter or collection">
+      <defs><marker id="ar3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="currentColor"/></marker></defs>
+      <g font-family="Inter,system-ui,sans-serif" font-size="12" stroke-linecap="round">
+        <g stroke="currentColor" fill="none" opacity=".75">
+          <line x1="130" y1="60" x2="130" y2="100" marker-end="url(#ar3)"/>
+          <line x1="130" y1="140" x2="130" y2="180" marker-end="url(#ar3)"/>
+          <line x1="190" y1="120" x2="290" y2="120" marker-end="url(#ar3)"/>
+          <line x1="410" y1="120" x2="520" y2="120" marker-end="url(#ar3)"/>
+          <line x1="580" y1="140" x2="580" y2="180" marker-end="url(#ar3)"/>
+          <line x1="350" y1="140" x2="350" y2="180" marker-end="url(#ar3)"/>
+          <line x1="520" y1="200" x2="410" y2="200" marker-end="url(#ar3)"/>
+          <line x1="350" y1="220" x2="350" y2="260" marker-end="url(#ar3)"/>
+          <line x1="410" y1="280" x2="520" y2="280" marker-end="url(#ar3)"/>
+          <line x1="290" y1="280" x2="190" y2="280" marker-end="url(#ar3)"/>
+          <line x1="290" y1="200" x2="190" y2="200" marker-end="url(#ar3)"/>
+          <line x1="130" y1="220" x2="130" y2="260" marker-end="url(#ar3)"/>
+          <line x1="580" y1="300" x2="580" y2="320" marker-end="url(#ar3)"/>
+        </g>
+        <g font-size="10" fill="currentColor" opacity=".75">
+          <text x="136" y="84">1 : n</text><text x="136" y="164">1 : n</text>
+          <text x="240" y="113" text-anchor="middle">1 : n</text>
+          <text x="465" y="113" text-anchor="middle">accepted →</text>
+          <text x="586" y="164">spans</text><text x="356" y="164">mentions</text>
+          <text x="465" y="194" text-anchor="middle">← source span</text>
+          <text x="356" y="244">resolved to</text>
+          <text x="465" y="273" text-anchor="middle">anchored by</text>
+          <text x="240" y="273" text-anchor="middle">in</text>
+          <text x="240" y="193" text-anchor="middle">derived from</text>
+          <text x="136" y="244">groups</text>
+        </g>
+        <g class="ent" data-t="session" tabindex="0"><rect x="70" y="20" width="120" height="40" rx="8"/><text x="130" y="44" text-anchor="middle">session</text></g>
+        <g class="ent" data-t="segment" tabindex="0"><rect x="70" y="100" width="120" height="40" rx="8"/><text x="130" y="124" text-anchor="middle">segment</text></g>
+        <g class="ent" data-t="word" tabindex="0"><rect x="70" y="180" width="120" height="40" rx="8"/><text x="130" y="204" text-anchor="middle">word</text></g>
+        <g class="ent" data-t="tombstone" tabindex="0"><rect x="70" y="260" width="120" height="40" rx="8"/><text x="130" y="284" text-anchor="middle">tombstone</text></g>
+        <g class="ent on" data-t="candidate" tabindex="0"><rect x="290" y="100" width="120" height="40" rx="8"/><text x="350" y="124" text-anchor="middle">candidate</text></g>
+        <g class="ent" data-t="mention" tabindex="0"><rect x="290" y="180" width="120" height="40" rx="8"/><text x="350" y="204" text-anchor="middle">mention</text></g>
+        <g class="ent" data-t="person" tabindex="0"><rect x="290" y="260" width="120" height="40" rx="8"/><text x="350" y="284" text-anchor="middle">person · alias</text></g>
+        <g class="ent" data-t="memory" tabindex="0"><rect x="520" y="100" width="120" height="40" rx="8"/><text x="580" y="124" text-anchor="middle">memory</text></g>
+        <g class="ent" data-t="memory_span" tabindex="0"><rect x="520" y="180" width="120" height="40" rx="8"/><text x="580" y="204" text-anchor="middle">memory_span</text></g>
+        <g class="ent" data-t="anchor" tabindex="0"><rect x="520" y="260" width="120" height="40" rx="8"/><text x="580" y="284" text-anchor="middle">anchor</text></g>
+        <g class="ent" data-t="curiosity" tabindex="0"><rect x="520" y="320" width="120" height="34" rx="8"/><text x="580" y="342" text-anchor="middle">curiosity_item</text></g>
+        <g class="ent" data-t="chapter" tabindex="0"><rect x="660" y="100" width="90" height="40" rx="8"/><text x="705" y="124" text-anchor="middle">chapter</text></g>
+        <g class="ent" data-t="collection" tabindex="0"><rect x="660" y="180" width="90" height="40" rx="8"/><text x="705" y="204" text-anchor="middle">collection</text></g>
+        <g class="ent" data-t="place" tabindex="0"><rect x="660" y="260" width="90" height="40" rx="8"/><text x="705" y="284" text-anchor="middle">place</text></g>
+        <g stroke="currentColor" fill="none" opacity=".75"><line x1="640" y1="120" x2="660" y2="120"/><line x1="640" y1="130" x2="660" y2="190"/><line x1="640" y1="135" x2="660" y2="270"/></g>
+      </g>
+    </svg>
+    <div class="note" id="er-note"></div>
+    <figcaption>Every memory keeps a pointer into the audio. The recording stays the truth. The extraction stays a derivative. Candidate rows are never edited, only generated again.</figcaption>
+  </figure>
+  <h3>Time range</h3>
+  <p>A memory and a chapter carry these columns: <code>earliest</code>, <code>latest</code>, <code>likely_start</code>, <code>likely_end</code> (each <code>YYYY-MM-DD</code> or null), <code>granularity</code> (day, month, season, year, decade, era), <code>origin</code> (stated, inferred, derived, confirmed) and <code>evidence_text</code> (the owner's phrase that set it). A memory with all four dates null is unplaced. It goes to the shelf unless it is in a collection.</p>
+  <h3>Later: kinds and domains</h3>
+  <p><span class="tag">Owner's direction, 2026-10-21</span> A later version will sub-divide memories two ways. By <b>kind</b>: a fact, a feeling, a goal or intention, an event, or another kind. By <b>domain</b>: relationships, health, education, travel, work, and more. V1 does not add these columns. V1 keeps the seam open in three ways. First, <code>candidate.payload</code> is JSON. A later extractor version can emit kind and domain, and a re-run can back-fill every past session. Second, V1 code and copy must not assume a memory is an event. Third, <code>collection_hint</code> and <code>chapter_hint</code> stay free text, not an enum. The taxonomy itself is a later design.</p>
+  <h3>Private memories</h3>
+  <p><span class="tag builder">Builder's call</span> A private memory is visible only under a Private filter on the timeline. The app must not put it in the context packet. The app must not put it in a summary sent to the model. The only export that holds it is the owner's full backup.</p>
+  <h3>Invariants</h3>
+  <ul>
+    <li>A memory must have at least one span. Let go deletes every span of the memory, then the memory.</li>
+    <li>Candidate rows are immutable. A new extractor version writes new rows.</li>
+    <li>No row in memory, person or place may hold text the owner did not say or type. The one exception is <code>title</code>. The extractor proposes it. The owner accepts it with a tap.</li>
+    <li>A range with <code>origin = inferred</code> must render as a guess in every view.</li>
+  </ul>
+  <p class="serves">Serves <b>P1</b> · <b>P5</b> · <b>P8</b></p>
+</section>
+
+<section id="extract">
+  <h2>7. Extraction</h2>
+  <p>Extraction runs after each segment closes. The app sends the segment text and a context packet. Requests are serialized per session. If a request fails, the segment stays pending. The app retries it at session end. The CLI can retry it too. Step through one segment below.</p>
+  <figure>
+    <div class="controls">
+      <button type="button" class="btn" id="seg-prev">Back</button>
+      <button type="button" class="btn primary" id="seg-next">Next step</button>
+      <span id="seg-count" style="font-size:13px;color:var(--muted)"></span>
+    </div>
+    <svg viewBox="0 0 760 170" role="img" aria-label="Path of one segment: speech, silence closes the segment, context packet is built, the extractor returns candidates, cards appear, a tap makes a memory">
+      <defs><marker id="ar4" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="currentColor"/></marker></defs>
+      <g font-family="Inter,system-ui,sans-serif" font-size="12" fill="currentColor" id="segflow">
+        <g data-i="0"><rect x="10" y="50" width="105" height="56" rx="9" fill="none" stroke="currentColor"/><text x="62" y="74" text-anchor="middle">speech</text><text x="62" y="92" text-anchor="middle" font-size="11" opacity=".7">audio + words</text></g>
+        <line x1="117" y1="78" x2="133" y2="78" stroke="currentColor" marker-end="url(#ar4)"/>
+        <g data-i="1"><rect x="135" y="50" width="105" height="56" rx="9" fill="none" stroke="currentColor"/><text x="187" y="74" text-anchor="middle">segment</text><text x="187" y="92" text-anchor="middle" font-size="11" opacity=".7">closes at 1.8 s</text></g>
+        <line x1="242" y1="78" x2="258" y2="78" stroke="currentColor" marker-end="url(#ar4)"/>
+        <g data-i="2"><rect x="260" y="50" width="105" height="56" rx="9" fill="none" stroke="currentColor"/><text x="312" y="74" text-anchor="middle">packet</text><text x="312" y="92" text-anchor="middle" font-size="11" opacity=".7">selects, never dumps</text></g>
+        <line x1="367" y1="78" x2="383" y2="78" stroke="currentColor" marker-end="url(#ar4)"/>
+        <g data-i="3"><rect x="385" y="50" width="105" height="56" rx="9" fill="none" stroke="currentColor"/><text x="437" y="74" text-anchor="middle">extractor</text><text x="437" y="92" text-anchor="middle" font-size="11" opacity=".7">text in, JSON out</text></g>
+        <line x1="492" y1="78" x2="508" y2="78" stroke="currentColor" marker-end="url(#ar4)"/>
+        <g data-i="4"><rect x="510" y="50" width="105" height="56" rx="9" fill="none" stroke="currentColor"/><text x="562" y="74" text-anchor="middle">cards</text><text x="562" y="92" text-anchor="middle" font-size="11" opacity=".7">pending candidates</text></g>
+        <line x1="617" y1="78" x2="633" y2="78" stroke="currentColor" marker-end="url(#ar4)"/>
+        <g data-i="5"><rect x="635" y="50" width="115" height="56" rx="9" fill="none" stroke="currentColor"/><text x="692" y="74" text-anchor="middle">memory</text><text x="692" y="92" text-anchor="middle" font-size="11" opacity=".7">one tap, with span</text></g>
+        <text x="380" y="140" text-anchor="middle" font-size="11" opacity=".7">audio never crosses the dashed line · only the text of this segment and the packet do</text>
+        <line x1="372" y1="20" x2="372" y2="150" stroke="currentColor" stroke-dasharray="4 4" opacity=".5"/>
+        <text x="366" y="30" text-anchor="end" font-size="10" opacity=".6">device</text><text x="378" y="30" font-size="10" opacity=".6">network</text>
+        <rect id="seg-hl" x="8" y="48" width="109" height="60" rx="11" fill="none" stroke="var(--olive)" stroke-width="2.5"/>
+      </g>
+    </svg>
+    <div class="note" id="seg-note"></div>
+    <figcaption>One segment from speech to a memory on the timeline. The extractor sees text only.</figcaption>
+  </figure>
+  <h3>Context packet</h3>
+  <p>The builder on the device selects. It never dumps. The packet has: the previous two segments (about two minutes), people with aliases (cap 50), chapters with ranges, this session's memories so far (titles and ranges), open curiosity items (cap 10), and the session stage.</p>
+  <h3>Output schema</h3>
+<pre>{
+  memories:  [{ ref, title, quote, segment_span: {start_word, end_word},
+                people_refs: [string], place_text?: string,
+                anchors: [{ phrase, relation, target_text?, value? }],
+                same_as_memory_id?: string, collection_hint?: string,
+                chapter_hint?: string, confidence }],
+  mentions:  [{ text, kind: person|place, likely_alias_of_person_id?, confidence }],
+  flags:     { serious_disclosure: bool, wants_to_stop: bool, wants_to_change_subject: bool }
+}</pre>
+  <p>Every field that carries content must be a span or a quote from the segment. The one composed field is <code>title</code>. The prompt limits it to the owner's own words, eight words at most.</p>
+  <h3>Prompt rules</h3>
+  <ul>
+    <li>Extract only what is said. Never infer a year from a general fact. "I was in third grade" gives an age anchor, not a year.</li>
+    <li>A summary ("we went every summer") is a collection hint, not a memory, unless one instance is told. A named era ("the Boston years") is a chapter hint.</li>
+    <li>Mark confidence honestly. The UI hides nothing. It renders low confidence more faintly.</li>
+    <li>Return <code>serious_disclosure</code> for abuse, danger to self or others, or similar. The model classifies. The app's response is fixed text.</li>
+  </ul>
+  <h3>Model call</h3>
+  <p>Model <code>claude-opus-5-5</code>. Adaptive thinking with low effort. Structured output with the schema above. Server-side fallback on refusal. One prompt-cache breakpoint after the fixed system prompt. Max tokens 4096. The model name and the effort are configuration, not code.</p>
+  <h3>Idempotency</h3>
+  <p>The pair (segment id, extractor version) is unique. A re-run of the same version does nothing. A new version appends rows. An accepted memory keeps its source candidate. A re-run can only add new pending cards.</p>
+  <figure>
+    <svg viewBox="0 0 640 170" role="img" aria-label="Candidate states: pending moves to accepted by a tap, to dismissed by a swipe or let go, or to superseded when a newer extractor version runs and the owner never acted">
+      <defs><marker id="ar5" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="currentColor"/></marker></defs>
+      <g font-family="Inter,system-ui,sans-serif" font-size="12" fill="currentColor">
+        <rect x="20" y="60" width="120" height="44" rx="22" fill="none" stroke="var(--ochre)" stroke-width="2"/><text x="80" y="87" text-anchor="middle">pending</text>
+        <rect x="300" y="14" width="130" height="40" rx="20" fill="none" stroke="var(--olive)" stroke-width="2"/><text x="365" y="39" text-anchor="middle">accepted → memory</text>
+        <rect x="300" y="64" width="130" height="40" rx="20" fill="none" stroke="currentColor"/><text x="365" y="89" text-anchor="middle">dismissed</text>
+        <rect x="300" y="114" width="130" height="40" rx="20" fill="none" stroke="currentColor"/><text x="365" y="139" text-anchor="middle">superseded</text>
+        <line x1="142" y1="74" x2="298" y2="36" stroke="currentColor" marker-end="url(#ar5)"/><text x="205" y="44" font-size="11" opacity=".8">tap · keep</text>
+        <line x1="142" y1="82" x2="298" y2="84" stroke="currentColor" marker-end="url(#ar5)"/><text x="205" y="78" font-size="11" opacity=".8">swipe · let go</text>
+        <line x1="142" y1="92" x2="298" y2="132" stroke="currentColor" marker-end="url(#ar5)"/><text x="190" y="122" font-size="11" opacity=".8">new extractor version</text>
+        <line x1="432" y1="34" x2="520" y2="34" stroke="var(--olive)" marker-end="url(#ar5)"/><text x="530" y="38" font-size="11" fill="var(--olive)">never changed by a re-run</text>
+        <text x="80" y="128" text-anchor="middle" font-size="11" opacity=".7">lives in the session,</text><text x="80" y="143" text-anchor="middle" font-size="11" opacity=".7">then in "Waiting for you"</text>
+      </g>
+    </svg>
+    <figcaption>Candidate states. Only an owner action moves a card to accepted or dismissed. A re-run can only add pending cards or supersede ones the owner never touched.</figcaption>
+  </figure>
+  <p class="serves">Serves <b>P1</b> · <b>P2</b> · <b>P5</b></p>
+</section>
+
+<section id="resolve">
+  <h2>8. Resolution</h2>
+  <p>The resolver runs on the device after each extraction, and in the CLI. Input: anchors. Output: time ranges, floating memories, curiosity items. It must never ask for a date. It may generate one relative question per anchor, phrased as a choice between things the owner said. Try it below.</p>
+  <figure>
+    <p style="font-size:14px;margin-bottom:10px"><b>Memory:</b> "the bear at the campsite" · <b>anchor:</b> after "we moved to Boston" · <b>collection:</b> Yosemite trips (1996 to 2023)</p>
+    <div class="controls">
+      <button type="button" class="btn" data-step="0" id="res-0">Start</button>
+      <button type="button" class="btn" data-step="1" id="res-1">Place "moved to Boston"</button>
+      <button type="button" class="btn" data-step="2" id="res-2">Owner: "before Maya was born"</button>
+      <button type="button" class="btn" data-step="3" id="res-3">Owner confirms</button>
+    </div>
+    <div class="range-bar" aria-hidden="true"><div class="possible" id="res-pos"></div><div class="likely" id="res-lik"></div></div>
+    <div class="axis"><span>1996</span><span>2003</span><span>2010</span><span>2017</span><span>2023</span></div>
+    <div class="note" id="res-note"></div>
+    <figcaption>The light band is the possible range. The dark band is the likely range. Each step narrows the band from a thing the owner said. The owner can stop at any step. The timeline renders the current band.</figcaption>
+  </figure>
+  <h3>Algorithm, per memory, in this order</h3>
+  <ol>
+    <li><b>Absolute.</b> A stated date, season or year sets the range at that granularity. Origin: stated.</li>
+    <li><b>Age.</b> An age anchor and a known birth date give a one-year band, or the school-year band for grade phrases. Origin: inferred. The birth date comes from the "About you" screen at first open (origin typed, editable in Settings), or from speech (origin stated). If the two disagree, the app shows a "which is right?" card. It never picks silently. With no birth date, the memory floats.</li>
+    <li><b>Relative to a placed memory or chapter.</b> Before, after, during, or same year as a resolved target derives the band from the target's range. Origin: inferred.</li>
+    <li><b>Relative to an unplaced target.</b> Create a floating memory for the target. Link the anchor. Add a curiosity item with a payoff count: the number of memories that one answer would place.</li>
+    <li><b>Collection membership.</b> A memory in a collection with no range of its own renders inside the collection's span, still marked unplaced.</li>
+  </ol>
+  <ul>
+    <li>A confirmed range is never overwritten by the resolver.</li>
+    <li>A full re-run over all memories must give the same result as the incremental runs. The resolver is a pure function of anchors and confirmed ranges.</li>
+  </ul>
+  <p class="serves">Serves <b>P2</b> · <b>P4</b> follow the tangent, keep the thread · <b>P5</b></p>
+</section>
+
+<section id="arc">
+  <h2>9. Session arc and safety</h2>
+  <p>Stages: open, middle, wind-down, ended. The controller holds the elapsed time and the stage log. The numbers are configuration, not code. Move the slider to see what the app does at each minute.</p>
+  <figure>
+    <label for="arc-slider" style="font-size:13px;color:var(--muted)">Elapsed time: <b id="arc-min" style="color:var(--fg);font-variant-numeric:tabular-nums">0 min</b></label>
+    <input type="range" id="arc-slider" class="slider" min="0" max="60" value="0" step="1">
+    <svg viewBox="0 0 760 70" role="img" aria-label="Session arc from 0 to 60 minutes: open until about minute 5, middle until 40, wind-down until 60">
+      <g font-family="Inter,system-ui,sans-serif" font-size="11">
+        <rect x="20" y="20" width="60" height="22" fill="var(--panel-2)" stroke="currentColor"/><text x="50" y="35" text-anchor="middle" fill="currentColor">open</text>
+        <rect x="80" y="20" width="420" height="22" fill="var(--panel-2)" stroke="currentColor"/><text x="290" y="35" text-anchor="middle" fill="currentColor">middle</text>
+        <rect x="500" y="20" width="240" height="22" fill="var(--ochre-soft)" stroke="currentColor"/><text x="620" y="35" text-anchor="middle" fill="currentColor">wind-down</text>
+        <g fill="currentColor" opacity=".7"><text x="20" y="60">0</text><text x="500" y="60" text-anchor="middle">40 · banner</text><text x="740" y="60" text-anchor="end">60 · hard stop</text></g>
+        <line id="arc-cursor" x1="20" y1="10" x2="20" y2="50" stroke="var(--olive)" stroke-width="3"/>
+      </g>
+    </svg>
+    <div class="controls" style="margin-top:8px">
+      <label style="font-size:13px;display:flex;gap:6px;align-items:center"><input type="checkbox" id="arc-signal"> Early signal at this minute (owner taps "Let's leave it there", or the extractor flags wants_to_stop)</label>
+    </div>
+    <div class="stage-row">
+      <div class="stage-box"><h5>The app does</h5><div id="arc-does"></div></div>
+      <div class="stage-box"><h5>The app does not</h5><div id="arc-not"></div></div>
+    </div>
+    <figcaption>The wind-down banner appears at 40 minutes. Recording continues. The summary opens when the owner taps the banner, or at 60 minutes. Capture stops when the summary opens.</figcaption>
+  </figure>
+  <h3>Serious disclosure</h3>
+  <p>The extractor returns the flag. The app stops new memory cards. The app shows one pre-written card from <code>Arc/FixedResponses/disclosure.md</code>: short, warm, one offer of help with a crisis line for the owner's locale, no insistence. The app moves to wind-down. A unit test asserts the text is shown verbatim. The model never writes it. The owner approves the wording and the line before M4.</p>
+  <h3>Wind-down screen</h3>
+  <p>A list of this session's memories, accepted and pending. Each quotes the owner. Each has keep, private, or let go. Default is keep. Keep on a pending card accepts it. Let go on a pending card dismisses it and deletes its span. Let go on an accepted memory deletes per section 5. One closing line comes from the top curiosity item, or a neutral line if the session was flagged heavy.</p>
+  <p><span class="tag builder">Builder's call</span> Any card still pending after a session appears in a "Waiting for you" section at the top of the timeline. New cards from a later extractor version appear there too.</p>
+  <p>The session must not end without the wind-down screen, except on a crash. On the next launch the app resumes an un-landed session straight to its wind-down, with what was captured.</p>
+  <p class="serves">Serves <b>P6</b> hard chapters are doors · <b>P8</b> every session lands</p>
+</section>
+
+<section id="cli">
+  <h2>10. CLI and testing</h2>
+  <p><span class="tag builder">Builder's call</span> The app exports a session bundle (SQLite copy plus audio) through the share sheet. The CLI reads it. Nothing flows back. Re-running the extractor on real sessions is an in-app action in Settings that uses the same code. The CLI is for evaluation and prompt work.</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Command</th><th>What it does</th></tr></thead>
+    <tbody>
+      <tr><td><code>lifeline import &lt;transcript.json&gt;</code></td><td>Loads an invented or consented transcript as a session.</td></tr>
+      <tr><td><code>lifeline extract --session &lt;id&gt; [--version v2]</code></td><td>Runs the extractor. Prints candidates as a table.</td></tr>
+      <tr><td><code>lifeline resolve --all</code></td><td>Runs the resolver again. Prints a diff against the current ranges.</td></tr>
+      <tr><td><code>lifeline eval &lt;fixtures/&gt;</code></td><td>Runs extraction over fixture transcripts with hand-labeled expected candidates. Prints precision, invented-detail count and anchor coverage. This is the recording study's scoring, ready for when it runs.</td></tr>
+    </tbody>
+  </table></div>
+  <h3>Tests</h3>
+  <ul>
+    <li><b>Unit.</b> TimeRange arithmetic. The resolver. Context packet selection and caps. Schema decoding. Fixed-response text verbatim. Let-go span deletion on a synthetic audio file.</li>
+    <li><b>Integration</b> (macOS, needs a key, opt-in). The extractor over three invented fixtures. Assert that no field contains text absent from the transcript.</li>
+    <li><b>UI</b> (iOS). The wind-down flow is reachable from every stage. Resume to wind-down after a simulated crash.</li>
+  </ul>
+  <p>Fixtures are invented. No real person's data goes in the repo.</p>
+</section>
+
+<section id="milestones">
+  <h2>11. Milestones</h2>
+  <p>Each milestone is usable on the owner's phone. M1 comes before M2 on purpose. The owner starts recording real sessions on day one. Every later milestone runs again over them.</p>
+  <div class="timeline-track">
+    <div class="ms"><div class="n">M1</div><b>Record, transcribe, store, play back</b><p>A 30-minute screen-off session gives a session row, segments with words, and an audio file. A memory-less timeline shows the session. A tap on a segment plays it.</p></div>
+    <div class="ms"><div class="n">M2</div><b>Extract and confirm</b><p>Cards appear during a session. A tap creates memories and people. "Who's this?" works. The CLI runs <code>extract</code> on an exported session.</p></div>
+    <div class="ms"><div class="n">M3</div><b>Place</b><p>The resolver sets ranges. The timeline renders bands, collections, chapters and the shelf. The relative-question card narrows a range. Curiosity items show payoff.</p></div>
+    <div class="ms"><div class="n">M4</div><b>Land</b><p>Timer and button wind-down. Summary. Keep / private / let go with real deletion. Fixed disclosure response. Crash resume.</p></div>
+    <div class="ms"><div class="n">M5</div><b>Reprocess and tune</b><p>In-app re-run with a new extractor version adds new pending cards and does not touch accepted memories. The export bundle opens in the CLI. <code>eval</code> runs on fixtures.</p></div>
+  </div>
+</section>
+
+<section id="decisions">
+  <h2>12. Decisions made in this design</h2>
+  <p>To add to <code>docs/DECISIONS.md</code>.</p>
+  <details open><summary>Recording study deferred until after V1 is usable</summary><div class="body"><p>The owner's own sessions calibrate the extractor first. The <code>eval</code> command keeps the study's scoring ready.</p></div></details>
+  <details><summary>V1 is listen-only</summary><div class="body"><p>No TTS. No interviewer turns. <code>VoiceSession</code> ships as <code>ListenOnlyVoiceSession</code>. The commands <code>say</code>, <code>acknowledge</code> and <code>interrupt</code> are no-ops that log.</p></div></details>
+  <details><summary>No separate server in V1</summary><div class="body"><p>The app calls the Anthropic Messages API directly through <code>ExtractionService</code>. This supersedes the open "server language" item. When a server is needed, it is LifelineKit compiled as a Swift server executable.</p></div></details>
+  <details><summary>Model provider: Anthropic Console API, billed by key</summary><div class="body"><p>The Max subscription does not cover API calls. Default model <code>claude-opus-5-5</code>, configurable.</p></div></details>
+  <details><summary>First user: the owner, telling their own life</summary><div class="body"><p>"Hand the phone over" is not in V1.</p></div></details>
+  <details><summary>Typed context at the start is allowed</summary><div class="body"><p>An optional "About you" screen at first open takes name, birthday, birthplace and free text. Typed values carry origin <code>typed</code>. This is the one exception to "no form-style questions". In a session, the rule holds. Decided by the owner, 2026-10-21.</p></div></details>
+  <details><summary>Memory kinds and domains are a later design</summary><div class="body"><p>V1 ships one memory type and keeps the seam open. See section 6.</p></div></details>
+  <h3>13. Left to the builder</h3>
+  <ul>
+    <li>Exact GRDB schema DDL and migration naming.</li>
+    <li>Energy-gate parameters and debounce. Log the pause distribution to a local file.</li>
+    <li>The extractor prompt wording (v1), inside the rules in section 7.</li>
+    <li>Card and timeline visual implementation from <code>docs/design/*.dc.html</code>.</li>
+    <li>The order of memories on the summary screen. Proposal: session order.</li>
+    <li>Xcode project layout. One workspace, an app target, LifelineKit as a local package.</li>
+  </ul>
+</section>
+
+<section id="open">
+  <h2>14. Open questions for the owner</h2>
+  <p><b>1. Birth date.</b> Resolved 2026-10-21. It comes from the "About you" screen at first open. See sections 3, 8 and 12.</p>
+  <div class="question"><b>2. Disclosure card.</b> When the owner says something that signals serious harm (for example past abuse, or thoughts of self-harm), the app must show a fixed, pre-written card. It must not improvise a reply. The builder needs two things from the owner before M4: approval of the card's words, and the crisis line the card shows, which depends on the owner's country. Proposed draft, US: <i>"Thank you for telling me that. You can stop here, or keep going. It is your choice. If you need to talk to someone now, call or text 988 (Suicide and Crisis Lifeline, US)."</i></div>
+</section>
+
+<footer>Life Timeline · V1 design · Companion to <code>docs/PRINCIPLES.md</code>, <code>docs/OVERVIEW.md</code> and <code>docs/DECISIONS.md</code>. Sample names, places and dates are invented.</footer>
+</div>
+
+<script>
+(function(){
+  function pressGroup(container, onPick){
+    var btns = container.querySelectorAll('button');
+    btns.forEach(function(b){
+      b.addEventListener('click', function(){
+        btns.forEach(function(x){ x.setAttribute('aria-pressed', String(x===b)); });
+        onPick(b.dataset.k);
+      });
+    });
+  }
+
+  /* 3. Experience steps */
+  var expText = {
+    open: '<b>First open.</b> A short, optional "About you" screen comes first: name, birthday, where you grew up, and a free-text box ("Anything useful for me to know?"). Every field can be skipped. All of it can be edited later in Settings. Then one question on the screen: "Tell me about the house you grew up in." A mic button. Three alternate prompts in small type. No sign-up. <span class="tag">Owner decided 2026-10-21</span>',
+    session: '<b>Session.</b> The owner talks. The screen shows the live transcript. The phone can lock. Recording continues. When a thought ends, the segment goes to the extractor. Cards arrive under the transcript: "Sounds like a memory," a title in the owner\'s words, a fuzzy time in ochre, people chips. One tap adds it. A swipe dismisses it. Unknown names become "Who\'s this?" cards. The owner can ignore every card and keep talking.',
+    landing: '<b>Landing.</b> At the configured time, or when the owner taps "Let\'s leave it there," the session ends. The app shows a summary that quotes the owner. Each memory gets keep, private, or let go. Let go deletes that memory\'s audio span and transcript. One light forward-looking line closes the screen.',
+    timeline: '<b>Timeline.</b> Chapters as structure. Memories as range bands. Collections group related memories and derive a span. The shelf holds memories with neither a date nor a collection.',
+    memory: '<b>Memory.</b> The owner\'s audio for that memory. The transcript span. People and place chips. The range with its evidence ("you said: the summer after graduation"). A tap on the range offers the one relative question the resolver wants, as two or three taps. Never a date picker.',
+    people: '<b>People.</b> The queue of unresolved mentions. The resolved list with aliases. Resolve to an existing person, a new person, or "not a person."'
+  };
+  var expNote = document.getElementById('exp-note');
+  var expSvg = document.getElementById('exp-svg');
+  function showExp(k){
+    expNote.innerHTML = expText[k];
+    expSvg.querySelectorAll('.step').forEach(function(g){
+      var r = g.querySelector('rect');
+      var on = g.dataset.k === k;
+      r.setAttribute('stroke', on ? 'var(--olive)' : 'currentColor');
+      r.setAttribute('stroke-width', on ? '2.5' : '1');
+      r.setAttribute('fill', on ? 'var(--panel-2)' : 'none');
+    });
+  }
+  pressGroup(document.getElementById('exp-seg'), showExp);
+  showExp('open');
+
+  /* 4. Architecture toggle */
+  var archNote = document.getElementById('arch-note');
+  function showArch(k){
+    document.getElementById('arch-v1').hidden = (k !== 'v1');
+    document.getElementById('arch-later').hidden = (k !== 'later');
+    archNote.innerHTML = k === 'v1'
+      ? '<b>V1.</b> <code>AnthropicExtractionService</code> calls the Messages API with URLSession. The key lives in the Keychain. The request holds the segment text and the context packet. No audio leaves the device. No server stores anything, because there is no server.'
+      : '<b>Later.</b> <code>RemoteExtractionService</code> posts to your own endpoint. The server is LifelineKit compiled as a Swift executable. It runs the same prompt and the same schema. It holds the key. It must not persist a request or a response. The swap is one conformer and one line in the composition root.';
+  }
+  pressGroup(document.getElementById('arch-seg'), showArch);
+  showArch('v1');
+
+  /* 6. ER diagram */
+  var er = {
+    session: '<b>session</b> · id, started_at, ended_at, audio_path, stage_log (JSON), landing_choice_made. One per recording.',
+    segment: '<b>segment</b> · id, session_id, index, start_ms, end_ms, text, status (pending / extracted / failed). One completed thought.',
+    word: '<b>word</b> · segment_id, index, text, start_ms, end_ms. From the transcriber. Replay highlighting and let-go deletion use these spans.',
+    tombstone: '<b>tombstone</b> · id, session_id, start_ms, end_ms, removed_at. A span was let go. No content.',
+    candidate: '<b>candidate</b> · id, segment_id, extractor_version, kind (memory / person / place / anchor / flag), payload (JSON), confidence, status (pending / accepted / dismissed / superseded). Raw extractor output. Never edited. Only generated again. (segment_id, extractor_version) is unique.',
+    mention: '<b>mention</b> · id, segment_id, text, status (unresolved / resolved / not_a_person), person_id. The "Who\'s this?" queue.',
+    person: '<b>person</b> · id, display_name, notes, is_owner, birth_date, birth_date_origin (stated / typed). Exactly one row is the owner. <b>alias</b> · person_id, text ("Maya", "my sister"). <b>profile</b> · one row from the "About you" screen: display_name, birth_date, birth_place_text, free_text. Typed by the owner. free_text goes into the fixed part of the context packet. No Contacts link in V1.',
+    memory: '<b>memory</b> · id, title, summary_quote, time range columns, visibility (timeline / private), chapter_id, created_from_candidate_id. The confirmed thing on the timeline. Also memory_person (role_text is the owner\'s phrase) and memory_place.',
+    memory_span: '<b>memory_span</b> · memory_id, segment_id, start_ms, end_ms, order. A memory can span several segments. The first span is primary. "same_as_memory_id" from the extractor adds a span here. Let go deletes every span.',
+    anchor: '<b>anchor</b> · id, memory_id, phrase, relation (before / after / during / same_year_as / age / absolute), target_kind (memory / person_birth / chapter / public_event / none), target_id, value (JSON), resolved. A typed edge from a memory to what it is relative to.',
+    curiosity: '<b>curiosity_item</b> · id, kind (unresolved_anchor / unexplained_person / place_without_story / dropped_thread), text, payoff_count, status, source_memory_id. What the interviewer would ask next.',
+    chapter: '<b>chapter</b> · id, title, time range columns, order. Titled by the owner, or an untitled span. Created from a hint card or from the timeline.',
+    collection: '<b>collection</b> · id, title. The span is derived from members. <b>collection_memory</b> · collection_id, memory_id.',
+    place: '<b>place</b> · id, name_text, lat, lon. The name is the owner\'s phrase.'
+  };
+  var erNote = document.getElementById('er-note');
+  var ents = document.querySelectorAll('#er .ent');
+  function pickEnt(g){
+    ents.forEach(function(x){ x.classList.toggle('on', x===g); });
+    erNote.innerHTML = er[g.dataset.t];
+  }
+  ents.forEach(function(g){
+    g.addEventListener('click', function(){ pickEnt(g); });
+    g.addEventListener('keydown', function(e){ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); pickEnt(g); } });
+  });
+  pickEnt(document.querySelector('#er .ent[data-t="candidate"]'));
+
+  /* 7. Segment stepper */
+  var segSteps = [
+    ['<b>Speech.</b> The owner talks. One AVAudioEngine tap writes the m4a file and feeds the transcriber. Words arrive with start and end milliseconds. Everything stays on the device.', 8, 109],
+    ['<b>Segment closes.</b> The energy gate sees 1.8 s of silence after at least 3 s of speech. The segment row is written with status pending. The log records the pause length for later calibration.', 133, 109],
+    ['<b>Context packet.</b> The builder selects: the previous two segments, people with aliases, chapters, this session\'s memories, open curiosity items, the stage. Caps apply. Private memories are excluded.', 258, 109],
+    ['<b>Extractor.</b> One Messages API call. Text in. Structured JSON out, validated against the schema. Every content field must be a span or a quote from the segment. The flags ride along.', 383, 109],
+    ['<b>Cards.</b> Candidates are stored immutably with the extractor version. The session screen shows them as cards with fuzzy time in ochre. Names the app does not know become "Who\'s this?" cards.', 508, 109],
+    ['<b>Memory.</b> One tap accepts a card. The memory keeps a span into the segment. The resolver runs on its anchors. The range renders as a guess until the owner confirms it.', 633, 119]
+  ];
+  var segI = 0;
+  var segHl = document.getElementById('seg-hl');
+  var segNote = document.getElementById('seg-note');
+  var segCount = document.getElementById('seg-count');
+  function showSeg(){
+    var s = segSteps[segI];
+    segNote.innerHTML = s[0];
+    segHl.setAttribute('x', s[1]); segHl.setAttribute('width', s[2]);
+    segCount.textContent = 'Step ' + (segI+1) + ' of ' + segSteps.length;
+    document.getElementById('seg-prev').disabled = segI===0;
+    document.getElementById('seg-next').disabled = segI===segSteps.length-1;
+  }
+  document.getElementById('seg-prev').addEventListener('click', function(){ if(segI>0){segI--; showSeg();} });
+  document.getElementById('seg-next').addEventListener('click', function(){ if(segI<segSteps.length-1){segI++; showSeg();} });
+  showSeg();
+
+  /* 8. Resolver demo. Axis 1996..2023 (27 years). */
+  var Y0 = 1996, SPAN = 27;
+  function pct(y){ return ((y - Y0) / SPAN * 100).toFixed(2) + '%'; }
+  function setBand(el, a, b){ el.style.left = pct(a); el.style.width = ((b - a) / SPAN * 100).toFixed(2) + '%'; }
+  var resSteps = [
+    { pos:[1996,2023], lik:[1996,2023], text:'<b>Start.</b> The memory is in the Yosemite collection. It has no range of its own. The anchor "after we moved to Boston" points at an unplaced target. The resolver creates a floating memory "we moved to Boston" and a curiosity item. Payoff: placing Boston would place this memory and three others.' },
+    { pos:[2011,2023], lik:[2011,2016], text:'<b>Target placed.</b> In another story the owner said "the Boston years" began in 2011. The chapter is placed. The resolver derives: earliest 2011, likely 2011 to 2016. Origin: inferred. The band renders as a guess.' },
+    { pos:[2011,2014], lik:[2012,2014], text:'<b>Relative question answered.</b> The card asked: "before or after Maya was born?" The owner tapped "before." Maya\'s birth (2014) is already placed. Latest becomes 2014. Likely 2012 to 2014. Still inferred, still a guess.' },
+    { pos:[2013,2013], lik:[2013,2013], text:'<b>Confirmed.</b> The owner says "that was the summer of 2013." Origin: confirmed, granularity: season. The resolver will never overwrite this range again.' }
+  ];
+  var resPos = document.getElementById('res-pos'), resLik = document.getElementById('res-lik'), resNote = document.getElementById('res-note');
+  function showRes(i){
+    var s = resSteps[i];
+    setBand(resPos, s.pos[0], s.pos[1] + (s.pos[0]===s.pos[1] ? 1 : 0));
+    setBand(resLik, s.lik[0], s.lik[1] + (s.lik[0]===s.lik[1] ? 1 : 0));
+    resNote.innerHTML = s.text;
+    for (var k=0;k<4;k++){ document.getElementById('res-'+k).classList.toggle('primary', k===i); }
+  }
+  for (var k=0;k<4;k++){ (function(i){ document.getElementById('res-'+i).addEventListener('click', function(){ showRes(i); }); })(k); }
+  showRes(0);
+
+  /* 9. Session arc slider */
+  var slider = document.getElementById('arc-slider'), arcMin = document.getElementById('arc-min'), cursor = document.getElementById('arc-cursor');
+  var does = document.getElementById('arc-does'), not = document.getElementById('arc-not'), sig = document.getElementById('arc-signal');
+  function showArc(){
+    var m = Number(slider.value);
+    arcMin.textContent = m + ' min';
+    var x = 20 + (m/60)*720;
+    cursor.setAttribute('x1', x); cursor.setAttribute('x2', x);
+    var early = sig.checked;
+    if (early){
+      does.innerHTML = 'Enters wind-down now. Recording continues until the owner taps the banner. Shows the summary with keep / private / let go. Closes with a neutral line if the extractor flagged the session heavy.';
+      not.innerHTML = 'Does not show a new memory card from this topic. Does not show a curiosity prompt. Does not end without the summary screen.';
+    } else if (m < 5){
+      does.innerHTML = 'Shows one question and a mic. Records. Transcribes on the device. Writes segments as thoughts close.';
+      not.innerHTML = 'Does not ask a second question. Does not show a form. Does not speak (V1).';
+    } else if (m < 40){
+      does.innerHTML = 'Records with the screen off. Extracts after each segment. Shows memory cards and "Who\'s this?" cards. Resolves anchors as they arrive. Logs pause lengths.';
+      not.innerHTML = 'Does not redirect the owner. Does not fill in an unsaid detail. Does not show an inferred date as a fact.';
+    } else if (m < 60){
+      does.innerHTML = 'Shows the "Let\'s leave it there" banner. Keeps recording and extracting while the owner talks. Opens the summary when the owner taps the banner.';
+      not.innerHTML = 'Does not show a new curiosity prompt. Does not open a new door. Does not stop capture until the summary opens.';
+    } else {
+      does.innerHTML = 'Hard stop. Capture ends. The summary opens with every accepted and pending memory. Keep is the default. Let go deletes the span from the audio file and writes a tombstone.';
+      not.innerHTML = 'Does not keep audio the owner let go. Does not end mid-story without the landing. On a crash, resumes straight to this screen on the next launch.';
+    }
+  }
+  slider.addEventListener('input', showArc);
+  sig.addEventListener('change', showArc);
+  showArc();
+})();
+</script>

@@ -32,6 +32,13 @@ A voice-first app: a person tells stories from their life, a timeline fills in, 
 - `docs/` — everything above
 - `docs/experiments/` — research protocols and results; the recording study comes first
 
+## Code quality (owner's standing instruction, 2026-10-21)
+
+- Optimize for clean, modular, readable code the owner can read months later. One responsibility per file. Small types with explicit interfaces. Names that say what a thing is, not how it was built.
+- Think about edge cases before writing the happy path: interruptions, empty input, out-of-range values, duplicate events, a kill mid-operation, a missing file or model. Each edge case that matters gets a test or a one-line comment that says why it does not.
+- Prefer a pure function with a test over a stateful object with a comment.
+- Specs live in `docs/specs/`, plans in `docs/plans/`. Write the design before the code.
+
 ## Conventions
 
 - Commit messages: imperative, one line, plus a body when the why is not obvious.
