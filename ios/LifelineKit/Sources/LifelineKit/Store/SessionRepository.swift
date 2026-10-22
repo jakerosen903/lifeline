@@ -3,7 +3,7 @@ import GRDB
 
 /// Reads and writes sessions, segments and words.
 public struct SessionRepository: Sendable {
-    private let db: AppDatabase
+    fileprivate let db: AppDatabase
 
     public init(_ db: AppDatabase) { self.db = db }
 
@@ -49,5 +49,12 @@ public struct SessionRepository: Sendable {
         try db.writer.read {
             try Word.filter(Column("segment_id") == segment.rawValue).order(Column("index")).fetchAll($0)
         }
+    }
+}
+
+extension SessionRepository {
+    /// Removes a session and, by cascade, its segments and words.
+    public func delete(_ id: SessionID) throws {
+        _ = try db.writer.write { try Session.deleteOne($0, key: id.rawValue) }
     }
 }
