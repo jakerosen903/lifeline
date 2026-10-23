@@ -56,6 +56,8 @@ final class TimelineViewModel {
     private(set) var axis: ClosedRange<Int>?
     private(set) var summary = ""
     private(set) var error: String?
+    /// The Hidden filter: show memories hidden from the timeline too.
+    var showHidden = false { didSet { refresh() } }
     private var skippedQuestions: Set<MemoryID> = []
 
     let home: HomeViewModel
@@ -76,7 +78,7 @@ final class TimelineViewModel {
     func refresh() {
         do {
             let store = deps.extractionStore
-            let all = try store.memories.visibleMemories().filter { !$0.isFloating }
+            let all = try (showHidden ? store.memories.allMemories() : store.memories.visibleMemories()).filter { !$0.isFloating }
             let birth = try store.profile.ownerBirthDate()
             let rows = Dictionary(uniqueKeysWithValues: try all.map { ($0.id, try row(for: $0, birth: birth)) })
             let allCollections = try store.chapters.collections()

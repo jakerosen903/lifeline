@@ -92,16 +92,30 @@ struct TimelineScreen: View {
                 }
                 .scrollContentBackground(.hidden)
 
-                Button {
-                    Task { await viewModel.home.startSession() }
-                } label: {
-                    Label("Start", systemImage: "mic.fill")
-                        .font(.title2.weight(.semibold))
-                        .frame(width: 140, height: 140)
-                        .background(Circle().fill(Theme.olive))
-                        .foregroundStyle(.white)
+                HStack(spacing: 12) {
+                    Button {
+                        Task { await viewModel.home.startSession(kind: .quick) }
+                    } label: {
+                        Label("Tell a quick story", systemImage: "mic.fill")
+                            .font(.headline)
+                            .frame(maxWidth: .infinity)
+                            .padding()
+                            .background(RoundedRectangle(cornerRadius: 18).fill(Theme.olive))
+                            .foregroundStyle(.white)
+                    }
+                    .accessibilityIdentifier("home.start")
+                    Button {
+                        Task { await viewModel.home.startSession(kind: .settleIn) }
+                    } label: {
+                        Text("Settle in")
+                            .font(.headline)
+                            .padding()
+                            .background(RoundedRectangle(cornerRadius: 18).fill(Theme.sand))
+                            .foregroundStyle(Theme.ink)
+                    }
+                    .accessibilityIdentifier("home.settleIn")
                 }
-                .accessibilityIdentifier("home.start")
+                .padding(.horizontal, 24)
                 .padding(.bottom, 24)
             }
             .linenBackground()
@@ -110,6 +124,9 @@ struct TimelineScreen: View {
                 MemoryScreen(viewModel: MemoryViewModel(memory: row.memory, deps: viewModel.deps), deps: viewModel.deps) { viewModel.refresh() }
             }
             .toolbar {
+                Button { viewModel.showHidden.toggle() } label: { Image(systemName: viewModel.showHidden ? "eye" : "eye.slash") }
+                    .accessibilityLabel(viewModel.showHidden ? "Showing hidden memories" : "Hidden memories are not shown")
+                    .accessibilityIdentifier("timeline.showHidden")
                 NavigationLink { SessionsScreen(viewModel: viewModel.home) } label: { Image(systemName: "waveform") }
                     .accessibilityIdentifier("timeline.sessions")
                 NavigationLink { PeopleScreen(viewModel: PeopleViewModel(deps: viewModel.deps)) } label: { Image(systemName: "person.2") }
@@ -131,8 +148,13 @@ struct TimelineScreen: View {
             } message: { _ in
                 Text("The memory, its people and its dates go. Your recording stays in Sessions.")
             }
-            .fullScreenCover(item: $home.activeSession) { session in
-                SessionScreen(viewModel: session) { viewModel.sessionEnded() }
+            .fullScreenCover(item: $home.presented) { presented in
+                switch presented {
+                case .session(let session):
+                    SessionScreen(viewModel: session) { viewModel.sessionEnded() }
+                case .landing(let landing):
+                    LandingScreen(viewModel: landing) { another in viewModel.home.landingClosed(tellAnother: another); viewModel.refresh() }
+                }
             }
             .alert("Add to a collection", isPresented: Binding(get: { collectionTarget != nil }, set: { if !$0 { collectionTarget = nil } }), presenting: collectionTarget) { row in
                 TextField("Collection name", text: $collectionTitle)

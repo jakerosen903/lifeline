@@ -11,9 +11,25 @@ final class HomeViewModel {
         var id: SessionID { session.id }
     }
 
+    /// What the full-screen cover shows: the live session, then its landing, in the same cover.
+    enum Presented: Identifiable {
+        case session(SessionViewModel)
+        case landing(LandingViewModel)
+        var id: UUID {
+            switch self {
+            case .session(let vm): vm.id
+            case .landing(let vm): vm.id
+            }
+        }
+    }
+
     private(set) var rows: [Row] = []
     private(set) var error: String?
-    var activeSession: SessionViewModel?
+    var presented: Presented?
+    var activeSession: SessionViewModel? {
+        if case .session(let vm) = presented { return vm }
+        return nil
+    }
     let deps: Dependencies
 
     init(deps: Dependencies) {
@@ -53,14 +69,30 @@ final class HomeViewModel {
             return
         }
         let vm = SessionViewModel(deps: deps, kind: kind)
-        activeSession = vm
+        presented = .session(vm)
         await vm.start()
     }
 
+    /// Finish: the cover swaps to the landing. A session with no words lands quietly.
     func sessionEnded() {
-        activeSession = nil
+        let ended = activeSession
         deps.deactivateAudio()
         refresh()
+        guard let ended, let id = ended.state.sessionID, let session = try? deps.sessions.fetch(id),
+              !((try? deps.sessions.segments(in: id)) ?? []).isEmpty else {
+            if let id = ended?.state.sessionID { try? deps.sessions.markLanded(id, stageLog: "[]") }
+            presented = nil
+            return
+        }
+        presented = .landing(LandingViewModel(session: session, heavy: ended.heavy, presentDanger: ended.presentDanger, deps: deps))
+    }
+
+    func present(landing: LandingViewModel) { presented = .landing(landing) }
+
+    func landingClosed(tellAnother: Bool) {
+        presented = nil
+        refresh()
+        if tellAnother { Task { await startSession(kind: .quick) } }
     }
 
     /// Duration from the last segment's end; falls back to the wall clock for a session with no segments.

@@ -7,8 +7,7 @@ final class ExtractionUITests: XCTestCase {
         let app = XCUIApplication()
         app.launchArguments = ["-uiTesting"]
         app.launch()
-        XCTAssertTrue(app.buttons["aboutYou.skip"].waitForExistence(timeout: 5))
-        app.buttons["aboutYou.skip"].tap()
+        app.skipFirstOpen()
         XCTAssertTrue(app.buttons["home.start"].waitForExistence(timeout: 5))
         return app
     }
@@ -22,7 +21,7 @@ final class ExtractionUITests: XCTestCase {
         XCTAssertTrue(blueDoorCard.exists)
         app.buttons["card.add"].firstMatch.tap()
         XCTAssertFalse(blueDoorCard.waitForExistence(timeout: 2), "the card goes once added")
-        app.buttons["session.finish"].tap()
+        app.finishSession()
 
         XCTAssertTrue(app.buttons["timeline.sessions"].waitForExistence(timeout: 10))
         app.buttons["timeline.sessions"].tap()
@@ -40,7 +39,7 @@ final class ExtractionUITests: XCTestCase {
         app.startSession()
         XCTAssertTrue(app.staticTexts["Who's this?"].waitForExistence(timeout: 20), "a who-is-this card should appear")
         app.buttons["card.newPerson"].firstMatch.tap()
-        app.buttons["session.finish"].tap()
+        app.finishSession()
         XCTAssertTrue(app.buttons["home.people"].waitForExistence(timeout: 5))
         app.buttons["home.people"].tap()
         let person = app.buttons["people.row"].firstMatch
@@ -65,7 +64,7 @@ final class ExtractionUITests: XCTestCase {
         let app = launchToHome()
         app.startSession()
         XCTAssertTrue(app.staticTexts["Sounds like a memory"].waitForExistence(timeout: 15))
-        app.buttons["session.finish"].tap()
+        app.finishSession()
         XCTAssertTrue(app.buttons["timeline.sessions"].waitForExistence(timeout: 10))
         app.buttons["timeline.sessions"].tap()
         let row = app.buttons["home.sessionRow"].firstMatch

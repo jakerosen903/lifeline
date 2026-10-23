@@ -7,8 +7,7 @@ final class TimelineUITests: XCTestCase {
         let app = XCUIApplication()
         app.launchArguments = ["-uiTesting"]
         app.launch()
-        XCTAssertTrue(app.buttons["aboutYou.skip"].waitForExistence(timeout: 5))
-        app.buttons["aboutYou.skip"].tap()
+        app.skipFirstOpen()
         XCTAssertTrue(app.buttons["home.start"].waitForExistence(timeout: 5))
         return app
     }
@@ -26,7 +25,7 @@ final class TimelineUITests: XCTestCase {
         if accept == 0 {
             XCTAssertTrue(app.staticTexts["session.segment"].firstMatch.waitForExistence(timeout: 15))
         }
-        app.buttons["session.finish"].tap()
+        app.finishSession()
         XCTAssertTrue(app.buttons["home.start"].waitForExistence(timeout: 10))
     }
 
@@ -108,7 +107,7 @@ final class TimelineUITests: XCTestCase {
         XCTAssertTrue(prompt.waitForExistence(timeout: 5))
         XCTAssertEqual(prompt.label, "Tell me about the house you grew up in.")
         XCTAssertTrue(app.staticTexts["session.segment"].firstMatch.waitForExistence(timeout: 15))
-        app.buttons["session.finish"].tap()
+        app.finishSession()
         XCTAssertTrue(app.buttons["home.start"].waitForExistence(timeout: 10))
 
         app.startSession(review: false)
@@ -119,7 +118,7 @@ final class TimelineUITests: XCTestCase {
         let alternateText = alternate.label
         alternate.tap()
         XCTAssertEqual(prompt.label, alternateText, "tapping an alternate swaps it in")
-        app.buttons["session.finish"].tap()
+        app.finishSession()
     }
 
     @MainActor
@@ -143,9 +142,10 @@ final class TimelineUITests: XCTestCase {
         let dismiss = app.buttons["card.dismiss"].firstMatch
         XCTAssertTrue(dismiss.waitForExistence(timeout: 15))
         dismiss.tap()   // "Not quite" on the blue door, in the session
-        app.buttons["session.finish"].tap()
+        app.finishSession()
         XCTAssertTrue(app.buttons["timeline.sessions"].waitForExistence(timeout: 10))
         app.buttons["timeline.sessions"].tap()
+        XCTAssertTrue(app.buttons["home.sessionRow"].firstMatch.waitForExistence(timeout: 5))
         app.buttons["home.sessionRow"].firstMatch.tap()
         let bringBack = app.buttons["detail.bringBack"].firstMatch
         XCTAssertTrue(reveal(bringBack, in: app), "a dismissed card is listed with a way back")

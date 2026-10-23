@@ -20,6 +20,8 @@ struct Dependencies {
     let promptLog: PromptLogRepository
     /// The arc's numbers: short under `-uiTesting`.
     let arcConfig: ArcConfig
+    /// Durable sorting: started at launch, cancelled per session before a delete.
+    let worker: SortingWorker
 
     /// A fresh question for the next session: an open thread first, then the bank without repeats.
     func opening() -> Opening {
@@ -53,11 +55,10 @@ struct Dependencies {
         let root = try AudioLocation.defaultRoot()
         let db = try AppDatabase.open(at: root.appending(path: "Lifeline/lifeline.sqlite"))
         let sessions = SessionRepository(db)
-        let resume = try SessionRecorder.recoverUnfinishedSessions(sessions)
-        if !resume.isEmpty { print("[lifeline] \(resume.count) session(s) to resume at the landing") }
         let pauseLog = PauseLog(url: root.appending(path: "Lifeline/pauses.log"))
         let secrets = KeychainSecretStore()
         let store = ExtractionStore(db)
+        let extraction = AnthropicExtractionService(apiKey: { try? secrets.read(.anthropicAPIKey) })
         return Dependencies(
             sessions: sessions,
             profile: ProfileRepository(db),
@@ -77,19 +78,28 @@ struct Dependencies {
             deactivateAudio: { AudioSessionConfigurator.deactivate() },
             requestMicrophone: { await AudioSessionConfigurator.requestMicrophoneAccess() },
             secrets: secrets,
-            extraction: AnthropicExtractionService(apiKey: { try? secrets.read(.anthropicAPIKey) }),
+            extraction: extraction,
             extractionStore: store,
             actions: CandidateActions(store: store),
             promptLog: PromptLogRepository(db),
-            arcConfig: .default)
+            arcConfig: .default,
+            worker: SortingWorker(store: store, service: extraction, log: { print("[sorting] \($0)") }))
     }
 
     /// Fresh temp database, scripted voice and extraction, in-memory secrets with a fake key.
     /// Selected by the `-uiTesting` launch argument.
     static func uiTesting() throws -> Dependencies {
-        let root = FileManager.default.temporaryDirectory.appending(path: "lifeline-ui-\(UUID().uuidString)")
+        // `-uiTesting-db <dir>` reuses one directory across a terminate and relaunch (crash-resume tests).
+        let args = CommandLine.arguments
+        let root: URL
+        if let i = args.firstIndex(of: "-uiTesting-db"), i + 1 < args.count {
+            root = URL(fileURLWithPath: args[i + 1])
+        } else {
+            root = FileManager.default.temporaryDirectory.appending(path: "lifeline-ui-\(UUID().uuidString)")
+        }
         let db = try AppDatabase.open(at: root.appending(path: "Lifeline/lifeline.sqlite"))
         let store = ExtractionStore(db)
+        let extraction = ScriptedExtractionService(delayMs: 200, heavy: args.contains("-uiTesting-heavy"))
         return Dependencies(
             sessions: SessionRepository(db),
             profile: ProfileRepository(db),
@@ -103,10 +113,11 @@ struct Dependencies {
             deactivateAudio: {},
             requestMicrophone: { true },
             secrets: InMemorySecretStore([.anthropicAPIKey: "sk-ant-api03-" + String(repeating: "x", count: 40)]),
-            extraction: ScriptedExtractionService(delayMs: 200, heavy: CommandLine.arguments.contains("-uiTesting-heavy")),
+            extraction: extraction,
             extractionStore: store,
             actions: CandidateActions(store: store),
             promptLog: PromptLogRepository(db),
-            arcConfig: .uiTesting)
+            arcConfig: .uiTesting,
+            worker: SortingWorker(store: store, service: extraction))
     }
 }
