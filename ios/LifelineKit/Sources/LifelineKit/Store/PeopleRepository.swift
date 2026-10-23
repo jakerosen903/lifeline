@@ -108,7 +108,7 @@ public struct PeopleRepository: Sendable {
         if !exists { try Alias(personID: person, text: trimmed).insert(db) }
     }
 
-    static func normalize(_ text: String) -> String {
+    public static func normalize(_ text: String) -> String {
         text.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
     }
 }

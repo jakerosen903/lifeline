@@ -88,6 +88,12 @@ Phase 1 personal timeline → Phase 2 props (photos, then music) → Phase 3 fam
 
 **Decision.** On a `serious_disclosure` flag the app shows this fixed card and nothing improvised: "Thank you for telling me that. You can stop here, or keep going. It is your choice. If you need to talk to someone now, call or text 988 (Suicide and Crisis Lifeline, US)." The crisis line is a locale-keyed configuration value; V1 ships the US line only.
 
+## 2026-10-22 · API key lives in the Keychain, typed into Settings
+
+The Anthropic Console key is entered in Settings and stored in the device Keychain (after first unlock, this device only). It is never in a build setting, an xcconfig, the repo or a log. The CLI reads `ANTHROPIC_API_KEY` from the environment instead.
+
+Why: nothing secret in the build; the owner can rotate the key without a rebuild; the same code path serves a second phone later. Cost: a first-run setup step, and sessions before the key is added are recorded but not sorted (they are retried by the CLI or a later re-run).
+
 ## Open · Memory kinds and domains
 
 A later version will sub-divide memories by kind (fact, feeling, goal or intention, event, other) and by domain (relationships, health, education, travel, work, more). V1 ships one memory type and keeps the seam open: the candidate payload is JSON so a new extractor version can back-fill, no V1 code or copy assumes a memory is an event, and collection and chapter hints stay free text. Design after V1 has real sessions.

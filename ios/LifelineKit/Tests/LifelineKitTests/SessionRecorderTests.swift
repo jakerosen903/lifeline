@@ -18,7 +18,9 @@ private func waitUntil(_ cond: @escaping () async -> Bool, timeoutMs: Int = 2_00
 @Test func startInsertsOpenSessionBeforeVoiceStarts() async throws {
     let db = try AppDatabase.inMemory(); let repo = SessionRepository(db); let voice = FakeVoiceSession()
     let rec = makeRecorder(voice: voice, repo: repo)
-    let id = try await rec.start()
+    let chosen = SessionID()
+    let id = try await rec.start(id: chosen)
+    #expect(id == chosen, "the caller's id is the session's id")
     let row = try #require(try repo.fetch(id))
     #expect(row.endedAt == nil && row.startedAt == Date(timeIntervalSince1970: 1_000))
     #expect(row.audioPath == "\(id.rawValue).m4a")

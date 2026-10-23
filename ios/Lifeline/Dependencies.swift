@@ -2,7 +2,8 @@ import Foundation
 import LifelineKit
 
 /// The composition root. Everything the screens need, wired once at launch.
-/// `live()` uses the microphone and on-device speech; `uiTesting()` plays a script.
+/// `live()` uses the microphone, on-device speech, the Keychain and the Messages API;
+/// `uiTesting()` plays scripts and keeps secrets in memory.
 struct Dependencies {
     let sessions: SessionRepository
     let profile: ProfileRepository
@@ -12,6 +13,10 @@ struct Dependencies {
     let activatePlayback: @Sendable () throws -> Void
     let deactivateAudio: @Sendable () -> Void
     let requestMicrophone: @Sendable () async -> Bool
+    let secrets: any SecretStore
+    let extraction: any ExtractionService
+    let extractionStore: ExtractionStore
+    let actions: CandidateActions
 
     func audioURL(for id: SessionID) throws -> URL {
         try AudioLocation.url(for: id, under: audioRoot)
@@ -21,8 +26,15 @@ struct Dependencies {
         try AudioLocation.directory(under: audioRoot).appending(path: session.audioPath)
     }
 
-    func makeRecorder(onStatus: @escaping @Sendable (TranscriberAvailability) -> Void) -> SessionRecorder {
-        SessionRecorder(voice: makeVoiceSession(onStatus), sessions: sessions, audioURL: { try audioURL(for: $0) })
+    func makeExtractionQueue(for session: SessionID) -> ExtractionQueue {
+        ExtractionQueue(session: session, service: extraction, store: extractionStore, log: { print("[extract] \($0)") })
+    }
+
+    /// A recorder whose stored segments feed `queue` and whose Stop waits for it to drain.
+    func makeRecorder(onStatus: @escaping @Sendable (TranscriberAvailability) -> Void, queue: ExtractionQueue) -> SessionRecorder {
+        SessionRecorder(voice: makeVoiceSession(onStatus), sessions: sessions, audioURL: { try audioURL(for: $0) },
+                        hooks: RecorderHooks(onSegmentStored: { id in Task { await queue.enqueue(id) } },
+                                             onStop: { await queue.drain() }))
     }
 
     static func live() throws -> Dependencies {
@@ -32,6 +44,8 @@ struct Dependencies {
         let recovered = try SessionRecorder.recoverUnfinishedSessions(sessions)
         if recovered > 0 { print("[lifeline] closed \(recovered) unfinished session(s)") }
         let pauseLog = PauseLog(url: root.appending(path: "Lifeline/pauses.log"))
+        let secrets = KeychainSecretStore()
+        let store = ExtractionStore(db)
         return Dependencies(
             sessions: sessions,
             profile: ProfileRepository(db),
@@ -49,13 +63,19 @@ struct Dependencies {
             activateAudio: { try AudioSessionConfigurator.activateForRecording() },
             activatePlayback: { try AudioSessionConfigurator.activateForPlayback() },
             deactivateAudio: { AudioSessionConfigurator.deactivate() },
-            requestMicrophone: { await AudioSessionConfigurator.requestMicrophoneAccess() })
+            requestMicrophone: { await AudioSessionConfigurator.requestMicrophoneAccess() },
+            secrets: secrets,
+            extraction: AnthropicExtractionService(apiKey: { try? secrets.read(.anthropicAPIKey) }),
+            extractionStore: store,
+            actions: CandidateActions(store: store))
     }
 
-    /// Fresh temp database, scripted voice, no audio session. Selected by the `-uiTesting` launch argument.
+    /// Fresh temp database, scripted voice and extraction, in-memory secrets with a fake key.
+    /// Selected by the `-uiTesting` launch argument.
     static func uiTesting() throws -> Dependencies {
         let root = FileManager.default.temporaryDirectory.appending(path: "lifeline-ui-\(UUID().uuidString)")
         let db = try AppDatabase.open(at: root.appending(path: "Lifeline/lifeline.sqlite"))
+        let store = ExtractionStore(db)
         return Dependencies(
             sessions: SessionRepository(db),
             profile: ProfileRepository(db),
@@ -67,6 +87,10 @@ struct Dependencies {
             activateAudio: {},
             activatePlayback: {},
             deactivateAudio: {},
-            requestMicrophone: { true })
+            requestMicrophone: { true },
+            secrets: InMemorySecretStore([.anthropicAPIKey: "sk-ant-api03-" + String(repeating: "x", count: 40)]),
+            extraction: ScriptedExtractionService(delayMs: 200),
+            extractionStore: store,
+            actions: CandidateActions(store: store))
     }
 }

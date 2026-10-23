@@ -25,12 +25,19 @@ struct SessionScreen: View {
                                 .id(segment.id)
                         }
                         liveText
+                        CardStack(cards: viewModel.visibleCards, handler: viewModel.cards,
+                                  onAccept: { viewModel.accept($0) }, onDismiss: { viewModel.dismiss($0) },
+                                  onResolve: { viewModel.resolve($0, $1) })
+                            .padding(.top, 8)
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(24)
                 }
                 .onChange(of: viewModel.state.segments.count) {
                     withAnimation { proxy.scrollTo("live", anchor: .bottom) }
+                }
+                .onChange(of: viewModel.visibleCards.map(\.id)) {
+                    if let last = viewModel.visibleCards.last { withAnimation { proxy.scrollTo(last.id, anchor: .bottom) } }
                 }
             }
             footer

@@ -4,17 +4,46 @@ import LifelineKit
 @MainActor
 @Observable
 final class SessionDetailViewModel {
+    struct MemoryRow: Identifiable {
+        let memory: Memory
+        let people: [String]
+        let anchors: [String]
+        var id: MemoryID { memory.id }
+    }
+
     let session: Session
     private(set) var segments: [Segment] = []
+    private(set) var memories: [MemoryRow] = []
+    private(set) var waiting: [Card] = []
     private(set) var error: String?
     let player = SegmentPlayer()
+    let cards: CardHandler
     private let deps: Dependencies
 
     init(session: Session, deps: Dependencies) {
         self.session = session
         self.deps = deps
-        do { segments = try deps.sessions.segments(in: session.id) } catch { self.error = error.localizedDescription }
+        cards = CardHandler(deps: deps)
+        refresh()
     }
+
+    func refresh() {
+        do {
+            segments = try deps.sessions.segments(in: session.id)
+            memories = try deps.extractionStore.memories.memories(in: session.id).map { memory in
+                MemoryRow(memory: memory,
+                          people: try deps.extractionStore.memories.people(of: memory.id).map(\.displayName),
+                          anchors: try deps.extractionStore.memories.anchors(of: memory.id).map(\.phrase))
+            }
+            waiting = try deps.extractionStore.candidates.pending(in: session.id).compactMap(Card.init)
+        } catch {
+            self.error = error.localizedDescription
+        }
+    }
+
+    func accept(_ card: Card) { if cards.accept(card) { refresh() } }
+    func dismiss(_ card: Card) { if cards.dismiss(card) { refresh() } }
+    func resolve(_ card: Card, _ choice: MentionChoice) { if cards.resolve(card, choice) { refresh() } }
 
     func isPlaying(_ segment: Segment) -> Bool { player.playingRange == segment.range && player.isPlaying }
 

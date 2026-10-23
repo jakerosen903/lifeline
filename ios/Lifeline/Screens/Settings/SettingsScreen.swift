@@ -1,18 +1,106 @@
+import LifelineKit
 import SwiftUI
 
-/// Settings is the About you form in edit mode. M2 adds the extractor controls here.
+/// Settings: the About you form in edit mode, and the key that lets the app sort what you say.
 struct SettingsScreen: View {
     let deps: Dependencies
     @Environment(\.dismiss) private var dismiss
+    @State private var key = APIKeyViewModel()
 
     var body: some View {
         NavigationStack {
-            AboutYouScreen(viewModel: AboutYouViewModel(profile: deps.profile, mode: .settings) { dismiss() })
-                .navigationTitle("Settings")
-                .navigationBarTitleDisplayMode(.inline)
-                .toolbar {
-                    Button("Done") { dismiss() }.accessibilityIdentifier("settings.done")
+            Form {
+                AboutYouFields(viewModel: AboutYouViewModel(profile: deps.profile, mode: .settings) { dismiss() })
+
+                APIKeySection(key: key, secrets: deps.secrets)
+            }
+            .scrollContentBackground(.hidden)
+            .linenBackground()
+            .navigationTitle("Settings")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                Button("Done") { dismiss() }.accessibilityIdentifier("settings.done")
+            }
+            .onAppear { key.load(from: deps.secrets) }
+        }
+    }
+}
+
+/// The "Sorting" section: the key field, Save and Remove, and the saved state.
+private struct APIKeySection: View {
+    @Bindable var key: APIKeyViewModel
+    let secrets: any SecretStore
+
+    var body: some View {
+        Section {
+            // A plain field: a pasted key's stray character must be visible, and the
+            // stored key is never shown here anyway.
+            TextField("Anthropic API key", text: $key.draft)
+                .font(.system(.footnote, design: .monospaced))
+                .autocorrectionDisabled()
+                .textInputAutocapitalization(.never)
+                .submitLabel(.done)
+                .onSubmit { if key.canSave { key.save(into: secrets) } }
+                .accessibilityIdentifier("settings.apiKey")
+            HStack {
+                Button("Save key") { key.save(into: secrets) }
+                    .disabled(!key.canSave)
+                    .accessibilityIdentifier("settings.apiKeySave")
+                Spacer()
+                if key.isSaved {
+                    Button("Remove", role: .destructive) { key.remove(from: secrets) }
+                        .accessibilityIdentifier("settings.apiKeyRemove")
                 }
+            }
+            Text(key.statusText)
+                .font(.footnote)
+                .foregroundStyle(key.isSaved ? Theme.olive : Theme.stone)
+                .accessibilityIdentifier("settings.apiKeyStatus")
+        } header: {
+            Text("Sorting")
+        } footer: {
+            Text("The key stays in this phone's Keychain. The field never shows a saved key.")
+        }
+    }
+}
+
+/// The key field's state. The stored key is never read back into the field, only its presence.
+@MainActor
+@Observable
+final class APIKeyViewModel {
+    var draft = ""
+    private(set) var isSaved = false
+    private(set) var error: String?
+
+    var canSave: Bool { APIKeyFormat.looksValid(draft) }
+
+    var statusText: String {
+        if let error { return error }
+        return isSaved ? "Key saved" : "No key. Sessions are recorded; nothing is sorted until you add one."
+    }
+
+    func load(from secrets: any SecretStore) {
+        isSaved = ((try? secrets.read(.anthropicAPIKey)) ?? nil) != nil
+    }
+
+    func save(into secrets: any SecretStore) {
+        do {
+            try secrets.write(APIKeyFormat.normalized(draft), for: .anthropicAPIKey)
+            draft = ""
+            isSaved = true
+            error = nil
+        } catch {
+            self.error = "Could not save the key: \(error.localizedDescription)"
+        }
+    }
+
+    func remove(from secrets: any SecretStore) {
+        do {
+            try secrets.delete(.anthropicAPIKey)
+            isSaved = false
+            error = nil
+        } catch {
+            self.error = "Could not remove the key: \(error.localizedDescription)"
         }
     }
 }
