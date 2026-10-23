@@ -10,7 +10,7 @@ struct ShelfSection: View {
     var body: some View {
         Section {
             ForEach(memories) { row in
-                MemoryRowView(row: row, axis: nil, actions: actions)
+                MemoryRowView(row: row, axis: nil, actions: actions, inline: true)
             }
         } header: {
             HStack {

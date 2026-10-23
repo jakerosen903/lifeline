@@ -126,4 +126,26 @@ final class SameStoryUITests: XCTestCase {
         XCTAssertTrue(app.buttons["memory.play"].firstMatch.waitForExistence(timeout: 5))
         XCTAssertEqual(app.otherElements.matching(identifier: "memory.span").count, 2)
     }
+
+    @MainActor
+    func testShelfRowActionsAreVisible() {
+        let app = launchToTimeline()
+        record(app, keep: 1)   // the blue door alone has no date and sits on the shelf
+        let addCollection = app.buttons["row.addCollection"].firstMatch
+        XCTAssertTrue(app.reveal(addCollection), "a shelf row shows Add to a collection without the menu")
+        XCTAssertTrue(app.buttons["row.addDate"].firstMatch.exists, "and Add a date")
+        XCTAssertEqual(app.buttons.matching(identifier: "row.addDate").count, 1, "one shelf row, one offer")
+        var tries = 0
+        while tries < 4 && addCollection.frame.maxY > app.buttons["home.start"].frame.minY - 8 { app.swipeUp(); tries += 1 }
+        addCollection.tap()
+        let field = app.textFields.firstMatch
+        XCTAssertTrue(field.waitForExistence(timeout: 5))
+        field.typeText("Doors")
+        app.buttons["Add"].firstMatch.tap()
+        // The collection section sits above the shelf; the alert may have left the list scrolled down.
+        app.swipeDown(); app.swipeDown()
+        let title = app.staticTexts["Doors"].firstMatch
+        XCTAssertTrue(app.reveal(title), "the memory now sits under a collection titled Doors")
+        XCTAssertTrue(app.descendants(matching: .any).matching(identifier: "timeline.collection").firstMatch.exists)
+    }
 }
