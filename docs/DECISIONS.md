@@ -169,6 +169,14 @@ Waits for M5: span-level deletion with offsets preserved (M4 deletes whole sessi
 
 Why: the review's "preserve first, organize later" changes the landing and the session more than the data model; shipping those first lets the owner feel the new shape before the model grows. Cost: a memory told across two sessions goes with the first one deleted until span deletion lands.
 
+## 2026-10-23 · Same story is offered, never applied; dates are stated, never inferred by the app
+
+On the second day of the M4 build a story told in two recordings became two memories: the extractor's `same_as_memory_id` was never acted on and the packet only carried the current session's memories. A memory with no anchor had no way to get a date. M4.1 adds the moves the person can make and a suggestion they confirm.
+
+**Decision.** Retrieval by on-device sentence embeddings (Apple's NaturalLanguage, cosine over `title. quote`) finds the nearest earlier memories across all recordings; they ride in the extractor's packet marked `related`. The extractor decides whether a segment retells one of them; a strong on-device match alone is also enough to put "Same as X?" on the card. The person decides: Keep stays the default and primary; "Same story" is one tap and undoable for six seconds. A merge is one memory with several audio spans (the V1 spec's `memory_span`); stories in M5 can group memories without undoing it. "Tell me when" writes a year, an around-year, a between, or an age with origin `stated`, shown as said; the resolver and the relative questions treat a stated range as settled. A memory excluded from AI is never embedded or suggested; a hidden one is never suggested on a card.
+
+**Consequences.** Migration v7 (`memory_embedding`, span `title_text` and `candidate_id`); extractor prompt v4; deleting a recording removes only its spans, and a memory with a telling elsewhere survives; the Change sheet gains "Same as another memory…" and "Tell me when"; shelf rows show "Add a date" and "Add to a collection" inline. Thresholds (retrieve 0.55, suggest 0.80) are starting points to tune on the owner's recordings. Spec: `docs/specs/2026-10-23-m4.1-same-story-and-when.md`.
+
 ## 2026-10-23 · Quick story and settle in differ in shape, not in length
 
 The owner's words: one is answering a prompt, the other is more of a conversation. A quick story is one prompt, finished when the person is done, with nothing about time on screen however long it runs. Settling in offers the next question when the room goes quiet after a story, and a gentle wrap-up with "Keep going" at the planned length. Nobody is stopped for talking longer than expected. Supersedes the entry below where they differ.
