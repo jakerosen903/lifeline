@@ -43,3 +43,7 @@ Decision: the data model is B (every event has a range, plus optional collection
 | Music2.dc.html | A song on repeat | A play spike from an optional streaming-history upload beside nearby timeline events |
 
 Sample content (names, places, dates) is invented.
+
+## App icon
+
+`icon/lifeline-icon.svg` (light) and `icon/lifeline-icon-dark.svg` are the sources; `ios/Assets.xcassets/AppIcon.appiconset/` holds the 1024 px light, dark and tinted PNGs with a `Contents.json` Xcode reads directly. The mark: one rising line (the lifeline) with three memories on it; the middle one carries a soft halo for the fuzzy range. Same palette as the screens.
