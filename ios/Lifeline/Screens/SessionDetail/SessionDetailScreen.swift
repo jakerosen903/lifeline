@@ -21,6 +21,9 @@ struct SessionDetailScreen: View {
                 Section("Memories") {
                     ForEach(viewModel.memories) { row in
                         VStack(alignment: .leading, spacing: 4) {
+                            if row.kind != .event && row.kind != .other {
+                                Text(row.kind.cardLabel).font(.caption2.weight(.semibold)).foregroundStyle(Theme.olive)
+                            }
                             Text(row.memory.title)
                                 .font(.system(.headline, design: .serif))
                                 .foregroundStyle(Theme.ink)

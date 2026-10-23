@@ -44,11 +44,15 @@ public struct CandidateActions: Sendable {
 
         var people: [MemoryPerson] = []
         var unknown: [String] = []
+        var roleAliases: [(PersonID, String)] = []
         for ref in out.peopleRefs {
             if let person = try store.people.findPerson(matching: ref) {
                 if !people.contains(where: { $0.personID == person.id }) {
                     people.append(MemoryPerson(memoryID: memory.id, personID: person.id, roleText: ref))
                 }
+                // "my mom, Marcel": the role half becomes an alias so "my mom" alone links next time.
+                let parts = PeopleRepository.parts(of: ref)
+                if parts.count > 1 { roleAliases += parts.dropFirst().map { (person.id, $0) } }
             } else if !unknown.contains(where: { Self.same($0, ref) }) {
                 unknown.append(ref)
             }
@@ -63,6 +67,7 @@ public struct CandidateActions: Sendable {
         }
 
         try store.memories.insert(memory, spans: [span], people: people, places: places, anchors: anchors, acceptingCandidate: candidate.id)
+        for (person, alias) in roleAliases { try store.people.addAlias(alias, to: person) }
 
         var newMentions: [Mention] = []
         for name in unknown {
@@ -81,7 +86,7 @@ public struct CandidateActions: Sendable {
     public func acceptMention(_ candidate: Candidate) throws -> Mention {
         guard candidate.kind == .person else { throw Error.wrongKind }
         guard let out = CandidatePayload.mention(candidate) else { throw Error.badPayload }
-        let row = try mention(for: out.text, in: candidate.segmentID)
+        let row = try mention(for: out.text, in: candidate.segmentID, relation: out.relationText)
         if candidate.status == .pending { try store.candidates.setStatus(candidate.id, .accepted) }
         return row
     }
@@ -144,9 +149,10 @@ public struct CandidateActions: Sendable {
         guard try store.candidates.fetch(candidate.id)?.status == .pending else { throw Error.notPending }
     }
 
-    private func mention(for text: String, in segment: SegmentID) throws -> Mention {
+    private func mention(for text: String, in segment: SegmentID, relation: String? = nil) throws -> Mention {
         if let existing = try store.people.mentions(in: segment).first(where: { Self.same($0.text, text) }) { return existing }
-        let row = Mention(id: .init(), segmentID: segment, text: text.trimmingCharacters(in: .whitespacesAndNewlines), status: .unresolved, personID: nil)
+        let row = Mention(id: .init(), segmentID: segment, text: text.trimmingCharacters(in: .whitespacesAndNewlines), status: .unresolved,
+                          personID: nil, relationText: relation?.trimmingCharacters(in: .whitespacesAndNewlines))
         try store.people.insertMention(row)
         return row
     }

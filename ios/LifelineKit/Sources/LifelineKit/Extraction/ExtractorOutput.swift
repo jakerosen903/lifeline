@@ -45,8 +45,26 @@ public struct AnchorOut: Codable, Sendable, Equatable {
     enum CodingKeys: String, CodingKey { case phrase, relation, targetText = "target_text", value }
 }
 
+/// What sort of thing a memory candidate is. The first seam of the later kinds/domains
+/// taxonomy: it lives in the payload, not in a column, and only changes the card's words.
+public enum MemoryKind: String, Codable, Sendable, CaseIterable {
+    case event, fact, feeling, goal, other
+
+    /// The card heading. Only an event is called a memory.
+    public var cardLabel: String {
+        switch self {
+        case .event, .other: "Sounds like a memory"
+        case .fact: "Something about your life"
+        case .feeling: "Something you felt"
+        case .goal: "Something you wanted"
+        }
+    }
+}
+
 public struct MemoryOut: Codable, Sendable, Equatable {
     public var ref: String
+    /// nil only for payloads written by extractor v1, which had no kinds.
+    public var kind: MemoryKind?
     public var title: String
     public var quote: String
     public var segmentSpan: WordSpan
@@ -58,15 +76,17 @@ public struct MemoryOut: Codable, Sendable, Equatable {
     public var chapterHint: String?
     public var confidence: Double
 
-    public init(ref: String, title: String, quote: String, segmentSpan: WordSpan, peopleRefs: [String], placeText: String?,
+    public var kindOrDefault: MemoryKind { kind ?? .other }
+
+    public init(ref: String, kind: MemoryKind? = nil, title: String, quote: String, segmentSpan: WordSpan, peopleRefs: [String], placeText: String?,
                 anchors: [AnchorOut], sameAsMemoryID: String?, collectionHint: String?, chapterHint: String?, confidence: Double) {
-        self.ref = ref; self.title = title; self.quote = quote; self.segmentSpan = segmentSpan; self.peopleRefs = peopleRefs
+        self.ref = ref; self.kind = kind; self.title = title; self.quote = quote; self.segmentSpan = segmentSpan; self.peopleRefs = peopleRefs
         self.placeText = placeText; self.anchors = anchors; self.sameAsMemoryID = sameAsMemoryID
         self.collectionHint = collectionHint; self.chapterHint = chapterHint; self.confidence = confidence
     }
 
     enum CodingKeys: String, CodingKey {
-        case ref, title, quote, segmentSpan = "segment_span", peopleRefs = "people_refs", placeText = "place_text", anchors
+        case ref, kind, title, quote, segmentSpan = "segment_span", peopleRefs = "people_refs", placeText = "place_text", anchors
         case sameAsMemoryID = "same_as_memory_id", collectionHint = "collection_hint", chapterHint = "chapter_hint", confidence
     }
 }
@@ -80,12 +100,26 @@ public struct MentionOut: Codable, Sendable, Equatable {
     public var kind: MentionKind
     public var likelyAliasOfPersonID: String?
     public var confidence: Double
+    /// The owner's kin or role phrase for a person ("my mom", "my best friend"), or nil.
+    public var relationText: String?
 
-    public init(text: String, kind: MentionKind, likelyAliasOfPersonID: String?, confidence: Double) {
+    public init(text: String, kind: MentionKind, likelyAliasOfPersonID: String?, confidence: Double, relationText: String? = nil) {
         self.text = text; self.kind = kind; self.likelyAliasOfPersonID = likelyAliasOfPersonID; self.confidence = confidence
+        self.relationText = relationText
     }
 
-    enum CodingKeys: String, CodingKey { case text, kind, likelyAliasOfPersonID = "likely_alias_of_person_id", confidence }
+    enum CodingKeys: String, CodingKey {
+        case text, kind, likelyAliasOfPersonID = "likely_alias_of_person_id", confidence, relationText = "relation_text"
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        text = try c.decode(String.self, forKey: .text)
+        kind = try c.decode(MentionKind.self, forKey: .kind)
+        likelyAliasOfPersonID = try c.decodeIfPresent(String.self, forKey: .likelyAliasOfPersonID)
+        confidence = try c.decode(Double.self, forKey: .confidence)
+        relationText = try c.decodeIfPresent(String.self, forKey: .relationText)
+    }
 }
 
 public struct Flags: Codable, Sendable, Equatable {

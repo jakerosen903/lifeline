@@ -15,14 +15,14 @@ public struct ScriptedExtractionService: ExtractionService {
         var memories: [MemoryOut] = []
         var mentions: [MentionOut] = []
         if request.segmentText.localizedCaseInsensitiveContains("blue door") {
-            memories.append(MemoryOut(ref: "m1", title: "The blue door", quote: request.segmentText,
+            memories.append(MemoryOut(ref: "m1", kind: .event, title: "The blue door", quote: request.segmentText,
                                       segmentSpan: WordSpan(startWord: 0, endWord: max(0, words.count - 1)),
                                       peopleRefs: [], placeText: nil,
                                       anchors: [AnchorOut(phrase: "blue door", relation: .during, targetText: nil, value: nil)],
                                       sameAsMemoryID: nil, collectionHint: nil, chapterHint: nil, confidence: 0.9))
         }
         if words.contains(where: { $0.caseInsensitiveCompare("Maya") == .orderedSame }) {
-            mentions.append(MentionOut(text: "Maya", kind: .person, likelyAliasOfPersonID: nil, confidence: 0.8))
+            mentions.append(MentionOut(text: "Maya", kind: .person, likelyAliasOfPersonID: nil, confidence: 0.8, relationText: "my sister"))
         }
         let empty = Usage(inputTokens: 0, outputTokens: 0, cacheReadInputTokens: 0, cacheCreationInputTokens: 0)
         return ExtractionResponse(output: ExtractorOutput(memories: memories, mentions: mentions, flags: .none),

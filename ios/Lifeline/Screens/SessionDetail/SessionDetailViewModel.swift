@@ -6,6 +6,7 @@ import LifelineKit
 final class SessionDetailViewModel {
     struct MemoryRow: Identifiable {
         let memory: Memory
+        let kind: MemoryKind
         let people: [String]
         let anchors: [String]
         var id: MemoryID { memory.id }
@@ -32,6 +33,7 @@ final class SessionDetailViewModel {
             segments = try deps.sessions.segments(in: session.id)
             memories = try deps.extractionStore.memories.memories(in: session.id).map { memory in
                 MemoryRow(memory: memory,
+                          kind: (try? deps.extractionStore.candidates.fetch(memory.createdFromCandidateID)).flatMap { CandidatePayload.memory($0) }?.kindOrDefault ?? .other,
                           people: try deps.extractionStore.memories.people(of: memory.id).map(\.displayName),
                           anchors: try deps.extractionStore.memories.anchors(of: memory.id).map(\.phrase))
             }

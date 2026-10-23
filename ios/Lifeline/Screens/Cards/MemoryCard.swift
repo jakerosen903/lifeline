@@ -13,7 +13,7 @@ struct MemoryCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("Sounds like a memory")
+            Text(memory.kindOrDefault.cardLabel)
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(Theme.olive)
             Text(memory.title)

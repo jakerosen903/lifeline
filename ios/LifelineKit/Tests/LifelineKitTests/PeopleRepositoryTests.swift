@@ -56,3 +56,22 @@ import Testing
     #expect(try sessions.segments(in: session, status: .pending).map(\.index) == [1])
     #expect(try sessions.fetchSegment(segs[0].id)?.status == .extracted)
 }
+
+@Test func renameKeepsTheOldSpellingAsAnAlias() throws {
+    let db = try AppDatabase.inMemory(); let people = PeopleRepository(db)
+    let marcel = try people.insertPerson(displayName: "Marcel")
+    try people.rename(marcel.id, to: " Marcelle ")
+    #expect(try people.person(id: marcel.id)?.displayName == "Marcelle")
+    #expect(try people.aliases(of: marcel.id).map(\.text).sorted() == ["Marcel", "Marcelle"])
+    #expect(try people.findPerson(matching: "marcel")?.id == marcel.id)
+    #expect(throws: PeopleRepository.Error.emptyName) { try people.rename(marcel.id, to: "  ") }
+}
+
+@Test func relationAliasIsTheOnesStartingWithMyOrOur() throws {
+    let db = try AppDatabase.inMemory(); let people = PeopleRepository(db)
+    let marcel = try people.insertPerson(displayName: "Marcelle")
+    try people.addAlias("Marcel", to: marcel.id)
+    try people.addAlias("my mom", to: marcel.id)
+    #expect(PeopleRepository.relationLabel(aliases: try people.aliases(of: marcel.id)) == "my mom")
+    #expect(PeopleRepository.relationLabel(aliases: [Alias(personID: marcel.id, text: "Mai")]) == nil)
+}

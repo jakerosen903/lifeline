@@ -127,6 +127,11 @@ enum Migrations {
                 t.column("resolved", .boolean).notNull().defaults(to: false)
             }
         }
+        m.registerMigration("v3") { db in
+            try db.alter(table: "mention") { t in
+                t.add(column: "relation_text", .text)
+            }
+        }
         return m
     }
 }

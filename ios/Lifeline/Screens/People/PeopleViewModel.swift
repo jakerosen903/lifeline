@@ -7,6 +7,7 @@ final class PeopleViewModel {
     struct PersonRow: Identifiable {
         let person: Person
         let aliases: [String]
+        let relation: String?
         var id: PersonID { person.id }
     }
 
@@ -32,7 +33,10 @@ final class PeopleViewModel {
                 .filter { seen.insert(PeopleRepository.normalize($0.text)).inserted }
                 .map(Card.init)
             people = try store.people.people().filter { !$0.isOwner }.map { person in
-                PersonRow(person: person, aliases: try store.people.aliases(of: person.id).map(\.text).filter { $0 != person.displayName })
+                let aliases = try store.people.aliases(of: person.id)
+                return PersonRow(person: person,
+                                 aliases: aliases.map(\.text).filter { $0 != person.displayName },
+                                 relation: PeopleRepository.relationLabel(aliases: aliases))
             }
         } catch {
             self.error = error.localizedDescription
@@ -41,4 +45,15 @@ final class PeopleViewModel {
 
     func resolve(_ card: Card, _ choice: MentionChoice) { if cards.resolve(card, choice) { refresh() } }
     func dismiss(_ card: Card) { if cards.dismiss(card) { refresh() } }
+
+    /// Fixes a spelling. The old spelling stays as an alias so later transcripts still link.
+    func rename(_ person: Person, to name: String) {
+        do {
+            try deps.extractionStore.people.rename(person.id, to: name)
+            error = nil
+            refresh()
+        } catch {
+            self.error = "Could not rename: \(error.localizedDescription)"
+        }
+    }
 }

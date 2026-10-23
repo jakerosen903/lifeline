@@ -132,7 +132,7 @@ extension Alias: FetchableRecord, PersistableRecord {
 
 extension Mention: FetchableRecord, PersistableRecord {
     public static let databaseTableName = "mention"
-    enum CodingKeys: String, CodingKey { case id, segmentID = "segment_id", text, status, personID = "person_id" }
+    enum CodingKeys: String, CodingKey { case id, segmentID = "segment_id", text, status, personID = "person_id", relationText = "relation_text" }
 }
 
 extension Anchor: FetchableRecord, PersistableRecord {

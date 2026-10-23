@@ -21,8 +21,8 @@ private struct Env {
         return c
     }
 
-    func mentionCandidate(_ text: String = "my mother", ordinal: Int = 1) throws -> Candidate {
-        let out = MentionOut(text: text, kind: .person, likelyAliasOfPersonID: nil, confidence: 0.8)
+    func mentionCandidate(_ text: String = "my mother", ordinal: Int = 1, relation: String? = nil) throws -> Candidate {
+        let out = MentionOut(text: text, kind: .person, likelyAliasOfPersonID: nil, confidence: 0.8, relationText: relation)
         let c = StoreFixtures.candidate(segment.id, ordinal: ordinal, kind: .person, payload: try CandidatePayload.encode(out))
         try store.candidates.insert(c)
         return c
@@ -169,4 +169,22 @@ private struct Env {
     #expect(throws: CandidateActions.Error.emptySpan) { try env.actions.acceptMemory(candidate) }
     #expect(try env.store.candidates.fetch(candidate.id)?.status == .pending)
     #expect(try env.store.memories.memories(in: env.session).isEmpty)
+}
+
+@Test func resolvingAMentionSavesTheKinPhraseAsAnAlias() throws {
+    let env = try Env(text: "my mom Marcel made dinner")
+    let mention = try env.actions.acceptMention(try env.mentionCandidate("Marcel", relation: "my mom"))
+    #expect(mention.relationText == "my mom")
+    let person = try #require(try env.actions.resolveMention(mention.id, to: .new(displayName: "Marcelle")))
+    #expect(try env.store.people.aliases(of: person.id).map(\.text).sorted() == ["Marcel", "Marcelle", "my mom"])
+    #expect(try env.store.people.findPerson(matching: "my mom")?.id == person.id)
+}
+
+@Test func peopleRefWithRoleAndNameMatchesTheNamedPerson() throws {
+    let env = try Env(text: "the garden had a pomegranate tree and my mom, Marcel, picked them")
+    let marcel = try env.store.people.insertPerson(displayName: "Marcel")
+    let accepted = try env.actions.acceptMemory(try env.memoryCandidate(people: ["my mom, Marcel"]))
+    #expect(accepted.newMentions.isEmpty)
+    #expect(try env.store.memories.people(of: accepted.memory.id).map(\.id) == [marcel.id])
+    #expect(try env.store.people.aliases(of: marcel.id).map(\.text).contains("my mom"), "the role phrase becomes an alias")
 }

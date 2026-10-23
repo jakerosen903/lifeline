@@ -4,6 +4,10 @@ import GRDB
 /// People, their aliases, the "Who's this?" mentions, and places.
 /// Name matching ignores case and surrounding whitespace, never spelling.
 public struct PeopleRepository: Sendable {
+    public enum Error: Swift.Error, Equatable {
+        case emptyName
+    }
+
     private let db: AppDatabase
 
     public init(_ db: AppDatabase) { self.db = db }
@@ -23,8 +27,16 @@ public struct PeopleRepository: Sendable {
         try db.writer.read { try Alias.filter(Column("person_id") == person.rawValue).order(Column("text")).fetchAll($0) }
     }
 
-    /// The person whose display name or any alias equals `text`, ignoring case and outer whitespace.
+    /// The person whose display name or any alias equals `text`, ignoring case and outer
+    /// whitespace. A phrase with a role and a name ("my mom, Marcel") matches on either part.
     public func findPerson(matching text: String) throws -> Person? {
+        for part in Self.parts(of: text) {
+            if let person = try findPerson(exactly: part) { return person }
+        }
+        return nil
+    }
+
+    private func findPerson(exactly text: String) throws -> Person? {
         let needle = Self.normalize(text)
         guard !needle.isEmpty else { return nil }
         return try db.writer.read { db in
@@ -34,6 +46,36 @@ public struct PeopleRepository: Sendable {
                 where lower(trim(person.display_name)) = ? or lower(trim(alias.text)) = ?
                 limit 1
                 """, arguments: [needle, needle])
+        }
+    }
+
+    /// "my mom, Marcel" -> ["my mom, Marcel", "my mom", "Marcel"]. The whole phrase first.
+    public static func parts(of text: String) -> [String] {
+        let whole = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        let split = whole.split(separator: ",").map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
+        return split.count > 1 ? [whole] + split : [whole]
+    }
+
+    /// The alias that reads as a relation to the owner ("my mom", "our dog"), if any.
+    public static func relationLabel(aliases: [Alias]) -> String? {
+        aliases.map(\.text).first { text in
+            let lower = text.lowercased()
+            return lower.hasPrefix("my ") || lower.hasPrefix("our ")
+        }
+    }
+
+    /// Changes the display name and keeps the old spelling as an alias, so a transcript that
+    /// repeats the old spelling still links.
+    public func rename(_ person: PersonID, to newName: String) throws {
+        let name = newName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty else { throw Error.emptyName }
+        try db.writer.write { db in
+            guard var row = try Person.fetchOne(db, key: person.rawValue) else { return }
+            let old = row.displayName
+            row.displayName = name
+            try row.update(db)
+            try Self.insertAlias(old, person, db)
+            try Self.insertAlias(name, person, db)
         }
     }
 
@@ -69,7 +111,7 @@ public struct PeopleRepository: Sendable {
         try db.writer.read { try Mention.filter(Column("segment_id") == segment.rawValue).fetchAll($0) }
     }
 
-    /// Marks the mention resolved to `person` and records its text as an alias.
+    /// Marks the mention resolved to `person` and records its text, and its relation phrase, as aliases.
     public func resolve(_ id: MentionID, to person: PersonID) throws {
         try db.writer.write { db in
             guard var mention = try Mention.fetchOne(db, key: id.rawValue) else { return }
@@ -77,6 +119,7 @@ public struct PeopleRepository: Sendable {
             mention.personID = person
             try mention.update(db)
             try Self.insertAlias(mention.text, person, db)
+            if let relation = mention.relationText { try Self.insertAlias(relation, person, db) }
         }
     }
 

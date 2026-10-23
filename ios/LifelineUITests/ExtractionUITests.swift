@@ -39,9 +39,21 @@ final class ExtractionUITests: XCTestCase {
         app.buttons["session.stop"].tap()
         XCTAssertTrue(app.buttons["home.people"].waitForExistence(timeout: 5))
         app.buttons["home.people"].tap()
-        let person = app.staticTexts["people.row"].firstMatch
+        let person = app.buttons["people.row"].firstMatch
         XCTAssertTrue(person.waitForExistence(timeout: 5))
         XCTAssertTrue(person.label.contains("Maya"))
+        XCTAssertTrue(person.label.contains("my sister"), "the kin phrase said with the name shows as the relation: \(person.label)")
+
+        person.tap()
+        let alert = app.alerts.firstMatch
+        XCTAssertTrue(alert.waitForExistence(timeout: 5))
+        let field = alert.textFields.firstMatch
+        field.tap()
+        field.typeText(XCUIKeyboardKey.delete.rawValue + "ra")   // Maya -> Mayra
+        alert.buttons["Save"].firstMatch.tap()
+        let renamed = app.buttons["people.row"].firstMatch
+        XCTAssertTrue(renamed.waitForExistence(timeout: 5))
+        XCTAssertTrue(renamed.label.contains("Mayra") && renamed.label.contains("Maya"), "new name shown, old spelling kept: \(renamed.label)")
     }
 
     @MainActor

@@ -20,6 +20,7 @@ public enum ExtractorSchema {
     private static var memory: [String: Any] {
         object([
             "ref": string,
+            "kind": ["type": "string", "enum": MemoryKind.allCases.map(\.rawValue)],
             "title": string,
             "quote": string,
             "segment_span": object(["start_word": integer, "end_word": integer]),
@@ -44,6 +45,7 @@ public enum ExtractorSchema {
             "kind": ["type": "string", "enum": MentionKind.allCases.map(\.rawValue)],
             "likely_alias_of_person_id": nullableString,
             "confidence": number,
+            "relation_text": nullableString,
         ])
     }
 

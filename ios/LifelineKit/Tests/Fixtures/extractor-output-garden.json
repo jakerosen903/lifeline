@@ -4,18 +4,41 @@
       "ref": "m1",
       "title": "The pomegranate tree",
       "quote": "the garden behind the house had a pomegranate tree",
-      "segment_span": { "start_word": 0, "end_word": 8 },
-      "people_refs": ["my mother"],
+      "segment_span": {
+        "start_word": 0,
+        "end_word": 8
+      },
+      "people_refs": [
+        "my mother"
+      ],
       "place_text": null,
-      "anchors": [ { "phrase": "when I was six", "relation": "age", "target_text": null, "value": null } ],
+      "anchors": [
+        {
+          "phrase": "when I was six",
+          "relation": "age",
+          "target_text": null,
+          "value": null
+        }
+      ],
       "same_as_memory_id": null,
       "collection_hint": null,
       "chapter_hint": null,
-      "confidence": 0.9
+      "confidence": 0.9,
+      "kind": "event"
     }
   ],
   "mentions": [
-    { "text": "my mother", "kind": "person", "likely_alias_of_person_id": null, "confidence": 0.8 }
+    {
+      "text": "my mother",
+      "kind": "person",
+      "likely_alias_of_person_id": null,
+      "confidence": 0.8,
+      "relation_text": "my mother"
+    }
   ],
-  "flags": { "serious_disclosure": false, "wants_to_stop": false, "wants_to_change_subject": false }
+  "flags": {
+    "serious_disclosure": false,
+    "wants_to_stop": false,
+    "wants_to_change_subject": false
+  }
 }

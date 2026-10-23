@@ -21,8 +21,11 @@ public struct Mention: Codable, Sendable, Equatable, Identifiable {
     public var text: String
     public var status: MentionStatus
     public var personID: PersonID?
+    /// The kin or role phrase said with the name ("my mom"), kept so resolving adds it as an alias.
+    public var relationText: String?
 
-    public init(id: MentionID, segmentID: SegmentID, text: String, status: MentionStatus, personID: PersonID?) {
+    public init(id: MentionID, segmentID: SegmentID, text: String, status: MentionStatus, personID: PersonID?, relationText: String? = nil) {
         self.id = id; self.segmentID = segmentID; self.text = text; self.status = status; self.personID = personID
+        self.relationText = relationText
     }
 }

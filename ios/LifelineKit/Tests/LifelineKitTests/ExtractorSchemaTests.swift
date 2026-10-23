@@ -32,6 +32,13 @@ import Testing
     #expect(output.memories[0].segmentSpan == WordSpan(startWord: 0, endWord: 8))
     #expect(output.memories[0].anchors.first?.relation == .age)
     #expect(output.mentions.count == 1 && output.mentions[0].kind == .person)
+    #expect(output.memories[0].kind == .event)
+    #expect(output.mentions[0].relationText == "my mother")
+    let schema = ExtractorSchema.json
+    let memoryProps = ((((schema["properties"] as? [String: Any])?["memories"] as? [String: Any])?["items"] as? [String: Any])?["properties"] as? [String: Any]) ?? [:]
+    #expect((memoryProps["kind"] as? [String: Any])?["enum"] as? [String] == MemoryKind.allCases.map(\.rawValue))
+    let mentionProps = ((((schema["properties"] as? [String: Any])?["mentions"] as? [String: Any])?["items"] as? [String: Any])?["properties"] as? [String: Any]) ?? [:]
+    #expect(mentionProps["relation_text"] != nil)
     #expect(output.flags == Flags(seriousDisclosure: false, wantsToStop: false, wantsToChangeSubject: false))
 }
 
@@ -44,6 +51,6 @@ import Testing
 
 @Test func configDefaultsMatchTheSpec() {
     let c = ExtractorConfig.default
-    #expect(c.model == "claude-opus-5-5" && c.effort == "low" && c.maxTokens == 4096 && c.version == "v1")
+    #expect(c.model == "claude-opus-5-5" && c.effort == "low" && c.maxTokens == 4096 && c.version == "v2")
     #expect(c.betas.contains("server-side-fallback-2026-07-01"))
 }

@@ -4,6 +4,8 @@ import SwiftUI
 /// People. The "Who's this?" queue first, then everyone with their aliases.
 struct PeopleScreen: View {
     let viewModel: PeopleViewModel
+    @State private var editing: PeopleViewModel.PersonRow?
+    @State private var draftName = ""
 
     var body: some View {
         List {
@@ -22,17 +24,28 @@ struct PeopleScreen: View {
                         .foregroundStyle(Theme.stone)
                 }
                 ForEach(viewModel.people) { row in
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(row.person.displayName)
-                            .font(.system(.headline, design: .serif))
-                            .foregroundStyle(Theme.ink)
-                        if !row.aliases.isEmpty {
-                            Text("also called " + row.aliases.map { "“\($0)”" }.joined(separator: ", "))
-                                .font(.caption)
-                                .foregroundStyle(Theme.stone)
+                    Button {
+                        draftName = row.person.displayName
+                        editing = row
+                    } label: {
+                        VStack(alignment: .leading, spacing: 2) {
+                            HStack(spacing: 6) {
+                                Text(row.person.displayName)
+                                    .font(.system(.headline, design: .serif))
+                                    .foregroundStyle(Theme.ink)
+                                if let relation = row.relation {
+                                    Text("· \(relation)").font(.subheadline).foregroundStyle(Theme.ochre)
+                                }
+                            }
+                            let others = row.aliases.filter { $0 != row.relation }
+                            if !others.isEmpty {
+                                Text("also called " + others.map { "“\($0)”" }.joined(separator: ", "))
+                                    .font(.caption)
+                                    .foregroundStyle(Theme.stone)
+                            }
                         }
+                        .padding(.vertical, 2)
                     }
-                    .padding(.vertical, 2)
                     .accessibilityElement(children: .combine)
                     .accessibilityIdentifier("people.row")
                 }
@@ -45,5 +58,18 @@ struct PeopleScreen: View {
         .linenBackground()
         .navigationTitle("People")
         .onAppear { viewModel.refresh() }
+        .alert("Fix the name", isPresented: Binding(get: { editing != nil }, set: { if !$0 { editing = nil } }), presenting: editing) { row in
+            TextField("Name", text: $draftName)
+                .autocorrectionDisabled()
+                .accessibilityIdentifier("people.renameField")
+            Button("Save") {
+                viewModel.rename(row.person, to: draftName)
+                editing = nil
+            }
+            .accessibilityIdentifier("people.renameSave")
+            Button("Cancel", role: .cancel) { editing = nil }
+        } message: { row in
+            Text("“\(row.person.displayName)” stays as another spelling, so stories that use it still link.")
+        }
     }
 }
