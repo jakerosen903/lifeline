@@ -52,6 +52,7 @@ struct MemoryRowActions {
     let open: (MemoryRow) -> Void
     let newChapter: (MemoryRow) -> Void
     let addToCollection: (MemoryRow) -> Void
+    let addDate: (MemoryRow) -> Void
     let hide: (MemoryRow) -> Void
     let setExcluded: (MemoryRow, Bool) -> Void
     let delete: (MemoryRow) -> Void

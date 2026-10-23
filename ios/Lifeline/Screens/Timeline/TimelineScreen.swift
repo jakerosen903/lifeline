@@ -9,6 +9,7 @@ struct TimelineScreen: View {
     @State private var showSettings = false
     @State private var openMemory: MemoryRow?
     @State private var collectionTarget: MemoryRow?
+    @State private var dateTarget: MemoryRow?
     @State private var collectionTitle = ""
 
     init(viewModel: TimelineViewModel) {
@@ -20,6 +21,7 @@ struct TimelineScreen: View {
         MemoryRowActions(open: { openMemory = $0 },
                          newChapter: { viewModel.newChapter(for: $0.id, title: nil) },
                          addToCollection: { collectionTarget = $0 },
+                         addDate: { dateTarget = $0 },
                          hide: { viewModel.hide($0.id) },
                          setExcluded: { viewModel.setExcluded($0.id, $1) },
                          delete: { viewModel.deleteTarget = $0 })
@@ -139,7 +141,10 @@ struct TimelineScreen: View {
                 SettingsScreen(deps: viewModel.deps)
             }
             .sheet(item: Binding(get: { viewModel.changing }, set: { viewModel.changing = $0 })) { memory in
-                ChangeSheet(viewModel: ChangeViewModel(memory: memory, deps: viewModel.deps)) { viewModel.refresh() }
+                ChangeSheet(memory: memory, deps: viewModel.deps, includeHidden: viewModel.showHidden) { viewModel.refresh() }
+            }
+            .sheet(item: $dateTarget, onDismiss: { viewModel.refresh() }) { row in
+                TellMeWhenSheet(title: row.memory.title, birthDate: try? viewModel.deps.extractionStore.profile.ownerBirthDate()) { viewModel.setStated(row.id, $0) }
             }
             .confirmationDialog("Delete this memory?", isPresented: Binding(get: { viewModel.deleteTarget != nil }, set: { if !$0 { viewModel.deleteTarget = nil } }),
                                 titleVisibility: .visible, presenting: viewModel.deleteTarget) { row in

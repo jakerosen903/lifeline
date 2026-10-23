@@ -229,6 +229,11 @@ final class TimelineViewModel {
         attempt("Could not hide that") { try deps.actions.setHidden(memory, true) }
     }
 
+    /// "Add a date" on a shelf row.
+    func setStated(_ memory: MemoryID, _ range: TimeRange) {
+        attempt("Could not save that") { try deps.actions.setStatedRange(memory, range) }
+    }
+
     func setExcluded(_ memory: MemoryID, _ excluded: Bool) {
         attempt("Could not change that") { try deps.actions.setExcluded(memory, excluded) }
     }

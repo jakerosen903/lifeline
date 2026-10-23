@@ -20,6 +20,9 @@ final class MemoryViewModel {
     private(set) var checkThis: [CheckThis] = []
     private var mentions: [Mention] = []
     private(set) var error: String?
+    /// True once the memory was merged away or deleted; the screen closes itself.
+    private(set) var isGone = false
+    private(set) var birthDate: CivilDate?
     let player = SegmentPlayer()
     private let deps: Dependencies
 
@@ -37,7 +40,9 @@ final class MemoryViewModel {
     func refresh() {
         do {
             let store = deps.extractionStore
-            memory = try store.memories.fetch(memory.id) ?? memory
+            guard let current = try store.memories.fetch(memory.id) else { isGone = true; return }
+            memory = current
+            birthDate = try store.profile.ownerBirthDate()
             people = try store.memories.people(of: memory.id)
             place = try store.memories.places(of: memory.id).first
             chapterTitle = try memory.chapterID.flatMap { try store.chapters.chapter(id: $0) }?.title
@@ -102,6 +107,12 @@ final class MemoryViewModel {
     func answer(_ choice: RelativeQuestion.Choice) {
         guard let question else { return }
         do { try deps.actions.answer(question, with: choice); refresh() }
+        catch { self.error = "Could not save that: \(error.localizedDescription)" }
+    }
+
+    /// "Tell me when": the person's own date, stored as said.
+    func setStated(_ range: TimeRange) {
+        do { try deps.actions.setStatedRange(memory.id, range); error = nil; refresh() }
         catch { self.error = "Could not save that: \(error.localizedDescription)" }
     }
 

@@ -101,7 +101,7 @@ struct SessionDetailScreen: View {
         .onAppear { viewModel.refresh() }
         .onDisappear { viewModel.stop() }
         .sheet(item: Binding(get: { viewModel.changing }, set: { viewModel.changing = $0 })) { memory in
-            ChangeSheet(viewModel: ChangeViewModel(memory: memory, deps: viewModel.deps)) { viewModel.refresh() }
+            ChangeSheet(memory: memory, deps: viewModel.deps) { viewModel.refresh() }
         }
     }
 }

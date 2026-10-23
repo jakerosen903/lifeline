@@ -13,14 +13,60 @@ final class ChangeViewModel {
     var newName = ""
     private(set) var error: String?
     let when: MemoryViewModel
+    /// After "Same as another memory…": the title it merged into, while Undo is offered.
+    private(set) var mergedInto: String?
+    private var mergeReceipt: MergeReceipt?
+    /// Set when this memory no longer exists (merged away): the sheet's owner closes.
+    private(set) var isGone = false
+    private let includeHidden: Bool
     private let deps: Dependencies
 
-    init(memory: Memory, deps: Dependencies) {
+    init(memory: Memory, deps: Dependencies, includeHidden: Bool = false) {
         self.memory = memory
         self.deps = deps
+        self.includeHidden = includeHidden
         draftTitle = memory.title
         when = MemoryViewModel(memory: memory, deps: deps)
         refresh()
+    }
+
+    // MARK: - Same as another memory… (M4.1)
+
+    /// The nearest memories, hidden ones only when the timeline is showing them. Never this one.
+    func pickerMatches() -> [MemoryMatch] {
+        let text = MemoryMatcher.text(title: memory.title, quote: memory.summaryQuote)
+        return (try? deps.matcher.picker(for: text, excluding: [memory.id], includeHidden: includeHidden)) ?? []
+    }
+
+    func merge(into target: MemoryID) {
+        do {
+            let receipt = try deps.actions.merge(memory.id, into: target)
+            mergeReceipt = receipt
+            mergedInto = receipt.targetTitle
+            isGone = true
+            error = nil
+        } catch {
+            self.error = "Could not merge: \(error.localizedDescription)"
+        }
+    }
+
+    func undoMerge() {
+        guard let receipt = mergeReceipt else { return }
+        do {
+            try deps.actions.unmerge(receipt)
+            mergeReceipt = nil
+            mergedInto = nil
+            isGone = false
+            error = nil
+            refresh()
+        } catch {
+            self.error = "That can't be undone any more: \(error.localizedDescription)"
+        }
+    }
+
+    /// "Tell me when" from the sheet.
+    func setStated(_ range: TimeRange) {
+        attempt("Could not save that") { try deps.actions.setStatedRange(memory.id, range) }
     }
 
     var canSaveTitle: Bool {
@@ -29,6 +75,7 @@ final class ChangeViewModel {
     }
 
     func refresh() {
+        guard !isGone else { return }
         do {
             let store = deps.extractionStore
             memory = try store.memories.fetch(memory.id) ?? memory
