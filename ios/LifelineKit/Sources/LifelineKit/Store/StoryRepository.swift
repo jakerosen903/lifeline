@@ -69,7 +69,7 @@ public struct StoryRepository: Sendable {
     @discardableResult
     public func deleteEmpty() throws -> Int {
         try db.writer.write { db in
-            try db.execute(sql: "delete from story where not exists (select 1 from story_moment where story_moment.story_id = story.id)")
+            try db.execute(sql: MemoryRepository.deleteEmptyStoriesSQL)
             return db.changesCount
         }
     }

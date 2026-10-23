@@ -25,6 +25,8 @@ public struct CandidateActions: Sendable {
         case stale
         case notStated
         case standIn
+        // M5 stories
+        case nothingToSplit
     }
 
     public enum HintResult: Equatable, Sendable {
@@ -100,7 +102,8 @@ public struct CandidateActions: Sendable {
         try store.sessions.deleteSession(session)
     }
 
-    public func acceptMemory(_ candidate: Candidate) throws -> AcceptedMemory {
+    /// `joinStory: false` is the card's "Not part of it": the memory lands with no story.
+    public func acceptMemory(_ candidate: Candidate, joinStory: Bool = true) throws -> AcceptedMemory {
         guard candidate.kind == .memory else { throw Error.wrongKind }
         try requirePending(candidate)
         guard let out = CandidatePayload.memory(candidate) else { throw Error.badPayload }
@@ -123,6 +126,7 @@ public struct CandidateActions: Sendable {
         try store.memories.insert(memory, spans: spans, people: edges.people, places: edges.places, anchors: edges.anchors, acceptingCandidate: candidate.id)
         for row in continuations { try store.candidates.setStatus(row.id, .accepted) }
         let newMentions = try finishEdges(edges, segment: candidate.segmentID)
+        if joinStory { try self.joinStory(memory.id, ref: out.storyRef) }
         try reindex(memory.id)
         // Place what the new anchors allow, and re-place anything that pointed at this title.
         _ = try ResolverRunner(store: store).run()
@@ -336,11 +340,6 @@ public struct CandidateActions: Sendable {
         }
         try store.candidates.setStatus(candidate.id, .accepted)
         return result
-    }
-
-    /// A story title hint, accepted: filled in by M5 Task 7 (StoryActions).
-    func acceptStoryHint(_ phrase: String, for memory: MemoryID) throws -> Story {
-        throw Error.wrongKind
     }
 
     public func createChapter(title: String?, containing memory: MemoryID) throws -> Chapter {

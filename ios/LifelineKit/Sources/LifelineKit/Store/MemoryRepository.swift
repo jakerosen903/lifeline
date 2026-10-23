@@ -30,9 +30,15 @@ public struct MemoryRepository: Sendable {
     }
 
     /// Removes a memory and, by cascade, its spans, people, places and anchors.
+    /// The memory and everything hanging off it (cascade). A story left with no member goes too.
     public func delete(_ id: MemoryID) throws {
-        _ = try db.writer.write { try Memory.deleteOne($0, key: id.rawValue) }
+        try db.writer.write { db in
+            _ = try Memory.deleteOne(db, key: id.rawValue)
+            try db.execute(sql: Self.deleteEmptyStoriesSQL)
+        }
     }
+
+    static let deleteEmptyStoriesSQL = "delete from story where not exists (select 1 from story_moment where story_moment.story_id = story.id)"
 
     public func fetch(_ id: MemoryID) throws -> Memory? {
         try db.writer.read { try Memory.fetchOne($0, key: id.rawValue) }

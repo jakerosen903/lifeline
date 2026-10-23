@@ -33,6 +33,8 @@ public actor ExtractionQueue {
     private var keyMissing = false
     private var lastFailure: [SegmentID: ExtractionError] = [:]
     private var idleWaiters: [CheckedContinuation<Void, Never>] = []
+    /// Raw story refs the model made up, and the ids minted for them, for this session (M5).
+    private var mintedStoryRefs: [String: StoryID] = [:]
 
     public static let defaultDrainDeadline: Duration = .seconds(20)
     public static let withheldReason = "withheld: serious disclosure"
@@ -123,7 +125,8 @@ public actor ExtractionQueue {
                 response = try await service.extract(request)
                 if Self.isBlank(response.output) { throw ExtractionError.badOutput("blank answer") }
             }
-            let validated = OutputValidator.validate(response.output, segmentText: segment.text, words: words)
+            var validated = OutputValidator.validate(response.output, segmentText: segment.text, words: words)
+            try mintStoryRefs(&validated)
             let shown = try storeCandidates(validated, segment: segmentID, version: response.version)
             lastFailure[segmentID] = nil
             log("segment \(segment.index): \(shown.count) shown, \(validated.rejected.count) rejected, model \(response.model), "
@@ -250,6 +253,21 @@ public actor ExtractionQueue {
         return shown
     }
 
+    /// A stored `story_ref` is always a story id: a ref that names no story and no pending
+    /// card's ref gets a fresh id, shared by every memory of this session with the same raw ref.
+    private func mintStoryRefs(_ validated: inout OutputValidator.Validated) throws {
+        let pendingRefs = Set(try store.candidates.pending(in: session).compactMap { CandidatePayload.memory($0)?.storyRef })
+        for i in validated.accepted.indices {
+            guard case .memory(var memory) = validated.accepted[i], let raw = memory.storyRef?.trimmingCharacters(in: .whitespacesAndNewlines), !raw.isEmpty else { continue }
+            if pendingRefs.contains(raw) { continue }
+            if try store.stories.story(id: StoryID(rawValue: raw)) != nil { continue }
+            let minted = mintedStoryRefs[raw] ?? StoryID()
+            mintedStoryRefs[raw] = minted
+            memory.storyRef = minted.rawValue
+            validated.accepted[i] = .memory(memory)
+        }
+    }
+
     /// The pending memory card of this session a continuation names, or nil: a kept, dismissed
     /// or unknown card is never extended, so the new telling stands as its own card.
     private func pendingCard(named id: String?) throws -> Candidate? {
@@ -263,7 +281,7 @@ public actor ExtractionQueue {
     private func hintRows(for memory: MemoryOut, keyedTo card: CandidateID,
                           row: (CandidateKind, String, Double, String?) -> Candidate) throws -> [Candidate] {
         var out: [Candidate] = []
-        for (kind, phrase) in [(HintKind.collection, memory.collectionHint), (.chapter, memory.chapterHint)] {
+        for (kind, phrase) in [(HintKind.collection, memory.collectionHint), (.chapter, memory.chapterHint), (.story, memory.storyTitleHint)] {
             guard let phrase = phrase?.trimmingCharacters(in: .whitespacesAndNewlines), !phrase.isEmpty else { continue }
             out.append(row(.hint, try CandidatePayload.encode(HintOut(kind: kind, phrase: phrase, memoryCandidateID: card.rawValue)), memory.confidence, nil))
         }

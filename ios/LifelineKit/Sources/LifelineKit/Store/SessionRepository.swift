@@ -154,6 +154,7 @@ extension SessionRepository {
                 }
             }
             _ = try Session.deleteOne(db, key: id.rawValue)
+            try db.execute(sql: MemoryRepository.deleteEmptyStoriesSQL)
         }
     }
 }

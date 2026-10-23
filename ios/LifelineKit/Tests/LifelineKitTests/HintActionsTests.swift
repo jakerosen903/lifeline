@@ -108,3 +108,17 @@ private struct Env {
     let hint = try #require(CandidatePayload.hint(rows[1]))
     #expect(hint.memoryCandidateID == rows[0].id.rawValue && hint.phrase == "every August" && hint.kind == .collection)
 }
+
+@Test func storyHintRenamesOrCreates() throws {
+    let env = try Env()
+    let memory = try env.memoryCandidate()
+    let kept = try env.actions.acceptMemory(memory).memory
+    let hint = try env.hintCandidate(for: memory, kind: .story, phrase: "The summer of the station wagon and more words here", ordinal: 1)
+    guard case .story(let created) = try env.actions.acceptHint(hint) else { Issue.record("expected a story"); return }
+    #expect(created.title == "The summer of the station wagon and more", "at most 8 words")
+    #expect(try env.store.stories.members(of: created.id).map(\.id) == [kept.id])
+    let again = try env.hintCandidate(for: memory, kind: .story, phrase: "Yosemite summers", ordinal: 2)
+    guard case .story(let renamed) = try env.actions.acceptHint(again) else { Issue.record("expected a story"); return }
+    #expect(renamed.id == created.id && renamed.title == "Yosemite summers", "the member's story is renamed, not doubled")
+    #expect(try env.store.stories.stories().count == 1)
+}

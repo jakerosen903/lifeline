@@ -367,3 +367,33 @@ private func firstCard(_ events: [ExtractionEvent]) -> Candidate? {
                                          statusOf: { (try? env.store.candidates.fetch($0))?.status })
     #expect(waiting.contains { if case .hint = $0 { true } else { false } })
 }
+
+// MARK: - M5 stories
+
+private func storied(_ refs: [(title: String, ref: String?, hint: String?)], quote: String = "the garden") -> ExtractorOutput {
+    ExtractorOutput(memories: refs.enumerated().map { i, r in
+        MemoryOut(ref: "m\(i)", title: r.title, quote: quote, segmentSpan: WordSpan(startWord: 0, endWord: 1), peopleRefs: [], placeText: nil,
+                  anchors: [], storyRef: r.ref, storyTitleHint: r.hint, collectionHint: nil, chapterHint: nil, confidence: 0.9)
+    }, mentions: [], flags: .none)
+}
+
+@Test func queueMintsOneStoryIDPerNewRef() async throws {
+    let env = try Env(texts: ["the garden had a pomegranate tree", "my sister Maya climbed it"],
+                      script: [.success(storied([("One", "s1", "The garden days"), ("Two", "s1", nil), ("Three", "other", nil)]))])
+    let queue = env.queue()
+    let events = await queue.events
+    await queue.enqueue(env.segments[0].id)
+    guard case .candidates(let cards, _)? = await collect(events, count: 1).first else { Issue.record("no event"); return }
+    let outs = cards.compactMap(CandidatePayload.memory)
+    #expect(outs.count == 3)
+    let refs = outs.compactMap(\.storyRef)
+    #expect(refs.count == 3 && refs[0] == refs[1] && refs[0] != refs[2], "one fresh id per raw ref")
+    #expect(UUID(uuidString: refs[0]) != nil && UUID(uuidString: refs[2]) != nil)
+    let hints = cards.compactMap(CandidatePayload.hint)
+    #expect(hints.map(\.kind) == [.story] && hints[0].phrase == "The garden days" && hints[0].memoryCandidateID == cards[0].id.rawValue)
+    // A later segment naming the minted id, or the raw ref again, keeps it.
+    env.service.push(.success(storied([("Four", refs[0], nil), ("Five", "s1", nil)], quote: "my sister")))
+    await queue.enqueue(env.segments[1].id)
+    guard case .candidates(let later, _)? = await collect(events, count: 1).first else { Issue.record("no event"); return }
+    #expect(later.compactMap(CandidatePayload.memory).map(\.storyRef) == [refs[0], refs[0]])
+}
