@@ -1,7 +1,8 @@
 import LifelineKit
 import SwiftUI
 
-/// Main. The live session: a prompt, the growing transcript, elapsed time, and Stop.
+/// Main. The live session: a prompt that stays while the person talks, the growing transcript,
+/// a listening indicator, elapsed time, and Stop.
 struct SessionScreen: View {
     let viewModel: SessionViewModel
     let onEnded: () -> Void
@@ -15,9 +16,7 @@ struct SessionScreen: View {
             ScrollViewReader { proxy in
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 16) {
-                        if viewModel.state.segments.isEmpty && viewModel.state.partial.isEmpty {
-                            promptCard
-                        }
+                        promptCard(compact: hasText)
                         ForEach(viewModel.state.segments) { segment in
                             Text(segment.text)
                                 .font(.system(.title3, design: .serif))
@@ -25,18 +24,13 @@ struct SessionScreen: View {
                                 .accessibilityIdentifier("session.segment")
                                 .id(segment.id)
                         }
-                        if !viewModel.state.partial.isEmpty {
-                            Text(viewModel.state.partial)
-                                .font(.system(.title3, design: .serif))
-                                .foregroundStyle(Theme.stone)
-                                .id("partial")
-                        }
+                        liveText
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(24)
                 }
                 .onChange(of: viewModel.state.segments.count) {
-                    withAnimation { proxy.scrollTo(viewModel.state.segments.last?.id, anchor: .bottom) }
+                    withAnimation { proxy.scrollTo("live", anchor: .bottom) }
                 }
             }
             footer
@@ -57,18 +51,54 @@ struct SessionScreen: View {
             if let line = viewModel.statusLine {
                 Text(line).font(.subheadline).foregroundStyle(Theme.ochre)
                     .accessibilityIdentifier("session.status")
-            } else {
-                Circle().fill(Theme.olive).frame(width: 10, height: 10)
             }
+            ListeningIndicator(mode: indicatorMode)
+                .padding(.leading, 12)
         }
         .padding(.horizontal, 24)
         .padding(.top, 24)
     }
 
-    private var promptCard: some View {
+    private var hasText: Bool {
+        !viewModel.state.segments.isEmpty || !viewModel.state.spoken.isEmpty || !viewModel.state.partial.isEmpty
+    }
+
+    private var indicatorMode: ListeningIndicator.Mode {
+        if viewModel.state.isInterrupted || viewModel.recorderNotStarted { return .paused }
+        return viewModel.state.isSpeaking ? .speaking : .quiet
+    }
+
+    /// The prompt stays on screen so the person can think about what to say next. Once words
+    /// arrive it shrinks and the alternates go, leaving room for the transcript.
+    private func promptCard(compact: Bool) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text(Self.prompt).titleStyle()
-            ForEach(Self.alternates, id: \.self) { Text($0).font(.footnote).foregroundStyle(Theme.stone) }
+            if compact {
+                Text(Self.prompt)
+                    .font(.system(.headline, design: .serif))
+                    .foregroundStyle(Theme.stone)
+                    .accessibilityIdentifier("session.prompt")
+            } else {
+                Text(Self.prompt).titleStyle().accessibilityIdentifier("session.prompt")
+                ForEach(Self.alternates, id: \.self) { Text($0).font(.footnote).foregroundStyle(Theme.stone) }
+            }
+        }
+        .animation(.default, value: compact)
+    }
+
+    /// Final words waiting for their segment, then the utterance in progress. Nothing vanishes
+    /// between a final and the pause that closes the segment.
+    @ViewBuilder
+    private var liveText: some View {
+        let state = viewModel.state
+        if !state.spoken.isEmpty || !state.partial.isEmpty {
+            (Text(state.spoken).foregroundStyle(Theme.ink)
+                + Text(state.spoken.isEmpty || state.partial.isEmpty ? "" : " ")
+                + Text(state.partial).foregroundStyle(Theme.stone))
+                .font(.system(.title3, design: .serif))
+                .accessibilityIdentifier("session.live")
+                .id("live")
+        } else {
+            Color.clear.frame(height: 1).id("live")
         }
     }
 

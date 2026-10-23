@@ -44,6 +44,8 @@ final class LaunchUITests: XCTestCase {
         let firstMoment = app.staticTexts["session.segment"].firstMatch
         XCTAssertTrue(firstMoment.waitForExistence(timeout: 10), "a scripted segment should appear")
         XCTAssertTrue(firstMoment.label.contains("blue door"))
+        XCTAssertTrue(app.staticTexts["session.prompt"].exists, "the prompt stays on screen while the person talks")
+        XCTAssertTrue(app.otherElements["session.listening"].exists, "the listening indicator stays on screen")
         app.buttons["session.stop"].tap()
 
         let row = app.buttons["home.sessionRow"].firstMatch

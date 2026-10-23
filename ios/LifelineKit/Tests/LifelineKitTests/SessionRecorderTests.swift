@@ -76,6 +76,29 @@ private func waitUntil(_ cond: @escaping () async -> Bool, timeoutMs: Int = 2_00
     #expect(!s.isInterrupted && s.partial.isEmpty && s.segments.first?.text == "the blue")
 }
 
+@Test func stateKeepsSpokenTextAndSpeakingFlagBetweenSegments() async throws {
+    let db = try AppDatabase.inMemory(); let repo = SessionRepository(db); let voice = FakeVoiceSession()
+    let rec = makeRecorder(voice: voice, repo: repo)
+    _ = try await rec.start()
+    await voice.emit(.speechStarted(atMs: 0))
+    await voice.emit(.transcriptPartial("the bl"))
+    await voice.emit(.transcriptFinal(TranscriptResult(text: "the blue", words: [w("the", 0, 300), w("blue", 300, 700)], range: MsRange(start: 0, end: 700), isFinal: true)))
+    await voice.emit(.transcriptPartial("do"))
+    await waitUntil { await rec.state.partial == "do" }
+    var s = await rec.state
+    // Finals that have not closed into a segment yet stay on screen; the partial is the next utterance.
+    #expect(s.isSpeaking && s.spoken == "the blue" && s.partial == "do")
+    await voice.emit(.transcriptFinal(TranscriptResult(text: "door", words: [w("door", 700, 1_000)], range: MsRange(start: 700, end: 1_000), isFinal: true)))
+    await voice.emit(.userPaused(afterMs: 1_000))
+    await waitUntil { await !rec.state.isSpeaking }
+    s = await rec.state
+    #expect(s.spoken == "the blue door" && s.partial.isEmpty)
+    await voice.emit(.segmentClosed(SegmentTranscript(range: MsRange(start: 0, end: 4_000), text: "the blue door", words: [w("the", 0, 300), w("blue", 300, 700), w("door", 700, 1_000)])))
+    await waitUntil { await rec.state.segments.count == 1 }
+    s = await rec.state
+    #expect(s.spoken.isEmpty && s.partial.isEmpty)
+}
+
 @Test func stopSetsEndedAt() async throws {
     let db = try AppDatabase.inMemory(); let repo = SessionRepository(db); let voice = FakeVoiceSession()
     let rec = makeRecorder(voice: voice, repo: repo)

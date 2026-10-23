@@ -4,7 +4,12 @@ import Foundation
 public struct RecorderState: Equatable, Sendable {
     public var sessionID: SessionID?
     public var startedAt: Date?
+    /// The utterance in progress, revised as the transcriber listens.
     public var partial: String = ""
+    /// Final text since the last closed segment. Shown so words do not vanish between finals.
+    public var spoken: String = ""
+    /// True from speech start to the pause that ends it; drives the listening indicator.
+    public var isSpeaking = false
     public var segments: [Segment] = []
     public var isInterrupted = false
     public var error: String?
@@ -87,19 +92,25 @@ public actor SessionRecorder {
 
     private func handle(_ event: VoiceEvent) {
         switch event {
+        case .speechStarted:
+            state.isSpeaking = true
         case .transcriptPartial(let text):
             state.partial = text
+        case .transcriptFinal(let result):
+            state.spoken = [state.spoken, result.text].filter { !$0.isEmpty }.joined(separator: " ")
+            state.partial = ""
+        case .userPaused:
+            state.isSpeaking = false
         case .segmentClosed(let transcript):
             store(transcript)
             state.partial = ""
+            state.spoken = ""
         case .interrupted:
             state.isInterrupted = true
         case .resumed:
             state.isInterrupted = false
         case .failed(let message):
             state.error = message
-        case .speechStarted, .transcriptFinal, .userPaused:
-            break
         }
     }
 
