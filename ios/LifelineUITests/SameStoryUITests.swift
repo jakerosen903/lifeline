@@ -71,9 +71,15 @@ final class SameStoryUITests: XCTestCase {
         XCTAssertTrue(app.buttons["card.sameStory"].waitForExistence(timeout: 15))
         app.buttons["card.sameStory"].tap()
         XCTAssertTrue(app.staticTexts["card.mergedNotice"].waitForExistence(timeout: 3))
-        app.buttons["card.undo"].tap()
+        // Dismiss another card inside the window: two notices, two undos, each its own.
+        let dismiss = app.buttons["card.dismiss"].firstMatch
+        XCTAssertTrue(dismiss.waitForExistence(timeout: 15))
+        dismiss.tap()
+        XCTAssertTrue(app.staticTexts["card.dismissedNotice"].waitForExistence(timeout: 3))
+        app.buttons["card.undoMerge"].tap()
         XCTAssertTrue(app.buttons["card.sameStory"].waitForExistence(timeout: 3), "the card is back with its offer")
         XCTAssertFalse(app.staticTexts["card.mergedNotice"].exists)
+        XCTAssertTrue(app.staticTexts["card.dismissedNotice"].exists, "undoing the merge did not touch the dismiss")
         app.finishSession()
         open(app, row: "The blue door")
         XCTAssertTrue(app.buttons["memory.play"].firstMatch.waitForExistence(timeout: 5))

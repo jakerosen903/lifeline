@@ -12,7 +12,9 @@ public struct NLSentenceEmbedder: SentenceEmbedder {
 
     public func vector(for text: String) -> [Float]? {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty, let embedding = Self.shared.embedding(), let vector = embedding.vector(for: trimmed) else { return nil }
+        // `vector(for:)` is not documented thread-safe; the backfill, the extraction actor and the
+        // main actor all call it, so the lock covers the call, not only the load.
+        guard !trimmed.isEmpty, let vector = Self.shared.vector(for: trimmed) else { return nil }
         return vector.map { Float($0) }
     }
 
@@ -24,14 +26,14 @@ public struct NLSentenceEmbedder: SentenceEmbedder {
         private var value: NLEmbedding?
         private(set) var loads = 0
 
-        func embedding() -> NLEmbedding? {
+        func vector(for text: String) -> [Double]? {
             lock.lock(); defer { lock.unlock() }
             if !loaded {
                 loaded = true
                 loads += 1
                 value = NLEmbedding.sentenceEmbedding(for: .english)
             }
-            return value
+            return value?.vector(for: text)
         }
 
         func reset() { lock.lock(); loaded = false; value = nil; loads = 0; lock.unlock() }

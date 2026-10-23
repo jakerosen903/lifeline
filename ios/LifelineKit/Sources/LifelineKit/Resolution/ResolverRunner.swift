@@ -69,9 +69,9 @@ public struct ResolverRunner: Sendable {
             try store.memories.updateRange(id, range)
             changes.append(RunReport.Change(memoryID: id, title: memory.title, before: memory.range, after: range))
         }
-        let confirmedMemories = Set(memories.filter(\.range.isConfirmed).map(\.id))
-        for var anchor in anchors where !confirmedMemories.contains(anchor.memoryID) && output.resolvedAnchorIDs.contains(anchor.id) != anchor.resolved {
-            // A confirmed memory keeps its flags: the owner settled it, nothing is open there.
+        let settledMemories = Set(memories.filter(\.range.isSettled).map(\.id))
+        for var anchor in anchors where !settledMemories.contains(anchor.memoryID) && output.resolvedAnchorIDs.contains(anchor.id) != anchor.resolved {
+            // A settled memory (confirmed or stated by the owner) keeps its flags: nothing is open there.
             anchor.resolved = output.resolvedAnchorIDs.contains(anchor.id)
             try store.memories.update(anchor)
         }

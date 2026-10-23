@@ -131,6 +131,7 @@ struct FlowChips: View {
 struct UndoNotice: View {
     var text = "Suggestion dismissed. Your recording is untouched."
     var identifier = "card.dismissedNotice"
+    var undoIdentifier = "card.undo"
     let onUndo: () -> Void
 
     var body: some View {
@@ -143,7 +144,7 @@ struct UndoNotice: View {
             Button("Undo", action: onUndo)
                 .buttonStyle(.bordered)
                 .tint(Theme.olive)
-                .accessibilityIdentifier("card.undo")
+                .accessibilityIdentifier(undoIdentifier)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)

@@ -45,8 +45,14 @@ public struct EmbeddingRepository: Sendable {
         try db.writer.write { try $0.execute(sql: "delete from memory_embedding where memory_id = ?", arguments: [memory.rawValue]) }
     }
 
-    public func memoryIDsWithRows() throws -> Set<MemoryID> {
-        try db.writer.read { Set(try String.fetchAll($0, sql: "select memory_id from memory_embedding").map(MemoryID.init(rawValue:))) }
+    /// Memories that have a row, of one model or of any.
+    public func memoryIDsWithRows(model: String? = nil) throws -> Set<MemoryID> {
+        try db.writer.read { db in
+            let ids = model == nil
+                ? try String.fetchAll(db, sql: "select memory_id from memory_embedding")
+                : try String.fetchAll(db, sql: "select memory_id from memory_embedding where model = ?", arguments: [model])
+            return Set(ids.map(MemoryID.init(rawValue:)))
+        }
     }
 
     static func blob(_ vector: [Float]) -> Data {

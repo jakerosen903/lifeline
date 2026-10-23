@@ -228,3 +228,50 @@ private struct Env {
     #expect(try env.store.candidates.fetch(c.id)?.status == .pending)
     #expect(try env.store.memories.people(of: target.id).isEmpty && (try env.store.memories.spans(of: target.id)).count == 1)
 }
+
+// MARK: - Second review (B1, T1, T2)
+
+@Test func unmergeIsOneTransaction() throws {
+    let env = try Env()
+    let (_, target) = try env.kept("we lived in an orange house", title: "Orange house")
+    let (_, source) = try env.kept("we drove to disney", title: "The drive")
+    var receipt = try env.actions.merge(source.id, into: target.id)
+    let merged = try #require(try env.store.memories.snapshot(of: target.id))
+    // The source's snapshot names a collection that no longer exists: its restore fails the foreign key.
+    receipt.before[1].collectionIDs = [CollectionID(rawValue: "gone")]
+    #expect(throws: (any Error).self) { try env.actions.unmerge(receipt) }
+    let after = try #require(try env.store.memories.snapshot(of: target.id))
+    #expect(after.spans == merged.spans && after.memory == merged.memory, "the target did not move: nothing partial landed")
+    #expect(try env.store.memories.fetch(source.id) == nil)
+}
+
+@Test func twoCardsFromOneSessionMergeAndItsDeleteLeavesOrderZero() throws {
+    let env = try Env()
+    let (_, target) = try env.kept("we lived in an orange house", title: "Orange house")
+    let (session, segs) = try StoreFixtures.session(in: env.store.sessions, segments: ["grew up in an orange house", "the orange house had a canal"])
+    var cards: [Candidate] = []
+    for (i, seg) in segs.enumerated() {
+        let out = MemoryOut(ref: "m\(i)", kind: .event, title: seg.text, quote: seg.text, segmentSpan: WordSpan(startWord: 0, endWord: 1), peopleRefs: [], placeText: nil,
+                            anchors: [], sameAsMemoryID: nil, collectionHint: nil, chapterHint: nil, confidence: 0.9)
+        let c = StoreFixtures.candidate(seg.id, payload: try CandidatePayload.encode(out))
+        try env.store.candidates.insert(c)
+        cards.append(c)
+    }
+    for c in cards { _ = try env.actions.mergeCandidate(c, into: target.id) }
+    #expect(try env.store.memories.spans(of: target.id).map(\.order) == [0, 1, 2])
+    try env.store.sessions.deleteSession(session)
+    let spans = try env.store.memories.spans(of: target.id)
+    #expect(spans.count == 1 && spans[0].order == 0 && spans[0].titleText == nil, "only the first telling remains")
+    #expect(try env.store.memories.fetch(target.id)?.createdFromCandidateID == target.createdFromCandidateID)
+}
+
+@Test func sameStoryNeverOverwritesAStatedTarget() throws {
+    let env = try Env()
+    let (_, target) = try env.kept("we lived in an orange house", title: "Orange house")
+    try env.actions.setStatedRange(target.id, .stated(year: 1997))
+    let (_, _, c) = try env.card("that was in 1998 in the orange house", title: "The orange house in 1998",
+                                 anchors: [AnchorOut(phrase: "in 1998", relation: .absolute, targetText: nil, value: "1998")])
+    _ = try env.actions.mergeCandidate(c, into: target.id)
+    let range = try #require(try env.store.memories.fetch(target.id)?.range)
+    #expect(range.earliest?.year == 1997 && range.displayText == "1997", "the person's own date stands over the card's anchor")
+}

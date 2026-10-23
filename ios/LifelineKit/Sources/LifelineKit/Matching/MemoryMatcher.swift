@@ -64,8 +64,9 @@ public struct MemoryMatcher: Sendable {
 
     /// Every memory without a row gets one. Returns how many were written.
     public func backfill() throws -> Int {
-        guard embedder != nil else { return 0 }
-        let done = try store.embeddings.memoryIDsWithRows()
+        guard let embedder else { return 0 }
+        // Per model: a new asset version or a second language re-embeds everything once.
+        let done = try store.embeddings.memoryIDsWithRows(model: embedder.model)
         var written = 0
         for memory in try store.memories.allMemories() where !done.contains(memory.id) && !memory.excludedFromAI {
             try index(memory)

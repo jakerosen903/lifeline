@@ -13,7 +13,7 @@ struct SessionDetailScreen: View {
                     CardStack(cards: viewModel.waiting, handler: viewModel.cards,
                               onAccept: { viewModel.accept($0) }, onChange: { viewModel.change($0) }, onDismiss: { viewModel.dismiss($0) },
                               onResolve: { viewModel.resolve($0, $1) }, onUndo: { viewModel.undo() },
-                              onSameStory: { viewModel.sameStory($0, into: $1) })
+                              onSameStory: { viewModel.sameStory($0, into: $1) }, onUndoMerge: { viewModel.undoMerge() })
                         .listRowBackground(Color.clear)
                         .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
                 }

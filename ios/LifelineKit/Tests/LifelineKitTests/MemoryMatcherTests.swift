@@ -146,3 +146,18 @@ private func card(_ title: String, quote: String) -> MemoryOut {
     _ = e.vector(for: "graduation day was hot")
     #expect(NLSentenceEmbedder.loadCount == 1, "one asset load per process, not one per sentence")
 }
+
+@Test func backfillIsPerModel() throws {
+    var env = try MatchEnv()
+    let a = try env.memory("a", quote: "aa", vector: [1, 0])
+    _ = try env.memory("b", quote: "bb", vector: [0, 1])
+    try env.matcher(FakeEmbedder(table: env.table)).index(a)
+    struct OtherModel: SentenceEmbedder {
+        let model = "fake-2"
+        func vector(for text: String) -> [Float]? { [1, 1] }
+    }
+    let other = env.matcher(OtherModel())
+    #expect(try other.backfill() == 2, "rows of another model do not count as done")
+    #expect(try env.store.embeddings.memoryIDsWithRows(model: "fake-2").count == 2)
+    #expect(try other.related(to: "anything").count == 2)
+}

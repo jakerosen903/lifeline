@@ -28,7 +28,9 @@ public enum Landing {
         for (memory, span) in kept {
             let seg = index[span.segmentID]
             all.append(((seg?.index ?? .max, span.startMs),
-                        LandingRow(id: "memory:\(memory.id.rawValue)", title: memory.title, quote: memory.summaryQuote,
+                        // A retelling merged into an older memory is its own moment here, under the words it was kept with.
+                        LandingRow(id: "memory:\(memory.id.rawValue):\(span.order)", title: span.order == 0 ? memory.title : (span.titleText ?? memory.title),
+                                   quote: memory.summaryQuote,
                                    segmentID: span.segmentID, play: MsRange(start: span.startMs, end: span.endMs), isKept: true)))
         }
         for (candidate, out) in possible {

@@ -64,7 +64,8 @@ final class SessionDetailViewModel {
     func accept(_ card: Card) { if cards.accept(card) { refresh() } }
     func change(_ card: Card) { if let memory = cards.keep(card) { refresh(); changing = memory } }
     func dismiss(_ card: Card) { if cards.dismiss(card) { refresh() } }
-    func undo() { if cards.undo() != nil || cards.undoMerge() != nil { refresh() } }
+    func undo() { if cards.undo() != nil { refresh() } }
+    func undoMerge() { if cards.undoMerge() != nil { refresh() } }
     func sameStory(_ card: Card, into target: MemoryID) { if cards.sameStory(card, into: target) { refresh() } }
     func resolve(_ card: Card, _ choice: MentionChoice) { if cards.resolve(card, choice) { refresh() } }
 

@@ -167,7 +167,21 @@ public struct MemoryRepository: Sendable {
 
     /// Puts the memory back exactly as the snapshot has it, re-creating the row if it was deleted.
     public func restore(_ snapshot: Snapshot) throws {
+        try restore([snapshot], settingCandidate: nil)
+    }
+
+    /// Several memories back at once, and a card's status with them, in one transaction: an undo
+    /// that is cut short leaves nothing half done.
+    public func restore(_ snapshots: [Snapshot], settingCandidate candidate: (id: CandidateID, status: CandidateStatus)?) throws {
         try db.writer.write { db in
+            for snapshot in snapshots { try Self.restore(snapshot, in: db) }
+            if let candidate {
+                try db.execute(sql: "update candidate set status = ? where id = ?", arguments: [candidate.status.rawValue, candidate.id.rawValue])
+            }
+        }
+    }
+
+    private static func restore(_ snapshot: Snapshot, in db: Database) throws {
             let id = snapshot.memory.id.rawValue
             try snapshot.memory.save(db)
             for table in ["memory_span", "memory_person", "memory_place", "anchor", "collection_memory"] {
@@ -180,7 +194,6 @@ public struct MemoryRepository: Sendable {
             for collection in snapshot.collectionIDs {
                 try db.execute(sql: "insert or ignore into collection_memory (collection_id, memory_id) values (?, ?)", arguments: [collection.rawValue, id])
             }
-        }
     }
 
     /// "Same story" on a card, in one transaction: the span, its edges, the card marked accepted.

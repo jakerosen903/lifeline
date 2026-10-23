@@ -13,6 +13,8 @@ struct CardStack: View {
     let onUndo: () -> Void
     /// "Same story" chose a memory for this card (M4.1). Absent where cards cannot be memories.
     var onSameStory: (Card, MemoryID) -> Void = { _, _ in }
+    /// Undo under "Added to X." Its own action: it must never undo a dismiss made moments before.
+    var onUndoMerge: () -> Void = {}
 
     @State private var picking: Card?
 
@@ -35,7 +37,7 @@ struct CardStack: View {
                 UndoNotice(onUndo: onUndo)
             }
             if let merged = handler.mergedNotice {
-                UndoNotice(text: merged, identifier: "card.mergedNotice", onUndo: onUndo)
+                UndoNotice(text: merged, identifier: "card.mergedNotice", undoIdentifier: "card.undoMerge", onUndo: onUndoMerge)
             }
         }
         .animation(.default, value: cards.map(\.id))

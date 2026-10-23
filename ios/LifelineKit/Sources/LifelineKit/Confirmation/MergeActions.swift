@@ -71,8 +71,8 @@ extension CandidateActions {
     /// later work.
     public func unmerge(_ receipt: MergeReceipt) throws {
         guard let current = try store.memories.snapshot(of: receipt.target), Self.same(current, receipt.after) else { throw Error.stale }
-        for snapshot in receipt.before { try store.memories.restore(snapshot) }
-        if let candidate = receipt.candidateID { try store.candidates.setStatus(candidate, .pending) }
+        // One transaction: a kill mid-undo must never leave the source gone from both memories.
+        try store.memories.restore(receipt.before, settingCandidate: receipt.candidateID.map { ($0, .pending) })
         for snapshot in receipt.before { try reindex(snapshot.memory.id) }
         _ = try ResolverRunner(store: store).run()
     }
