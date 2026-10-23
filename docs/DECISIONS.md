@@ -171,6 +171,16 @@ Added 2026-10-23 after the M4.1 device run: **duplicates among memories already 
 
 Why: the review's "preserve first, organize later" changes the landing and the session more than the data model; shipping those first lets the owner feel the new shape before the model grows. Cost: a memory told across two sessions goes with the first one deleted until span deletion lands.
 
+## 2026-10-23 · V1 is one person's app: "protect" waits, backup does not
+
+**Status:** Decided (owner).
+
+The owner is the only user of V1. The privacy screen (Share…, Local-only before recording), span-level deletion with offsets preserved, the two disabled rows on the Change sheet and the in-app extractor re-run are not needed for V1 and wait until someone else uses the app. Hide from timeline, Exclude from AI processing and Delete (session or memory) already exist and stay.
+
+One item is kept out of that list: a plain backup. Every recording and its derivatives live only on the phone, so a lost phone is a lost archive, which breaks "preserve first" for one user as much as for many. A one-tap export of the database and the audio to Files or iCloud Drive, with a restore path, is scheduled as a small task after M5, not as a milestone.
+
+M5 is "organize" (`docs/specs/2026-10-23-m5-organize.md`); there is no M6 "protect" in V1.
+
 ## 2026-10-23 · Same story is offered, never applied; dates are stated, never inferred by the app
 
 On the second day of the M4 build a story told in two recordings became two memories: the extractor's `same_as_memory_id` was never acted on and the packet only carried the current session's memories. A memory with no anchor had no way to get a date. M4.1 adds the moves the person can make and a suggestion they confirm.
