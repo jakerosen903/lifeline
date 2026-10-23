@@ -17,6 +17,7 @@ public struct CandidateActions: Sendable {
         case segmentMissing
         case emptySpan
         case memoryNotAccepted
+        case notDismissed
     }
 
     public enum HintResult: Equatable, Sendable {
@@ -86,6 +87,24 @@ public struct CandidateActions: Sendable {
     public func dismiss(_ candidate: Candidate) throws {
         try requirePending(candidate)
         try store.candidates.setStatus(candidate.id, .dismissed)
+    }
+
+    /// A wrong tap costs nothing: a dismissed card waits again. Only what the owner dismissed
+    /// comes back; what the validator rejected or the app withheld stays out.
+    public func restore(_ candidate: Candidate) throws {
+        guard let current = try store.candidates.fetch(candidate.id), current.status == .dismissed, current.rejection == nil else {
+            throw Error.notDismissed
+        }
+        try store.candidates.setStatus(candidate.id, .pending)
+        if current.kind == .person, let mention = try store.people.mentions(in: current.segmentID).first(where: { m in
+            CandidatePayload.mention(current).map { Self.same($0.text, m.text) } ?? false
+        }), mention.status == .notAPerson {
+            try store.people.reopen(mention.id)
+        }
+    }
+
+    public func restoreMention(_ id: MentionID) throws {
+        try store.people.reopen(id)
     }
 
     /// Writes the mention row for a `person` candidate, reusing one the same segment already has

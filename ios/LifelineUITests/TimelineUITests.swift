@@ -123,6 +123,38 @@ final class TimelineUITests: XCTestCase {
     }
 
     @MainActor
+    func testTappingAWaitingCardDoesNotDismissIt() {
+        let app = launchToTimeline()
+        record(app, accept: 0)
+        let title = app.staticTexts.matching(identifier: "card.title").matching(NSPredicate(format: "label == %@", "The blue door")).firstMatch
+        XCTAssertTrue(reveal(title, in: app), "the unacted card waits on the timeline")
+        title.tap()   // a tap on the card's body, not on a button
+        XCTAssertTrue(title.waitForExistence(timeout: 2), "a tap on the card must not act on it")
+        let who = app.staticTexts["Who's this?"].firstMatch
+        XCTAssertTrue(reveal(who, in: app))
+        who.tap()
+        XCTAssertTrue(who.waitForExistence(timeout: 2), "same for a who-is-this card")
+    }
+
+    @MainActor
+    func testDismissedCardsCanBeBroughtBack() {
+        let app = launchToTimeline()
+        app.buttons["home.start"].tap()
+        let dismiss = app.buttons["card.dismiss"].firstMatch
+        XCTAssertTrue(dismiss.waitForExistence(timeout: 15))
+        dismiss.tap()   // "Not quite" on the blue door, in the session
+        app.buttons["session.stop"].tap()
+        XCTAssertTrue(app.buttons["timeline.sessions"].waitForExistence(timeout: 10))
+        app.buttons["timeline.sessions"].tap()
+        app.buttons["home.sessionRow"].firstMatch.tap()
+        let bringBack = app.buttons["detail.bringBack"].firstMatch
+        XCTAssertTrue(reveal(bringBack, in: app), "a dismissed card is listed with a way back")
+        bringBack.tap()
+        let title = app.staticTexts.matching(identifier: "card.title").matching(NSPredicate(format: "label == %@", "The blue door")).firstMatch
+        XCTAssertTrue(title.waitForExistence(timeout: 5), "it waits again")
+    }
+
+    @MainActor
     func testSessionsAreOneTapAway() {
         let app = launchToTimeline()
         record(app, accept: 0)

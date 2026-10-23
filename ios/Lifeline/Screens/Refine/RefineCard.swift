@@ -33,6 +33,7 @@ struct RefineCard: View {
                     .font(.footnote).foregroundStyle(Theme.stone)
             }
             Button("Keep “\(bestGuess)” for now", action: onKeep)
+                .buttonStyle(.borderless)
                 .font(.footnote)
                 .foregroundStyle(Theme.stone)
                 .accessibilityIdentifier("refine.keep")

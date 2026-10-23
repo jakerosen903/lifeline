@@ -38,6 +38,7 @@ struct MemoryCard: View {
                     .tint(Theme.olive)
                     .accessibilityIdentifier("card.add")
                 Button("Not quite", action: onDismiss)
+                    .buttonStyle(.borderless)
                     .foregroundStyle(Theme.stone)
                     .accessibilityIdentifier("card.dismiss")
             }

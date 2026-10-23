@@ -16,6 +16,7 @@ final class SessionDetailViewModel {
     private(set) var segments: [Segment] = []
     private(set) var memories: [MemoryRow] = []
     private(set) var waiting: [Card] = []
+    private(set) var dismissed: [Candidate] = []
     private(set) var error: String?
     let player = SegmentPlayer()
     let cards: CardHandler
@@ -46,9 +47,15 @@ final class SessionDetailViewModel {
                 .filter { segmentIDs.contains($0.segmentID) && !shownNames.contains(PeopleRepository.normalize($0.text)) }
                 .map(Card.init)
             waiting = pending + openNames
+            dismissed = try candidates.dismissed(in: session.id)
         } catch {
             self.error = error.localizedDescription
         }
+    }
+
+    func bringBack(_ candidate: Candidate) {
+        do { try deps.actions.restore(candidate); error = nil; refresh() }
+        catch { self.error = "Could not bring that back: \(error.localizedDescription)" }
     }
 
     func accept(_ card: Card) { if cards.accept(card) { refresh() } }

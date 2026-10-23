@@ -73,6 +73,22 @@ struct SessionDetailScreen: View {
                     .accessibilityIdentifier("detail.segment")
                 }
             }
+            if !viewModel.dismissed.isEmpty {
+                Section("Dismissed") {
+                    ForEach(viewModel.dismissed) { candidate in
+                        HStack {
+                            Text(CandidatePayload.memory(candidate)?.title ?? CandidatePayload.mention(candidate)?.text ?? "")
+                                .font(.system(.subheadline, design: .serif))
+                                .foregroundStyle(Theme.stone)
+                            Spacer()
+                            Button("Bring back") { viewModel.bringBack(candidate) }
+                                .buttonStyle(.bordered)
+                                .tint(Theme.olive)
+                                .accessibilityIdentifier("detail.bringBack")
+                        }
+                    }
+                }
+            }
             if let error = viewModel.error ?? viewModel.cards.error {
                 Text(error).foregroundStyle(.red).accessibilityIdentifier("detail.error")
             }

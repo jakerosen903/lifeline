@@ -188,3 +188,29 @@ private struct Env {
     #expect(try env.store.memories.people(of: accepted.memory.id).map(\.id) == [marcel.id])
     #expect(try env.store.people.aliases(of: marcel.id).map(\.text).contains("my mom"), "the role phrase becomes an alias")
 }
+
+@Test func dismissedCandidatesAndNotAPersonMentionsCanBeRestored() throws {
+    let env = try Env()
+    let memory = try env.memoryCandidate(people: [])
+    try env.actions.dismiss(memory)
+    #expect(try env.store.candidates.dismissed(in: env.session).map(\.id) == [memory.id])
+    try env.actions.restore(memory)
+    #expect(try env.store.candidates.fetch(memory.id)?.status == .pending)
+    #expect(try env.store.candidates.dismissed(in: env.session).isEmpty)
+    #expect(throws: CandidateActions.Error.notDismissed) { try env.actions.restore(memory) }
+
+    let mentionCandidate = try env.mentionCandidate("Mr. Spitzig")
+    let mention = try env.actions.acceptMention(mentionCandidate)
+    _ = try env.actions.resolveMention(mention.id, to: .notAPerson)
+    #expect(try env.store.people.mention(id: mention.id)?.status == .notAPerson)
+    try env.actions.restoreMention(mention.id)
+    #expect(try env.store.people.mention(id: mention.id)?.status == .unresolved)
+}
+
+@Test func withheldAndInventedCandidatesAreNotRestorable() throws {
+    let env = try Env()
+    let invented = try env.memoryCandidate(people: [])
+    try env.store.candidates.setStatus(invented.id, .dismissed, rejection: "quote not in segment")
+    #expect(try env.store.candidates.dismissed(in: env.session).isEmpty, "only what the owner dismissed is offered back")
+    #expect(throws: CandidateActions.Error.notDismissed) { try env.actions.restore(invented) }
+}

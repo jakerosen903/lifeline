@@ -48,11 +48,13 @@ private struct APIKeySection: View {
                 .accessibilityIdentifier("settings.apiKey")
             HStack {
                 Button("Save key") { key.save(into: secrets) }
+                    .buttonStyle(.borderless)
                     .disabled(!key.canSave)
                     .accessibilityIdentifier("settings.apiKeySave")
                 Spacer()
                 if key.isSaved {
                     Button("Remove", role: .destructive) { key.remove(from: secrets) }
+                        .buttonStyle(.borderless)
                         .accessibilityIdentifier("settings.apiKeyRemove")
                 }
             }

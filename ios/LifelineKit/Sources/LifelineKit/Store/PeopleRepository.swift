@@ -123,6 +123,14 @@ public struct PeopleRepository: Sendable {
         }
     }
 
+    /// Reopens a mention marked "not a person" by mistake.
+    public func reopen(_ id: MentionID) throws {
+        try db.writer.write { db in
+            try db.execute(sql: "update mention set status = ?, person_id = null where id = ?",
+                           arguments: [MentionStatus.unresolved.rawValue, id.rawValue])
+        }
+    }
+
     public func markNotAPerson(_ id: MentionID) throws {
         try db.writer.write { db in
             try db.execute(sql: "update mention set status = ?, person_id = null where id = ?",

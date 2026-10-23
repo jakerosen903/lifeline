@@ -21,6 +21,7 @@ struct HintCard: View {
                     .tint(Theme.olive)
                     .accessibilityIdentifier("card.hintYes")
                 Button("Not quite", action: onDismiss)
+                    .buttonStyle(.borderless)
                     .foregroundStyle(Theme.stone)
                     .accessibilityIdentifier("card.hintNo")
             }
