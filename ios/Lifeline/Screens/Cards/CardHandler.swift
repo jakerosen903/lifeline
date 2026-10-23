@@ -26,14 +26,20 @@ final class CardHandler {
 
     /// Returns true when the card is done with.
     func accept(_ card: Card) -> Bool {
-        guard case .memory(let candidate, _) = card else { return false }
-        return attempt("Could not add that") { _ = try deps.actions.acceptMemory(candidate) }
+        switch card {
+        case .memory(let candidate, _):
+            return attempt("Could not add that") { _ = try deps.actions.acceptMemory(candidate) }
+        case .hint(let candidate, _):
+            return attempt("Could not file that") { _ = try deps.actions.acceptHint(candidate) }
+        case .whoIsThis:
+            return false
+        }
     }
 
     func dismiss(_ card: Card) -> Bool {
         attempt("Could not dismiss that") {
             switch card {
-            case .memory(let candidate, _):
+            case .memory(let candidate, _), .hint(let candidate, _):
                 try deps.actions.dismiss(candidate)
             case .whoIsThis:
                 try deps.actions.resolveMention(try mention(for: card).id, to: .notAPerson)

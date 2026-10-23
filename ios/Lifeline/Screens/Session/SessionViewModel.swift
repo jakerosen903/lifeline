@@ -76,8 +76,16 @@ final class SessionViewModel: Identifiable {
 
     // MARK: - Cards
 
-    func accept(_ card: Card) { if cards.accept(card) { cardQueue.remove(card.id) } }
-    func dismiss(_ card: Card) { if cards.dismiss(card) { cardQueue.remove(card.id) } }
+    func accept(_ card: Card) {
+        guard cards.accept(card) else { return }
+        cardQueue.remove(card.id)
+        if case .memory = card { cardQueue.memoryAccepted(card.id) }
+    }
+    func dismiss(_ card: Card) {
+        guard cards.dismiss(card) else { return }
+        cardQueue.remove(card.id)
+        if case .memory = card { cardQueue.memoryDismissed(card.id) }
+    }
     func resolve(_ card: Card, _ choice: MentionChoice) { if cards.resolve(card, choice) { cardQueue.remove(card.id) } }
 
     private func apply(_ s: RecorderState) { state = s }
