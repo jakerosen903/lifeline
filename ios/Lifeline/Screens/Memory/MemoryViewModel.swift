@@ -14,6 +14,8 @@ final class MemoryViewModel {
     private(set) var session: Session?
     private(set) var ageText: String?
     private(set) var question: RelativeQuestion?
+    private(set) var checkThis: [CheckThis] = []
+    private var mentions: [Mention] = []
     private(set) var error: String?
     let player = SegmentPlayer()
     private let deps: Dependencies
@@ -45,6 +47,8 @@ final class MemoryViewModel {
                 ageText = nil
             }
             question = try firstQuestion()
+            mentions = try span.map { try store.people.mentions(in: $0.segmentID) } ?? []
+            checkThis = CheckThisTags.tags(range: memory.range, mentions: mentions)
         } catch {
             self.error = error.localizedDescription
         }
@@ -85,6 +89,11 @@ final class MemoryViewModel {
         guard let question else { return }
         do { try deps.actions.answer(question, with: choice); refresh() }
         catch { self.error = "Could not save that: \(error.localizedDescription)" }
+    }
+
+    func mention(for tag: CheckThis) -> Mention? {
+        guard case .person(_, let id) = tag else { return nil }
+        return mentions.first { $0.id == id }
     }
 
     func stop() { player.stop() }

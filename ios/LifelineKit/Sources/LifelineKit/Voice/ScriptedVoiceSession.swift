@@ -8,6 +8,7 @@ public actor ScriptedVoiceSession: VoiceSession {
     private let intervalMs: Int
     private var continuation: AsyncStream<VoiceEvent>.Continuation?
     private var task: Task<Void, Never>?
+    private var paused = false
 
     public init(script: [SegmentTranscript] = ScriptedVoiceSession.sampleScript, intervalMs: Int = 1_500) {
         self.script = script
@@ -19,10 +20,14 @@ public actor ScriptedVoiceSession: VoiceSession {
         let (stream, c) = AsyncStream<VoiceEvent>.makeStream()
         continuation = c
         let script = self.script, intervalMs = self.intervalMs
-        task = Task {
+        task = Task { [weak self] in
             for segment in script {
                 try? await Task.sleep(for: .milliseconds(intervalMs))
                 guard !Task.isCancelled else { return }
+                while await self?.paused == true {
+                    try? await Task.sleep(for: .milliseconds(100))
+                    guard !Task.isCancelled else { return }
+                }
                 c.yield(.speechStarted(atMs: segment.range.start))
                 c.yield(.transcriptPartial(String(segment.text.prefix(segment.text.count / 2))))
                 try? await Task.sleep(for: .milliseconds(intervalMs / 3))
@@ -38,6 +43,9 @@ public actor ScriptedVoiceSession: VoiceSession {
         continuation?.finish()
         continuation = nil
     }
+
+    public func pause() async throws { paused = true; continuation?.yield(.paused) }
+    public func resume() async throws { paused = false; continuation?.yield(.resumed) }
 
     public func say(_ text: String) async {}
     public func acknowledge() async {}

@@ -2,20 +2,28 @@ import LifelineKit
 import SwiftUI
 
 /// "Sounds like a memory": the title in the owner's words, the quote, time phrases in ochre,
-/// people chips, and two choices. Swipe left dismisses.
+/// people chips, and three choices: Keep, Change…, Dismiss. Low confidence is a word, never a
+/// fade. Swipe left also dismisses; the button is the visible way.
 struct MemoryCard: View {
     let memory: MemoryOut
     let confidence: Double
-    let onAdd: () -> Void
+    let onKeep: () -> Void
+    let onChange: () -> Void
     let onDismiss: () -> Void
 
     @State private var offset: CGFloat = 0
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text(memory.kindOrDefault.cardLabel)
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(Theme.olive)
+            HStack {
+                Text(memory.kindOrDefault.cardLabel)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(Theme.olive)
+                Spacer()
+                ForEach(CheckThisTags.tags(range: .unplaced, mentions: [], confidence: confidence), id: \.label) { tag in
+                    CheckThisTag(tag: tag)
+                }
+            }
             Text(memory.title)
                 .font(.system(.title3, design: .serif).weight(.semibold))
                 .foregroundStyle(Theme.ink)
@@ -25,7 +33,7 @@ struct MemoryCard: View {
                 .foregroundStyle(Theme.stone)
                 .lineLimit(4)
             if !memory.anchors.isEmpty {
-                Text(memory.anchors.map(\.phrase).joined(separator: " · "))
+                Label(memory.anchors.map(\.phrase).joined(separator: " · "), systemImage: "clock")
                     .font(.subheadline)
                     .foregroundStyle(Theme.ochre)
             }
@@ -33,11 +41,16 @@ struct MemoryCard: View {
                 FlowChips(items: memory.peopleRefs + (memory.placeText.map { [$0] } ?? []))
             }
             HStack(spacing: 12) {
-                Button("Add to timeline", action: onAdd)
+                Button("Keep", action: onKeep)
                     .buttonStyle(.borderedProminent)
                     .tint(Theme.olive)
                     .accessibilityIdentifier("card.add")
-                Button("Not quite", action: onDismiss)
+                Button("Change…", action: onChange)
+                    .buttonStyle(.bordered)
+                    .tint(Theme.olive)
+                    .accessibilityIdentifier("card.change")
+                Spacer(minLength: 0)
+                Button("Dismiss", action: onDismiss)
                     .buttonStyle(.borderless)
                     .foregroundStyle(Theme.stone)
                     .accessibilityIdentifier("card.dismiss")
@@ -47,7 +60,6 @@ struct MemoryCard: View {
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(RoundedRectangle(cornerRadius: 18).fill(Theme.sand))
-        .opacity(confidence < 0.5 ? 0.7 : 1)
         .offset(x: offset)
         .gesture(
             DragGesture(minimumDistance: 20)
@@ -61,12 +73,32 @@ struct MemoryCard: View {
     }
 }
 
+/// "Check this: around 1998?" A word and a symbol in ochre, never colour alone.
+struct CheckThisTag: View {
+    let tag: CheckThis
+
+    var body: some View {
+        // An HStack, not a Label: inside a List row a Label measured by a custom Layout
+        // reports an icon-sized width and a huge height, which blanked the timeline rows.
+        HStack(spacing: 4) {
+            Image(systemName: "questionmark.circle")
+            Text(tag.label)
+        }
+        .font(.caption.weight(.semibold))
+        .foregroundStyle(Theme.ochre)
+        .fixedSize()
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel(tag.label)
+            .accessibilityIdentifier("card.checkThis")
+    }
+}
+
 /// People and place chips, wrapping.
 struct FlowChips: View {
     let items: [String]
 
     var body: some View {
-        HStack(spacing: 6) {
+        FlowLayout(spacing: 6) {
             ForEach(items, id: \.self) { item in
                 Text(item)
                     .font(.caption)
@@ -76,5 +108,28 @@ struct FlowChips: View {
                     .foregroundStyle(Theme.ink)
             }
         }
+    }
+}
+
+/// "Suggestion dismissed. Your recording is untouched." with Undo, for the undo window.
+struct DismissedNotice: View {
+    let onUndo: () -> Void
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Text("Suggestion dismissed. Your recording is untouched.")
+                .font(.footnote)
+                .foregroundStyle(Theme.stone)
+                .accessibilityIdentifier("card.dismissedNotice")
+            Spacer(minLength: 0)
+            Button("Undo", action: onUndo)
+                .buttonStyle(.bordered)
+                .tint(Theme.olive)
+                .accessibilityIdentifier("card.undo")
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .background(RoundedRectangle(cornerRadius: 14).fill(Theme.sand))
+        .transition(.opacity)
     }
 }

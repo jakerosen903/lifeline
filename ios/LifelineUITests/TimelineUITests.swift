@@ -7,8 +7,7 @@ final class TimelineUITests: XCTestCase {
         let app = XCUIApplication()
         app.launchArguments = ["-uiTesting"]
         app.launch()
-        XCTAssertTrue(app.buttons["aboutYou.skip"].waitForExistence(timeout: 5))
-        app.buttons["aboutYou.skip"].tap()
+        app.skipFirstOpen()
         XCTAssertTrue(app.buttons["home.start"].waitForExistence(timeout: 5))
         return app
     }
@@ -16,8 +15,8 @@ final class TimelineUITests: XCTestCase {
     /// Records one scripted session, accepting the first `accept` memory cards, then stops.
     @MainActor
     private func record(_ app: XCUIApplication, accept: Int) {
-        app.buttons["home.start"].tap()
-        XCTAssertTrue(app.buttons["session.stop"].waitForExistence(timeout: 5))
+        app.startSession()
+        XCTAssertTrue(app.buttons["session.finish"].waitForExistence(timeout: 5))
         for _ in 0..<accept {
             let add = app.buttons["card.add"].firstMatch
             XCTAssertTrue(add.waitForExistence(timeout: 15), "a memory card should arrive")
@@ -26,7 +25,7 @@ final class TimelineUITests: XCTestCase {
         if accept == 0 {
             XCTAssertTrue(app.staticTexts["session.segment"].firstMatch.waitForExistence(timeout: 15))
         }
-        app.buttons["session.stop"].tap()
+        app.finishSession()
         XCTAssertTrue(app.buttons["home.start"].waitForExistence(timeout: 10))
     }
 
@@ -90,6 +89,11 @@ final class TimelineUITests: XCTestCase {
         record(app, accept: 2)
         let maya = app.buttons.matching(identifier: "timeline.memory").matching(NSPredicate(format: "label CONTAINS %@", "Maya climbed it")).firstMatch
         XCTAssertTrue(reveal(maya, in: app))
+        // The Check-this tag shows its words, not an icon beside a blank row (bug seen on device 2026-10-23).
+        let tag = app.staticTexts.matching(identifier: "card.checkThis").matching(NSPredicate(format: "label == %@", "Check this: Maya?")).firstMatch
+        XCTAssertTrue(tag.exists)
+        XCTAssertGreaterThan(tag.frame.width, 60, "the tag's text is laid out: \(tag.frame)")
+        XCTAssertLessThan(maya.frame.height, 160, "a memory row is not stretched by its tags: \(maya.frame)")
         // The floating Start button can sit over a row's centre; tap the row's title instead.
         maya.coordinate(withNormalizedOffset: CGVector(dx: 0.15, dy: 0.35)).tap()
         XCTAssertTrue(app.buttons["memory.play"].waitForExistence(timeout: 5))
@@ -103,23 +107,23 @@ final class TimelineUITests: XCTestCase {
     @MainActor
     func testSecondSessionOpensWithADifferentPrompt() {
         let app = launchToTimeline()
-        app.buttons["home.start"].tap()
+        app.startSession()
         let prompt = app.staticTexts["session.prompt"]
         XCTAssertTrue(prompt.waitForExistence(timeout: 5))
         XCTAssertEqual(prompt.label, "Tell me about the house you grew up in.")
         XCTAssertTrue(app.staticTexts["session.segment"].firstMatch.waitForExistence(timeout: 15))
-        app.buttons["session.stop"].tap()
+        app.finishSession()
         XCTAssertTrue(app.buttons["home.start"].waitForExistence(timeout: 10))
 
-        app.buttons["home.start"].tap()
+        app.startSession(review: false)
         XCTAssertTrue(prompt.waitForExistence(timeout: 5))
         XCTAssertNotEqual(prompt.label, "Tell me about the house you grew up in.", "the second session opens with a fresh question")
         let alternate = app.buttons["session.alternate"].firstMatch
-        XCTAssertTrue(alternate.exists)
+        XCTAssertTrue(alternate.waitForExistence(timeout: 3))
         let alternateText = alternate.label
         alternate.tap()
         XCTAssertEqual(prompt.label, alternateText, "tapping an alternate swaps it in")
-        app.buttons["session.stop"].tap()
+        app.finishSession()
     }
 
     @MainActor
@@ -139,13 +143,14 @@ final class TimelineUITests: XCTestCase {
     @MainActor
     func testDismissedCardsCanBeBroughtBack() {
         let app = launchToTimeline()
-        app.buttons["home.start"].tap()
+        app.startSession()
         let dismiss = app.buttons["card.dismiss"].firstMatch
         XCTAssertTrue(dismiss.waitForExistence(timeout: 15))
         dismiss.tap()   // "Not quite" on the blue door, in the session
-        app.buttons["session.stop"].tap()
+        app.finishSession()
         XCTAssertTrue(app.buttons["timeline.sessions"].waitForExistence(timeout: 10))
         app.buttons["timeline.sessions"].tap()
+        XCTAssertTrue(app.buttons["home.sessionRow"].firstMatch.waitForExistence(timeout: 5))
         app.buttons["home.sessionRow"].firstMatch.tap()
         let bringBack = app.buttons["detail.bringBack"].firstMatch
         XCTAssertTrue(reveal(bringBack, in: app), "a dismissed card is listed with a way back")

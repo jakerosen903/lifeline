@@ -28,6 +28,7 @@ public actor ListenOnlyVoiceSession: VoiceSession {
     private var closeWaiter: (segmentEndMs: Milliseconds, deadline: ContinuousClock.Instant, generation: Int, continuation: CheckedContinuation<Void, Never>)?
     private var waiterGeneration = 0
     private var isStopping = false
+    private var isPaused = false
     private var graceTimer: Task<Void, Never>?
 
     public init(source: any AudioSource, sink: any AudioSink, transcriber: any Transcriber,
@@ -82,6 +83,25 @@ public actor ListenOnlyVoiceSession: VoiceSession {
         try await sink.close()
         events?.finish()
         events = nil
+    }
+
+    /// Closes the thought in progress (the transcriber is asked to finalize) and stops capture.
+    /// The source keeps its frame count, so the chunk after `resume` continues the file clock.
+    public func pause() async throws {
+        guard !isPaused, !isStopping else { return }
+        isPaused = true
+        await source.pause()
+        await closeSegments(segmenter.flush(atMs: lastChunkEndMs))
+        log("paused at \(lastChunkEndMs) ms")
+        emit(.paused)
+    }
+
+    public func resume() async throws {
+        guard isPaused else { return }
+        try await source.resume()
+        isPaused = false
+        log("resumed at \(lastChunkEndMs) ms")
+        emit(.resumed)
     }
 
     public func say(_ text: String) async { log("say (no-op in listen-only): \(text)") }

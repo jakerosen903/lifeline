@@ -34,6 +34,7 @@ public final class AVAudioEngineSource: AudioSource, @unchecked Sendable {
     /// Guarded by `control`.
     private var isInterrupted = false
     private var isStopped = false
+    private var isPaused = false
 
     public init(bufferMs: Int = 100) {
         self.bufferMs = bufferMs
@@ -55,6 +56,33 @@ public final class AVAudioEngineSource: AudioSource, @unchecked Sendable {
             }
         }
         return stream
+    }
+
+    public func pause() async {
+        await withCheckedContinuation { (done: CheckedContinuation<Void, Never>) in
+            control.async {
+                guard !self.isStopped else { done.resume(); return }
+                self.isPaused = true
+                self.engine.pause()
+                done.resume()
+            }
+        }
+    }
+
+    public func resume() async throws {
+        try await withCheckedThrowingContinuation { (done: CheckedContinuation<Void, Error>) in
+            control.async {
+                guard !self.isStopped else { done.resume(); return }
+                do {
+                    try AVAudioSession.sharedInstance().setActive(true)
+                    if !self.engine.isRunning { try self.engine.start() }
+                    self.isPaused = false
+                    done.resume()
+                } catch {
+                    done.resume(throwing: error)
+                }
+            }
+        }
     }
 
     public func stop() async {
@@ -175,7 +203,7 @@ public final class AVAudioEngineSource: AudioSource, @unchecked Sendable {
     }
 
     private func restartEngine() {
-        guard !isStopped else { return }
+        guard !isStopped, !isPaused else { return }   // a paused person stays paused through an interruption
         do {
             try AVAudioSession.sharedInstance().setActive(true)
             if !engine.isRunning { try engine.start() }

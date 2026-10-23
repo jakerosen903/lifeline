@@ -12,8 +12,8 @@ struct PeopleScreen: View {
             if !viewModel.queue.isEmpty {
                 Section("Who's this?") {
                     CardStack(cards: viewModel.queue, handler: viewModel.cards,
-                              onAccept: { _ in }, onDismiss: { viewModel.dismiss($0) },
-                              onResolve: { viewModel.resolve($0, $1) })
+                              onAccept: { _ in }, onChange: { _ in }, onDismiss: { viewModel.dismiss($0) },
+                              onResolve: { viewModel.resolve($0, $1) }, onUndo: { viewModel.undo() })
                         .listRowBackground(Color.clear)
                         .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
                 }

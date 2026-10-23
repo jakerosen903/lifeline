@@ -12,14 +12,21 @@ public struct Session: Codable, Sendable, Equatable, Identifiable {
     /// JSON array of stage changes. "[]" until M4 fills it.
     public var stageLog: String
     public var landingChoiceMade: Bool
+    /// A quick story or settling in (M4). Older rows read as quick.
+    public var kind: SessionKind
+    /// "Hide today from the timeline": memories kept from this session later are hidden too.
+    public var hiddenFromTimeline: Bool
 
-    public init(id: SessionID, startedAt: Date, endedAt: Date?, audioPath: String, stageLog: String, landingChoiceMade: Bool) {
+    public init(id: SessionID, startedAt: Date, endedAt: Date?, audioPath: String, stageLog: String, landingChoiceMade: Bool,
+                kind: SessionKind = .quick, hiddenFromTimeline: Bool = false) {
         self.id = id
         self.startedAt = startedAt
         self.endedAt = endedAt
         self.audioPath = audioPath
         self.stageLog = stageLog
         self.landingChoiceMade = landingChoiceMade
+        self.kind = kind
+        self.hiddenFromTimeline = hiddenFromTimeline
     }
 }
 

@@ -42,9 +42,9 @@ public enum Card: Identifiable, Equatable, Sendable {
     }
 }
 
-/// Pure: turns extraction events into the cards on screen, in order. After a serious
-/// disclosure no new memory cards appear for the session (the fixed response is M4);
-/// "Who's this?" cards still do, since they ask about a name, not a memory.
+/// Pure: turns extraction events into the cards on screen, in order. After a heavy moment (a
+/// disclosure, a wish to stop) no organizational prompt of any kind appears for the rest of the
+/// session; the candidates are still stored and wait on the timeline afterwards.
 public struct CardQueue: Equatable, Sendable {
     public private(set) var cards: [Card] = []
     public private(set) var suppressed = false
@@ -55,14 +55,20 @@ public struct CardQueue: Equatable, Sendable {
 
     public var heldHintCount: Int { heldHints.values.reduce(0) { $0 + $1.count } }
 
+    /// "N possible memories" on the Listen view: memory cards not yet kept or dismissed.
+    public var possibleMemoryCount: Int {
+        cards.reduce(0) { if case .memory = $1 { $0 + 1 } else { $0 } }
+    }
+
     public mutating func apply(_ event: ExtractionEvent) {
         switch event {
         case .flags(let flags, _):
-            if flags.seriousDisclosure { suppressed = true }
+            if flags.isHeavy { suppressed = true }
         case .candidates(let candidates, _):
             for candidate in candidates {
                 guard let card = Card(candidate), !cards.contains(where: { $0.id == card.id }) else { continue }
-                if suppressed, case .memory = card { continue }
+                // A heavy moment suppresses every organizational prompt, who-is-this included.
+                if suppressed { continue }
                 if case .hint(_, let out) = card {
                     heldHints[out.memoryCandidateID, default: []].append(card)
                     continue
@@ -95,6 +101,12 @@ public struct CardQueue: Equatable, Sendable {
     /// The memory was declined: its hints are dropped unseen.
     public mutating func memoryDismissed(_ memoryCandidateID: String) {
         heldHints[memoryCandidateID] = nil
+    }
+
+    /// Undo: a card dismissed moments ago comes back at the end of the stack.
+    public mutating func restore(_ card: Card) {
+        guard !cards.contains(where: { $0.id == card.id }) else { return }
+        cards.append(card)
     }
 
     public mutating func remove(_ id: String) {

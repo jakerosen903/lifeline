@@ -49,8 +49,25 @@ import Testing
     #expect(throws: ExtractorPrompt.Error.missingPrompt("v9")) { try ExtractorPrompt.system(version: "v9") }
 }
 
+@Test func v2FlagsDecodeAsPast() throws {
+    let old = try CandidatePayload.decode(Flags.self, from: #"{"serious_disclosure":true,"wants_to_stop":false,"wants_to_change_subject":false}"#)
+    #expect(old.disclosure == .past && old.seriousDisclosure && old.isHeavy)
+    let new = try CandidatePayload.decode(Flags.self, from: #"{"disclosure":"present","wants_to_stop":false,"wants_to_change_subject":true}"#)
+    #expect(new.disclosure == .present && new.isHeavy && new.isAnySet)
+    let quiet = try CandidatePayload.decode(Flags.self, from: #"{"disclosure":"none","wants_to_stop":false,"wants_to_change_subject":false}"#)
+    #expect(!quiet.isHeavy && !quiet.isAnySet)
+}
+
+@Test func schemaHasTheDisclosureEnum() throws {
+    let flags = (((ExtractorSchema.json["properties"] as? [String: Any])?["flags"] as? [String: Any])?["properties"] as? [String: Any]) ?? [:]
+    #expect((flags["disclosure"] as? [String: Any])?["enum"] as? [String] == ["none", "past", "present"])
+    #expect(flags["serious_disclosure"] == nil)
+    let text = try ExtractorPrompt.system(version: "v3")
+    #expect(text.contains("`present`") && text.contains("`past`"))
+}
+
 @Test func configDefaultsMatchTheSpec() {
     let c = ExtractorConfig.default
-    #expect(c.model == "claude-opus-5-5" && c.effort == "low" && c.maxTokens == 4096 && c.version == "v2")
+    #expect(c.model == "claude-opus-5-5" && c.effort == "low" && c.maxTokens == 4096 && c.version == "v3")
     #expect(c.betas.contains("server-side-fallback-2026-07-01"))
 }

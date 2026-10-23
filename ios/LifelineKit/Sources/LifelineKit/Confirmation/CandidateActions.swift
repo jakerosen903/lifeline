@@ -18,6 +18,7 @@ public struct CandidateActions: Sendable {
         case emptySpan
         case memoryNotAccepted
         case notDismissed
+        case emptyTitle
     }
 
     public enum HintResult: Equatable, Sendable {
@@ -35,6 +36,57 @@ public struct CandidateActions: Sendable {
 
     public init(store: ExtractionStore) { self.store = store }
 
+    // MARK: - Correction (M4)
+
+    /// Change… → The title. The quote is the owner's words and is never edited.
+    public func renameMemory(_ memory: MemoryID, to title: String) throws {
+        let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { throw Error.emptyTitle }
+        try store.memories.updateTitle(memory, trimmed)
+    }
+
+    /// Change… → Who was there. A second link to the same person is a no-op.
+    public func linkPerson(_ person: PersonID, to memory: MemoryID, roleText: String?) throws {
+        try store.memories.link(person, to: memory, roleText: roleText)
+    }
+
+    /// A name typed in: an existing person by that name is reused, otherwise one is created.
+    @discardableResult
+    public func linkNewPerson(named name: String, to memory: MemoryID) throws -> Person {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { throw Error.emptyTitle }
+        let person = try store.people.findPerson(matching: trimmed) ?? store.people.insertPerson(displayName: trimmed)
+        try store.memories.link(person.id, to: memory, roleText: nil)
+        return person
+    }
+
+    /// Unlinking never deletes the person: they may be in other memories, and People keeps them.
+    public func unlinkPerson(_ person: PersonID, from memory: MemoryID) throws {
+        try store.memories.unlink(person, from: memory)
+    }
+
+    // MARK: - Privacy (M4)
+
+    public func setHidden(_ memory: MemoryID, _ hidden: Bool) throws { try store.memories.setHidden(memory, hidden) }
+    public func setExcluded(_ memory: MemoryID, _ excluded: Bool) throws { try store.memories.setExcluded(memory, excluded) }
+
+    /// "Hide today from the timeline": every memory told in the session leaves everyday browsing.
+    public func hideSession(_ session: SessionID) throws {
+        try store.sessions.setHidden(session, true)
+        for memory in try store.memories.memories(in: session, includingStandIns: true) {
+            try store.memories.setHidden(memory.id, true)
+        }
+    }
+
+    /// "Delete today's recording…": the audio file goes first, then every row derived from the
+    /// session. A file already gone is not an error. The caller cancels any sorting worker first.
+    public func deleteSession(_ session: SessionID, audioURL: URL) throws {
+        if FileManager.default.fileExists(atPath: audioURL.path) {
+            try FileManager.default.removeItem(at: audioURL)
+        }
+        try store.sessions.deleteSession(session)
+    }
+
     public func acceptMemory(_ candidate: Candidate) throws -> AcceptedMemory {
         guard candidate.kind == .memory else { throw Error.wrongKind }
         try requirePending(candidate)
@@ -43,8 +95,10 @@ public struct CandidateActions: Sendable {
         guard !words.isEmpty, out.segmentSpan.startWord >= 0, out.segmentSpan.endWord < words.count,
               out.segmentSpan.startWord <= out.segmentSpan.endWord else { throw Error.emptySpan }
 
+        // A session hidden from the timeline hides what is kept from it later, too.
+        let hidden = try store.sessions.fetchSegment(candidate.segmentID).flatMap { try store.sessions.fetch($0.sessionID) }?.hiddenFromTimeline ?? false
         let memory = Memory(id: .init(), title: out.title, summaryQuote: out.quote, visibility: .timeline, chapterID: nil,
-                            createdFromCandidateID: candidate.id, createdAt: .now)
+                            createdFromCandidateID: candidate.id, createdAt: .now, hiddenFromTimeline: hidden)
         let span = MemorySpan(memoryID: memory.id, segmentID: candidate.segmentID,
                               startMs: words[out.segmentSpan.startWord].startMs, endMs: words[out.segmentSpan.endWord].endMs, order: 0)
 

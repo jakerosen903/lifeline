@@ -18,6 +18,10 @@ struct Dependencies {
     let extractionStore: ExtractionStore
     let actions: CandidateActions
     let promptLog: PromptLogRepository
+    /// The arc's numbers: short under `-uiTesting`.
+    let arcConfig: ArcConfig
+    /// Durable sorting: started at launch, cancelled per session before a delete.
+    let worker: SortingWorker
 
     /// A fresh question for the next session: an open thread first, then the bank without repeats.
     func opening() -> Opening {
@@ -39,22 +43,22 @@ struct Dependencies {
         ExtractionQueue(session: session, service: extraction, store: extractionStore, log: { print("[extract] \($0)") })
     }
 
-    /// A recorder whose stored segments feed `queue` and whose Stop waits for it to drain.
+    /// A recorder whose stored segments feed `queue`. Finish returns at once; the queue keeps
+    /// sorting in the background and the launch-time worker picks up anything it leaves.
     func makeRecorder(onStatus: @escaping @Sendable (TranscriberAvailability) -> Void, queue: ExtractionQueue) -> SessionRecorder {
         SessionRecorder(voice: makeVoiceSession(onStatus), sessions: sessions, audioURL: { try audioURL(for: $0) },
                         hooks: RecorderHooks(onSegmentStored: { id in Task { await queue.enqueue(id) } },
-                                             onStop: { await queue.drain() }))
+                                             onStopped: { Task { await queue.drain() } }))
     }
 
     static func live() throws -> Dependencies {
         let root = try AudioLocation.defaultRoot()
         let db = try AppDatabase.open(at: root.appending(path: "Lifeline/lifeline.sqlite"))
         let sessions = SessionRepository(db)
-        let recovered = try SessionRecorder.recoverUnfinishedSessions(sessions)
-        if recovered > 0 { print("[lifeline] closed \(recovered) unfinished session(s)") }
         let pauseLog = PauseLog(url: root.appending(path: "Lifeline/pauses.log"))
         let secrets = KeychainSecretStore()
         let store = ExtractionStore(db)
+        let extraction = AnthropicExtractionService(apiKey: { try? secrets.read(.anthropicAPIKey) })
         return Dependencies(
             sessions: sessions,
             profile: ProfileRepository(db),
@@ -74,34 +78,47 @@ struct Dependencies {
             deactivateAudio: { AudioSessionConfigurator.deactivate() },
             requestMicrophone: { await AudioSessionConfigurator.requestMicrophoneAccess() },
             secrets: secrets,
-            extraction: AnthropicExtractionService(apiKey: { try? secrets.read(.anthropicAPIKey) }),
+            extraction: extraction,
             extractionStore: store,
             actions: CandidateActions(store: store),
-            promptLog: PromptLogRepository(db))
+            promptLog: PromptLogRepository(db),
+            arcConfig: .default,
+            worker: SortingWorker(store: store, service: extraction, log: { print("[sorting] \($0)") }))
     }
 
     /// Fresh temp database, scripted voice and extraction, in-memory secrets with a fake key.
     /// Selected by the `-uiTesting` launch argument.
     static func uiTesting() throws -> Dependencies {
-        let root = FileManager.default.temporaryDirectory.appending(path: "lifeline-ui-\(UUID().uuidString)")
+        // `-uiTesting-db <dir>` reuses one directory across a terminate and relaunch (crash-resume tests).
+        let args = CommandLine.arguments
+        let root: URL
+        if let i = args.firstIndex(of: "-uiTesting-db"), i + 1 < args.count {
+            root = URL(fileURLWithPath: args[i + 1])
+        } else {
+            root = FileManager.default.temporaryDirectory.appending(path: "lifeline-ui-\(UUID().uuidString)")
+        }
         let db = try AppDatabase.open(at: root.appending(path: "Lifeline/lifeline.sqlite"))
         let store = ExtractionStore(db)
+        let extraction = ScriptedExtractionService(delayMs: 200, heavy: args.contains("-uiTesting-heavy"))
         return Dependencies(
             sessions: SessionRepository(db),
             profile: ProfileRepository(db),
             audioRoot: root,
             makeVoiceSession: { onStatus in
                 onStatus(.ready)
-                return ScriptedVoiceSession(intervalMs: 800)
+                // `-uiTesting-slow`: a segment every few seconds, for tests that act between segments.
+                return ScriptedVoiceSession(intervalMs: args.contains("-uiTesting-slow") ? 2_500 : 800)
             },
             activateAudio: {},
             activatePlayback: {},
             deactivateAudio: {},
             requestMicrophone: { true },
             secrets: InMemorySecretStore([.anthropicAPIKey: "sk-ant-api03-" + String(repeating: "x", count: 40)]),
-            extraction: ScriptedExtractionService(delayMs: 200),
+            extraction: extraction,
             extractionStore: store,
             actions: CandidateActions(store: store),
-            promptLog: PromptLogRepository(db))
+            promptLog: PromptLogRepository(db),
+            arcConfig: .uiTesting,
+            worker: SortingWorker(store: store, service: extraction))
     }
 }

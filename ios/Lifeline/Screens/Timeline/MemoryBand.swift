@@ -46,3 +46,66 @@ struct MemoryBand: View {
         .accessibilityLabel("\(row.memory.title) · \(row.subtitle)")
     }
 }
+
+/// What the "…" menu and a long-press on a memory row can do.
+struct MemoryRowActions {
+    let open: (MemoryRow) -> Void
+    let newChapter: (MemoryRow) -> Void
+    let addToCollection: (MemoryRow) -> Void
+    let hide: (MemoryRow) -> Void
+    let setExcluded: (MemoryRow, Bool) -> Void
+    let delete: (MemoryRow) -> Void
+}
+
+/// A memory row: the band (tap opens it), its Check-this tags, and the visible "…" menu that
+/// offers everything the long-press does.
+struct MemoryRowView: View {
+    let row: MemoryRow
+    let axis: ClosedRange<Int>?
+    let actions: MemoryRowActions
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 8) {
+            VStack(alignment: .leading, spacing: 4) {
+                Button { actions.open(row) } label: { MemoryBand(row: row, axis: axis) }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("timeline.memory")
+                if !row.checkThis.isEmpty {
+                    FlowLayout(spacing: 8) {
+                        ForEach(row.checkThis, id: \.label) { CheckThisTag(tag: $0) }
+                    }
+                    .padding(.bottom, 6)
+                }
+            }
+            Menu {
+                menuItems
+            } label: {
+                Image(systemName: "ellipsis.circle")
+                    .font(.title3)
+                    .foregroundStyle(Theme.stone)
+                    .padding(.top, 8)
+            }
+            .buttonStyle(.borderless)
+            .accessibilityIdentifier("row.more")
+        }
+        .contextMenu { menuItems }
+    }
+
+    @ViewBuilder
+    private var menuItems: some View {
+        Button("New chapter from here", systemImage: "book") { actions.newChapter(row) }
+        Button("Add to a collection…", systemImage: "square.stack") { actions.addToCollection(row) }
+        Divider()
+        Button("Hide from timeline", systemImage: "eye.slash") { actions.hide(row) }
+            .accessibilityIdentifier("row.hide")
+        if row.memory.excludedFromAI {
+            Button("Include in AI processing", systemImage: "sparkles") { actions.setExcluded(row, false) }
+                .accessibilityIdentifier("row.exclude")
+        } else {
+            Button("Exclude from AI processing", systemImage: "sparkles.slash") { actions.setExcluded(row, true) }
+                .accessibilityIdentifier("row.exclude")
+        }
+        Button("Delete…", systemImage: "trash", role: .destructive) { actions.delete(row) }
+            .accessibilityIdentifier("row.delete")
+    }
+}

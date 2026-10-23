@@ -24,9 +24,62 @@ public struct SessionRepository: Sendable {
         try db.writer.read { try Session.order(Column("started_at").desc).fetchAll($0) }
     }
 
-    /// Sessions that never landed: `ended_at` is nil.
+    /// Sessions whose recording never ended: `ended_at` is nil (a crash, or recording now).
     public func unfinishedSessions() throws -> [Session] {
         try db.writer.read { try Session.filter(Column("ended_at") == nil).fetchAll($0) }
+    }
+
+    /// Sessions with words that have not been through their landing, newest first.
+    public func unlandedSessions() throws -> [Session] {
+        try db.writer.read { db in
+            try Session.fetchAll(db, sql: """
+                SELECT s.* FROM session s
+                WHERE s.landing_choice_made = 0
+                  AND EXISTS (SELECT 1 FROM segment g WHERE g.session_id = s.id)
+                ORDER BY s.started_at DESC
+                """)
+        }
+    }
+
+    /// Column-scoped writes: the recorder, the arc and the landing each own one column, so none
+    /// overwrites another's with a stale copy of the row.
+    public func updateStageLog(_ id: SessionID, _ stageLog: String) throws {
+        try db.writer.write { try $0.execute(sql: "UPDATE session SET stage_log = ? WHERE id = ?", arguments: [stageLog, id.rawValue]) }
+    }
+
+    public func markEnded(_ id: SessionID, at date: Date) throws {
+        try db.writer.write { try $0.execute(sql: "UPDATE session SET ended_at = ? WHERE id = ?", arguments: [date, id.rawValue]) }
+    }
+
+    /// Appends `reason` to the session's stage log (stage `ended`).
+    public func appendToStageLog(_ id: SessionID, reason: String, at date: Date) throws {
+        try db.writer.write { db in
+            let current = try String.fetchOne(db, sql: "SELECT stage_log FROM session WHERE id = ?", arguments: [id.rawValue]) ?? "[]"
+            var log = (try? SessionArc.decode(current)) ?? []
+            log.append(StageChange(stage: .ended, at: date, reason: reason))
+            try db.execute(sql: "UPDATE session SET stage_log = ? WHERE id = ?", arguments: [try SessionArc.encode(log), id.rawValue])
+        }
+    }
+
+    /// The person left the landing (or had nothing to land): logged, and never shown again.
+    public func markLanded(_ id: SessionID, now: Date = .now) throws {
+        try appendToStageLog(id, reason: "landed", at: now)
+        try db.writer.write { try $0.execute(sql: "UPDATE session SET landing_choice_made = 1 WHERE id = ?", arguments: [id.rawValue]) }
+    }
+
+    public func setHidden(_ id: SessionID, _ hidden: Bool) throws {
+        try db.writer.write { try $0.execute(sql: "UPDATE session SET hidden_from_timeline = ? WHERE id = ?", arguments: [hidden, id.rawValue]) }
+    }
+
+    /// Sessions with at least one segment still waiting to be sorted, newest first.
+    public func sessionsWithPendingSegments() throws -> [Session] {
+        try db.writer.read { db in
+            try Session.fetchAll(db, sql: """
+                SELECT s.* FROM session s
+                WHERE EXISTS (SELECT 1 FROM segment g WHERE g.session_id = s.id AND g.status = 'pending')
+                ORDER BY s.started_at DESC
+                """)
+        }
     }
 
     /// Inserts a segment and its words in one transaction.
@@ -56,6 +109,24 @@ extension SessionRepository {
     /// Removes a session and, by cascade, its segments and words.
     public func delete(_ id: SessionID) throws {
         _ = try db.writer.write { try Session.deleteOne($0, key: id.rawValue) }
+    }
+
+    /// Removes the session and everything derived from it: segments, words, candidates, mentions
+    /// and prompt-log rows go by cascade; memories told in it (by span or by candidate) are
+    /// deleted first, and their spans, anchors, people and places follow them. One transaction.
+    public func deleteSession(_ id: SessionID) throws {
+        try db.writer.write { db in
+            try db.execute(sql: """
+                delete from memory where id in (
+                    select memory_span.memory_id from memory_span
+                    join segment on segment.id = memory_span.segment_id where segment.session_id = ?
+                    union
+                    select memory.id from memory
+                    join candidate on candidate.id = memory.created_from_candidate_id
+                    join segment on segment.id = candidate.segment_id where segment.session_id = ?)
+                """, arguments: [id.rawValue, id.rawValue])
+            _ = try Session.deleteOne(db, key: id.rawValue)
+        }
     }
 }
 

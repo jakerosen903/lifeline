@@ -159,6 +159,16 @@ The Anthropic Console key is entered in Settings and stored in the device Keycha
 
 Why: nothing secret in the build; the owner can rotate the key without a rebuild; the same code path serves a second phone later. Cost: a first-run setup step, and sessions before the key is added are recorded but not sorted (they are retried by the CLI or a later re-run).
 
+## 2026-10-23 · M4 ships the landing, correction and durable sorting; the rest of the review waits for M5
+
+What M4 ships from the 2026-10-22 review: finishing never waits for sorting (a launch-time worker picks up anything left pending); the Listen and Transcript & memories views; Keep / Change… / Dismiss with Undo and "Check this" tags; the light landing with Done for now as the default, Hide today and Delete today's recording; the disclosure flag with past and present kinds, a fixed card, and every organizational prompt (who's this included) suppressed in a heavy moment; visibility as two flags, `hidden_from_timeline` and `excluded_from_ai`; pause and resume; two ways in at first open and on the timeline.
+
+Numbers chosen here, all configuration: a quick story has no time element; settling in is planned at 30 minutes with a 10-minute grace between wrap-up offers and the next question offered after 6 seconds of quiet; the recording limit of 3 hours is the one automatic landing.
+
+Waits for M5: span-level deletion with offsets preserved (M4 deletes whole sessions and single memories); the privacy screen with Share and Local-only; stories and `story_moment`; reconciliation of related segments and the token-budgeted context packet; backup and restore; "Which part of the recording" and "Just tell me" on the Change sheet, shown disabled so the shape of correction is visible.
+
+Why: the review's "preserve first, organize later" changes the landing and the session more than the data model; shipping those first lets the owner feel the new shape before the model grows. Cost: a memory told across two sessions goes with the first one deleted until span deletion lands.
+
 ## 2026-10-23 · Quick story and settle in differ in shape, not in length
 
 The owner's words: one is answering a prompt, the other is more of a conversation. A quick story is one prompt, finished when the person is done, with nothing about time on screen however long it runs. Settling in offers the next question when the room goes quiet after a story, and a gentle wrap-up with "Keep going" at the planned length. Nobody is stopped for talking longer than expected. Supersedes the entry below where they differ.

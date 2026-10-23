@@ -7,21 +7,13 @@ struct ChapterSection: View {
     let rangeText: String?
     let memories: [MemoryRow]
     let axis: ClosedRange<Int>?
-    let onOpen: (MemoryRow) -> Void
-    let onNewChapter: (MemoryRow) -> Void
-    let onAddToCollection: (MemoryRow) -> Void
+    let actions: MemoryRowActions
 
     var body: some View {
         Section {
             if let axis { YearAxis(years: axis).listRowBackground(Color.clear).listRowSeparator(.hidden) }
             ForEach(memories) { row in
-                Button { onOpen(row) } label: { MemoryBand(row: row, axis: axis) }
-                    .buttonStyle(.plain)
-                    .accessibilityIdentifier("timeline.memory")
-                    .contextMenu {
-                        Button("New chapter from here", systemImage: "book") { onNewChapter(row) }
-                        Button("Add to a collection…", systemImage: "square.stack") { onAddToCollection(row) }
-                    }
+                MemoryRowView(row: row, axis: axis, actions: actions)
             }
         } header: {
             VStack(alignment: .leading, spacing: 2) {

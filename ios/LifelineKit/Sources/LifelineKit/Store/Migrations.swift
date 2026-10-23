@@ -191,6 +191,25 @@ enum Migrations {
                 t.add(column: "target_text", .text)
             }
         }
+        // v5 (M4): visibility becomes two flags named by their effect; a session has a kind; the
+        // landing exists, so every session that ended before it counts as landed.
+        m.registerMigration("v5") { db in
+            try db.alter(table: "memory") { t in
+                t.add(column: "hidden_from_timeline", .boolean).notNull().defaults(to: false)
+                t.add(column: "excluded_from_ai", .boolean).notNull().defaults(to: false)
+            }
+            try db.execute(sql: "update memory set hidden_from_timeline = 1 where visibility = 'private'")
+            try db.alter(table: "session") { t in
+                t.add(column: "kind", .text).notNull().defaults(to: "quick")
+            }
+            try db.execute(sql: "update session set landing_choice_made = 1 where ended_at is not null")
+        }
+        // v6 (M4 review): "Hide today" is remembered on the session so memories kept later are hidden too.
+        m.registerMigration("v6") { db in
+            try db.alter(table: "session") { t in
+                t.add(column: "hidden_from_timeline", .boolean).notNull().defaults(to: false)
+            }
+        }
         return m
     }
 }

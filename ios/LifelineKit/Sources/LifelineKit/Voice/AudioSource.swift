@@ -28,6 +28,9 @@ public protocol AudioSource: Sendable {
     var format: AVAudioFormat { get }
     func start() async throws -> AsyncStream<AudioSourceEvent>
     func stop() async
+    /// Stops delivering chunks without ending the stream. Frame counting continues where it left off at `resume`.
+    func pause() async
+    func resume() async throws
 }
 
 /// Where audio goes: the m4a file, a fake in tests.

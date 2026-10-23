@@ -5,8 +5,11 @@ import SwiftUI
 /// people in it, and the evidence behind the range. Tapping the range opens the refine card.
 struct MemoryScreen: View {
     let viewModel: MemoryViewModel
+    let deps: Dependencies
     let onChange: () -> Void
     @State private var refining = false
+    @State private var changing = false
+    @State private var whoIsThis: Mention?
 
     var body: some View {
         ScrollView {
@@ -25,6 +28,17 @@ struct MemoryScreen: View {
                 .accessibilityIdentifier("memory.range")
 
                 Text(viewModel.memory.title).titleStyle()
+
+                if !viewModel.checkThis.isEmpty {
+                    FlowLayout(spacing: 8) {
+                        ForEach(viewModel.checkThis, id: \.label) { tag in
+                            Button {
+                                if let mention = viewModel.mention(for: tag) { whoIsThis = mention } else { refining = true }
+                            } label: { CheckThisTag(tag: tag) }
+                            .buttonStyle(.borderless)
+                        }
+                    }
+                }
 
                 if viewModel.place != nil || !viewModel.people.isEmpty {
                     Text([viewModel.place?.nameText, viewModel.people.isEmpty ? nil : "with " + viewModel.people.map(\.displayName).joined(separator: " and ")]
@@ -76,6 +90,22 @@ struct MemoryScreen: View {
         }
         .linenBackground()
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            Button("Change…") { changing = true }.accessibilityIdentifier("memory.change")
+        }
+        .sheet(isPresented: $changing, onDismiss: { viewModel.refresh(); onChange() }) {
+            ChangeSheet(viewModel: ChangeViewModel(memory: viewModel.memory, deps: deps)) {}
+        }
+        .sheet(item: $whoIsThis, onDismiss: { viewModel.refresh(); onChange() }) { mention in
+            let handler = CardHandler(deps: deps)
+            let card = Card(mention)
+            WhoIsThisCard(text: mention.text, people: handler.peopleChoices(for: mention.text)) { choice in
+                if handler.resolve(card, choice) { whoIsThis = nil }
+            }
+            .padding(24)
+            .presentationDetents([.medium, .large])
+            .presentationBackground(Theme.linen)
+        }
         .sheet(isPresented: $refining, onDismiss: { viewModel.refresh(); onChange() }) {
             RefineCard(title: viewModel.memory.title, bestGuess: viewModel.rangeText, question: viewModel.question,
                        onChoose: { viewModel.answer($0); refining = false }, onKeep: { refining = false })

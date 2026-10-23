@@ -13,6 +13,8 @@ final class LaunchUITests: XCTestCase {
     @MainActor
     func testFirstOpenShowsAboutYouAndSkipLeadsHome() {
         let app = launch()
+        XCTAssertTrue(app.buttons["firstOpen.quick"].waitForExistence(timeout: 5), "first open offers a quick story")
+        app.buttons["firstOpen.context"].tap()
         XCTAssertTrue(app.textFields["aboutYou.name"].waitForExistence(timeout: 5))
         app.buttons["aboutYou.skip"].tap()
         XCTAssertTrue(app.buttons["home.start"].waitForExistence(timeout: 5))
@@ -21,6 +23,8 @@ final class LaunchUITests: XCTestCase {
     @MainActor
     func testAboutYouNameAppearsInSettings() {
         let app = launch()
+        XCTAssertTrue(app.buttons["firstOpen.context"].waitForExistence(timeout: 5))
+        app.buttons["firstOpen.context"].tap()
         let name = app.textFields["aboutYou.name"]
         XCTAssertTrue(name.waitForExistence(timeout: 5))
         name.tap()
@@ -36,17 +40,16 @@ final class LaunchUITests: XCTestCase {
     @MainActor
     func testRecordStopAndPlayBackAMoment() {
         let app = launch()
-        XCTAssertTrue(app.buttons["aboutYou.skip"].waitForExistence(timeout: 5))
-        app.buttons["aboutYou.skip"].tap()
-        app.buttons["home.start"].tap()
+        app.skipFirstOpen()
+        app.startSession()
 
-        XCTAssertTrue(app.buttons["session.stop"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["session.finish"].waitForExistence(timeout: 5))
         let firstMoment = app.staticTexts["session.segment"].firstMatch
         XCTAssertTrue(firstMoment.waitForExistence(timeout: 10), "a scripted segment should appear")
         XCTAssertTrue(firstMoment.label.contains("blue door"))
         XCTAssertTrue(app.staticTexts["session.prompt"].exists, "the prompt stays on screen while the person talks")
         XCTAssertTrue(app.otherElements["session.listening"].exists, "the listening indicator stays on screen")
-        app.buttons["session.stop"].tap()
+        app.finishSession()
 
         XCTAssertTrue(app.buttons["timeline.sessions"].waitForExistence(timeout: 10))
         app.buttons["timeline.sessions"].tap()
