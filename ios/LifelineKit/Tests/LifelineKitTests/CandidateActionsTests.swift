@@ -141,3 +141,32 @@ private struct Env {
     let memory = try env.memoryCandidate(people: [])
     #expect(throws: CandidateActions.Error.wrongKind) { try env.actions.acceptMention(memory) }
 }
+
+@Test func resolveNewReusesAKnownPerson() throws {
+    let env = try Env()
+    let rosa = try env.store.people.insertPerson(displayName: "Rosa")
+    let accepted = try env.actions.acceptMemory(try env.memoryCandidate(people: ["my mother"]))
+    let person = try #require(try env.actions.resolveMention(accepted.newMentions[0].id, to: .new(displayName: "rosa ")))
+    #expect(person.id == rosa.id, "typing a name the app knows must not make a second person")
+    #expect(try env.store.people.people().filter { !$0.isOwner }.count == 1)
+}
+
+@Test func resolvingOneMentionResolvesTheSameNameEverywhere() throws {
+    let env = try Env()
+    let other = try StoreFixtures.session(in: env.store.sessions, segments: ["my mother sang"])
+    let later = Mention(id: .init(), segmentID: other.1[0].id, text: "My Mother", status: .unresolved, personID: nil)
+    try env.store.people.insertMention(later)
+    let accepted = try env.actions.acceptMemory(try env.memoryCandidate(people: ["my mother"]))
+    let rosa = try #require(try env.actions.resolveMention(accepted.newMentions[0].id, to: .new(displayName: "Rosa")))
+    #expect(try env.store.people.mention(id: later.id)?.personID == rosa.id)
+    #expect(try env.store.people.mentions(status: .unresolved).isEmpty)
+}
+
+@Test func acceptMemoryWritesMemoryAndCandidateStatusTogether() throws {
+    let env = try Env()
+    // A span the words cannot satisfy fails inside the write; the candidate must stay pending.
+    let candidate = try env.memoryCandidate(people: [], span: WordSpan(startWord: 0, endWord: 99))
+    #expect(throws: CandidateActions.Error.emptySpan) { try env.actions.acceptMemory(candidate) }
+    #expect(try env.store.candidates.fetch(candidate.id)?.status == .pending)
+    #expect(try env.store.memories.memories(in: env.session).isEmpty)
+}

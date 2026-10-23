@@ -128,3 +128,11 @@ private func client(_ transport: FakeHTTPTransport, key: String? = "sk-ant-api03
     let user = try #require((try transport.body(of: 0)["messages"] as? [[String: Any]])?[0]["content"] as? String)
     #expect(user.contains("0:the"))
 }
+
+@Test func retryAfterIsCapped() async throws {
+    let transport = FakeHTTPTransport([.response(status: 429, body: APIBodies.apiError, headers: ["retry-after": "600"]), .response(status: 200, body: APIBodies.success())])
+    let sleeper = SleepRecorder()
+    _ = try await client(transport, sleeper: sleeper).extract(system: [.init(text: "S", cached: true)], user: "U")
+    #expect(sleeper.durations == [AnthropicMessagesClient.maxRetryDelay])
+    #expect(AnthropicMessagesClient.maxRetryDelay <= .seconds(10))
+}

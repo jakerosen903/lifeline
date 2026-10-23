@@ -35,7 +35,14 @@ final class SessionDetailViewModel {
                           people: try deps.extractionStore.memories.people(of: memory.id).map(\.displayName),
                           anchors: try deps.extractionStore.memories.anchors(of: memory.id).map(\.phrase))
             }
-            waiting = try deps.extractionStore.candidates.pending(in: session.id).compactMap(Card.init)
+            let pending = try deps.extractionStore.candidates.pending(in: session.id).compactMap(Card.init)
+            // Names a memory listed that never had their own card wait here as well.
+            let segmentIDs = Set(segments.map(\.id))
+            let shownNames = Set(pending.compactMap { if case .whoIsThis(_, let text) = $0 { PeopleRepository.normalize(text) } else { nil } })
+            let openNames = try deps.extractionStore.people.mentions(status: .unresolved)
+                .filter { segmentIDs.contains($0.segmentID) && !shownNames.contains(PeopleRepository.normalize($0.text)) }
+                .map(Card.init)
+            waiting = pending + openNames
         } catch {
             self.error = error.localizedDescription
         }

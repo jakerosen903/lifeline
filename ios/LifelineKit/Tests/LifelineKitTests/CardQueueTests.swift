@@ -17,11 +17,13 @@ private func mentionCandidate(_ segment: SegmentID, ordinal: Int = 1) throws -> 
     let a = try memoryCandidate(segment, ordinal: 0), b = try mentionCandidate(segment, ordinal: 1)
     var queue = CardQueue()
     queue.apply(.candidates([a, b], segment: segment))
-    #expect(queue.cards.map(\.id) == [a.id, b.id])
+    #expect(queue.cards.map(\.id) == [a.id.rawValue, b.id.rawValue])
     guard case .memory(let c, let out) = queue.cards[0] else { Issue.record("expected memory card"); return }
     #expect(c.id == a.id && out.title == "T")
-    queue.remove(a.id)
-    #expect(queue.cards.map(\.id) == [b.id])
+    guard case .whoIsThis(.candidate(let who), let text) = queue.cards[1] else { Issue.record("expected who-is-this card"); return }
+    #expect(who.id == b.id && text == "Maya")
+    queue.remove(a.id.rawValue)
+    #expect(queue.cards.map(\.id) == [b.id.rawValue])
     queue.apply(.candidates([a], segment: segment))
     queue.apply(.candidates([a], segment: segment))
     #expect(queue.cards.count == 2, "the same candidate is never shown twice")

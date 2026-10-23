@@ -18,6 +18,8 @@ public struct AnthropicMessagesClient: Sendable {
     }
 
     public static let maxAttempts = 3
+    /// A server-named wait longer than this is not worth holding a session for.
+    public static let maxRetryDelay: Duration = .seconds(10)
 
     private let config: ExtractorConfig
     private let apiKey: @Sendable () -> String?
@@ -120,9 +122,9 @@ public struct AnthropicMessagesClient: Sendable {
         response.value(forHTTPHeaderField: "retry-after").flatMap { Int($0.trimmingCharacters(in: .whitespaces)) }
     }
 
-    /// 1 s, 2 s, 4 s, unless the server named a wait.
+    /// 1 s, 2 s, 4 s, unless the server named a wait (capped at `maxRetryDelay`).
     static func delay(for error: ExtractionError, attempt: Int) -> Duration {
-        if case .rateLimited(let seconds?) = error { return .seconds(seconds) }
+        if case .rateLimited(let seconds?) = error { return min(.seconds(max(0, seconds)), maxRetryDelay) }
         return .seconds(1 << (attempt - 1))
     }
 }

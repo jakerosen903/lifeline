@@ -1,19 +1,22 @@
 import Foundation
 
+/// Where a "Who's this?" card comes from: a fresh candidate in the live session, or a mention
+/// row that is still open (the People queue, names a memory listed without a mention).
+public enum WhoSource: Equatable, Sendable {
+    case candidate(Candidate)
+    case mention(Mention)
+}
+
 /// A card the person can act on.
 public enum Card: Identifiable, Equatable, Sendable {
     case memory(Candidate, MemoryOut)
-    case whoIsThis(Candidate, MentionOut)
+    case whoIsThis(WhoSource, text: String)
 
-    public var id: CandidateID {
+    public var id: String {
         switch self {
-        case .memory(let c, _), .whoIsThis(let c, _): c.id
-        }
-    }
-
-    public var candidate: Candidate {
-        switch self {
-        case .memory(let c, _), .whoIsThis(let c, _): c
+        case .memory(let c, _): c.id.rawValue
+        case .whoIsThis(.candidate(let c), _): c.id.rawValue
+        case .whoIsThis(.mention(let m), _): m.id.rawValue
         }
     }
 
@@ -24,10 +27,14 @@ public enum Card: Identifiable, Equatable, Sendable {
             self = .memory(candidate, out)
         case .person:
             guard let out = CandidatePayload.mention(candidate) else { return nil }
-            self = .whoIsThis(candidate, out)
+            self = .whoIsThis(.candidate(candidate), text: out.text)
         case .place, .flag:
             return nil
         }
+    }
+
+    public init(_ mention: Mention) {
+        self = .whoIsThis(.mention(mention), text: mention.text)
     }
 }
 
@@ -55,7 +62,7 @@ public struct CardQueue: Equatable, Sendable {
         }
     }
 
-    public mutating func remove(_ id: CandidateID) {
+    public mutating func remove(_ id: String) {
         cards.removeAll { $0.id == id }
     }
 }

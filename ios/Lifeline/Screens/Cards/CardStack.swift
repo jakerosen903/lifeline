@@ -15,8 +15,8 @@ struct CardStack: View {
                 switch card {
                 case .memory(let candidate, let memory):
                     MemoryCard(memory: memory, confidence: candidate.confidence, onAdd: { onAccept(card) }, onDismiss: { onDismiss(card) })
-                case .whoIsThis(_, let mention):
-                    WhoIsThisCard(mention: mention, people: handler.peopleChoices()) { onResolve(card, $0) }
+                case .whoIsThis(_, let text):
+                    WhoIsThisCard(text: text, people: handler.peopleChoices(for: text)) { onResolve(card, $0) }
                         .onAppear { handler.shown(card) }
                 }
             }

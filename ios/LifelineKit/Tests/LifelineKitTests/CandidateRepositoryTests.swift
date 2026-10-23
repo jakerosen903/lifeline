@@ -30,3 +30,17 @@ import Testing
     #expect(stored.status == .dismissed && stored.rejection == "quote not in segment")
     #expect(try repo.pending(in: session).isEmpty)
 }
+
+@Test func batchInsertIsAllOrNothingAndSetsTheSegmentStatus() throws {
+    let db = try AppDatabase.inMemory(); let sessions = SessionRepository(db); let repo = CandidateRepository(db)
+    let (_, segs) = try StoreFixtures.session(in: sessions)
+    let a = StoreFixtures.candidate(segs[0].id, ordinal: 0), dup = StoreFixtures.candidate(segs[0].id, ordinal: 0)
+    #expect(throws: CandidateRepository.Error.duplicate) {
+        try repo.insertAll([a, dup], markingExtracted: segs[0].id, in: sessions)
+    }
+    #expect(try repo.candidates(for: segs[0].id).isEmpty)
+    #expect(try sessions.fetchSegment(segs[0].id)?.status == .pending)
+    try repo.insertAll([a], markingExtracted: segs[0].id, in: sessions)
+    #expect(try repo.candidates(for: segs[0].id).count == 1)
+    #expect(try sessions.fetchSegment(segs[0].id)?.status == .extracted)
+}

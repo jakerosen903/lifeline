@@ -1,21 +1,24 @@
 import LifelineKit
 import SwiftUI
 
-/// "Who's this?": the name as said, up to three known people, someone new, or not a person.
+/// "Who's this?": the name as said, the three closest known people, everyone else behind
+/// "Someone else", someone new, or not a person.
 struct WhoIsThisCard: View {
-    let mention: MentionOut
+    let text: String
     let people: [Person]
     let onChoose: (MentionChoice) -> Void
+
+    private static let shown = 3
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("Who's this?")
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(Theme.ochre)
-            Text("“\(mention.text)”")
+            Text("“\(text)”")
                 .font(.system(.title3, design: .serif).weight(.semibold))
                 .foregroundStyle(Theme.ink)
-            ForEach(people) { person in
+            ForEach(people.prefix(Self.shown)) { person in
                 Button { onChoose(.existing(person.id)) } label: {
                     Label(person.displayName, systemImage: "person")
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -24,7 +27,20 @@ struct WhoIsThisCard: View {
                 .tint(Theme.olive)
                 .accessibilityIdentifier("card.person")
             }
-            Button { onChoose(.new(displayName: mention.text)) } label: {
+            if people.count > Self.shown {
+                Menu {
+                    ForEach(people.dropFirst(Self.shown)) { person in
+                        Button(person.displayName) { onChoose(.existing(person.id)) }
+                    }
+                } label: {
+                    Label("Someone else", systemImage: "person.3")
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .buttonStyle(.bordered)
+                .tint(Theme.stone)
+                .accessibilityIdentifier("card.someoneElse")
+            }
+            Button { onChoose(.new(displayName: text)) } label: {
                 Label("Someone new", systemImage: "person.badge.plus")
                     .frame(maxWidth: .infinity, alignment: .leading)
             }

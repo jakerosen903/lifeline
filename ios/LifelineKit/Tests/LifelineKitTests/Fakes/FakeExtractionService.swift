@@ -8,6 +8,9 @@ final class FakeExtractionService: ExtractionService, Sendable {
     let version = "fake"
     private let state = Mutex<(script: [Result<ExtractorOutput, ExtractionError>], requests: [ExtractionRequest])>(([], []))
 
+    /// When set, every call sleeps this long first (simulates a slow network).
+    let delay = Mutex<Duration?>(nil)
+
     init(_ script: [Result<ExtractorOutput, ExtractionError>] = []) { state.withLock { $0.script = script } }
 
     var requests: [ExtractionRequest] { state.withLock { $0.requests } }
@@ -15,6 +18,7 @@ final class FakeExtractionService: ExtractionService, Sendable {
     func push(_ result: Result<ExtractorOutput, ExtractionError>) { state.withLock { $0.script.append(result) } }
 
     func extract(_ request: ExtractionRequest) async throws(ExtractionError) -> ExtractionResponse {
+        if let d = delay.withLock({ $0 }) { try? await Task.sleep(for: d) }
         let next: Result<ExtractorOutput, ExtractionError> = state.withLock { s in
             s.requests.append(request)
             return s.script.isEmpty ? .success(ExtractorOutput(memories: [], mentions: [], flags: .none)) : s.script.removeFirst()

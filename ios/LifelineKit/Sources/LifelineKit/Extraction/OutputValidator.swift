@@ -24,7 +24,7 @@ public enum OutputValidator {
     public static let maxTitleWords = 8
 
     public static func validate(_ output: ExtractorOutput, segmentText: String, words: [String]) -> Validated {
-        let haystack = normalize(segmentText)
+        let haystack = tokens(segmentText)
         var result = Validated(accepted: [], rejected: [], flags: output.flags)
 
         for memory in output.memories {
@@ -44,7 +44,7 @@ public enum OutputValidator {
         return result
     }
 
-    private static func problem(with memory: MemoryOut, haystack: String, wordCount: Int) -> String? {
+    private static func problem(with memory: MemoryOut, haystack: [String], wordCount: Int) -> String? {
         if !contains(haystack, memory.quote) { return "quote not in segment" }
         let span = memory.segmentSpan
         if span.startWord < 0 || span.endWord >= wordCount || span.startWord > span.endWord {
@@ -57,13 +57,34 @@ public enum OutputValidator {
         return nil
     }
 
-    /// Substring test after folding case and collapsing whitespace. Empty needles never match.
-    static func contains(_ haystack: String, _ needle: String) -> Bool {
-        let n = normalize(needle)
-        return !n.isEmpty && haystack.contains(n)
+    /// True when the needle's words appear in the haystack as a run of whole words. Matching on
+    /// words, not characters, keeps "Al" from matching "always". Case, surrounding punctuation
+    /// and curly apostrophes are folded. Empty needles never match.
+    static func contains(_ haystack: [String], _ needle: String) -> Bool {
+        let n = tokens(needle)
+        guard !n.isEmpty, n.count <= haystack.count else { return false }
+        return (0...(haystack.count - n.count)).contains { start in
+            Array(haystack[start..<(start + n.count)]) == n
+        }
     }
 
-    static func normalize(_ text: String) -> String {
-        text.split(whereSeparator: \.isWhitespace).joined(separator: " ").lowercased()
+    /// Convenience for callers holding the segment text.
+    public static func contains(_ haystack: String, _ needle: String) -> Bool {
+        contains(tokens(haystack), needle)
+    }
+
+    /// Lowercased words with edge punctuation removed and apostrophes unified.
+    public static func tokens(_ text: String) -> [String] {
+        text.replacingOccurrences(of: "\u{2019}", with: "'")
+            .replacingOccurrences(of: "\u{2018}", with: "'")
+            .lowercased()
+            .split(whereSeparator: \.isWhitespace)
+            .map { String($0.trimmingCharacters(in: .punctuationCharacters.subtracting(CharacterSet(charactersIn: "'")))) }
+            .map { $0.trimmingCharacters(in: CharacterSet(charactersIn: "'")) }
+            .filter { !$0.isEmpty }
+    }
+
+    public static func normalize(_ text: String) -> String {
+        tokens(text).joined(separator: " ")
     }
 }

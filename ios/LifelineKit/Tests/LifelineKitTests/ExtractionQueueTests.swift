@@ -140,3 +140,65 @@ private func collect(_ events: AsyncStream<ExtractionEvent>, count: Int, timeout
     #expect(packet.profileFreeText == "I grew up in Fresno")
     #expect(packet.people.map(\.name) == ["Maya"])
 }
+
+@Test func disclosureSegmentShowsNoMemoryCardAnywhere() async throws {
+    var output = gardenOutput()
+    output.flags = Flags(seriousDisclosure: true, wantsToStop: false, wantsToChangeSubject: false)
+    output.mentions = [MentionOut(text: "my sister", kind: .person, likelyAliasOfPersonID: nil, confidence: 0.8)]
+    let env = try Env(texts: ["the garden had a pomegranate tree and my sister"], script: [.success(output)])
+    let queue = env.queue()
+    let events = await queue.events
+    await queue.enqueue(env.segments[0].id)
+    var cards = CardQueue()
+    for event in await collect(events, count: 2) { cards.apply(event) }
+    #expect(cards.suppressed)
+    #expect(!cards.cards.contains { if case .memory = $0 { true } else { false } }, "the disclosure itself is never offered as a memory")
+    let stored = try env.store.candidates.candidates(for: env.segments[0].id)
+    let memory = try #require(stored.first { $0.kind == .memory })
+    #expect(memory.status == .dismissed && memory.rejection?.contains("disclosure") == true)
+    #expect(try env.store.candidates.pending(in: env.session).map(\.kind) == [.person], "nothing waits in the detail screen except the name")
+}
+
+@Test func knownNameMentionIsResolvedWithoutACard() async throws {
+    let env = try Env(texts: ["my sister Maya climbed it"], script: [.success(ExtractorOutput(memories: [], mentions: [MentionOut(text: "maya", kind: .person, likelyAliasOfPersonID: nil, confidence: 0.8)], flags: .none))])
+    let maya = try env.store.people.insertPerson(displayName: "Maya")
+    let queue = env.queue()
+    let events = await queue.events
+    await queue.enqueue(env.segments[0].id)
+    guard case .candidates(let shown, _)? = await collect(events, count: 1).first else { Issue.record("no event"); return }
+    #expect(shown.isEmpty, "a name the app knows is not a question")
+    let mentions = try env.store.people.mentions(in: env.segments[0].id)
+    #expect(mentions.count == 1 && mentions[0].status == .resolved && mentions[0].personID == maya.id)
+    #expect(try env.store.candidates.candidates(for: env.segments[0].id).first?.status == .accepted)
+}
+
+@Test func skippedSegmentIsMarkedExtracted() async throws {
+    let env = try Env(texts: ["the garden had a pomegranate tree"])
+    try env.store.candidates.insert(StoreFixtures.candidate(env.segments[0].id, version: "fake"))
+    let queue = env.queue()
+    await queue.enqueue(env.segments[0].id)
+    await queue.drain()
+    #expect(try env.store.sessions.fetchSegment(env.segments[0].id)?.status == .extracted, "a half-written segment is not retried forever")
+}
+
+@Test func drainRetriesOnlyTransientFailures() async throws {
+    let env = try Env(script: [.failure(.unauthorized), .failure(.network("offline")), .success(gardenOutput())])
+    let queue = env.queue()
+    await queue.enqueue(env.segments[0].id)
+    await queue.enqueue(env.segments[1].id)
+    await queue.drain()
+    #expect(env.service.requests.map(\.segmentText) == [env.segments[0].text, env.segments[1].text, env.segments[1].text])
+    #expect(try env.store.sessions.fetchSegment(env.segments[0].id)?.status == .pending)
+    #expect(try env.store.sessions.fetchSegment(env.segments[1].id)?.status == .extracted)
+}
+
+@Test func drainGivesUpAtItsDeadline() async throws {
+    let env = try Env(texts: ["the garden had a pomegranate tree"], script: [.success(gardenOutput())])
+    env.service.delay.withLock { $0 = .seconds(5) }
+    let queue = ExtractionQueue(session: env.session, service: env.service, store: env.store, drainDeadline: .milliseconds(300))
+    await queue.enqueue(env.segments[0].id)
+    let clock = ContinuousClock()
+    let elapsed = await clock.measure { await queue.drain() }
+    #expect(elapsed < .seconds(2), "Stop must not wait on a slow network: \(elapsed)")
+    #expect(try env.store.sessions.fetchSegment(env.segments[0].id)?.status == .pending)
+}

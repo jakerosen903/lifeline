@@ -62,8 +62,7 @@ public struct CandidateActions: Sendable {
                    value: $0.value, resolved: false)
         }
 
-        try store.memories.insert(memory, spans: [span], people: people, places: places, anchors: anchors)
-        try store.candidates.setStatus(candidate.id, .accepted)
+        try store.memories.insert(memory, spans: [span], people: people, places: places, anchors: anchors, acceptingCandidate: candidate.id)
 
         var newMentions: [Mention] = []
         for name in unknown {
@@ -98,19 +97,45 @@ public struct CandidateActions: Sendable {
             person = try store.people.person(id: personID)
         case .new(let displayName):
             let name = displayName.trimmingCharacters(in: .whitespacesAndNewlines)
-            let created = try store.people.insertPerson(displayName: name.isEmpty ? mention.text : name)
-            try store.people.resolve(id, to: created.id)
-            person = created
+            let wanted = name.isEmpty ? mention.text : name
+            // A typed name the app already knows is that person, not a second one.
+            let existing = try store.people.findPerson(matching: wanted)
+            let target = try existing ?? store.people.insertPerson(displayName: wanted)
+            try store.people.resolve(id, to: target.id)
+            person = target
         case .notAPerson:
             try store.people.markNotAPerson(id)
             person = nil
         }
         if let person {
-            for memory in try store.memories.memories(fromSegment: mention.segmentID) where try names(memory, mention.text) {
-                try store.memories.link(person.id, to: memory.id, roleText: mention.text)
+            try linkMemories(naming: mention.text, in: mention.segmentID, to: person.id)
+            // The same name waiting in other segments is the same question; answer it once.
+            for other in try store.people.mentions(status: .unresolved) where other.id != id && Self.same(other.text, mention.text) {
+                try store.people.resolve(other.id, to: person.id)
+                try linkMemories(naming: other.text, in: other.segmentID, to: person.id)
+            }
+        } else {
+            for other in try store.people.mentions(status: .unresolved) where other.id != id && Self.same(other.text, mention.text) {
+                try store.people.markNotAPerson(other.id)
             }
         }
         return person
+    }
+
+    /// Records a mention the app can answer itself because the name is already known.
+    /// Returns the person when it did, nil when the name is new and needs a card.
+    @discardableResult
+    public func resolveIfKnown(_ mention: Mention) throws -> Person? {
+        guard mention.status == .unresolved, let person = try store.people.findPerson(matching: mention.text) else { return nil }
+        try store.people.resolve(mention.id, to: person.id)
+        try linkMemories(naming: mention.text, in: mention.segmentID, to: person.id)
+        return person
+    }
+
+    private func linkMemories(naming text: String, in segment: SegmentID, to person: PersonID) throws {
+        for memory in try store.memories.memories(fromSegment: segment) where try names(memory, text) {
+            try store.memories.link(person, to: memory.id, roleText: text)
+        }
     }
 
     // MARK: - Helpers

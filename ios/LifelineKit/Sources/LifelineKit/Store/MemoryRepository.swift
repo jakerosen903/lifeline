@@ -12,7 +12,10 @@ public struct MemoryRepository: Sendable {
 
     public init(_ db: AppDatabase) { self.db = db }
 
-    public func insert(_ memory: Memory, spans: [MemorySpan], people: [MemoryPerson], places: [MemoryPlace], anchors: [Anchor]) throws {
+    /// `acceptingCandidate` marks that candidate accepted in the same transaction, so a kill
+    /// can never leave an accepted memory behind a card that is still pending.
+    public func insert(_ memory: Memory, spans: [MemorySpan], people: [MemoryPerson], places: [MemoryPlace], anchors: [Anchor],
+                       acceptingCandidate candidate: CandidateID? = nil) throws {
         guard !spans.isEmpty else { throw Error.noSpan }
         try db.writer.write { db in
             try memory.insert(db)
@@ -20,6 +23,9 @@ public struct MemoryRepository: Sendable {
             for person in people { try person.insert(db) }
             for place in places { try place.insert(db) }
             for anchor in anchors { try anchor.insert(db) }
+            if let candidate {
+                try db.execute(sql: "update candidate set status = ? where id = ?", arguments: [CandidateStatus.accepted.rawValue, candidate.rawValue])
+            }
         }
     }
 

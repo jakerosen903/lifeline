@@ -69,3 +69,21 @@ private func output(_ memories: [MemoryOut] = [], mentions: [MentionOut] = [], f
     let v = OutputValidator.validate(output(flags: flags), segmentText: segment, words: words)
     #expect(v.flags == flags)
 }
+
+@Test func shortNameInsideAWordIsRejected() {
+    let text = "we always planned to visit and I used the old road"
+    let w = text.split(separator: " ").map(String.init)
+    for name in ["Al", "Ann", "Ed"] {
+        let v = OutputValidator.validate(output(mentions: [MentionOut(text: name, kind: .person, likelyAliasOfPersonID: nil, confidence: 0.9)]), segmentText: text, words: w)
+        #expect(v.accepted.isEmpty, "\(name) is not in the text as a word")
+    }
+    let real = OutputValidator.validate(output(mentions: [MentionOut(text: "old road", kind: .place, likelyAliasOfPersonID: nil, confidence: 0.9)]), segmentText: text, words: w)
+    #expect(real.accepted.count == 1)
+}
+
+@Test func curlyApostropheMatchesStraightAndEdgePunctuationIsIgnored() {
+    let text = "my mom’s kitchen, the one on Olive Avenue."
+    let w = text.split(separator: " ").map(String.init)
+    let v = OutputValidator.validate(output([memory(quote: "my mom's kitchen", span: WordSpan(startWord: 0, endWord: 2), people: ["mom's"], place: "Olive Avenue")]), segmentText: text, words: w)
+    #expect(v.accepted.count == 1, "\(v.rejected.map(\.reason))")
+}

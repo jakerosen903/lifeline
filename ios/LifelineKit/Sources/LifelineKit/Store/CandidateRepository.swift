@@ -20,6 +20,19 @@ public struct CandidateRepository: Sendable {
         }
     }
 
+    /// Writes every candidate of one extraction and marks the segment extracted in one
+    /// transaction, so a kill cannot leave half the rows behind a pending segment.
+    public func insertAll(_ candidates: [Candidate], markingExtracted segment: SegmentID, in sessions: SessionRepository) throws {
+        do {
+            try db.writer.write { db in
+                for candidate in candidates { try candidate.insert(db) }
+                try db.execute(sql: "update segment set status = ? where id = ?", arguments: [SegmentStatus.extracted.rawValue, segment.rawValue])
+            }
+        } catch let error as DatabaseError where error.resultCode == .SQLITE_CONSTRAINT {
+            throw Error.duplicate
+        }
+    }
+
     public func setStatus(_ id: CandidateID, _ status: CandidateStatus, rejection: String? = nil) throws {
         try db.writer.write { db in
             try db.execute(sql: "update candidate set status = ?, rejection = ? where id = ?",
