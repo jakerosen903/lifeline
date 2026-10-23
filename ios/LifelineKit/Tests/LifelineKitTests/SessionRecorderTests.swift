@@ -124,9 +124,9 @@ private func waitUntil(_ cond: @escaping () async -> Bool, timeoutMs: Int = 2_00
     let db = try AppDatabase.inMemory(); let repo = SessionRepository(db)
     try repo.insert(Session(id: .init(), startedAt: .now, endedAt: nil, audioPath: "a.m4a", stageLog: "[]", landingChoiceMade: false))
     try repo.insert(Session(id: .init(), startedAt: .now, endedAt: .now, audioPath: "b.m4a", stageLog: "[]", landingChoiceMade: false))
-    #expect(try SessionRecorder.recoverUnfinishedSessions(repo) == 1)
+    #expect(try SessionRecorder.recoverUnfinishedSessions(repo).isEmpty, "no words: nothing to resume")
     #expect(try repo.unfinishedSessions().isEmpty)
-    #expect(try SessionRecorder.recoverUnfinishedSessions(repo) == 0)
+    #expect(try SessionRecorder.recoverUnfinishedSessions(repo).isEmpty)
 }
 
 @Test func storedSegmentsReachTheHookInOrder() async throws {
@@ -143,15 +143,63 @@ private func waitUntil(_ cond: @escaping () async -> Bool, timeoutMs: Int = 2_00
     #expect(seen.all == stored, "the hook sees exactly the stored segments, in order; the empty one never reaches it")
 }
 
-@Test func stopAwaitsTheStopHookBeforeEnding() async throws {
+@Test func stoppedHookFiresAfterTheRowIsEnded() async throws {
     let db = try AppDatabase.inMemory(); let repo = SessionRepository(db); let voice = FakeVoiceSession()
-    let order = LogCollector()
+    let seen = LogCollector()
     let rec = SessionRecorder(voice: voice, sessions: repo, audioURL: { URL(fileURLWithPath: "/tmp/\($0.rawValue).m4a") },
                               now: { Date(timeIntervalSince1970: 1_000) },
-                              hooks: .init(onStop: { try? await Task.sleep(for: .milliseconds(100)); order.append("hook") }))
-    let id = try await rec.start()
+                              hooks: .init(onStopped: { seen.append((try? repo.listSessions().first?.endedAt) == nil ? "open" : "ended") }))
+    try await rec.start()
     try await rec.stop()
-    order.append("ended")
-    #expect(order.all == ["hook", "ended"])
+    #expect(seen.all == ["ended"], "the background sorting starts from an ended session")
+    try await rec.stop()
+    #expect(seen.all == ["ended"], "a second Finish is a no-op")
+}
+
+@Test func stopReturnsBeforeExtractionFinishes() async throws {
+    let db = try AppDatabase.inMemory(); let repo = SessionRepository(db); let voice = FakeVoiceSession()
+    let finished = LogCollector()
+    let rec = SessionRecorder(voice: voice, sessions: repo, audioURL: { URL(fileURLWithPath: "/tmp/\($0.rawValue).m4a") },
+                              hooks: .init(onStopped: { Task { try? await Task.sleep(for: .seconds(1)); finished.append("sorted") } }))
+    let id = try await rec.start()
+    let clock = ContinuousClock()
+    let elapsed = await clock.measure { try? await rec.stop() }
+    #expect(elapsed < .milliseconds(500), "finishing never waits for sorting: \(elapsed)")
     #expect(try repo.fetch(id)?.endedAt != nil)
+    #expect(finished.all.isEmpty, "sorting is still going on in the background")
+}
+
+@Test func recoverLeavesUnlandedSessionsWithSegmentsOpen() async throws {
+    let db = try AppDatabase.inMemory(); let repo = SessionRepository(db)
+    let (withWords, _) = try StoreFixtures.session(in: repo, segments: ["the garden had a pomegranate tree"])
+    var crashed = try #require(try repo.fetch(withWords)); crashed.endedAt = nil; try repo.update(crashed)
+    let empty = Session(id: .init(), startedAt: .now, endedAt: nil, audioPath: "e.m4a", stageLog: "[]", landingChoiceMade: false)
+    try repo.insert(empty)
+    let resume = try SessionRecorder.recoverUnfinishedSessions(repo, now: Date(timeIntervalSince1970: 2_000))
+    #expect(resume.map(\.id) == [withWords], "a session with words is resumed to the landing, not closed")
+    #expect(try repo.fetch(withWords)?.endedAt != nil, "its recording has ended, though")
+    #expect(try repo.fetch(withWords)?.landingChoiceMade == false)
+    let closed = try #require(try repo.fetch(empty.id))
+    #expect(closed.endedAt != nil && closed.landingChoiceMade, "an empty session is closed quietly")
+}
+
+@Test func markLandedAndUnlandedSessions() throws {
+    let db = try AppDatabase.inMemory(); let repo = SessionRepository(db)
+    let (a, _) = try StoreFixtures.session(in: repo)
+    #expect(try repo.unlandedSessions().map(\.id) == [a])
+    try repo.markLanded(a, stageLog: "[]")
+    #expect(try repo.unlandedSessions().isEmpty)
+    #expect(try repo.fetch(a)?.landingChoiceMade == true)
+}
+
+@Test func pauseAndResumeAreRecordedInState() async throws {
+    let db = try AppDatabase.inMemory(); let repo = SessionRepository(db); let voice = FakeVoiceSession()
+    let rec = makeRecorder(voice: voice, repo: repo)
+    _ = try await rec.start()
+    try await rec.pause()
+    #expect(await voice.pauseCalls == 1)
+    await waitUntil { await rec.state.isPaused }
+    try await rec.resume()
+    #expect(await voice.resumeCalls == 1)
+    await waitUntil { await !rec.state.isPaused }
 }

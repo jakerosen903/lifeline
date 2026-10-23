@@ -24,9 +24,38 @@ public struct SessionRepository: Sendable {
         try db.writer.read { try Session.order(Column("started_at").desc).fetchAll($0) }
     }
 
-    /// Sessions that never landed: `ended_at` is nil.
+    /// Sessions whose recording never ended: `ended_at` is nil (a crash, or recording now).
     public func unfinishedSessions() throws -> [Session] {
         try db.writer.read { try Session.filter(Column("ended_at") == nil).fetchAll($0) }
+    }
+
+    /// Sessions with words that have not been through their landing, newest first.
+    public func unlandedSessions() throws -> [Session] {
+        try db.writer.read { db in
+            try Session.fetchAll(db, sql: """
+                SELECT s.* FROM session s
+                WHERE s.landing_choice_made = 0
+                  AND EXISTS (SELECT 1 FROM segment g WHERE g.session_id = s.id)
+                ORDER BY s.started_at DESC
+                """)
+        }
+    }
+
+    public func markLanded(_ id: SessionID, stageLog: String) throws {
+        try db.writer.write { db in
+            try db.execute(sql: "UPDATE session SET landing_choice_made = 1, stage_log = ? WHERE id = ?", arguments: [stageLog, id.rawValue])
+        }
+    }
+
+    /// Sessions with at least one segment still waiting to be sorted, newest first.
+    public func sessionsWithPendingSegments() throws -> [Session] {
+        try db.writer.read { db in
+            try Session.fetchAll(db, sql: """
+                SELECT s.* FROM session s
+                WHERE EXISTS (SELECT 1 FROM segment g WHERE g.session_id = s.id AND g.status = 'pending')
+                ORDER BY s.started_at DESC
+                """)
+        }
     }
 
     /// Inserts a segment and its words in one transaction.

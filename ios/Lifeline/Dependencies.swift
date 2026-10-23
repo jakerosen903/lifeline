@@ -39,19 +39,20 @@ struct Dependencies {
         ExtractionQueue(session: session, service: extraction, store: extractionStore, log: { print("[extract] \($0)") })
     }
 
-    /// A recorder whose stored segments feed `queue` and whose Stop waits for it to drain.
+    /// A recorder whose stored segments feed `queue`. Finish returns at once; the queue keeps
+    /// sorting in the background and the launch-time worker picks up anything it leaves.
     func makeRecorder(onStatus: @escaping @Sendable (TranscriberAvailability) -> Void, queue: ExtractionQueue) -> SessionRecorder {
         SessionRecorder(voice: makeVoiceSession(onStatus), sessions: sessions, audioURL: { try audioURL(for: $0) },
                         hooks: RecorderHooks(onSegmentStored: { id in Task { await queue.enqueue(id) } },
-                                             onStop: { await queue.drain() }))
+                                             onStopped: { Task { await queue.drain() } }))
     }
 
     static func live() throws -> Dependencies {
         let root = try AudioLocation.defaultRoot()
         let db = try AppDatabase.open(at: root.appending(path: "Lifeline/lifeline.sqlite"))
         let sessions = SessionRepository(db)
-        let recovered = try SessionRecorder.recoverUnfinishedSessions(sessions)
-        if recovered > 0 { print("[lifeline] closed \(recovered) unfinished session(s)") }
+        let resume = try SessionRecorder.recoverUnfinishedSessions(sessions)
+        if !resume.isEmpty { print("[lifeline] \(resume.count) session(s) to resume at the landing") }
         let pauseLog = PauseLog(url: root.appending(path: "Lifeline/pauses.log"))
         let secrets = KeychainSecretStore()
         let store = ExtractionStore(db)

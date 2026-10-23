@@ -45,6 +45,9 @@ public actor ExtractionQueue {
         (events, emit) = AsyncStream.makeStream(bufferingPolicy: .unbounded)
     }
 
+    /// True once a request failed for want of an API key; nothing more is tried this session.
+    public var isKeyMissing: Bool { keyMissing }
+
     public func enqueue(_ segment: SegmentID) {
         waiting.append(segment)
         startWorkerIfNeeded()

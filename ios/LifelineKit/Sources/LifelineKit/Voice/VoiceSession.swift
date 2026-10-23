@@ -36,6 +36,9 @@ public enum VoiceEvent: Equatable, Sendable {
     case userPaused(afterMs: Milliseconds)
     case segmentClosed(SegmentTranscript)
     case interrupted
+    /// The person paused. Capture stops until `resume`; the file clock does not move.
+    case paused
+    /// After an interruption or a pause, capture is running again.
     case resumed
     case failed(String)
 }
@@ -45,6 +48,9 @@ public enum VoiceEvent: Equatable, Sendable {
 public protocol VoiceSession: Actor {
     func start(writingTo audioURL: URL) async throws -> AsyncStream<VoiceEvent>
     func stop() async throws
+    /// Closes what was said and stops capture; the next chunk after `resume` follows the last one on the file clock.
+    func pause() async throws
+    func resume() async throws
     func say(_ text: String) async
     func acknowledge() async
     func interrupt() async

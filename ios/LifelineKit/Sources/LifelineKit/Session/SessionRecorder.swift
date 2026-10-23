@@ -12,20 +12,21 @@ public struct RecorderState: Equatable, Sendable {
     public var isSpeaking = false
     public var segments: [Segment] = []
     public var isInterrupted = false
+    public var isPaused = false
     public var error: String?
     public init() {}
 }
 
-/// What happens around the recorder: a stored segment goes to extraction, and Stop waits for
-/// extraction to drain before the session is marked ended. Both default to nothing.
+/// What happens around the recorder: a stored segment goes to extraction, and once the session
+/// has ended the caller may let sorting finish in the background. Finishing never waits for it.
 public struct RecorderHooks: Sendable {
     public var onSegmentStored: @Sendable (SegmentID) -> Void
-    public var onStop: @Sendable () async -> Void
+    public var onStopped: @Sendable () -> Void
 
     public init(onSegmentStored: @escaping @Sendable (SegmentID) -> Void = { _ in },
-                onStop: @escaping @Sendable () async -> Void = {}) {
+                onStopped: @escaping @Sendable () -> Void = {}) {
         self.onSegmentStored = onSegmentStored
-        self.onStop = onStop
+        self.onStopped = onStopped
     }
 }
 
@@ -85,26 +86,43 @@ public actor SessionRecorder {
         return id
     }
 
-    /// Stops capture and marks the session ended. Safe to call more than once.
+    /// Stops capture, stores the closing words and marks the session ended. It returns as soon as
+    /// that is done: sorting what was said is the caller's background work. Safe to call twice.
     public func stop() async throws {
         guard var row = session, row.endedAt == nil else { return }
         try await voice.stop()
         await eventTask?.value
-        await hooks.onStop()
         row.endedAt = now()
         try sessions.update(row)
         session = row
+        hooks.onStopped()
     }
 
-    /// Closes every session left open by a crash. Returns how many it closed.
-    /// M4 replaces this with resume-to-wind-down.
-    public nonisolated static func recoverUnfinishedSessions(_ repo: SessionRepository, now: Date = .now) throws -> Int {
-        let open = try repo.unfinishedSessions()
-        for var s in open {
+    public func pause() async throws {
+        guard let row = session, row.endedAt == nil else { return }
+        try await voice.pause()
+    }
+
+    public func resume() async throws {
+        guard let row = session, row.endedAt == nil else { return }
+        try await voice.resume()
+    }
+
+    /// After a crash: every session left open has its recording ended. One with words waits for
+    /// its landing (the app opens it first); one with nothing said is closed quietly.
+    /// Returns the sessions to resume, newest first.
+    public nonisolated static func recoverUnfinishedSessions(_ repo: SessionRepository, now: Date = .now) throws -> [Session] {
+        var resume: [Session] = []
+        for var s in try repo.unfinishedSessions() {
             s.endedAt = now
             try repo.update(s)
+            if try repo.segments(in: s.id).isEmpty {
+                try repo.markLanded(s.id, stageLog: s.stageLog)
+            } else {
+                resume.append(s)
+            }
         }
-        return open.count
+        return resume.sorted { $0.startedAt > $1.startedAt }
     }
 
     private func handle(_ event: VoiceEvent) {
@@ -124,8 +142,12 @@ public actor SessionRecorder {
             state.spoken = ""
         case .interrupted:
             state.isInterrupted = true
+        case .paused:
+            state.isPaused = true
+            state.isSpeaking = false
         case .resumed:
             state.isInterrupted = false
+            state.isPaused = false
         case .failed(let message):
             state.error = message
         }

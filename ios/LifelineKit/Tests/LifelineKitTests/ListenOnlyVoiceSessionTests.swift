@@ -180,3 +180,26 @@ private func collect(_ events: AsyncStream<VoiceEvent>, count: Int, timeoutMs: I
     #expect(message.contains("transcriber"))
     try await h.vs.stop()
 }
+
+@Test func pauseClosesTheOpenSegmentAndResumeContinuesTheClock() async throws {
+    let h = Harness()
+    let events = try await h.vs.start(writingTo: URL(fileURLWithPath: "/dev/null"))
+    h.src.push(speechMs: 0..<4_000)
+    h.tr.push(TranscriptResult(text: "one", words: [TranscribedWord(text: "one", range: MsRange(start: 0, end: 300))], range: MsRange(start: 0, end: 300), isFinal: true))
+    _ = try await firstEvent(events) { if case .transcriptFinal = $0 { true } else { false } }
+    try await Task.sleep(for: .milliseconds(300))   // let the source task observe every pushed chunk
+    try await h.vs.pause()
+    let closed = try await firstEvent(events) { if case .segmentClosed = $0 { true } else { false } }
+    guard case .segmentClosed(let segment) = closed else { Issue.record("expected a segment"); return }
+    #expect(segment.range == MsRange(start: 0, end: 4_000) && segment.words.count == 1, "pausing closes what was said")
+    #expect(await h.src.paused)
+    _ = try await firstEvent(events) { if case .paused = $0 { true } else { false } }
+    try await h.vs.resume()
+    _ = try await firstEvent(events) { if case .resumed = $0 { true } else { false } }
+    // The next chunk follows on the same file clock: the source keeps counting frames, so the session accepts it as is.
+    h.src.push(speechMs: 4_000..<7_000, silenceMs: 7_000..<9_000)
+    h.tr.push(TranscriptResult(text: "two", words: [TranscribedWord(text: "two", range: MsRange(start: 4_000, end: 4_300))], range: MsRange(start: 4_000, end: 4_300), isFinal: true))
+    let second = try await firstEvent(events) { if case .segmentClosed(let s) = $0 { s.range.start >= 4_000 } else { false } }
+    guard case .segmentClosed(let next) = second else { Issue.record("expected a second segment"); return }
+    #expect(next.range.start == 4_000)
+}

@@ -11,6 +11,9 @@ final class FakeAudioSource: AudioSource, @unchecked Sendable {
 
     func start() async throws -> AsyncStream<AudioSourceEvent> { stream }
     func stop() async { stopped = true; continuation.finish() }
+    private(set) var paused = false
+    func pause() async { paused = true }
+    func resume() async throws { paused = false }
 
     /// Pushes 100 ms chunks: loud for `speechMs`, quiet for `silenceMs`.
     func push(speechMs: Range<Int>, silenceMs: Range<Int>? = nil) {

@@ -18,6 +18,10 @@ actor FakeVoiceSession: VoiceSession {
     }
 
     func stop() async throws { stopCalled = true; continuation?.finish() }
+    private(set) var pauseCalls = 0
+    private(set) var resumeCalls = 0
+    func pause() async throws { pauseCalls += 1; continuation?.yield(.paused) }
+    func resume() async throws { resumeCalls += 1; continuation?.yield(.resumed) }
     func say(_ text: String) async {}
     func acknowledge() async {}
     func interrupt() async {}
