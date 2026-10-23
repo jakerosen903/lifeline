@@ -46,4 +46,4 @@ Sample content (names, places, dates) is invented.
 
 ## App icon
 
-`icon/lifeline-icon.svg` (light) and `icon/lifeline-icon-dark.svg` are the sources; `ios/Assets.xcassets/AppIcon.appiconset/` holds the 1024 px light, dark and tinted PNGs with a `Contents.json` Xcode reads directly. The mark: one rising line (the lifeline) with three memories on it; the middle one carries a soft halo for the fuzzy range. Same palette as the screens.
+`icon/lifeline-icon.svg` (light) and `icon/lifeline-icon-dark.svg` are the sources; `ios/Assets.xcassets/AppIcon.appiconset/` holds the 1024 px light, dark and tinted PNGs with a `Contents.json` Xcode reads directly. The mark: five tree rings, the years of a life read in cross-section, with a soft split through them the way rings open around a knot, and one ochre ring for a year that mattered. Same palette as the screens. Chosen 2026-10-22 over a rising-line mark, a radial waveform and a constellation.
