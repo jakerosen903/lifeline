@@ -70,6 +70,9 @@ public struct TimeRange: Codable, Sendable, Equatable {
     /// (a chapter, a collection) reads plainly, as the canvases show "1986 – 2004 · Childhood".
     public var displayText: String {
         guard let earliest, let latest else { return "no date yet" }
+        // A confirmed relation ("before Graduation (2004)") is what the owner actually settled;
+        // the band's far edge is the builder's slack and is never shown as a fact.
+        if origin == .confirmed, let evidenceText, Self.isRelationEvidence(evidenceText) { return evidenceText }
         let guess = origin == .inferred
         switch granularity ?? .year {
         case .day:
@@ -91,6 +94,10 @@ public struct TimeRange: Codable, Sendable, Equatable {
             // still "around"; wider than that it is honestly "sometime between".
             return guess ? (latest.year - earliest.year <= 1 ? "around \(span)" : "sometime between \(span)") : span
         }
+    }
+
+    static func isRelationEvidence(_ text: String) -> Bool {
+        ["before ", "after ", "not the same year as ", "during "].contains { text.lowercased().hasPrefix($0) }
     }
 
     static func yearSpan(_ a: Int, _ b: Int) -> String {

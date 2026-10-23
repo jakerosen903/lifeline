@@ -39,11 +39,53 @@ private func input(_ memories: [MemoryRef], _ anchors: [Anchor], birth: String? 
     #expect(range?.earliest == d("1994-09-01") && range?.latest == d("1995-06-30") && range?.origin == .inferred)
 }
 
-@Test func approximateAgeWidensBothWays() {
+@Test func twoAgesSpanExactlyThoseYears() {
     let m = ref("Road trip")
     let out = Resolver.resolve(input([m], [anchor(m, "eleven or twelve", .age)]))
     let range = out.placements[m.id]
+    #expect(range?.earliest == d("1997-05-10") && range?.latest == d("1999-05-09"))
+}
+
+@Test func approximateAgeWidensBothWays() {
+    let m = ref("Road trip")
+    let out = Resolver.resolve(input([m], [anchor(m, "around eleven", .age)]))
+    let range = out.placements[m.id]
     #expect(range?.earliest == d("1996-05-10") && range?.latest == d("1999-05-09"))
+}
+
+@Test func aMemoryNeverTargetsItselfAndEvidenceIsNotATarget() {
+    // "The move" was placed last run from "after graduation"; its own evidence must not count as the target now.
+    let move = ref("The move", range: TimeRange(earliest: d("2004-01-01"), latest: d("2009-12-31"), likelyStart: nil, likelyEnd: nil, granularity: .year, origin: .inferred, evidenceText: "after graduation"))
+    let out = Resolver.resolve(input([move], [anchor(move, "after graduation", .after, target: "graduation")]))
+    // With no graduation memory in sight, the old guess is withdrawn rather than fed back into itself.
+    #expect(out.placements[move.id] == .unplaced, "no self-targeting: \(String(describing: out.placements[move.id]))")
+    #expect(out.floating.count == 1, "graduation is still an unplaced target")
+}
+
+@Test func nonConfirmedRangesAreRecomputedFromScratch() {
+    // A stale inferred range with no anchor behind it any more (the birthday was removed) goes back to unplaced.
+    let m = ref("The blue door", range: .year(1992, origin: .inferred, evidence: "when I was six"))
+    let out = Resolver.resolve(input([m], [anchor(m, "when I was six", .age)], birth: nil))
+    #expect(out.placements[m.id] == .unplaced)
+}
+
+@Test func relativeRangesAreClampedToTodayAndBirth() {
+    let recent = ref("The move", range: .year(2024, origin: .stated, evidence: "in 2024"))
+    let after = ref("New job"), before = ref("Before I was born, they say")
+    let early = ref("Early", range: .year(1988, origin: .stated, evidence: "in 1988"))
+    var inp = input([recent, after, before, early], [anchor(after, "after we moved", .after, target: "The move"), anchor(before, "before that", .before, target: "Early")])
+    inp.today = d("2026-10-23")
+    let out = Resolver.resolve(inp)
+    #expect(out.placements[after.id]?.latest == d("2026-10-23"), "nothing is placed in the future")
+    #expect(out.placements[before.id]?.earliest == d("1986-05-10"), "nothing is placed before the owner was born")
+}
+
+@Test func curiosityIsOnlyAboutMissingOrUnplacedTargets() {
+    let grad = ref("Graduation", range: .year(2004, origin: .stated, evidence: "in 2004"))
+    let job = ref("First job", range: .year(1998, origin: .stated, evidence: "in 1998"))
+    // "after graduation" contradicts the stated 1998 and stays unresolved, but graduation itself is placed: nothing to ask.
+    let out = Resolver.resolve(input([grad, job], [anchor(job, "in 1998", .absolute), anchor(job, "after graduation", .after, target: "Graduation")]))
+    #expect(out.curiosity.isEmpty && out.floating.isEmpty)
 }
 
 @Test func ageAnchorFloatsWithoutBirthDate() {

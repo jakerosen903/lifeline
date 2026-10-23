@@ -80,6 +80,26 @@ private struct Env {
     #expect(try env.store.memories.memories(inChapter: childhood.id).isEmpty)
 }
 
+@Test func sessionMemoriesLeaveOutStandIns() throws {
+    let env = try Env()
+    _ = try env.memory("Told")
+    _ = try env.store.memories.insertFloating(title: "graduation", segment: env.segment.id, startMs: 0, endMs: 500)
+    #expect(try env.store.memories.memories(in: env.session).map(\.title) == ["Told"])
+    #expect(try env.store.memories.memories(in: env.session, includingStandIns: true).count == 2)
+}
+
+@Test func derivedSpanIsAGuessWhenAnyMemberIs() throws {
+    let env = try Env()
+    let stated = try env.memory("A", range: .year(1998, origin: .stated, evidence: nil))
+    let guessed = try env.memory("B", range: TimeRange.span(CivilDate(iso: "2004-01-01")!, CivilDate(iso: "2009-12-31")!, granularity: .year, origin: .inferred, evidence: nil))
+    let c = try env.chapters.insertCollection(titled: "Mixed")
+    try env.chapters.add(memory: stated.id, to: c.id)
+    #expect(try env.chapters.derivedSpan(of: c.id).displayText == "1998")
+    try env.chapters.add(memory: guessed.id, to: c.id)
+    let span = try env.chapters.derivedSpan(of: c.id)
+    #expect(span.origin == .inferred && span.displayText == "sometime between 1998–2009")
+}
+
 @Test func floatingMemoryHasNoCandidateAndASpan() throws {
     let env = try Env()
     let floating = try env.store.memories.insertFloating(title: "graduation", segment: env.segment.id, startMs: 100, endMs: 900)

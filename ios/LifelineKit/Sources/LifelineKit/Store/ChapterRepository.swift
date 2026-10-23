@@ -93,11 +93,18 @@ public struct ChapterRepository: Sendable {
         }
     }
 
-    /// Earliest of the members' earliest to latest of their latest, origin `derived`.
-    /// Unplaced when no member is placed.
+    /// Earliest of the members' earliest to latest of their latest. Reads as a guess when any
+    /// member is a guess, plainly only when every member is stated or confirmed. Unplaced when
+    /// no member is placed.
     public func derivedSpan(of collection: CollectionID) throws -> TimeRange {
-        let placed = try members(of: collection).map(\.range).filter(\.isPlaced)
+        Self.span(over: try members(of: collection).map(\.range))
+    }
+
+    public static func span(over ranges: [TimeRange]) -> TimeRange {
+        let placed = ranges.filter(\.isPlaced)
         guard let earliest = placed.compactMap(\.earliest).min(), let latest = placed.compactMap(\.latest).max() else { return .unplaced }
-        return TimeRange(earliest: earliest, latest: latest, likelyStart: nil, likelyEnd: nil, granularity: .year, origin: .derived, evidenceText: nil)
+        let anyGuess = placed.contains { $0.origin == .inferred }
+        return TimeRange(earliest: earliest, latest: latest, likelyStart: nil, likelyEnd: nil, granularity: .year,
+                         origin: anyGuess ? .inferred : .derived, evidenceText: nil)
     }
 }

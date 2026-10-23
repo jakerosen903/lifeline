@@ -7,6 +7,8 @@ public struct RelativeQuestion: Equatable, Sendable {
         public var id: String
         public var label: String
         public var resultingRange: TimeRange
+        /// The sentence stored as the range's evidence ("before Graduation (2004)").
+        public var evidence: String
     }
 
     public var memoryID: MemoryID
@@ -32,7 +34,7 @@ public enum RelativeQuestions {
     public static func apply(_ choice: RelativeQuestion.Choice, to memory: MemoryRef) -> TimeRange {
         var range = choice.resultingRange
         range.origin = .confirmed
-        range.evidenceText = choice.label
+        range.evidenceText = choice.evidence
         return range
     }
 
@@ -49,8 +51,8 @@ public enum RelativeQuestions {
                 memoryID: memory.id,
                 prompt: "Was this before or after \(target.title)?",
                 choices: [
-                    .init(id: "before", label: "Before (\(year))", resultingRange: before),
-                    .init(id: "after", label: "After (\(year))", resultingRange: after),
+                    .init(id: "before", label: "Before (\(year))", resultingRange: before, evidence: "before \(target.title) (\(year))"),
+                    .init(id: "after", label: "After (\(year))", resultingRange: after, evidence: "after \(target.title) (\(year))"),
                 ],
                 anchorID: anchor.id)
         }
@@ -87,7 +89,8 @@ public enum RelativeQuestions {
         return RelativeQuestion(
             memoryID: memory.id,
             prompt: "Was this the same year as \(sibling.title)?",
-            choices: [.init(id: "yes", label: "Yes (\(sYear))", resultingRange: yes), .init(id: "no", label: "No", resultingRange: no)],
+            choices: [.init(id: "yes", label: "Yes (\(sYear))", resultingRange: yes, evidence: "the same year as \(sibling.title)"),
+                      .init(id: "no", label: "No", resultingRange: no, evidence: "not the same year as \(sibling.title)")],
             anchorID: nil)
     }
 

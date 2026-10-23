@@ -248,9 +248,9 @@
   "relation": "age",
   "expect": {
    "age": {
-    "approximate": [
+    "years": [
      11,
-     1
+     12
     ]
    }
   }
@@ -440,5 +440,125 @@
   "value": null,
   "relation": "age",
   "expect": null
+ },
+ {
+  "phrase": "1997 or 1998",
+  "value": null,
+  "relation": "absolute",
+  "expect": {
+   "earliest": "1997-01-01",
+   "latest": "1998-12-31",
+   "granularity": "year",
+   "origin": "inferred"
+  }
+ },
+ {
+  "phrase": "around 1998",
+  "value": null,
+  "relation": "absolute",
+  "expect": {
+   "earliest": "1998-01-01",
+   "latest": "1998-12-31",
+   "granularity": "year",
+   "origin": "inferred"
+  }
+ },
+ {
+  "phrase": "1998 or so",
+  "value": null,
+  "relation": "absolute",
+  "expect": {
+   "earliest": "1998-01-01",
+   "latest": "1998-12-31",
+   "granularity": "year",
+   "origin": "inferred"
+  }
+ },
+ {
+  "phrase": "it may have been 1998",
+  "value": null,
+  "relation": "absolute",
+  "expect": {
+   "earliest": "1998-01-01",
+   "latest": "1998-12-31",
+   "granularity": "year",
+   "origin": "inferred"
+  }
+ },
+ {
+  "phrase": "maybe 2004",
+  "value": "2004",
+  "relation": "absolute",
+  "expect": {
+   "earliest": "2004-01-01",
+   "latest": "2004-12-31",
+   "granularity": "year",
+   "origin": "inferred"
+  }
+ },
+ {
+  "phrase": "May 1998",
+  "value": null,
+  "relation": "absolute",
+  "expect": {
+   "earliest": "1998-05-01",
+   "latest": "1998-05-31",
+   "granularity": "month"
+  }
+ },
+ {
+  "phrase": "junior year of college",
+  "value": null,
+  "relation": "age",
+  "expect": {
+   "age": {
+    "years": [
+     20,
+     20
+    ]
+   }
+  }
+ },
+ {
+  "phrase": "a sophomore in college",
+  "value": null,
+  "relation": "age",
+  "expect": {
+   "age": {
+    "years": [
+     19,
+     19
+    ]
+   }
+  }
+ },
+ {
+  "phrase": "grade 3",
+  "value": null,
+  "relation": "age",
+  "expect": {
+   "age": {
+    "grade": 3
+   }
+  }
+ },
+ {
+  "phrase": "six months old",
+  "value": null,
+  "relation": "age",
+  "expect": null
+ },
+ {
+  "phrase": "twelve or eleven",
+  "value": null,
+  "relation": "age",
+  "expect": {
+   "age": {
+    "years": [
+     11,
+     12
+    ]
+   }
+  }
  }
 ]

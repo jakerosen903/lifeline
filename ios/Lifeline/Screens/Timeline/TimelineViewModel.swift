@@ -109,7 +109,9 @@ final class TimelineViewModel {
         let kind = memory.createdFromCandidateID.flatMap { try? store.candidates.fetch($0) }.flatMap { CandidatePayload.memory($0) }?.kindOrDefault ?? .other
         let span = try store.memories.spans(of: memory.id).first
         var age: String?
-        if let birth, let year = memory.range.earliest?.year, memory.range.origin == .inferred {
+        // Only when an age anchor is what placed it; a relative guess says nothing about age.
+        let placedByAge = try store.memories.anchors(of: memory.id).contains { $0.relation == .age && $0.resolved }
+        if placedByAge, let birth, let year = memory.range.earliest?.year, memory.range.origin == .inferred {
             let a = year - birth.year
             if a >= 0 { age = "age ~\(a)" }
         }

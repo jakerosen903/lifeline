@@ -15,30 +15,54 @@ public enum AnchorPhrase {
     // MARK: - Absolute
 
     public static func parseAbsolute(_ phrase: String, value: String?) -> TimeRange? {
+        let words = tokens(phrase)
+        // "around", "maybe", "or so", "may have been": the owner was guessing, so it is a guess.
+        let origin: RangeOrigin = isApproximate(words) ? .inferred : .stated
         if let value = value?.trimmingCharacters(in: .whitespaces), !value.isEmpty {
             if let day = CivilDate(iso: value) {
-                return TimeRange.span(day, day, granularity: .day, origin: .stated, evidence: phrase)
+                return TimeRange.span(day, day, granularity: .day, origin: origin, evidence: phrase)
             }
             if let y = Int(value), yearRange.contains(y) {
-                return .year(y, origin: .stated, evidence: phrase)
+                return .year(y, origin: origin, evidence: phrase)
             }
         }
-        let words = tokens(phrase)
         guard !words.isEmpty else { return nil }
-        let year = findYear(in: words)
+        let years = findYears(in: words)
+        if years.count >= 2, words.contains("or") {
+            return TimeRange.span(.firstOfYear(years.min()!), .lastOfYear(years.max()!), granularity: .year, origin: .inferred, evidence: phrase)
+        }
+        let year = years.first
         if let season = words.lazy.compactMap({ seasons[$0] }).first, let year {
             let (startMonth, endMonth, wraps) = season
             let start = CivilDate.first(ofMonth: startMonth, year: year)
             let end = CivilDate.last(ofMonth: endMonth, year: wraps ? year + 1 : year)
-            return TimeRange.span(start, end, granularity: .season, origin: .stated, evidence: phrase)
+            return TimeRange.span(start, end, granularity: .season, origin: origin, evidence: phrase)
         }
-        if let month = words.lazy.compactMap({ months[$0] }).first, let year {
-            return TimeRange.span(.first(ofMonth: month, year: year), .last(ofMonth: month, year: year), granularity: .month, origin: .stated, evidence: phrase)
+        if let month = findMonth(in: words), let year {
+            return TimeRange.span(.first(ofMonth: month, year: year), .last(ofMonth: month, year: year), granularity: .month, origin: origin, evidence: phrase)
         }
         if let decade = findDecade(in: words) {
-            return TimeRange.span(.firstOfYear(decade), .lastOfYear(decade + 9), granularity: .decade, origin: .stated, evidence: phrase)
+            return TimeRange.span(.firstOfYear(decade), .lastOfYear(decade + 9), granularity: .decade, origin: origin, evidence: phrase)
         }
-        if let year { return .year(year, origin: .stated, evidence: phrase) }
+        if let year { return .year(year, origin: origin, evidence: phrase) }
+        return nil
+    }
+
+    static func isApproximate(_ words: [String]) -> Bool {
+        let text = words.joined(separator: " ")
+        if words.contains(where: { ["around", "about", "roughly", "maybe", "approximately", "probably", "perhaps"].contains($0) }) { return true }
+        return text.contains(" or so") || text.hasSuffix("ish") || text.contains("may have been") || text.contains("might have been")
+            || text.contains("i think") || text.contains("something like")
+    }
+
+    /// "may" is a month only next to a year or a day number; otherwise it is the verb.
+    static func findMonth(in words: [String]) -> Int? {
+        for (i, w) in words.enumerated() {
+            guard let month = months[w] else { continue }
+            if w != "may" { return month }
+            let neighbours = [i > 0 ? words[i - 1] : "", i + 1 < words.count ? words[i + 1] : ""]
+            if neighbours.contains(where: { Int($0.trimmingCharacters(in: CharacterSet(charactersIn: "'"))) != nil }) { return month }
+        }
         return nil
     }
 
@@ -49,20 +73,29 @@ public enum AnchorPhrase {
         guard !words.isEmpty else { return nil }
         let text = words.joined(separator: " ")
 
+        // "six months old" is not an age in years.
+        if text.contains("months old") || text.contains("weeks old") || text.contains("days old") { return nil }
         if words.contains("kindergarten") { return .grade(0) }
-        if let i = words.firstIndex(of: "grade"), i > 0, let n = ordinal(words[i - 1]), (1...12).contains(n) { return .grade(n) }
-        for (word, grade) in schoolYears where words.contains(word) { return .grade(grade) }
+        if let i = words.firstIndex(of: "grade") {
+            if i > 0, let n = ordinal(words[i - 1]), (1...12).contains(n) { return .grade(n) }
+            if i + 1 < words.count, let n = Int(words[i + 1]), (1...12).contains(n) { return .grade(n) }
+        }
+        let inCollege = text.contains("college") || text.contains("university")
+        for (word, grade) in schoolYears where words.contains(word) {
+            // Freshman through senior: a grade in high school, a year of life in college.
+            return inCollege ? .years(from: grade + 9, to: grade + 9) : .grade(grade)
+        }
         if text.contains("middle school") { return .years(from: 11, to: 14) }
         if text.contains("high school") { return .years(from: 14, to: 18) }
-        if text.contains("college") || text.contains("university") { return .years(from: 18, to: 22) }
+        if inCollege { return .years(from: 18, to: 22) }
 
         if let i = words.firstIndex(of: "birthday"), i > 0, let n = ordinal(words[i - 1]), (0...99).contains(n) { return .years(from: n, to: n) }
 
         let numbers = cardinalRuns(in: words)
-        let approximateCue = words.contains { ["around", "about", "roughly", "maybe", "approximately"].contains($0) } || text.contains("ish")
         if let first = numbers.first {
-            if numbers.count >= 2, words.contains("or") { return .approximate(center: first, slack: max(1, abs(numbers[1] - first))) }
-            if approximateCue { return .approximate(center: first, slack: 1) }
+            // "eleven or twelve" is exactly those two ages, not a band around the first.
+            if numbers.count >= 2, words.contains("or") { return .years(from: min(first, numbers[1]), to: max(first, numbers[1])) }
+            if isApproximate(words) { return .approximate(center: first, slack: 1) }
             return .years(from: first, to: first)
         }
         if let value, let n = Int(value.trimmingCharacters(in: .whitespaces)), (0...99).contains(n) { return .years(from: n, to: n) }
@@ -81,14 +114,15 @@ public enum AnchorPhrase {
             .filter { !$0.isEmpty }
     }
 
-    /// A four-digit year, or a two-digit one marked by an apostrophe or following a season or "of".
-    static func findYear(in words: [String]) -> Int? {
+    /// Every year said: four digits, or two digits marked by an apostrophe or after a season or "of".
+    static func findYears(in words: [String]) -> [Int] {
+        var out: [Int] = []
         for (i, w) in words.enumerated() {
-            if w.count == 4, let y = Int(w), yearRange.contains(y) { return y }
-            if w.hasPrefix("'"), let two = Int(w.dropFirst()), (0...99).contains(two) { return expand(two) }
-            if w.count == 2, let two = Int(w), i > 0, seasons[words[i - 1]] != nil || words[i - 1] == "of" { return expand(two) }
+            if w.count == 4, let y = Int(w), yearRange.contains(y) { out.append(y) }
+            else if w.hasPrefix("'"), let two = Int(w.dropFirst()), (0...99).contains(two) { out.append(expand(two)) }
+            else if w.count == 2, let two = Int(w), i > 0, seasons[words[i - 1]] != nil || words[i - 1] == "of" { out.append(expand(two)) }
         }
-        return nil
+        return out
     }
 
     private static func expand(_ two: Int) -> Int { two < 30 ? 2000 + two : 1900 + two }

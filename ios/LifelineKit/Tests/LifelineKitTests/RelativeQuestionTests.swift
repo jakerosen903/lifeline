@@ -57,7 +57,24 @@ private func anchor(_ memory: MemoryRef, _ phrase: String, _ relation: AnchorRel
     let a = anchor(bear, "around then", .during, target: "Mirror Lake", targetID: lake.id)
     let q = try #require(RelativeQuestions.question(for: bear, anchors: [a], placed: [lake], siblings: [], birthDate: nil, config: .default))
     let range = RelativeQuestions.apply(q.choices[0], to: bear)
-    #expect(range.origin == .confirmed && range.evidenceText == "Before (2000)" && range.earliest == q.choices[0].resultingRange.earliest)
+    #expect(range.origin == .confirmed && range.evidenceText == "before Dad fell in at Mirror Lake (2000)" && range.earliest == q.choices[0].resultingRange.earliest)
+}
+
+@Test func confirmedChoiceCarriesTheRelationAsEvidenceAndReadsThatWay() throws {
+    let lake = ref("Dad fell in at Mirror Lake", range: .year(2000, origin: .stated, evidence: "in 2000"))
+    let bear = ref("The bear at the campsite")
+    let a = anchor(bear, "around then", .during, target: "Mirror Lake", targetID: lake.id)
+    let q = try #require(RelativeQuestions.question(for: bear, anchors: [a], placed: [lake], siblings: [], birthDate: nil, config: .default))
+    let before = RelativeQuestions.apply(q.choices[0], to: bear)
+    #expect(before.evidenceText == "before Dad fell in at Mirror Lake (2000)")
+    #expect(before.displayText == "before Dad fell in at Mirror Lake (2000)", "the slack edge is never shown as a fact")
+    let wagon = ref("The green station wagon", range: .year(1998, origin: .stated, evidence: "in 1998"))
+    let band = ref("The bear", range: TimeRange.span(d("1996-01-01"), d("2001-12-31"), granularity: .year, origin: .inferred, evidence: nil))
+    let same = try #require(RelativeQuestions.question(for: band, anchors: [], placed: [wagon], siblings: [wagon], birthDate: nil, config: .default))
+    let yes = RelativeQuestions.apply(same.choices[0], to: band)
+    #expect(yes.displayText == "1998" && yes.evidenceText == "the same year as The green station wagon")
+    let no = RelativeQuestions.apply(same.choices[1], to: band)
+    #expect(no.evidenceText == "not the same year as The green station wagon" && no.displayText == no.evidenceText!)
 }
 
 @Test func confirmedRangeSurvivesATargetChange() throws {

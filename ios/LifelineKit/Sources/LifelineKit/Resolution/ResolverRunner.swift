@@ -69,7 +69,9 @@ public struct ResolverRunner: Sendable {
             try store.memories.updateRange(id, range)
             changes.append(RunReport.Change(memoryID: id, title: memory.title, before: memory.range, after: range))
         }
-        for var anchor in anchors where output.resolvedAnchorIDs.contains(anchor.id) != anchor.resolved {
+        let confirmedMemories = Set(memories.filter(\.range.isConfirmed).map(\.id))
+        for var anchor in anchors where !confirmedMemories.contains(anchor.memoryID) && output.resolvedAnchorIDs.contains(anchor.id) != anchor.resolved {
+            // A confirmed memory keeps its flags: the owner settled it, nothing is open there.
             anchor.resolved = output.resolvedAnchorIDs.contains(anchor.id)
             try store.memories.update(anchor)
         }
@@ -79,6 +81,13 @@ public struct ResolverRunner: Sendable {
                           targetMemoryID: draft.targetMemoryID ?? draft.targetPhrase.flatMap { phrase in memories.first { Resolver.matches($0.title, phrase) }?.id })
         }
         try store.curiosity.replaceOpenAnchorItems(items)
+
+        // Chapters follow their members wherever the members just moved.
+        if !changes.isEmpty {
+            for chapter in chapters {
+                try store.chapters.setRange(chapter.id, ChapterRepository.span(over: try store.memories.memories(inChapter: chapter.id).map(\.range)))
+            }
+        }
 
         changes.sort { $0.title < $1.title }
         return RunReport(placed: changes.count, floatingCreated: floatingCreated, curiosityOpen: try store.curiosity.open().count, changes: changes)

@@ -82,6 +82,48 @@ private struct Env {
     #expect(try env.store.memories.fetch(memory.id)?.range == confirmed)
 }
 
+@Test func repeatedRunsAfterARelativePlacementChangeNothing() throws {
+    let env = try Env(text: "we moved after graduation and graduation was in 2004 and one more thing")
+    let move = try env.accept("The move", anchors: [AnchorOut(phrase: "after graduation", relation: .after, targetText: "graduation", value: nil)], ordinal: 0)
+    try env.accept("Graduation", anchors: [AnchorOut(phrase: "in 2004", relation: .absolute, targetText: nil, value: nil)], ordinal: 1)
+    let placed = try env.store.memories.fetch(move.id)?.range
+    #expect(placed?.latest?.iso == "2009-12-31")
+    try env.accept("One more thing", anchors: [], ordinal: 2)
+    for _ in 0..<3 { _ = try env.runner.run() }
+    #expect(try env.store.memories.fetch(move.id)?.range == placed, "a range never widens on a re-run")
+}
+
+@Test func removingTheBirthdayUnplacesAgeMemories() throws {
+    let env = try Env()
+    try env.birthday("1986-05-10")
+    let memory = try env.accept("The blue door", anchors: [AnchorOut(phrase: "I was six", relation: .age, targetText: nil, value: nil)], ordinal: 0)
+    #expect(try env.store.memories.fetch(memory.id)?.range.isPlaced == true)
+    try env.store.profile.save(Profile(displayName: "Jake", birthDate: nil, birthPlaceText: nil, freeText: nil, updatedAt: .now))
+    _ = try env.runner.run()
+    #expect(try env.store.memories.fetch(memory.id)?.range == .unplaced, "a guess that lost its basis is withdrawn")
+}
+
+@Test func confirmingAMemoryKeepsItsAnchorsResolvedAndAsksNothing() throws {
+    let env = try Env(text: "after graduation I started work and graduation was in 2004")
+    let job = try env.accept("First job", anchors: [AnchorOut(phrase: "after graduation", relation: .after, targetText: "graduation", value: nil)], ordinal: 0)
+    try env.accept("Graduation", anchors: [AnchorOut(phrase: "in 2004", relation: .absolute, targetText: nil, value: nil)], ordinal: 1)
+    #expect(try env.store.memories.anchors(of: job.id).allSatisfy(\.resolved))
+    try env.store.memories.updateRange(job.id, .year(2005, origin: .confirmed, evidence: "after Graduation (2004)"))
+    _ = try env.runner.run()
+    #expect(try env.store.memories.anchors(of: job.id).allSatisfy(\.resolved), "confirming does not un-resolve")
+    #expect(try env.store.curiosity.open().isEmpty, "no question about a story already told")
+}
+
+@Test func chapterRangesFollowPlacedMembers() throws {
+    let env = try Env()
+    let memory = try env.accept("The blue door", anchors: [AnchorOut(phrase: "I was six", relation: .age, targetText: nil, value: nil)], ordinal: 0)
+    let chapter = try env.actions.createChapter(title: "Childhood", containing: memory.id)
+    #expect(try env.store.chapters.chapter(id: chapter.id)?.range == .unplaced)
+    try env.birthday("1986-05-10")
+    _ = try env.runner.run()
+    #expect(try env.store.chapters.chapter(id: chapter.id)?.range.earliest?.iso == "1992-05-10", "the chapter follows its member")
+}
+
 @Test func floatingTargetIsReplacedWhenTheRealMemoryArrives() throws {
     let env = try Env(text: "we moved after graduation and graduation was in 2004")
     let move = try env.accept("The move", anchors: [AnchorOut(phrase: "after graduation", relation: .after, targetText: "graduation", value: nil)], ordinal: 0)

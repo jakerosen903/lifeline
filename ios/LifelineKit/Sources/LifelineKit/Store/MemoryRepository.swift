@@ -38,16 +38,18 @@ public struct MemoryRepository: Sendable {
         try db.writer.read { try Memory.fetchOne($0, key: id.rawValue) }
     }
 
-    /// Memories with a span in this session, in session order (first span's segment, then start).
-    public func memories(in session: SessionID) throws -> [Memory] {
+    /// Memories told in this session, in session order (first span's segment, then start).
+    /// Stand-ins the resolver made borrow a span here but are not told stories; they are left out
+    /// unless asked for.
+    public func memories(in session: SessionID, includingStandIns: Bool = false) throws -> [Memory] {
         try db.writer.read { db in
             try Memory.fetchAll(db, sql: """
                 select memory.* from memory
                 join memory_span on memory_span.memory_id = memory.id and memory_span."order" = 0
                 join segment on segment.id = memory_span.segment_id
-                where segment.session_id = ?
+                where segment.session_id = ? and (? or memory.created_from_candidate_id is not null)
                 order by segment."index", memory_span.start_ms, memory.created_at
-                """, arguments: [session.rawValue])
+                """, arguments: [session.rawValue, includingStandIns])
         }
     }
 

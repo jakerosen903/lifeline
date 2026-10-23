@@ -27,9 +27,13 @@ public struct ResolverInput: Sendable {
     public var birthDate: CivilDate?
     public var chapters: [Chapter]
     public var config: ResolverConfig
+    /// Nothing is placed after today.
+    public var today: CivilDate
 
-    public init(memories: [MemoryRef], anchors: [Anchor], birthDate: CivilDate?, chapters: [Chapter], config: ResolverConfig = .default) {
+    public init(memories: [MemoryRef], anchors: [Anchor], birthDate: CivilDate?, chapters: [Chapter], config: ResolverConfig = .default,
+                today: CivilDate = .today()) {
         self.memories = memories; self.anchors = anchors; self.birthDate = birthDate; self.chapters = chapters; self.config = config
+        self.today = today
     }
 }
 
@@ -57,13 +61,14 @@ public struct ResolverOutput: Sendable, Equatable {
     public var resolvedAnchorIDs: Set<AnchorID>
 }
 
-/// Spec §8, as a pure function. Rules run in order for every memory, and the whole pass repeats
-/// until nothing changes, so a chain places in one call and a cycle ends. The same input always
-/// gives the same output, which is what makes a full re-run equal the incremental runs.
+/// Spec §8, as a pure function of anchors, the birth date, chapter ranges and the ranges the
+/// owner stated or confirmed. Every guess (`inferred`) is recomputed from nothing on each call,
+/// so a stale guess cannot survive its basis and a re-run cannot widen anything. Rules run in order for every memory, and
+/// the pass repeats until nothing changes, so a chain places in one call and a cycle ends.
 public enum Resolver {
     public static func resolve(_ input: ResolverInput) -> ResolverOutput {
-        var ranges: [MemoryID: TimeRange] = Dictionary(uniqueKeysWithValues: input.memories.map { ($0.id, $0.range) })
-        let original = ranges
+        let original: [MemoryID: TimeRange] = Dictionary(uniqueKeysWithValues: input.memories.map { ($0.id, $0.range) })
+        var ranges = original.mapValues { $0.origin == .inferred ? .unplaced : $0 }
         var resolved = Set<AnchorID>()
         let anchorsByMemory = Dictionary(grouping: input.anchors, by: \.memoryID)
 
@@ -87,15 +92,18 @@ public enum Resolver {
             if !changed { break }
         }
 
-        // Rule 4: relative anchors whose target is still not placed.
+        // Rule 4: relative anchors whose target is missing or still unplaced. An anchor whose
+        // target is placed is settled, whether or not it won the memory's range.
         var floating: [FloatingTarget] = []
         var seenPhrases = Set<String>()
         var payoff: [String: (count: Int, memories: Set<MemoryID>, targetID: MemoryID?)] = [:]
-        for anchor in input.anchors where anchor.isRelative && !resolved.contains(anchor.id) {
+        for anchor in input.anchors where anchor.isRelative && !resolved.contains(anchor.id) && !(original[anchor.memoryID]?.isConfirmed ?? false) {
             guard let phrase = anchor.targetText?.trimmingCharacters(in: .whitespacesAndNewlines), !phrase.isEmpty else { continue }
             let key = PeopleRepository.normalize(phrase)
-            let target = findTarget(phrase, in: input)
-            if target == nil, !isChapter(phrase, input), seenPhrases.insert(key).inserted {
+            let target = findTarget(phrase, in: input, excluding: anchor.memoryID)
+            if let target, ranges[target.id]?.isPlaced ?? false { continue }
+            if isChapter(phrase, input) { continue }
+            if target == nil, seenPhrases.insert(key).inserted {
                 floating.append(FloatingTarget(phrase: phrase, anchorID: anchor.id, fromMemory: anchor.memoryID))
             }
             var entry = payoff[key] ?? (0, [], target?.id)
@@ -127,7 +135,8 @@ public enum Resolver {
             guard let birth = input.birthDate, let age = AnchorPhrase.parseAge(anchor.phrase, value: anchor.value) else { return nil }
             return ageRange(age, birth: birth, config: config, evidence: anchor.phrase)
         case .before, .after, .during, .sameYearAs:
-            guard let phrase = anchor.targetText, let target = targetRange(phrase, input: input, ranges: ranges), target.isPlaced else { return nil }
+            guard let phrase = anchor.targetText,
+                  let target = targetRange(phrase, input: input, ranges: ranges, excluding: anchor.memoryID), target.isPlaced else { return nil }
             var out: TimeRange
             switch anchor.relation {
             case .after: out = target.widened(by: config.relativeSlackYears, toward: .later)
@@ -138,8 +147,17 @@ public enum Resolver {
             out.granularity = .year
             out.origin = .inferred
             out.evidenceText = anchor.phrase
-            return out
+            return clamp(out, input: input)
         }
+    }
+
+    /// Nothing after today, nothing before the owner was born.
+    private static func clamp(_ range: TimeRange, input: ResolverInput) -> TimeRange? {
+        var out = range
+        if let latest = out.latest, latest > input.today { out.latest = input.today }
+        if let birth = input.birthDate, let earliest = out.earliest, earliest < birth { out.earliest = birth }
+        guard let lo = out.earliest, let hi = out.latest, lo <= hi else { return nil }
+        return out
     }
 
     static func ageRange(_ age: AgeSpan, birth: CivilDate, config: ResolverConfig, evidence: String) -> TimeRange {
@@ -180,15 +198,18 @@ public enum Resolver {
 
     // MARK: - Targets
 
-    private static func targetRange(_ phrase: String, input: ResolverInput, ranges: [MemoryID: TimeRange]) -> TimeRange? {
-        if let memory = findTarget(phrase, in: input) { return ranges[memory.id] }
+    private static func targetRange(_ phrase: String, input: ResolverInput, ranges: [MemoryID: TimeRange], excluding own: MemoryID) -> TimeRange? {
+        let hits = input.memories.filter { $0.id != own && matches($0.title, phrase) }
+        if let placed = hits.first(where: { ranges[$0.id]?.isPlaced ?? false }) { return ranges[placed.id] }
+        if let any = hits.first { return ranges[any.id] }
         if let chapter = input.chapters.first(where: { matches($0.title ?? "", phrase) }) { return chapter.range }
         return nil
     }
 
-    /// A placed match beats an unplaced one, so a stand-in never shadows the told story.
-    private static func findTarget(_ phrase: String, in input: ResolverInput) -> MemoryRef? {
-        let hits = input.memories.filter { matches($0.title, phrase) || ($0.range.evidenceText.map { matches($0, phrase) } ?? false) }
+    /// Titles only, never a memory's own evidence, never the anchor's own memory. A placed match
+    /// beats an unplaced one, so a stand-in never shadows the told story.
+    private static func findTarget(_ phrase: String, in input: ResolverInput, excluding own: MemoryID) -> MemoryRef? {
+        let hits = input.memories.filter { $0.id != own && matches($0.title, phrase) }
         return hits.first(where: \.range.isPlaced) ?? hits.first
     }
 

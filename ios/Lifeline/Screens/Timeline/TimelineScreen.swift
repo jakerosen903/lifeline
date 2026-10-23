@@ -64,7 +64,7 @@ struct TimelineScreen: View {
                         }
                     }
                     if !viewModel.shelf.isEmpty {
-                        ShelfSection(title: viewModel.chapters.isEmpty ? "Somewhere in your story" : "Somewhere in \(viewModel.chapters.last?.title ?? "your story")",
+                        ShelfSection(title: "Somewhere in your story",
                                      memories: viewModel.shelf, onOpen: { openMemory = $0 },
                                      onNewChapter: { viewModel.newChapter(for: $0.id, title: nil) }, onAddToCollection: { collectionTarget = $0 })
                     }

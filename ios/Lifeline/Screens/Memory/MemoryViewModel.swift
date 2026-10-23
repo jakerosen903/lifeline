@@ -38,7 +38,8 @@ final class MemoryViewModel {
             chapterTitle = try memory.chapterID.flatMap { try store.chapters.chapter(id: $0) }?.title
             span = try store.memories.spans(of: memory.id).first
             session = try span.flatMap { try store.sessions.fetchSegment($0.segmentID) }.flatMap { try store.sessions.fetch($0.sessionID) }
-            if let birth = try store.profile.ownerBirthDate(), let year = memory.range.earliest?.year, isGuess, year - birth.year >= 0 {
+            let placedByAge = try store.memories.anchors(of: memory.id).contains { $0.relation == .age && $0.resolved }
+            if placedByAge, let birth = try store.profile.ownerBirthDate(), let year = memory.range.earliest?.year, isGuess, year - birth.year >= 0 {
                 ageText = "age ~\(year - birth.year)"
             } else {
                 ageText = nil

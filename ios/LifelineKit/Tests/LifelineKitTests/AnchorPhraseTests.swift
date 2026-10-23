@@ -4,7 +4,7 @@ import Testing
 
 private struct Case: Decodable {
     struct Expect: Decodable {
-        let earliest: String?, latest: String?, granularity: String?
+        let earliest: String?, latest: String?, granularity: String?, origin: String?
         let age: Age?
         struct Age: Decodable { let years: [Int]?; let approximate: [Int]?; let grade: Int? }
     }
@@ -32,7 +32,7 @@ private func cases() throws -> [Case] {
             guard let e = row.expect else { #expect(got == nil, Comment(rawValue: row.phrase)); continue }
             #expect(got?.earliest?.iso == e.earliest && got?.latest?.iso == e.latest && got?.granularity?.rawValue == e.granularity,
                     Comment(rawValue: "\(row.phrase): got \(String(describing: got))"))
-            #expect(got?.origin == .stated && got?.evidenceText == row.phrase)
+            #expect(got?.origin.map(\.rawValue) == (e.origin ?? "stated") && got?.evidenceText == row.phrase, Comment(rawValue: row.phrase))
         }
     }
 }

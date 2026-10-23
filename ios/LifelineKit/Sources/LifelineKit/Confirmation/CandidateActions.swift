@@ -164,7 +164,7 @@ public struct CandidateActions: Sendable {
             anchor.resolved = true
             try store.memories.update(anchor)
         }
-        if let item = try store.curiosity.item(forTarget: memory.id) { try store.curiosity.setStatus(item.id, .answered) }
+        // The runner refreshes the open questions from what is still unplaced.
         _ = try ResolverRunner(store: store).run()
     }
 
@@ -219,13 +219,7 @@ public struct CandidateActions: Sendable {
 
     /// A chapter's range is the span of its placed members, origin `derived`; unplaced when none are placed.
     public func chapterRangeFromMembers(_ chapter: ChapterID) throws {
-        let placed = try store.memories.memories(inChapter: chapter).map(\.range).filter(\.isPlaced)
-        guard let earliest = placed.compactMap(\.earliest).min(), let latest = placed.compactMap(\.latest).max() else {
-            try store.chapters.setRange(chapter, .unplaced)
-            return
-        }
-        try store.chapters.setRange(chapter, TimeRange(earliest: earliest, latest: latest, likelyStart: nil, likelyEnd: nil,
-                                                         granularity: .year, origin: .derived, evidenceText: nil))
+        try store.chapters.setRange(chapter, ChapterRepository.span(over: try store.memories.memories(inChapter: chapter).map(\.range)))
     }
 
     // MARK: - Helpers

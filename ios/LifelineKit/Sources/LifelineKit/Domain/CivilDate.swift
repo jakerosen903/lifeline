@@ -20,6 +20,12 @@ public struct CivilDate: Hashable, Comparable, Codable, Sendable, CustomStringCo
         self.init(year: y, month: m, day: d)
     }
 
+    /// Today in the given calendar's time zone.
+    public static func today(calendar: Calendar = .current, now: Date = .now) -> CivilDate {
+        let p = calendar.dateComponents([.year, .month, .day], from: now)
+        return CivilDate(year: p.year ?? 2000, month: p.month ?? 1, day: p.day ?? 1) ?? CivilDate(year: 2000, month: 1, day: 1)!
+    }
+
     public var iso: String { String(format: "%04d-%02d-%02d", year, month, day) }
     public var description: String { iso }
 
