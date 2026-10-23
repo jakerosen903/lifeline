@@ -17,6 +17,15 @@ struct Dependencies {
     let extraction: any ExtractionService
     let extractionStore: ExtractionStore
     let actions: CandidateActions
+    let promptLog: PromptLogRepository
+
+    /// A fresh question for the next session: an open thread first, then the bank without repeats.
+    func opening() -> Opening {
+        let bank = (try? PromptBank.load()) ?? []
+        let curiosity = (try? extractionStore.curiosity.open()) ?? []
+        let used = (try? promptLog.lastUsed()) ?? [:]
+        return OpeningChooser.choose(curiosity: curiosity, bank: bank, lastUsed: used, now: .now)
+    }
 
     func audioURL(for id: SessionID) throws -> URL {
         try AudioLocation.url(for: id, under: audioRoot)
@@ -67,7 +76,8 @@ struct Dependencies {
             secrets: secrets,
             extraction: AnthropicExtractionService(apiKey: { try? secrets.read(.anthropicAPIKey) }),
             extractionStore: store,
-            actions: CandidateActions(store: store))
+            actions: CandidateActions(store: store),
+            promptLog: PromptLogRepository(db))
     }
 
     /// Fresh temp database, scripted voice and extraction, in-memory secrets with a fake key.
@@ -91,6 +101,7 @@ struct Dependencies {
             secrets: InMemorySecretStore([.anthropicAPIKey: "sk-ant-api03-" + String(repeating: "x", count: 40)]),
             extraction: ScriptedExtractionService(delayMs: 200),
             extractionStore: store,
-            actions: CandidateActions(store: store))
+            actions: CandidateActions(store: store),
+            promptLog: PromptLogRepository(db))
     }
 }

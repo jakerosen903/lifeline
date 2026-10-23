@@ -7,8 +7,6 @@ struct SessionScreen: View {
     let viewModel: SessionViewModel
     let onEnded: () -> Void
 
-    private static let prompt = "Tell me about the house you grew up in."
-    private static let alternates = ["A meal you can still taste.", "A teacher you remember.", "The first place that felt like yours."]
 
     var body: some View {
         VStack(spacing: 0) {
@@ -80,13 +78,33 @@ struct SessionScreen: View {
     private func promptCard(compact: Bool) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             if compact {
-                Text(Self.prompt)
+                Text(viewModel.prompt)
                     .font(.system(.headline, design: .serif))
                     .foregroundStyle(Theme.stone)
                     .accessibilityIdentifier("session.prompt")
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 6) {
+                        ForEach(Array(viewModel.alternates.enumerated()), id: \.offset) { index, text in
+                            Button { viewModel.swapIn(alternate: index) } label: {
+                                Text(text).font(.caption).lineLimit(1)
+                                    .padding(.horizontal, 10).padding(.vertical, 5)
+                                    .background(Capsule().fill(Theme.sand))
+                                    .foregroundStyle(Theme.ink)
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityIdentifier("session.alternate")
+                        }
+                    }
+                }
             } else {
-                Text(Self.prompt).titleStyle().accessibilityIdentifier("session.prompt")
-                ForEach(Self.alternates, id: \.self) { Text($0).font(.footnote).foregroundStyle(Theme.stone) }
+                Text(viewModel.prompt).titleStyle().accessibilityIdentifier("session.prompt")
+                ForEach(Array(viewModel.alternates.enumerated()), id: \.offset) { index, text in
+                    Button { viewModel.swapIn(alternate: index) } label: {
+                        Text(text).font(.footnote).foregroundStyle(Theme.stone).multilineTextAlignment(.leading)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("session.alternate")
+                }
             }
         }
         .animation(.default, value: compact)

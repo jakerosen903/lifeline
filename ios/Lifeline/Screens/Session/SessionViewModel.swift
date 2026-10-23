@@ -12,6 +12,7 @@ final class SessionViewModel: Identifiable {
     private(set) var stopError: String?
     private(set) var cardQueue = CardQueue()
     private(set) var extractionStatus: String?
+    private(set) var opening: Opening
     let cards: CardHandler
 
     private let deps: Dependencies
@@ -23,6 +24,19 @@ final class SessionViewModel: Identifiable {
     init(deps: Dependencies) {
         self.deps = deps
         cards = CardHandler(deps: deps)
+        opening = deps.opening()
+    }
+
+    var prompt: String { opening.main.text }
+    var alternates: [String] { opening.alternates.map(\.text) }
+
+    /// Tapping an alternate makes it the question; the old main becomes an alternate.
+    func swapIn(alternate index: Int) {
+        guard opening.alternates.indices.contains(index) else { return }
+        let chosen = opening.alternates.remove(at: index)
+        opening.alternates.insert(opening.main, at: index)
+        opening.main = chosen
+        if let id = state.sessionID { try? deps.promptLog.record(promptID: chosen.logID, session: id) }
     }
 
     var startedAt: Date { state.startedAt ?? .now }
@@ -58,6 +72,7 @@ final class SessionViewModel: Identifiable {
         }
         do {
             try await recorder.start(id: sessionID)
+            try? deps.promptLog.record(promptID: opening.main.logID, session: sessionID)
         } catch {
             startError = "Could not start recording: \(error.localizedDescription)"
             observation?.cancel()
