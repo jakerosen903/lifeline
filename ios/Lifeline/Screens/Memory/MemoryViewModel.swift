@@ -130,6 +130,13 @@ final class MemoryViewModel {
         catch { self.error = "Could not save that: \(error.localizedDescription)" }
     }
 
+    /// "Separate this telling": a later telling becomes its own memory again (M5).
+    func separate(order: Int) {
+        stop()
+        do { _ = try deps.actions.separateTelling(memory.id, order: order); error = nil; refresh() }
+        catch { self.error = "Could not separate that: \(error.localizedDescription)" }
+    }
+
     /// "Tell me when": the person's own date, stored as said.
     func setStated(_ range: TimeRange) {
         do { try deps.actions.setStatedRange(memory.id, range); error = nil; refresh() }

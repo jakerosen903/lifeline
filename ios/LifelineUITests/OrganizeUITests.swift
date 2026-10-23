@@ -172,4 +172,54 @@ final class OrganizeUITests: XCTestCase {
         XCTAssertEqual(memoryRows(app, containing: "Maya climbed it").count, 1)
         XCTAssertFalse(app.descendants(matching: .any).matching(identifier: "timeline.story").firstMatch.exists, "no story row: the person opted out")
     }
+
+    // MARK: - Task 10: story rows and Separate this telling
+
+    @MainActor
+    func testStoryRowGroupsAndExpandsAndRenames() {
+        let app = launchToTimeline()
+        record(app, keep: 2)   // the blue door and Maya climbed it, both in the story the extractor proposed
+        let story = app.buttons["timeline.story"].firstMatch
+        XCTAssertTrue(app.reveal(story), "the two moments sit under one story row")
+        XCTAssertTrue(story.label.contains("+ 1 more"), story.label)
+        XCTAssertEqual(memoryRows(app, containing: "Maya climbed it").count, 0, "members are folded until the row is opened")
+        var tries = 0
+        while tries < 4 && story.frame.maxY > app.buttons["home.start"].frame.minY - 8 { app.swipeUp(); tries += 1 }
+        story.tap()
+        XCTAssertTrue(memoryRows(app, containing: "Maya climbed it").firstMatch.waitForExistence(timeout: 3))
+        XCTAssertEqual(memoryRows(app, containing: "The blue door").count, 1)
+        app.buttons["story.more"].firstMatch.tap()
+        XCTAssertTrue(app.buttons["story.rename"].waitForExistence(timeout: 3))
+        app.buttons["story.rename"].tap()
+        let field = app.textFields.firstMatch
+        XCTAssertTrue(field.waitForExistence(timeout: 5))
+        field.typeText("Summer of the door")
+        app.buttons["Rename"].firstMatch.tap()
+        let renamed = app.buttons.matching(identifier: "timeline.story").matching(NSPredicate(format: "label CONTAINS %@", "Summer of the door")).firstMatch
+        XCTAssertTrue(renamed.waitForExistence(timeout: 5), "the row carries the person's title")
+    }
+
+    @MainActor
+    func testSeparateThisTelling() {
+        let app = launchToTimeline()
+        record(app, keep: 1)   // the blue door, first telling
+        app.startSession()
+        XCTAssertTrue(app.buttons["card.sameStory"].waitForExistence(timeout: 15))
+        app.buttons["card.sameStory"].tap()
+        XCTAssertTrue(app.staticTexts["card.mergedNotice"].waitForExistence(timeout: 3))
+        app.finishSession()
+        XCTAssertTrue(app.reveal(memoryRows(app, containing: "The blue door").firstMatch))
+        XCTAssertEqual(memoryRows(app, containing: "The blue door").count, 1)
+        open(app, row: "The blue door")
+        XCTAssertTrue(app.buttons["memory.play"].firstMatch.waitForExistence(timeout: 5))
+        XCTAssertEqual(app.otherElements.matching(identifier: "memory.span").count, 2)
+        app.buttons["telling.more"].firstMatch.tap()
+        XCTAssertTrue(app.buttons["telling.separate"].waitForExistence(timeout: 3))
+        app.buttons["telling.separate"].tap()
+        XCTAssertTrue(app.buttons["memory.play"].firstMatch.waitForExistence(timeout: 5))
+        XCTAssertEqual(app.otherElements.matching(identifier: "memory.span").count, 1, "the telling left this memory")
+        app.navigationBars.buttons.firstMatch.tap()
+        XCTAssertTrue(app.reveal(memoryRows(app, containing: "The blue door").firstMatch))
+        XCTAssertEqual(memoryRows(app, containing: "The blue door").count, 2, "the separated telling is its own memory again")
+    }
 }
