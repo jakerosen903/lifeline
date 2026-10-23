@@ -52,6 +52,10 @@ struct HomeScreen: View {
                 SessionDetailScreen(viewModel: SessionDetailViewModel(session: session, deps: viewModel.deps))
             }
             .toolbar {
+                NavigationLink { PeopleScreen(viewModel: PeopleViewModel(deps: viewModel.deps)) } label: {
+                    Image(systemName: "person.2")
+                }
+                .accessibilityIdentifier("home.people")
                 Button { showSettings = true } label: { Image(systemName: "gearshape") }
                     .accessibilityIdentifier("home.settings")
             }

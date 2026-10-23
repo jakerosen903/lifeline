@@ -18,7 +18,9 @@ private func waitUntil(_ cond: @escaping () async -> Bool, timeoutMs: Int = 2_00
 @Test func startInsertsOpenSessionBeforeVoiceStarts() async throws {
     let db = try AppDatabase.inMemory(); let repo = SessionRepository(db); let voice = FakeVoiceSession()
     let rec = makeRecorder(voice: voice, repo: repo)
-    let id = try await rec.start()
+    let chosen = SessionID()
+    let id = try await rec.start(id: chosen)
+    #expect(id == chosen, "the caller's id is the session's id")
     let row = try #require(try repo.fetch(id))
     #expect(row.endedAt == nil && row.startedAt == Date(timeIntervalSince1970: 1_000))
     #expect(row.audioPath == "\(id.rawValue).m4a")
@@ -125,4 +127,31 @@ private func waitUntil(_ cond: @escaping () async -> Bool, timeoutMs: Int = 2_00
     #expect(try SessionRecorder.recoverUnfinishedSessions(repo) == 1)
     #expect(try repo.unfinishedSessions().isEmpty)
     #expect(try SessionRecorder.recoverUnfinishedSessions(repo) == 0)
+}
+
+@Test func storedSegmentsReachTheHookInOrder() async throws {
+    let db = try AppDatabase.inMemory(); let repo = SessionRepository(db); let voice = FakeVoiceSession()
+    let seen = LogCollector()
+    let rec = SessionRecorder(voice: voice, sessions: repo, audioURL: { URL(fileURLWithPath: "/tmp/\($0.rawValue).m4a") },
+                              hooks: .init(onSegmentStored: { seen.append($0.rawValue) }))
+    let id = try await rec.start()
+    await voice.emit(.segmentClosed(SegmentTranscript(range: MsRange(start: 0, end: 4_000), text: "one", words: [w("one", 0, 300)])))
+    await voice.emit(.segmentClosed(SegmentTranscript(range: MsRange(start: 5_000, end: 9_000), text: "", words: [])))
+    await voice.emit(.segmentClosed(SegmentTranscript(range: MsRange(start: 10_000, end: 14_000), text: "two", words: [w("two", 10_000, 10_300)])))
+    await waitUntil { await rec.state.segments.count == 2 }
+    let stored = try repo.segments(in: id).map(\.id.rawValue)
+    #expect(seen.all == stored, "the hook sees exactly the stored segments, in order; the empty one never reaches it")
+}
+
+@Test func stopAwaitsTheStopHookBeforeEnding() async throws {
+    let db = try AppDatabase.inMemory(); let repo = SessionRepository(db); let voice = FakeVoiceSession()
+    let order = LogCollector()
+    let rec = SessionRecorder(voice: voice, sessions: repo, audioURL: { URL(fileURLWithPath: "/tmp/\($0.rawValue).m4a") },
+                              now: { Date(timeIntervalSince1970: 1_000) },
+                              hooks: .init(onStop: { try? await Task.sleep(for: .milliseconds(100)); order.append("hook") }))
+    let id = try await rec.start()
+    try await rec.stop()
+    order.append("ended")
+    #expect(order.all == ["hook", "ended"])
+    #expect(try repo.fetch(id)?.endedAt != nil)
 }

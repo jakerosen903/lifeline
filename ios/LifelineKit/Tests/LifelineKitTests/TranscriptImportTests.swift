@@ -29,12 +29,12 @@ private func fixtureURL() throws -> URL {
     #expect(try repo.listSessions().isEmpty)
 }
 
-@Test func cliRunsImportAndSessions() throws {
+@Test func cliRunsImportAndSessions() async throws {
     let db = FileManager.default.temporaryDirectory.appending(path: "\(UUID().uuidString).sqlite")
-    let imported = try CLI.run(["import", try fixtureURL().path(), "--db", db.path()])
+    let imported = try await CLI.run(["import", try fixtureURL().path(), "--db", db.path()])
     #expect(imported.exitCode == 0 && imported.output.count == 37)   // a UUID and a newline
-    let listed = try CLI.run(["sessions", "--db", db.path()])
+    let listed = try await CLI.run(["sessions", "--db", db.path()])
     #expect(listed.exitCode == 0 && listed.output.contains("3 segments"))
-    #expect(try CLI.run(["bogus"]).exitCode == 2)
-    #expect(try CLI.run(["sessions"]).exitCode == 2)   // --db is required
+    #expect(try await CLI.run(["bogus"]).exitCode == 2)
+    #expect(try await CLI.run(["sessions"]).exitCode == 2)   // --db is required
 }

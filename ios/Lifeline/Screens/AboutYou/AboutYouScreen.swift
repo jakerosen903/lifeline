@@ -2,10 +2,23 @@ import SwiftUI
 
 /// Onboard1. Every field is optional; Skip saves an empty profile.
 struct AboutYouScreen: View {
-    @Bindable var viewModel: AboutYouViewModel
+    let viewModel: AboutYouViewModel
 
     var body: some View {
         Form {
+            AboutYouFields(viewModel: viewModel)
+        }
+        .scrollContentBackground(.hidden)
+        .linenBackground()
+    }
+}
+
+/// The fields themselves, so Settings can place them inside its own Form.
+struct AboutYouFields: View {
+    @Bindable var viewModel: AboutYouViewModel
+
+    var body: some View {
+        Group {
             Section {
                 Text("About you").titleStyle()
                 Text("Everything here is optional. You can change it in Settings.")
@@ -49,7 +62,5 @@ struct AboutYouScreen: View {
             }
             .listRowBackground(Color.clear)
         }
-        .scrollContentBackground(.hidden)
-        .linenBackground()
     }
 }
