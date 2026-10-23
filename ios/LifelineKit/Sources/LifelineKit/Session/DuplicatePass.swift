@@ -12,6 +12,7 @@ public actor DuplicatePass {
     private let log: @Sendable (String) -> Void
     private var scheduled: Task<Void, Never>?
     private var running = false
+    private var onFinished: (@Sendable (Int) -> Void)?
 
     public static let debounce: Duration = .seconds(2)
 
@@ -20,16 +21,26 @@ public actor DuplicatePass {
         self.store = store; self.matcher = matcher; self.reconcile = reconcile; self.actions = actions; self.config = config; self.log = log
     }
 
+    /// Called after every run with how many pairs it wrote, so a screen can show new cards.
+    public func setOnFinished(_ handler: @escaping @Sendable (Int) -> Void) { onFinished = handler }
+
     /// One pass: up to `pairBatch` new pairs judged and written. Returns how many were judged.
     /// A missing key ends the pass quietly; any other failure is logged and leaves nothing behind.
     @discardableResult
     public func run() async -> Int {
         guard !running else { return 0 }
         running = true
-        defer { running = false }
+        let written = await judgeOnce()
+        running = false
+        onFinished?(written)
+        return written
+    }
+
+    private func judgeOnce() async -> Int {
         let found: [PairFinder.Candidate]
         do { found = Array(try PairFinder(store: store, matcher: matcher, config: config).candidates().prefix(config.pairBatch)) }
         catch { log("[duplicates] store error: \(error)"); return 0 }
+        log("[duplicates] \(found.count) pair(s) to judge")
         guard !found.isEmpty else { return 0 }
         let requests = found.map { pair in
             PairRequest(id: PairKey(pair.a.id, pair.b.id).low.rawValue + "|" + PairKey(pair.a.id, pair.b.id).high.rawValue,

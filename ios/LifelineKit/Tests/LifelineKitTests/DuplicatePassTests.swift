@@ -12,7 +12,10 @@ import Testing
     try env.indexAll(matcher)
     let log = LogCollector()
     let pass = DuplicatePass(store: env.store, matcher: matcher, reconcile: ScriptedReconcileService(), actions: CandidateActions(store: env.store), log: { log.append($0) })
+    let finished = LogCollector()
+    await pass.setOnFinished { finished.append("\($0)") }
     let judged = await pass.run()
+    #expect(finished.all == ["\(judged)"], "the screen hears about the new pairs")
     let rows = try env.store.pairs.pairs(touching: door1.id) + env.store.pairs.pairs(touching: door2.id) + env.store.pairs.pairs(touching: canal.id)
     let unique = Dictionary(grouping: rows, by: \.id).values.compactMap(\.first)
     #expect(judged == unique.count && judged > 0)
@@ -36,4 +39,27 @@ import Testing
     let pass = DuplicatePass(store: env.store, matcher: matcher, reconcile: noKey, actions: CandidateActions(store: env.store), log: { _ in })
     #expect(await pass.run() == 0)
     #expect(try env.store.pairs.open(limit: 10).isEmpty && (try env.store.pairs.known()).isEmpty)
+}
+
+/// The UI-test wiring end to end: word-overlap vectors, two cards kept with the same words,
+/// the scripted reconciler, one open pair.
+@Test func duplicatePassFindsTwoKeptBlueDoorsUnderTheHashingEmbedder() async throws {
+    let store = ExtractionStore(try AppDatabase.inMemory())
+    let matcher = MemoryMatcher(store: store, embedder: HashingEmbedder())
+    let actions = CandidateActions(store: store, matcher: matcher)
+    for _ in 0..<2 {
+        let text = "the house had a blue door when I was six before Maya climbed it"
+        let (_, segs) = try StoreFixtures.session(in: store.sessions, segments: [text])
+        let out = MemoryOut(ref: "m1", kind: .event, title: "The blue door", quote: text, segmentSpan: WordSpan(startWord: 0, endWord: 13), peopleRefs: [], placeText: nil,
+                            anchors: [], storyRef: UUID().uuidString, collectionHint: nil, chapterHint: nil, confidence: 0.9)
+        let c = StoreFixtures.candidate(segs[0].id, payload: try CandidatePayload.encode(out))
+        try store.candidates.insert(c)
+        _ = try actions.acceptMemory(c)
+    }
+    let log = LogCollector()
+    let pass = DuplicatePass(store: store, matcher: matcher, reconcile: ScriptedReconcileService(), actions: actions, log: { log.append($0) })
+    let judged = await pass.run()
+    #expect(judged == 1, "\(log.all)")
+    let open = try store.pairs.open(limit: 3)
+    #expect(open.count == 1 && open.first?.verdict == .sameMoment)
 }

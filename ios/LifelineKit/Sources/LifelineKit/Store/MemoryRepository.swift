@@ -311,6 +311,7 @@ public struct MemoryRepository: Sendable {
                 try db.execute(sql: "update memory set chapter_id = (select chapter_id from memory where id = ?) where id = ?", arguments: [source.id.rawValue, target.id.rawValue])
             }
             _ = try Memory.deleteOne(db, key: source.id.rawValue)
+            try db.execute(sql: Self.deleteEmptyStoriesSQL)
         }
     }
 

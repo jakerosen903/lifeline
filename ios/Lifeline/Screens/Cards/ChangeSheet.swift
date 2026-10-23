@@ -139,7 +139,7 @@ struct ChangeSheet: View {
         .sheet(isPresented: $pickingSameAs) {
             SameAsPicker(matches: viewModel.pickerMatches(), title: "Same as which memory?") { chosen in
                 pickingSameAs = false
-                if let chosen { viewModel.merge(into: chosen) }
+                if let target = chosen.first { viewModel.merge(into: target) }
             }
         }
     }

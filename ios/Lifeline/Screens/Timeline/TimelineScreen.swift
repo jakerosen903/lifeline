@@ -36,15 +36,18 @@ struct TimelineScreen: View {
                             .listRowBackground(Color.clear)
                             .accessibilityIdentifier("timeline.summary")
                     }
-                    if !viewModel.waiting.isEmpty {
-                        Section("Waiting for you") {
+                    if !viewModel.waiting.isEmpty || !viewModel.pairs.isEmpty {
+                        Section {
                             CardStack(cards: viewModel.waiting, handler: viewModel.cards,
                                       onAccept: { viewModel.accept($0) }, onChange: { viewModel.change($0) }, onDismiss: { viewModel.dismiss($0) },
                                       onResolve: { viewModel.resolve($0, $1) }, onUndo: { viewModel.undo() },
-                              onSameStory: { viewModel.sameStory($0, into: $1) }, onUndoMerge: { viewModel.undoMerge() })
+                                      onSameStory: { viewModel.sameStory($0, into: $1) }, onUndoMerge: { viewModel.undoMerge() },
+                                      pairs: viewModel.pairs, onPair: { viewModel.answerPair($0, same: $1) }, onUndoPair: { viewModel.undoPair() })
                                 .listRowBackground(Color.clear)
                                 .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
-                                .accessibilityIdentifier("timeline.waiting")
+                        } header: {
+                            // The List lays the stack out as rows; an identifier on the stack would replace every card's own.
+                            Text("Waiting for you").accessibilityIdentifier("timeline.waiting")
                         }
                     }
                     ForEach(viewModel.chapters) { chapter in
@@ -89,7 +92,7 @@ struct TimelineScreen: View {
                             .listRowBackground(Color.clear)
                     }
                     if let error = viewModel.error ?? viewModel.cards.error ?? viewModel.home.error {
-                        Text(error).foregroundStyle(.red)
+                        Text(error).foregroundStyle(.red).accessibilityIdentifier("timeline.error")
                     }
                     Color.clear.frame(height: 120).listRowBackground(Color.clear)
                 }

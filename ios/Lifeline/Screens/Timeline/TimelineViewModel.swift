@@ -46,6 +46,8 @@ struct ChapterRow: Identifiable, Equatable {
 @Observable
 final class TimelineViewModel {
     private(set) var waiting: [Card] = []
+    /// "Are these the same?": up to a few open pairs; a pair whose memory is gone is dropped (M5).
+    private(set) var pairs: [PairRow] = []
     private(set) var chapters: [ChapterRow] = []
     private(set) var collections: [CollectionRow] = []
     private(set) var unchaptered: [MemoryRow] = []
@@ -69,6 +71,13 @@ final class TimelineViewModel {
         home = HomeViewModel(deps: deps)
         cards = CardHandler(deps: deps)
         refresh()
+        // New pairs from the pass become cards without a relaunch.
+        Task { [weak self] in
+            await deps.duplicates.setOnFinished { written in
+                guard written > 0 else { return }
+                Task { @MainActor in self?.refresh() }
+            }
+        }
     }
 
     var memoryCount: Int { chapters.reduce(0) { $0 + $1.memories.count } + collections.reduce(0) { $0 + $1.members.count } + unchaptered.count + shelf.count }
@@ -100,6 +109,7 @@ final class TimelineViewModel {
             axis = years.isEmpty ? nil : (years.min()! ... max(years.max()!, Calendar.current.component(.year, from: .now)))
 
             waiting = try waitingCards()
+            pairs = try openPairs()
             (question, questionRow) = try firstQuestion(rows: rows, birth: birth)
             summary = Self.summaryText(memories: all.count, chapters: chapters.count, firstYear: years.min())
             error = nil
@@ -156,6 +166,22 @@ final class TimelineViewModel {
             .filter { seen.insert(PeopleRepository.normalize($0.text)).inserted }
             .map(Card.init)
         return cards
+    }
+
+    /// The open pairs, oldest first, as far as both memories still exist and are shown.
+    private func openPairs() throws -> [PairRow] {
+        let store = deps.extractionStore
+        return try store.pairs.open(limit: PairConfig.default.shownAtOnce * 2).compactMap { pair in
+            guard let a = try store.memories.fetch(pair.aMemoryID), let b = try store.memories.fetch(pair.bMemoryID),
+                  showHidden || (!a.hiddenFromTimeline && !b.hiddenFromTimeline) else { return nil }
+            return PairRow(pair: pair, a: a, b: b, aRecordedAt: try firstTold(a.id), bRecordedAt: try firstTold(b.id))
+        }.prefix(PairConfig.default.shownAtOnce).map { $0 }
+    }
+
+    private func firstTold(_ memory: MemoryID) throws -> Date? {
+        let store = deps.extractionStore
+        guard let span = try store.memories.spans(of: memory).first, let segment = try store.sessions.fetchSegment(span.segmentID) else { return nil }
+        return try store.sessions.fetch(segment.sessionID)?.startedAt
     }
 
     // MARK: - The question
@@ -222,7 +248,15 @@ final class TimelineViewModel {
     func dismiss(_ card: Card) { if cards.dismiss(card) { refresh() } }
     func undo() { if cards.undo() != nil { refresh() } }
     func undoMerge() { if cards.undoMerge() != nil { refresh() } }
-    func sameStory(_ card: Card, into target: MemoryID) { if cards.sameStory(card, into: target) { refresh() } }
+    func sameStory(_ card: Card, into targets: [MemoryID]) { if cards.sameStory(card, into: targets) { refresh() } }
+
+    /// A pair answered: Same story / One story (true) or Keep separate (false).
+    func answerPair(_ row: PairRow, same: Bool) {
+        let done = same ? (row.pair.verdict == .sameStory ? cards.groupPair(row.pair) : cards.samePair(row.pair)) : cards.separatePair(row.pair)
+        if done { refresh() }
+    }
+
+    func undoPair() { if cards.undoPair() { refresh() } }
 
     // MARK: - The "…" menu on a row (every long-press has a visible alternative)
 
