@@ -113,6 +113,15 @@ public struct MemoryMatcher: Sendable {
         return try newest.prefix(config.pickerCount).map { try match($0, score: 0, source: .embedding) }
     }
 
+    /// True when the embedder's scores mean something on their own (M4.1 device finding).
+    public var isCalibrated: Bool { embedder?.suggestsOnItsOwn == true }
+
+    /// Every memory with a vector under the current model, for the duplicate pass (M5).
+    public func embedded() throws -> [(memory: Memory, vector: [Float])] {
+        guard let embedder else { return [] }
+        return try store.embeddings.memoriesWithVectors(model: embedder.model)
+    }
+
     // MARK: - Helpers
 
     private func eligible(_ memory: Memory, includeHidden: Bool) -> Bool {

@@ -6,6 +6,7 @@ import Testing
 struct FakeEmbedder: SentenceEmbedder {
     let model = "fake"
     var table: [String: [Float]]
+    var suggestsOnItsOwn = true
     func vector(for text: String) -> [Float]? { table[text] }
 }
 
