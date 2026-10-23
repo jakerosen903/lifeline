@@ -33,7 +33,7 @@ final class SessionDetailViewModel {
             segments = try deps.sessions.segments(in: session.id)
             memories = try deps.extractionStore.memories.memories(in: session.id).map { memory in
                 MemoryRow(memory: memory,
-                          kind: (try? deps.extractionStore.candidates.fetch(memory.createdFromCandidateID)).flatMap { CandidatePayload.memory($0) }?.kindOrDefault ?? .other,
+                          kind: memory.createdFromCandidateID.flatMap { try? deps.extractionStore.candidates.fetch($0) }.flatMap { CandidatePayload.memory($0) }?.kindOrDefault ?? .other,
                           people: try deps.extractionStore.memories.people(of: memory.id).map(\.displayName),
                           anchors: try deps.extractionStore.memories.anchors(of: memory.id).map(\.phrase))
             }

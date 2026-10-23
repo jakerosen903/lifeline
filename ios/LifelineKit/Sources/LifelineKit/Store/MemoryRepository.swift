@@ -88,6 +88,40 @@ public struct MemoryRepository: Sendable {
         }
     }
 
+    public func updateRange(_ id: MemoryID, _ range: TimeRange) throws {
+        try db.writer.write { db in
+            guard var memory = try Memory.fetchOne(db, key: id.rawValue) else { return }
+            memory.range = range
+            try memory.update(db)
+        }
+    }
+
+    public func allMemories() throws -> [Memory] {
+        try db.writer.read { try Memory.order(Column("created_at")).fetchAll($0) }
+    }
+
+    public func memories(inChapter chapter: ChapterID) throws -> [Memory] {
+        try db.writer.read { try Memory.filter(Column("chapter_id") == chapter.rawValue).order(Column("created_at")).fetchAll($0) }
+    }
+
+    /// Memories with no range at all.
+    public func unplacedMemories() throws -> [Memory] {
+        try db.writer.read {
+            try Memory.filter(Column("earliest") == nil && Column("latest") == nil && Column("likely_start") == nil && Column("likely_end") == nil)
+                .order(Column("created_at")).fetchAll($0)
+        }
+    }
+
+    /// A memory the resolver creates to stand for a target the owner named but has not told
+    /// yet. It has no candidate; its span is the span of the memory that named it.
+    public func insertFloating(title: String, segment: SegmentID, startMs: Milliseconds, endMs: Milliseconds) throws -> Memory {
+        let memory = Memory(id: .init(), title: title, summaryQuote: title, visibility: .timeline, chapterID: nil,
+                            createdFromCandidateID: nil, createdAt: .now)
+        try insert(memory, spans: [MemorySpan(memoryID: memory.id, segmentID: segment, startMs: startMs, endMs: endMs, order: 0)],
+                   people: [], places: [], anchors: [])
+        return memory
+    }
+
     /// Links a person to a memory; a second link to the same person is a no-op.
     public func link(_ person: PersonID, to memory: MemoryID, roleText: String?) throws {
         try db.writer.write { db in

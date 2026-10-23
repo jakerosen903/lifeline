@@ -35,7 +35,7 @@ private struct Env {
     let spans = try env.store.memories.spans(of: accepted.memory.id)
     #expect(spans.count == 1 && spans[0].startMs == env.words[1].startMs && spans[0].endMs == env.words[3].endMs && spans[0].order == 0)
     #expect(accepted.memory.summaryQuote == "garden had a" && accepted.memory.title == "The pomegranate tree" && accepted.memory.isUnplaced)
-    #expect(try env.store.candidates.fetch(accepted.memory.createdFromCandidateID)?.status == .accepted)
+    #expect(try env.store.candidates.fetch(try #require(accepted.memory.createdFromCandidateID))?.status == .accepted)
 }
 
 @Test func peopleRefMatchingAnAliasLinksWithoutAMention() throws {

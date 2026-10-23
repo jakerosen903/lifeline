@@ -37,8 +37,7 @@ public struct CandidateActions: Sendable {
               out.segmentSpan.startWord <= out.segmentSpan.endWord else { throw Error.emptySpan }
 
         let memory = Memory(id: .init(), title: out.title, summaryQuote: out.quote, visibility: .timeline, chapterID: nil,
-                            createdFromCandidateID: candidate.id, createdAt: .now, earliest: nil, latest: nil, likelyStart: nil,
-                            likelyEnd: nil, granularity: nil, origin: nil, evidenceText: nil)
+                            createdFromCandidateID: candidate.id, createdAt: .now)
         let span = MemorySpan(memoryID: memory.id, segmentID: candidate.segmentID,
                               startMs: words[out.segmentSpan.startWord].startMs, endMs: words[out.segmentSpan.endWord].endMs, order: 0)
 
@@ -159,7 +158,8 @@ public struct CandidateActions: Sendable {
 
     /// True when the memory's candidate named this person.
     private func names(_ memory: Memory, _ text: String) throws -> Bool {
-        guard let candidate = try store.candidates.fetch(memory.createdFromCandidateID), let out = CandidatePayload.memory(candidate) else { return false }
+        guard let candidateID = memory.createdFromCandidateID, let candidate = try store.candidates.fetch(candidateID),
+              let out = CandidatePayload.memory(candidate) else { return false }
         return out.peopleRefs.contains { Self.same($0, text) }
     }
 
