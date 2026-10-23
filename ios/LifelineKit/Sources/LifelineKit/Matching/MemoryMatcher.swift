@@ -86,14 +86,24 @@ public struct MemoryMatcher: Sendable {
     /// What the card says. The extractor's answer first, then vectors above `suggestMin`.
     /// Never a hidden or excluded memory, never one that no longer exists.
     public func suggestion(for card: MemoryOut, extractorSameAs: MemoryID?) throws -> MemoryMatch? {
-        if let extractorSameAs, let memory = try store.memories.fetch(extractorSameAs), eligible(memory, includeHidden: false) {
-            return try match(memory, score: 1, source: .extractor)
+        try suggestions(for: card, extractorSameAs: extractorSameAs.map { [$0] } ?? []).first
+    }
+
+    /// Every memory the extractor named that exists and may be shown, in packet order, then a
+    /// calibrated vector match not already listed (M5 groups: "Same as X and n more?").
+    public func suggestions(for card: MemoryOut, extractorSameAs: [MemoryID]) throws -> [MemoryMatch] {
+        var out: [MemoryMatch] = []
+        for id in extractorSameAs where !out.contains(where: { $0.memoryID == id }) {
+            guard let memory = try store.memories.fetch(id), eligible(memory, includeHidden: false) else { continue }
+            out.append(try match(memory, score: 1, source: .extractor))
         }
         let text = Self.text(title: card.title, quote: card.quote)
-        guard embedder?.suggestsOnItsOwn == true,
-              let best = try scored(text, excluding: []).first(where: { eligible($0.memory, includeHidden: false) }),
-              best.score >= config.suggestMin else { return nil }
-        return try match(best.memory, score: best.score, source: .embedding)
+        if embedder?.suggestsOnItsOwn == true,
+           let best = try scored(text, excluding: Set(out.map(\.memoryID))).first(where: { eligible($0.memory, includeHidden: false) }),
+           best.score >= config.suggestMin {
+            out.append(try match(best.memory, score: best.score, source: .embedding))
+        }
+        return out
     }
 
     /// Whether a match is strong enough to merge without asking "Which one?".

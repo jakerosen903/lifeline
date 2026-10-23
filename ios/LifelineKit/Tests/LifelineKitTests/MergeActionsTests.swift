@@ -275,3 +275,40 @@ private struct Env {
     let range = try #require(try env.store.memories.fetch(target.id)?.range)
     #expect(range.earliest?.year == 1997 && range.displayText == "1997", "the person's own date stands over the card's anchor")
 }
+
+// MARK: - M5 groups
+
+@Test func mergeGroupFoldsOldestFirstWithOneReceipt() throws {
+    let env = try Env()
+    let (_, first) = try env.kept("we lived in an orange house", title: "Orange house")
+    let (_, second) = try env.kept("the orange house had a canal", title: "Orange house canal", collection: "Home")
+    let (_, third) = try env.kept("that orange house again", title: "Orange house again")
+    let (_, segment, c) = try env.card("grew up in an orange house with Maya", title: "Grew up in an orange house", people: ["Maya"])
+    let result = try env.actions.mergeGroup(c, into: [third.id, first.id, second.id])
+    #expect(result.receipt.target == first.id && result.receipt.before.count == 3)
+    #expect(result.receipt.before.map(\.memory.id) == [first.id, second.id, third.id], "the oldest's snapshot first, then each folded memory in telling order")
+    #expect(try env.store.memories.fetch(second.id) == nil && (try env.store.memories.fetch(third.id)) == nil)
+    let spans = try env.store.memories.spans(of: first.id)
+    #expect(spans.count == 4 && spans.map(\.order) == [0, 1, 2, 3] && spans[3].segmentID == segment.id)
+    #expect(spans[1].titleText == "Orange house canal" && spans[2].titleText == "Orange house again" && spans[3].titleText == "Grew up in an orange house")
+    #expect(try env.store.chapters.collections(of: first.id).map(\.title) == ["Home"])
+    #expect(result.newMentions.map(\.text) == ["Maya"])
+    #expect(try env.store.candidates.fetch(c.id)?.status == .accepted)
+
+    try env.actions.unmerge(result.receipt)
+    #expect(try env.store.memories.fetch(second.id) != nil && (try env.store.memories.fetch(third.id)) != nil)
+    #expect(try env.store.memories.spans(of: first.id).count == 1)
+    #expect(try env.store.candidates.fetch(c.id)?.status == .pending, "the card waits again")
+}
+
+@Test func mergeGroupRefusesDuplicatesAndFloatingSources() throws {
+    let env = try Env()
+    let (_, first) = try env.kept("we lived in an orange house", title: "Orange house")
+    let span = try #require(try env.store.memories.spans(of: first.id).first)
+    let standIn = try env.store.memories.insertFloating(title: "graduation", segment: span.segmentID, startMs: span.startMs, endMs: span.endMs)
+    let (_, _, c) = try env.card("grew up in an orange house", title: "Grew up")
+    #expect(throws: CandidateActions.Error.sameMemory) { try env.actions.mergeGroup(c, into: [first.id, first.id]) }
+    #expect(throws: CandidateActions.Error.standIn) { try env.actions.mergeGroup(c, into: [first.id, standIn.id]) }
+    #expect(try env.store.candidates.fetch(c.id)?.status == .pending, "a refused group leaves the card and the memories alone")
+    #expect(try env.store.memories.fetch(standIn.id) != nil)
+}

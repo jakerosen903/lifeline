@@ -190,3 +190,22 @@ private func card(_ title: String, quote: String) -> MemoryOut {
     #expect(!matcher.isStrong(strong))
     #expect(env.matcher(FakeEmbedder(table: env.table)).isStrong(strong), "the calibrated model trusts the same score")
 }
+
+@Test func suggestionsListEveryNamedMemoryInOrder() throws {
+    var env = try MatchEnv()
+    let a = try env.memory("orange house", quote: "we lived in an orange house", vector: [1, 0, 0])
+    let b = try env.memory("canal", quote: "right on the canal", vector: [0.7, 0.7, 0])
+    let c = try env.memory("disney", quote: "we drove to disney", vector: [0, 0, 1])
+    let hidden = try env.memory("hidden", quote: "hidden house", vector: [1, 0, 0], hidden: true)
+    let retold = card("The orange house", quote: "grew up in an orange house")
+    env.table[MemoryMatcher.text(title: retold.title, quote: retold.quote)] = [1, 0, 0]
+    let matcher = env.matcher(FakeEmbedder(table: env.table))
+    for m in env.memories.values { try matcher.index(m) }
+
+    let named = try matcher.suggestions(for: retold, extractorSameAs: [c.id, hidden.id, MemoryID(rawValue: "nope"), b.id])
+    #expect(named.map(\.memoryID) == [c.id, b.id, a.id], "packet order for the named ones, then the strong vector match not already listed")
+    #expect(named.map(\.source) == [.extractor, .extractor, .embedding])
+    #expect(try matcher.suggestions(for: retold, extractorSameAs: [a.id]).map(\.memoryID) == [a.id], "no duplicate when the vector match was named")
+    #expect(try matcher.suggestion(for: retold, extractorSameAs: [b.id].first)?.memoryID == b.id, "the one-match API is the first of the list")
+    #expect(try matcher.suggestions(for: retold, extractorSameAs: []).map(\.memoryID) == [a.id])
+}

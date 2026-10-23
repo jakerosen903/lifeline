@@ -50,6 +50,44 @@ extension CandidateActions {
                                newMentions: newMentions)
     }
 
+    /// The card named several memories and the person said they are one (M5): every memory
+    /// folds into the oldest, telling order kept, then the card joins as the last telling. One
+    /// receipt, so one undo puts every memory back. Nothing changes until every name checks out.
+    public func mergeGroup(_ candidate: Candidate, into memories: [MemoryID]) throws -> MergedCandidate {
+        guard candidate.kind == .memory else { throw Error.wrongKind }
+        try requirePending(candidate)
+        guard Set(memories).count == memories.count else { throw Error.sameMemory }
+        var rows: [(memory: Memory, firstTold: Date)] = []
+        for id in memories {
+            guard let memory = try store.memories.fetch(id) else { throw Error.targetMissing }
+            rows.append((memory, try firstTelling(of: memory) ?? memory.createdAt))
+        }
+        rows.sort { $0.firstTold != $1.firstTold ? $0.firstTold < $1.firstTold : $0.memory.id.rawValue < $1.memory.id.rawValue }
+        guard let oldest = rows.first?.memory else { throw Error.targetMissing }
+        let later = rows.dropFirst().map(\.memory)
+        guard !later.contains(where: \.isFloating) else { throw Error.standIn }
+        var before: [MemoryRepository.Snapshot] = []
+        for memory in [oldest] + later {
+            guard let snapshot = try store.memories.snapshot(of: memory.id) else { throw Error.targetMissing }
+            before.append(snapshot)
+        }
+        for memory in later {
+            guard let target = try store.memories.fetch(oldest.id) else { throw Error.targetMissing }
+            try store.memories.fold(memory, into: target)
+        }
+        var merged = try mergeCandidate(candidate, into: oldest.id)
+        merged.receipt.before = before
+        merged.receipt.targetTitle = oldest.title
+        return merged
+    }
+
+    /// When a memory was first told: the session start of its order-0 span.
+    private func firstTelling(of memory: Memory) throws -> Date? {
+        guard let span = try store.memories.spans(of: memory.id).first,
+              let segment = try store.sessions.fetchSegment(span.segmentID) else { return nil }
+        return try store.sessions.fetch(segment.sessionID)?.startedAt
+    }
+
     /// One memory becomes later tellings of another. The target keeps its title, range (unless
     /// it had none), collections and chapter (unless it had none). A stand-in target becomes
     /// real with the source's telling first; a stand-in cannot be a source.
