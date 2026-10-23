@@ -1,0 +1,142 @@
+import Foundation
+import Testing
+@testable import LifelineKit
+
+private struct Env {
+    let db: AppDatabase, store: ExtractionStore, service: FakeExtractionService
+    let session: SessionID, segments: [Segment], log: LogCollector
+    init(texts: [String] = ["the garden had a pomegranate tree", "my sister Maya climbed it"], script: [Result<ExtractorOutput, ExtractionError>] = []) throws {
+        db = try AppDatabase.inMemory()
+        let sessions = SessionRepository(db)
+        store = ExtractionStore(candidates: CandidateRepository(db), sessions: sessions, people: PeopleRepository(db),
+                                memories: MemoryRepository(db), profile: ProfileRepository(db))
+        (session, segments) = try StoreFixtures.session(in: sessions, segments: texts)
+        service = FakeExtractionService(script)
+        log = LogCollector()
+    }
+    func queue() -> ExtractionQueue {
+        let log = self.log
+        return ExtractionQueue(session: session, service: service, store: store, log: { log.append($0) })
+    }
+}
+
+private func gardenOutput(quote: String = "had a pomegranate tree", people: [String] = []) -> ExtractorOutput {
+    ExtractorOutput(memories: [MemoryOut(ref: "m1", title: "The pomegranate tree", quote: quote, segmentSpan: WordSpan(startWord: 2, endWord: 5),
+                                         peopleRefs: people, placeText: nil, anchors: [], sameAsMemoryID: nil, collectionHint: nil,
+                                         chapterHint: nil, confidence: 0.9)],
+                    mentions: [], flags: .none)
+}
+
+private func collect(_ events: AsyncStream<ExtractionEvent>, count: Int, timeoutMs: Int = 3_000) async -> [ExtractionEvent] {
+    await withTaskGroup(of: [ExtractionEvent].self) { group in
+        group.addTask { var out: [ExtractionEvent] = []; for await e in events { out.append(e); if out.count == count { break } }; return out }
+        group.addTask { try? await Task.sleep(for: .milliseconds(timeoutMs)); return [] }
+        let first = await group.next() ?? []
+        group.cancelAll()
+        return first
+    }
+}
+
+@Test func segmentsAreExtractedInOrderAndStoredPending() async throws {
+    let env = try Env(script: [.success(gardenOutput()), .success(ExtractorOutput(memories: [], mentions: [MentionOut(text: "Maya", kind: .person, likelyAliasOfPersonID: nil, confidence: 0.8)], flags: .none))])
+    let queue = env.queue()
+    let events = await queue.events
+    await queue.enqueue(env.segments[0].id)
+    await queue.enqueue(env.segments[1].id)
+    let got = await collect(events, count: 2)
+    guard got.count == 2, case .candidates(let first, let s0) = got[0], case .candidates(let second, let s1) = got[1] else {
+        Issue.record("unexpected events \(got)"); return
+    }
+    #expect(s0 == env.segments[0].id && s1 == env.segments[1].id)
+    #expect(first.count == 1 && first[0].kind == .memory && first[0].status == .pending && first[0].extractorVersion == "fake")
+    #expect(second.count == 1 && second[0].kind == .person)
+    #expect(env.service.requests.map(\.segmentText) == env.segments.map(\.text))
+    #expect(env.service.requests[1].packet.previousSegments == [env.segments[0].text])
+    #expect(try env.store.sessions.fetchSegment(env.segments[0].id)?.status == .extracted)
+    #expect(try env.store.candidates.pending(in: env.session).count == 2)
+}
+
+@Test func rejectedCandidatesAreStoredNotShown() async throws {
+    let env = try Env(script: [.success(gardenOutput(quote: "we drove to Yosemite"))])
+    let queue = env.queue()
+    let events = await queue.events
+    await queue.enqueue(env.segments[0].id)
+    let got = await collect(events, count: 1)
+    guard case .candidates(let shown, _)? = got.first else { Issue.record("no event"); return }
+    #expect(shown.isEmpty)
+    let stored = try env.store.candidates.candidates(for: env.segments[0].id)
+    #expect(stored.count == 1 && stored[0].status == .dismissed && stored[0].rejection?.contains("quote") == true)
+}
+
+@Test func failedRequestLeavesSegmentPendingAndRecordingContinues() async throws {
+    let env = try Env(script: [.failure(.network("offline")), .success(gardenOutput())])
+    let queue = env.queue()
+    let events = await queue.events
+    await queue.enqueue(env.segments[0].id)
+    await queue.enqueue(env.segments[1].id)
+    let got = await collect(events, count: 2)
+    guard got.count == 2, case .failed(let failed, .network) = got[0], case .candidates = got[1] else { Issue.record("events \(got)"); return }
+    #expect(failed == env.segments[0].id)
+    #expect(try env.store.sessions.fetchSegment(env.segments[0].id)?.status == .pending)
+    #expect(try env.store.sessions.fetchSegment(env.segments[1].id)?.status == .extracted)
+}
+
+@Test func drainRetriesPendingOnce() async throws {
+    let env = try Env(texts: ["the garden had a pomegranate tree"], script: [.failure(.server(status: 500)), .success(gardenOutput())])
+    let queue = env.queue()
+    await queue.enqueue(env.segments[0].id)
+    await queue.drain()
+    #expect(env.service.requests.count == 2)
+    #expect(try env.store.sessions.fetchSegment(env.segments[0].id)?.status == .extracted)
+}
+
+@Test func missingKeyDisablesExtractionQuietly() async throws {
+    let env = try Env(script: [.failure(.noKey), .failure(.noKey), .failure(.noKey)])
+    let queue = env.queue()
+    let events = await queue.events
+    await queue.enqueue(env.segments[0].id)
+    await queue.enqueue(env.segments[1].id)
+    let got = await collect(events, count: 2)
+    #expect(got.count == 2)
+    for e in got { guard case .failed(_, .noKey) = e else { Issue.record("expected noKey, got \(e)"); continue } }
+    await queue.drain()
+    #expect(env.service.requests.count == 1, "after the first missing-key failure nothing else is sent, drain included")
+    #expect(try env.store.sessions.segments(in: env.session, status: .pending).count == 2)
+}
+
+@Test func alreadyExtractedSegmentIsSkipped() async throws {
+    let env = try Env(texts: ["the garden had a pomegranate tree"], script: [.success(gardenOutput())])
+    try env.store.candidates.insert(StoreFixtures.candidate(env.segments[0].id, version: "fake"))
+    let queue = env.queue()
+    let events = await queue.events
+    await queue.enqueue(env.segments[0].id)
+    let got = await collect(events, count: 1)
+    guard case .skipped(let id)? = got.first else { Issue.record("events \(got)"); return }
+    #expect(id == env.segments[0].id && env.service.requests.isEmpty)
+}
+
+@Test func flagsAreStoredAsAFlagCandidate() async throws {
+    var output = gardenOutput()
+    output.flags = Flags(seriousDisclosure: true, wantsToStop: false, wantsToChangeSubject: false)
+    let env = try Env(texts: ["the garden had a pomegranate tree"], script: [.success(output)])
+    let queue = env.queue()
+    let events = await queue.events
+    await queue.enqueue(env.segments[0].id)
+    let got = await collect(events, count: 2)
+    #expect(got.contains { if case .flags(let f, _) = $0 { f.seriousDisclosure } else { false } })
+    let stored = try env.store.candidates.candidates(for: env.segments[0].id)
+    #expect(stored.map(\.kind) == [.memory, .flag])
+    #expect(stored[1].payload.contains("\"serious_disclosure\":true"))
+}
+
+@Test func profileFreeTextAndPeopleReachThePacket() async throws {
+    let env = try Env(texts: ["the garden had a pomegranate tree"], script: [.success(gardenOutput())])
+    try env.store.profile.save(Profile(displayName: "Jake", birthDate: nil, birthPlaceText: nil, freeText: "I grew up in Fresno", updatedAt: .now))
+    _ = try env.store.people.insertPerson(displayName: "Maya")
+    let queue = env.queue()
+    await queue.enqueue(env.segments[0].id)
+    await queue.drain()
+    let packet = try #require(env.service.requests.first?.packet)
+    #expect(packet.profileFreeText == "I grew up in Fresno")
+    #expect(packet.people.map(\.name) == ["Maya"])
+}
