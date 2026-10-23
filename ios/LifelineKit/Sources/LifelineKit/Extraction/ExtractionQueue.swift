@@ -138,7 +138,8 @@ public actor ExtractionQueue {
         let memories = try store.memories.memories(in: session)
         let freeText = try store.profile.fetch()?.freeText
         return ContextPacketBuilder.build(segment: segment, previous: previous, people: people, memories: memories,
-                                          profileFreeText: freeText, stage: stage)
+                                          profileFreeText: freeText, stage: stage,
+                                          chapters: try store.chapters.chapters(), curiosity: try store.curiosity.open())
     }
 
     /// Writes one row per candidate in output order, plus a flag row when any flag is set, and
@@ -171,6 +172,14 @@ public actor ExtractionQueue {
                 knownMentions.append((c, mention))
             } else {
                 shown.append(c)
+            }
+            if case .memory(let memory) = candidate {
+                for (kind, phrase) in [(HintKind.collection, memory.collectionHint), (.chapter, memory.chapterHint)] {
+                    guard let phrase = phrase?.trimmingCharacters(in: .whitespacesAndNewlines), !phrase.isEmpty else { continue }
+                    let hint = row(.hint, try CandidatePayload.encode(HintOut(kind: kind, phrase: phrase, memoryCandidateID: c.id.rawValue)), memory.confidence, nil)
+                    rows.append(hint)
+                    shown.append(hint)
+                }
             }
         }
         for rejected in validated.rejected {

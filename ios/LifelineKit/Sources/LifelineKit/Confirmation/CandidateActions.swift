@@ -16,6 +16,12 @@ public struct CandidateActions: Sendable {
         case badPayload
         case segmentMissing
         case emptySpan
+        case memoryNotAccepted
+    }
+
+    public enum HintResult: Equatable, Sendable {
+        case collection(Collection)
+        case chapter(Chapter)
     }
 
     public struct AcceptedMemory: Sendable, Equatable {
@@ -142,6 +148,66 @@ public struct CandidateActions: Sendable {
         for memory in try store.memories.memories(fromSegment: segment) where try names(memory, text) {
             try store.memories.link(person, to: memory.id, roleText: text)
         }
+    }
+
+    // MARK: - Hints, chapters and collections
+
+    /// "Sounds like it belongs here", accepted: the hint's memory joins a collection or chapter
+    /// titled with the owner's phrase, reusing one that already exists.
+    public func acceptHint(_ candidate: Candidate) throws -> HintResult {
+        guard candidate.kind == .hint else { throw Error.wrongKind }
+        try requirePending(candidate)
+        guard let out = CandidatePayload.hint(candidate) else { throw Error.badPayload }
+        guard let memory = try store.memories.memories(fromSegment: candidate.segmentID)
+                .first(where: { $0.createdFromCandidateID?.rawValue == out.memoryCandidateID }) else { throw Error.memoryNotAccepted }
+        let result: HintResult
+        switch out.kind {
+        case .collection:
+            result = .collection(try addToCollection(memory.id, titled: out.phrase))
+        case .chapter:
+            if let existing = try store.chapters.chapters().first(where: { Self.same($0.title ?? "", out.phrase) }) {
+                try assign(memory: memory.id, toChapter: existing.id)
+                result = .chapter(try store.chapters.chapter(id: existing.id) ?? existing)
+            } else {
+                result = .chapter(try createChapter(title: out.phrase, containing: memory.id))
+            }
+        }
+        try store.candidates.setStatus(candidate.id, .accepted)
+        return result
+    }
+
+    public func createChapter(title: String?, containing memory: MemoryID) throws -> Chapter {
+        let chapter = try store.chapters.insertChapter(title: title)
+        try assign(memory: memory, toChapter: chapter.id)
+        return try store.chapters.chapter(id: chapter.id) ?? chapter
+    }
+
+    /// Moves a memory between chapters and refreshes both chapters' member-derived ranges.
+    public func assign(memory: MemoryID, toChapter chapter: ChapterID?) throws {
+        let previous = try store.memories.fetch(memory)?.chapterID
+        try store.chapters.assign(memory: memory, toChapter: chapter)
+        for id in [previous, chapter].compactMap({ $0 }) { try chapterRangeFromMembers(id) }
+    }
+
+    public func addToCollection(_ memory: MemoryID, titled title: String) throws -> Collection {
+        let collection = try store.chapters.insertCollection(titled: title)
+        try store.chapters.add(memory: memory, to: collection.id)
+        return collection
+    }
+
+    public func removeFromCollection(_ memory: MemoryID, from collection: CollectionID) throws {
+        try store.chapters.remove(memory: memory, from: collection)
+    }
+
+    /// A chapter's range is the span of its placed members, origin `derived`; unplaced when none are placed.
+    public func chapterRangeFromMembers(_ chapter: ChapterID) throws {
+        let placed = try store.memories.memories(inChapter: chapter).map(\.range).filter(\.isPlaced)
+        guard let earliest = placed.compactMap(\.earliest).min(), let latest = placed.compactMap(\.latest).max() else {
+            try store.chapters.setRange(chapter, .unplaced)
+            return
+        }
+        try store.chapters.setRange(chapter, TimeRange(earliest: earliest, latest: latest, likelyStart: nil, likelyEnd: nil,
+                                                         granularity: .year, origin: .derived, evidenceText: nil))
     }
 
     // MARK: - Helpers

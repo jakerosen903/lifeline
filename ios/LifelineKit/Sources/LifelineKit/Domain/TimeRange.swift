@@ -66,10 +66,11 @@ public struct TimeRange: Codable, Sendable, Equatable {
         return out
     }
 
-    /// The canvases' wording. A guess always reads as a guess.
+    /// The canvases' wording. An inference always reads as a guess; a span derived from members
+    /// (a chapter, a collection) reads plainly, as the canvases show "1986 – 2004 · Childhood".
     public var displayText: String {
         guard let earliest, let latest else { return "no date yet" }
-        let guess = origin == .inferred || origin == .derived
+        let guess = origin == .inferred
         switch granularity ?? .year {
         case .day:
             return (guess ? "around " : "") + "\(earliest.day) \(Self.monthName(earliest.month)) \(earliest.year)"

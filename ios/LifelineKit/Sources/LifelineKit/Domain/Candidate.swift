@@ -2,6 +2,8 @@ import Foundation
 
 public enum CandidateKind: String, Codable, Sendable {
     case memory, person, place, flag
+    /// A collection or chapter the extractor heard in a memory; shown once the memory is accepted.
+    case hint
 }
 
 public enum CandidateStatus: String, Codable, Sendable {

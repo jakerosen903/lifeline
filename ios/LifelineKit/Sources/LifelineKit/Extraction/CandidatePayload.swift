@@ -18,6 +18,11 @@ public enum CandidatePayload {
         return try? decode(MemoryOut.self, from: candidate.payload)
     }
 
+    public static func hint(_ candidate: Candidate) -> HintOut? {
+        guard candidate.kind == .hint else { return nil }
+        return try? decode(HintOut.self, from: candidate.payload)
+    }
+
     public static func mention(_ candidate: Candidate) -> MentionOut? {
         guard candidate.kind == .person || candidate.kind == .place else { return nil }
         return try? decode(MentionOut.self, from: candidate.payload)

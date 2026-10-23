@@ -49,7 +49,8 @@ public struct ContextPacketLimits: Sendable, Equatable {
 /// Pure. Chapters and curiosity items are empty until M3 builds them.
 public enum ContextPacketBuilder {
     public static func build(segment: Segment, previous: [Segment], people: [(Person, [Alias])], memories: [Memory],
-                             profileFreeText: String?, stage: String, limits: ContextPacketLimits = ContextPacketLimits()) -> ContextPacket {
+                             profileFreeText: String?, stage: String, limits: ContextPacketLimits = ContextPacketLimits(),
+                             chapters: [Chapter] = [], curiosity: [CuriosityItem] = []) -> ContextPacket {
         let earlier = previous.filter { $0.index < segment.index }.sorted { $0.index < $1.index }
         let window = earlier.suffix(limits.previousSegments).map(\.text)
         let entries = people
@@ -60,8 +61,12 @@ public enum ContextPacketBuilder {
                                           aliases: aliases.map(\.text).filter { $0.caseInsensitiveCompare(person.displayName) != .orderedSame })
             }
         let memoryEntries = memories.map { ContextPacket.MemoryEntry(id: $0.id.rawValue, title: $0.title, rangeText: $0.range.isPlaced ? $0.range.displayText : nil) }
-        return ContextPacket(previousSegments: Array(window), people: Array(entries), chapters: [], memories: memoryEntries,
-                             curiosity: [], stage: stage, profileFreeText: profileFreeText)
+        let chapterEntries = chapters.map {
+            ContextPacket.ChapterEntry(id: $0.id.rawValue, title: $0.title ?? "untitled", rangeText: $0.range.isPlaced ? $0.range.displayText : nil)
+        }
+        let questions = curiosity.prefix(limits.curiosity).map(\.text)
+        return ContextPacket(previousSegments: Array(window), people: Array(entries), chapters: chapterEntries, memories: memoryEntries,
+                             curiosity: Array(questions), stage: stage, profileFreeText: profileFreeText)
     }
 }
 
