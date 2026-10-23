@@ -72,6 +72,8 @@ public struct CandidateActions: Sendable {
         for name in unknown {
             newMentions.append(try mention(for: name, in: candidate.segmentID))
         }
+        // Place what the new anchors allow, and re-place anything that pointed at this title.
+        _ = try ResolverRunner(store: store).run()
         return AcceptedMemory(memory: memory, newMentions: newMentions)
     }
 

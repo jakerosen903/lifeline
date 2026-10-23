@@ -9,7 +9,8 @@ private struct Env {
         db = try AppDatabase.inMemory()
         let sessions = SessionRepository(db)
         store = ExtractionStore(candidates: CandidateRepository(db), sessions: sessions, people: PeopleRepository(db),
-                                memories: MemoryRepository(db), profile: ProfileRepository(db))
+                                memories: MemoryRepository(db), profile: ProfileRepository(db),
+                                chapters: ChapterRepository(db), curiosity: CuriosityRepository(db))
         (session, segments) = try StoreFixtures.session(in: sessions, segments: texts)
         service = FakeExtractionService(script)
         log = LogCollector()
