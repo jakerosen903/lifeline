@@ -113,6 +113,8 @@ final class CardHandler {
         return matches
     }
 
+    func isStrong(_ match: MemoryMatch) -> Bool { deps.matcher.isStrong(match) }
+
     /// The card becomes a later telling of `target`. Undo stays open for the usual window.
     func sameStory(_ card: Card, into target: MemoryID) -> Bool {
         guard case .memory(let candidate, _) = card else { return false }

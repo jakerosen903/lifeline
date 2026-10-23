@@ -54,7 +54,7 @@ struct CardStack: View {
     /// One strong answer merges at once; more than one plausible answer asks "Which one?".
     private func sameStory(_ card: Card) {
         let matches = handler.pickerMatches(for: card)
-        let plausible = matches.filter { $0.source == .extractor || $0.score >= MatchConfig.default.suggestMin }
+        let plausible = matches.filter { handler.isStrong($0) }
         if plausible.count <= 1, let suggested = handler.suggestion(for: card) {
             onSameStory(card, suggested.memoryID)
         } else {

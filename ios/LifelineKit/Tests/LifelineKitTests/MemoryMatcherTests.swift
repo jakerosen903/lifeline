@@ -161,3 +161,31 @@ private func card(_ title: String, quote: String) -> MemoryOut {
     #expect(try env.store.embeddings.memoryIDsWithRows(model: "fake-2").count == 2)
     #expect(try other.related(to: "anything").count == 2)
 }
+
+@Test func nlEmbedderNamesTheModelItUses() {
+    let e = NLSentenceEmbedder()
+    let v = e.vector(for: "the house had a blue door")
+    #expect((v != nil) == (e.model != "nl-none"), "a model name means vectors; none means nil")
+    #expect(!NLSentenceEmbedder.availability.isEmpty)
+}
+
+@Test func anUncalibratedEmbedderRetrievesButNeverSuggestsOnItsOwn() throws {
+    var env = try MatchEnv()
+    let a = try env.memory("orange house", quote: "we lived in an orange house", vector: [1, 0, 0])
+    let retold = card("The orange house", quote: "grew up in an orange house")
+    env.table[MemoryMatcher.text(title: retold.title, quote: retold.quote)] = [1, 0, 0]
+    struct Uncalibrated: SentenceEmbedder {
+        let table: [String: [Float]]
+        let model = "fake-uncalibrated"
+        var suggestsOnItsOwn: Bool { false }
+        func vector(for text: String) -> [Float]? { table[text] }
+    }
+    let matcher = env.matcher(Uncalibrated(table: env.table))
+    try matcher.index(a)
+    #expect(try matcher.related(to: MemoryMatcher.text(title: retold.title, quote: retold.quote)).map(\.id) == [a.id], "still feeds the packet")
+    #expect(try matcher.suggestion(for: retold, extractorSameAs: nil) == nil, "a perfect score alone is not enough")
+    #expect(try matcher.suggestion(for: retold, extractorSameAs: a.id)?.source == .extractor)
+    let strong = try #require(try matcher.picker(for: MemoryMatcher.text(title: retold.title, quote: retold.quote), excluding: [], includeHidden: false).first)
+    #expect(!matcher.isStrong(strong))
+    #expect(env.matcher(FakeEmbedder(table: env.table)).isStrong(strong), "the calibrated model trusts the same score")
+}

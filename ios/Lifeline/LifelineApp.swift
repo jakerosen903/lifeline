@@ -37,8 +37,14 @@ final class AppModel {
             }
             // Off the main actor: the backfill loads the embedding model and walks every memory.
             Task.detached(priority: .utility) {
+                print("[matching] \(NLSentenceEmbedder.availability)")
                 // Memories kept before M4.1 get their vectors once; idempotent.
-                if let n = try? deps.matcher.backfill(), n > 0 { print("[matching] embedded \(n) earlier memories") }
+                do {
+                    let n = try deps.matcher.backfill()
+                    print("[matching] backfill embedded \(n) earlier memories")
+                } catch {
+                    print("[matching] backfill failed: \(error)")
+                }
                 await deps.worker.start()
             }
         } catch {

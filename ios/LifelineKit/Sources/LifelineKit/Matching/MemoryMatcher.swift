@@ -90,9 +90,15 @@ public struct MemoryMatcher: Sendable {
             return try match(memory, score: 1, source: .extractor)
         }
         let text = Self.text(title: card.title, quote: card.quote)
-        guard let best = try scored(text, excluding: []).first(where: { eligible($0.memory, includeHidden: false) }),
+        guard embedder?.suggestsOnItsOwn == true,
+              let best = try scored(text, excluding: []).first(where: { eligible($0.memory, includeHidden: false) }),
               best.score >= config.suggestMin else { return nil }
         return try match(best.memory, score: best.score, source: .embedding)
+    }
+
+    /// Whether a match is strong enough to merge without asking "Which one?".
+    public func isStrong(_ match: MemoryMatch) -> Bool {
+        match.source == .extractor || (embedder?.suggestsOnItsOwn == true && match.score >= config.suggestMin)
     }
 
     /// "Which one?": the nearest few with no minimum; newest first when there are no vectors.
