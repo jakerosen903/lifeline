@@ -36,11 +36,15 @@ extension CandidateActions {
         let span = MemorySpan(memoryID: target, segmentID: candidate.segmentID,
                               startMs: words[out.segmentSpan.startWord].startMs, endMs: words[out.segmentSpan.endWord].endMs,
                               order: try store.memories.nextSpanOrder(of: target), titleText: out.title, candidateID: candidate.id)
-        let edges = try edges(of: out, for: target)
+        // The card's edges and its continuations', as one telling (M5).
+        let continuations = try store.candidates.continuations(of: candidate.id)
+        var edges = try edges(of: out, for: target)
+        for row in continuations.compactMap(CandidatePayload.memory) { edges.merge(try self.edges(of: row, for: target)) }
         // The owner named this moment before telling it; now they have told it.
         let promotion = targetMemory.isFloating ? (title: out.title, summaryQuote: out.quote) : nil
-        try store.memories.mergeSpan(span, people: edges.people, places: edges.places, anchors: edges.anchors,
-                                     promotingStandIn: promotion, acceptingCandidate: candidate.id)
+        try store.memories.mergeSpan(span, continuations: try continuationSpans(of: out, for: target), people: edges.people, places: edges.places,
+                                     anchors: edges.anchors, promotingStandIn: promotion, acceptingCandidate: candidate.id)
+        for row in continuations { try store.candidates.setStatus(row.id, .accepted) }
         let newMentions = try finishEdges(edges, segment: candidate.segmentID)
         try reindex(target)
         _ = try ResolverRunner(store: store).run()
@@ -107,6 +111,63 @@ extension CandidateActions {
         _ = try ResolverRunner(store: store).run()
         guard let after = try store.memories.snapshot(of: target) else { throw Error.targetMissing }
         return MergeReceipt(target: target, targetTitle: targetMemory.title, before: [targetBefore, sourceBefore], after: after, candidateID: nil, mergedAt: .now)
+    }
+
+    /// "Separate this telling" (M5): a later telling becomes its own memory again, with the
+    /// spans that carried it on, the anchors, people and place only its card named, and the
+    /// card as its origin. The original re-derives its date unless the person stated one.
+    public func separateTelling(_ memory: MemoryID, order: Int) throws -> Memory {
+        guard order != 0 else { throw Error.wrongKind }
+        guard let original = try store.memories.fetch(memory) else { throw Error.targetMissing }
+        let spans = try store.memories.spans(of: memory)
+        guard let span = spans.first(where: { $0.order == order }) else { throw Error.targetMissing }
+        let card = try span.candidateID.flatMap { try store.candidates.fetch($0) }
+        let out = card.flatMap(CandidatePayload.memory)
+        let segmentText = try store.sessions.fetchSegment(span.segmentID)?.text ?? ""
+        let fresh = Memory(id: .init(), title: span.titleText ?? original.title, summaryQuote: out?.quote ?? segmentText, visibility: original.visibility,
+                           chapterID: nil, createdFromCandidateID: span.candidateID, createdAt: .now, hiddenFromTimeline: original.hiddenFromTimeline)
+        try store.memories.separate(memory, order: order, into: fresh)
+
+        // What this telling alone named goes with it; what another telling also named stays.
+        let leaving = try tellingOutputs(of: span, card: card)
+        let staying = try spans.filter { $0.order != order && $0.continuesOrder != order }
+            .flatMap { try tellingOutputs(of: $0, card: try $0.candidateID.flatMap { try store.candidates.fetch($0) }) }
+            + (original.createdFromCandidateID.flatMap { try? store.candidates.fetch($0) }.flatMap(CandidatePayload.memory).map { [$0] } ?? [])
+        let leavingAnchors = leaving.flatMap(\.anchors), stayingAnchors = staying.flatMap(\.anchors)
+        for anchor in try store.memories.anchors(of: memory)
+        where leavingAnchors.contains(where: { $0.phrase == anchor.phrase && $0.relation == anchor.relation })
+            && !stayingAnchors.contains(where: { $0.phrase == anchor.phrase && $0.relation == anchor.relation }) {
+            try store.memories.move(anchor: anchor.id, to: fresh.id)
+        }
+        let leavingPeople = try people(named: leaving.flatMap(\.peopleRefs)), stayingPeople = try people(named: staying.flatMap(\.peopleRefs))
+        for person in leavingPeople.subtracting(stayingPeople) {
+            try store.memories.unlink(person, from: memory)
+            try store.memories.link(person, to: fresh.id, roleText: nil)
+        }
+        let leavingPlaces = Set(leaving.compactMap(\.placeText).map { $0.lowercased() }), stayingPlaces = Set(staying.compactMap(\.placeText).map { $0.lowercased() })
+        for place in try store.memories.places(of: memory)
+        where leavingPlaces.contains(place.nameText.lowercased()) && !stayingPlaces.contains(place.nameText.lowercased()) {
+            try store.memories.unlinkPlace(place.id, from: memory)
+            try store.memories.insertPlace(MemoryPlace(memoryID: fresh.id, placeID: place.id))
+        }
+        // A date the anchors gave (the resolver stamps "in 1998" as stated, phrase as evidence) goes
+        // with the telling that said it; a date the person typed on "Tell me when" stays.
+        let fromLeavingAnchor = leavingAnchors.contains { $0.phrase.caseInsensitiveCompare(original.range.evidenceText ?? "") == .orderedSame }
+        if !original.range.isSettled || fromLeavingAnchor { try store.memories.updateRange(memory, .unplaced) }
+        try reindex(memory)
+        try reindex(fresh.id)
+        _ = try ResolverRunner(store: store).run()
+        return try store.memories.fetch(fresh.id) ?? fresh
+    }
+
+    /// The payloads behind one telling: its card and the card's continuations.
+    private func tellingOutputs(of span: MemorySpan, card: Candidate?) throws -> [MemoryOut] {
+        guard let card, let out = CandidatePayload.memory(card) else { return [] }
+        return [out] + (try store.candidates.continuations(of: card.id)).compactMap(CandidatePayload.memory)
+    }
+
+    private func people(named refs: [String]) throws -> Set<PersonID> {
+        Set(try refs.compactMap { try store.people.findPerson(matching: $0)?.id })
     }
 
     /// Puts both sides back. Refused when the target changed in any way since the merge (a

@@ -312,3 +312,61 @@ private struct Env {
     #expect(try env.store.candidates.fetch(c.id)?.status == .pending, "a refused group leaves the card and the memories alone")
     #expect(try env.store.memories.fetch(standIn.id) != nil)
 }
+
+// MARK: - M5 separate a telling
+
+/// A card told across two segments: the second is a continuation of the first.
+private func twoSegmentCard(_ env: Env, first: String, second: String, title: String, anchors: [AnchorOut]) throws -> (Candidate, [Segment]) {
+    let (_, segs) = try StoreFixtures.session(in: env.store.sessions, segments: [first, second])
+    let out = MemoryOut(ref: "m1", kind: .event, title: title, quote: first, segmentSpan: WordSpan(startWord: 0, endWord: first.split(separator: " ").count - 1),
+                        peopleRefs: [], placeText: nil, anchors: anchors, collectionHint: nil, chapterHint: nil, confidence: 0.9,
+                        extraSpans: [ExtraSpan(segmentID: segs[1].id.rawValue, startWord: 0, endWord: second.split(separator: " ").count - 1)])
+    let c = StoreFixtures.candidate(segs[0].id, payload: try CandidatePayload.encode(out))
+    try env.store.candidates.insert(c)
+    return (c, segs)
+}
+
+@Test func separatingTakesContinuationsAndRederives() throws {
+    let env = try Env()
+    let (_, a) = try env.kept("we lived in an orange house", title: "Orange house")
+    #expect(a.isUnplaced)
+    let (b, segs) = try twoSegmentCard(env, first: "the orange house in 1998", second: "and we stayed all summer", title: "The orange house in 1998",
+                                       anchors: [AnchorOut(phrase: "in 1998", relation: .absolute, targetText: nil, value: "1998")])
+    _ = try env.actions.mergeCandidate(b, into: a.id)
+    let placed = try #require(try env.store.memories.fetch(a.id))
+    #expect(placed.range.earliest?.year == 1998, "the merged telling's date places the memory")
+    let merged = try env.store.memories.spans(of: a.id)
+    #expect(merged.count == 3 && merged[2].continuesOrder == 1 && merged[2].segmentID == segs[1].id, "the continuation came along as a span of the merged telling")
+
+    let fresh = try env.actions.separateTelling(a.id, order: 1)
+    #expect(fresh.title == "The orange house in 1998" && fresh.summaryQuote == "the orange house in 1998" && fresh.createdFromCandidateID == b.id)
+    let freshSpans = try env.store.memories.spans(of: fresh.id)
+    #expect(freshSpans.map(\.order) == [0, 1] && freshSpans[0].segmentID == segs[0].id && freshSpans[1].segmentID == segs[1].id && freshSpans[1].continuesOrder == 0)
+    #expect(try env.store.memories.anchors(of: fresh.id).map(\.phrase) == ["in 1998"])
+    #expect(try env.store.memories.fetch(fresh.id)?.range.earliest?.year == 1998, "the separated telling keeps its own date")
+    let back = try #require(try env.store.memories.fetch(a.id))
+    #expect(back.isUnplaced, "the original re-derives without the anchor it lost")
+    #expect(try env.store.memories.spans(of: a.id).map(\.order) == [0] && (try env.store.memories.anchors(of: a.id)).isEmpty)
+    #expect(try env.store.candidates.fetch(b.id)?.status == .accepted, "the card stays answered")
+}
+
+@Test func separatingLeavesAStatedRangeAlone() throws {
+    let env = try Env()
+    let (_, a) = try env.kept("we lived in an orange house", title: "Orange house")
+    try env.actions.setStatedRange(a.id, .stated(year: 1997))
+    let (_, _, b) = try env.card("the orange house in 1998", title: "The orange house in 1998", anchors: [AnchorOut(phrase: "in 1998", relation: .absolute, targetText: nil, value: "1998")])
+    _ = try env.actions.mergeCandidate(b, into: a.id)
+    let fresh = try env.actions.separateTelling(a.id, order: 1)
+    let stated = try #require(try env.store.memories.fetch(a.id))
+    #expect(stated.range.origin == .stated && stated.range.earliest?.year == 1997)
+    #expect(try env.store.memories.fetch(fresh.id)?.range.earliest?.year == 1998)
+}
+
+@Test func separatingTheFirstTellingIsRefused() throws {
+    let env = try Env()
+    let (_, a) = try env.kept("we lived in an orange house", title: "Orange house")
+    #expect(throws: CandidateActions.Error.wrongKind) { try env.actions.separateTelling(a.id, order: 0) }
+    #expect(throws: CandidateActions.Error.targetMissing) { try env.actions.separateTelling(a.id, order: 4) }
+    #expect(throws: CandidateActions.Error.targetMissing) { try env.actions.separateTelling(MemoryID(rawValue: "nope"), order: 1) }
+    #expect(try env.store.memories.allMemories().count == 1)
+}

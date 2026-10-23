@@ -208,7 +208,7 @@ public struct MemoryRepository: Sendable {
     /// `promotingStandIn` carries the card's title, quote and candidate when the target is a
     /// resolver stand-in: its borrowed span goes, this telling becomes order 0 and the memory
     /// becomes real. A failure anywhere leaves the card pending and the target untouched.
-    public func mergeSpan(_ span: MemorySpan, people: [MemoryPerson], places: [MemoryPlace], anchors: [Anchor],
+    public func mergeSpan(_ span: MemorySpan, continuations: [MemorySpan] = [], people: [MemoryPerson], places: [MemoryPlace], anchors: [Anchor],
                           promotingStandIn: (title: String, summaryQuote: String)?, acceptingCandidate candidate: CandidateID) throws {
         try db.writer.write { db in
             var span = span
@@ -219,6 +219,13 @@ public struct MemoryRepository: Sendable {
                                arguments: [promoted.title, promoted.summaryQuote, candidate.rawValue, span.memoryID.rawValue])
             }
             try span.insert(db)
+            // The card's other segments follow as spans that carry on this telling (M5).
+            for (i, var extra) in continuations.enumerated() {
+                extra.memoryID = span.memoryID
+                extra.order = span.order + 1 + i
+                extra.continuesOrder = span.order
+                try extra.insert(db)
+            }
             for person in people {
                 try db.execute(sql: "insert or ignore into memory_person (memory_id, person_id, role_text) values (?, ?, ?)",
                                arguments: [person.memoryID.rawValue, person.personID.rawValue, person.roleText])
@@ -229,6 +236,41 @@ public struct MemoryRepository: Sendable {
             for anchor in anchors { try anchor.insert(db) }
             try db.execute(sql: "update candidate set status = ? where id = ?", arguments: [CandidateStatus.accepted.rawValue, candidate.rawValue])
         }
+    }
+
+    /// "Separate this telling" (M5): the span with `order`, and every span that carries it on,
+    /// move to `new` as orders 0…; the rest of the memory is renumbered, continuation links
+    /// following through the same map. One transaction. Edges move in `MergeActions`.
+    public func separate(_ memory: MemoryID, order: Int, into new: Memory) throws {
+        try db.writer.write { db in
+            let spans = try MemorySpan.filter(Column("memory_id") == memory.rawValue).order(Column("order")).fetchAll(db)
+            guard spans.contains(where: { $0.order == order }) else { throw Error.noSpan }
+            try new.insert(db)
+            let moving = spans.filter { $0.order == order || $0.continuesOrder == order }
+            let staying = spans.filter { span in !moving.contains(where: { $0.order == span.order }) }
+            try db.execute(sql: "delete from memory_span where memory_id = ?", arguments: [memory.rawValue])
+            for (i, var span) in moving.enumerated() {
+                span.memoryID = new.id
+                span.order = i
+                span.continuesOrder = i == 0 ? nil : 0
+                try span.insert(db)
+            }
+            let renumbered = Dictionary(uniqueKeysWithValues: staying.enumerated().map { ($1.order, $0) })
+            for (i, var span) in staying.enumerated() {
+                span.order = i
+                span.continuesOrder = span.continuesOrder.flatMap { renumbered[$0] }
+                try span.insert(db)
+            }
+        }
+    }
+
+    /// Moves an anchor to another memory.
+    public func move(anchor: AnchorID, to memory: MemoryID) throws {
+        try db.writer.write { try $0.execute(sql: "update anchor set memory_id = ? where id = ?", arguments: [memory.rawValue, anchor.rawValue]) }
+    }
+
+    public func unlinkPlace(_ place: PlaceID, from memory: MemoryID) throws {
+        try db.writer.write { try $0.execute(sql: "delete from memory_place where memory_id = ? and place_id = ?", arguments: [memory.rawValue, place.rawValue]) }
     }
 
     /// Re-points every edge of `source` at `target` and appends its spans after the target's.
