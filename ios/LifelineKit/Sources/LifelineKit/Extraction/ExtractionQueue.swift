@@ -151,15 +151,34 @@ public actor ExtractionQueue {
 
     private func packet(for segment: Segment) throws -> ContextPacket {
         let previous = try store.sessions.segments(in: session)
-        let people = try store.people.people().map { ($0, (try? store.people.aliases(of: $0.id)) ?? []) }
         let memories = try store.memories.memories(in: session)
         let freeText = try store.profile.fetch()?.freeText
         // Earlier memories that read like this segment, so a retelling can be named (M4.1).
         let related = try matcher?.related(to: segment.text, excluding: Set(memories.map(\.id))) ?? []
+        // People named in this or the previous segments first, then by most recent link (M5).
+        let recentText = ([segment] + previous.filter { $0.index < segment.index }.suffix(2)).map(\.text).joined(separator: " ")
+        let people = try store.people.peopleByRecentLink()
+            .map { ($0, (try? store.people.aliases(of: $0.id)) ?? []) }
+            .sorted { Self.isNamed($0, in: recentText) && !Self.isNamed($1, in: recentText) }
+        // This session's cards still waiting, except this segment's own, so a continuation can name one (M5).
+        let pending = try store.candidates.pending(in: session).filter { $0.kind == .memory && $0.segmentID != segment.id }
+        var storyIDs: [StoryID] = []
+        var stories: [(Story, [Memory])] = []
+        for memory in related + memories {
+            guard let story = try store.stories.story(of: memory.id), !storyIDs.contains(story.id) else { continue }
+            storyIDs.append(story.id)
+            stories.append((story, try store.stories.members(of: story.id)))
+        }
         return ContextPacketBuilder.build(segment: segment, previous: previous, people: people, memories: memories,
                                           profileFreeText: freeText, stage: stage,
                                           chapters: try store.chapters.chapters(), curiosity: try store.curiosity.open(),
-                                          excludedMemoryIDs: try store.memories.excludedIDs(), related: related)
+                                          excludedMemoryIDs: try store.memories.excludedIDs(), related: related,
+                                          pending: pending, stories: stories)
+    }
+
+    private static func isNamed(_ entry: (Person, [Alias]), in text: String) -> Bool {
+        let lower = text.lowercased()
+        return ([entry.0.displayName] + entry.1.map(\.text)).contains { !$0.isEmpty && lower.contains($0.lowercased()) }
     }
 
     /// Writes one row per candidate in output order, plus a flag row when any flag is set, and

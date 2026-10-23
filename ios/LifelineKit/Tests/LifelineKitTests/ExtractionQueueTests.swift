@@ -268,3 +268,27 @@ private let blankOutput = ExtractorOutput(memories: [MemoryOut(ref: "", kind: .o
     let match = try #require(try matcher.suggestion(for: card, extractorSameAs: card.sameAsMemoryID.map(MemoryID.init(rawValue:))))
     #expect(match.memoryID == a.id && match.source == .extractor)
 }
+
+@Test func queuePacketCarriesPendingCardsStoriesAndPeopleByRelevance() async throws {
+    let env = try Env(texts: ["the garden had a pomegranate tree", "my sister Maya climbed it"], script: [.success(gardenOutput()), .success(gardenOutput())])
+    // Two people: Zed was linked to a memory; Maya is named in the current segment and goes first.
+    let zed = try env.store.people.insertPerson(displayName: "Zed")
+    _ = try env.store.people.insertPerson(displayName: "Maya")
+    let (_, earlier) = try StoreFixtures.session(in: env.store.sessions, segments: ["we lived in an orange house"])
+    let old = try StoreFixtures.memory(in: env.store.memories, candidates: env.store.candidates, segment: earlier[0].id, title: "Old")
+    try env.store.memories.link(zed.id, to: old.id, roleText: nil)
+    let story = try env.store.stories.insert(title: "The thread", chapterID: nil)
+    try env.store.stories.add(memory: old.id, to: story.id)
+    let matcher = MemoryMatcher(store: env.store, embedder: FakeEmbedder(table: [MemoryMatcher.text(title: old.title, quote: old.summaryQuote): [Float]([1, 0]), env.segments[1].text: [1, 0]]))
+    try matcher.index(old)
+    let queue = ExtractionQueue(session: env.session, service: env.service, store: env.store, matcher: matcher)
+    await queue.enqueue(env.segments[0].id)
+    await queue.enqueue(env.segments[1].id)
+    await queue.drain()
+    let packets = env.service.requests.map(\.packet)
+    #expect(packets.count == 2)
+    let second = packets[1]
+    #expect(second.pending.map(\.title) == ["The pomegranate tree"], "the first segment's card is still pending when the second is extracted")
+    #expect(second.people.map(\.name) == ["Maya", "Zed"], "named in this segment first, then by most recent link")
+    #expect(second.stories.map(\.title) == ["The thread"], "stories of the related memories ride along")
+}

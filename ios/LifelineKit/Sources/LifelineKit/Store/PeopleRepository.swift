@@ -19,6 +19,21 @@ public struct PeopleRepository: Sendable {
         }
     }
 
+    /// Everyone but the owner, the most recently linked to a kept memory first, then by name.
+    /// People never linked come last. Feeds the packet's relevance order (M5).
+    public func peopleByRecentLink() throws -> [Person] {
+        try db.writer.read { db in
+            try Person.fetchAll(db, sql: """
+                select person.* from person
+                left join (select memory_person.person_id, max(memory.created_at) as last_linked from memory_person
+                           join memory on memory.id = memory_person.memory_id group by memory_person.person_id) links
+                  on links.person_id = person.id
+                where person.is_owner = 0
+                order by links.last_linked is null, links.last_linked desc, person.display_name collate nocase
+                """)
+        }
+    }
+
     public func person(id: PersonID) throws -> Person? {
         try db.writer.read { try Person.fetchOne($0, key: id.rawValue) }
     }
