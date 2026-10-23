@@ -17,3 +17,11 @@ import GRDB
         try db.writer.write { try orphan.insert($0) }
     }
 }
+
+@Test func v2CreatesTheConfirmationTables() throws {
+    let db = try AppDatabase.inMemory()
+    let tables = try db.writer.read { try String.fetchAll($0, sql: "select name from sqlite_master where type = 'table' order by name") }
+    for t in ["alias", "anchor", "candidate", "memory", "memory_person", "memory_place", "memory_span", "mention", "place"] {
+        #expect(tables.contains(t), "missing \(t)")
+    }
+}

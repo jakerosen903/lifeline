@@ -85,3 +85,59 @@ struct ProfileRow: Codable, FetchableRecord, PersistableRecord {
         Profile(displayName: displayName, birthDate: birthDate, birthPlaceText: birthPlaceText, freeText: freeText, updatedAt: updatedAt)
     }
 }
+
+extension Candidate: FetchableRecord, PersistableRecord {
+    public static let databaseTableName = "candidate"
+    enum CodingKeys: String, CodingKey {
+        case id, segmentID = "segment_id", extractorVersion = "extractor_version", ordinal, kind, payload, confidence, status
+        case rejection, createdAt = "created_at"
+    }
+}
+
+extension Memory: FetchableRecord, PersistableRecord {
+    public static let databaseTableName = "memory"
+    enum CodingKeys: String, CodingKey {
+        case id, title, summaryQuote = "summary_quote", visibility, chapterID = "chapter_id"
+        case createdFromCandidateID = "created_from_candidate_id", createdAt = "created_at"
+        case earliest, latest, likelyStart = "likely_start", likelyEnd = "likely_end", granularity, origin, evidenceText = "evidence_text"
+    }
+}
+
+extension MemorySpan: FetchableRecord, PersistableRecord {
+    public static let databaseTableName = "memory_span"
+    enum CodingKeys: String, CodingKey {
+        case memoryID = "memory_id", segmentID = "segment_id", startMs = "start_ms", endMs = "end_ms", order
+    }
+}
+
+extension MemoryPerson: FetchableRecord, PersistableRecord {
+    public static let databaseTableName = "memory_person"
+    enum CodingKeys: String, CodingKey { case memoryID = "memory_id", personID = "person_id", roleText = "role_text" }
+}
+
+extension Place: FetchableRecord, PersistableRecord {
+    public static let databaseTableName = "place"
+    enum CodingKeys: String, CodingKey { case id, nameText = "name_text", lat, lon }
+}
+
+extension MemoryPlace: FetchableRecord, PersistableRecord {
+    public static let databaseTableName = "memory_place"
+    enum CodingKeys: String, CodingKey { case memoryID = "memory_id", placeID = "place_id" }
+}
+
+extension Alias: FetchableRecord, PersistableRecord {
+    public static let databaseTableName = "alias"
+    enum CodingKeys: String, CodingKey { case personID = "person_id", text }
+}
+
+extension Mention: FetchableRecord, PersistableRecord {
+    public static let databaseTableName = "mention"
+    enum CodingKeys: String, CodingKey { case id, segmentID = "segment_id", text, status, personID = "person_id" }
+}
+
+extension Anchor: FetchableRecord, PersistableRecord {
+    public static let databaseTableName = "anchor"
+    enum CodingKeys: String, CodingKey {
+        case id, memoryID = "memory_id", phrase, relation, targetKind = "target_kind", targetID = "target_id", value, resolved
+    }
+}

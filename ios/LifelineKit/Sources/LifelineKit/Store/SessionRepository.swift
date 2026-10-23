@@ -58,3 +58,23 @@ extension SessionRepository {
         _ = try db.writer.write { try Session.deleteOne($0, key: id.rawValue) }
     }
 }
+
+extension SessionRepository {
+    public func setStatus(_ status: SegmentStatus, for segment: SegmentID) throws {
+        try db.writer.write { db in
+            try db.execute(sql: "update segment set status = ? where id = ?", arguments: [status.rawValue, segment.rawValue])
+        }
+    }
+
+    /// In index order, only segments with `status`.
+    public func segments(in session: SessionID, status: SegmentStatus) throws -> [Segment] {
+        try db.writer.read {
+            try Segment.filter(Column("session_id") == session.rawValue && Column("status") == status.rawValue)
+                .order(Column("index")).fetchAll($0)
+        }
+    }
+
+    public func fetchSegment(_ id: SegmentID) throws -> Segment? {
+        try db.writer.read { try Segment.fetchOne($0, key: id.rawValue) }
+    }
+}

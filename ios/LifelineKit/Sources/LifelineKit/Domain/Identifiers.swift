@@ -22,3 +22,8 @@ extension TypedID {
 public struct SessionID: TypedID { public let rawValue: String; public init(rawValue: String) { self.rawValue = rawValue } }
 public struct SegmentID: TypedID { public let rawValue: String; public init(rawValue: String) { self.rawValue = rawValue } }
 public struct PersonID: TypedID { public let rawValue: String; public init(rawValue: String) { self.rawValue = rawValue } }
+public struct CandidateID: TypedID { public let rawValue: String; public init(rawValue: String) { self.rawValue = rawValue } }
+public struct MemoryID: TypedID { public let rawValue: String; public init(rawValue: String) { self.rawValue = rawValue } }
+public struct PlaceID: TypedID { public let rawValue: String; public init(rawValue: String) { self.rawValue = rawValue } }
+public struct MentionID: TypedID { public let rawValue: String; public init(rawValue: String) { self.rawValue = rawValue } }
+public struct AnchorID: TypedID { public let rawValue: String; public init(rawValue: String) { self.rawValue = rawValue } }
