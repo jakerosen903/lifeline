@@ -48,12 +48,15 @@ final class LaunchUITests: XCTestCase {
         XCTAssertTrue(app.otherElements["session.listening"].exists, "the listening indicator stays on screen")
         app.buttons["session.stop"].tap()
 
+        XCTAssertTrue(app.buttons["timeline.sessions"].waitForExistence(timeout: 10))
+        app.buttons["timeline.sessions"].tap()
         let row = app.buttons["home.sessionRow"].firstMatch
         XCTAssertTrue(row.waitForExistence(timeout: 5))
         XCTAssertTrue(row.label.contains("moments"))
         row.tap()
 
         let segment = app.buttons["detail.segment"].firstMatch
+        for _ in 0..<6 where !segment.exists { app.swipeUp() }   // moments sit below the waiting cards
         XCTAssertTrue(segment.waitForExistence(timeout: 5))
         segment.tap()
         XCTAssertFalse(app.staticTexts["detail.error"].exists, "playback must not fail for a recorded moment")

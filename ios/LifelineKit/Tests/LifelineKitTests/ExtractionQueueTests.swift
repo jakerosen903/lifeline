@@ -9,7 +9,8 @@ private struct Env {
         db = try AppDatabase.inMemory()
         let sessions = SessionRepository(db)
         store = ExtractionStore(candidates: CandidateRepository(db), sessions: sessions, people: PeopleRepository(db),
-                                memories: MemoryRepository(db), profile: ProfileRepository(db))
+                                memories: MemoryRepository(db), profile: ProfileRepository(db),
+                                chapters: ChapterRepository(db), curiosity: CuriosityRepository(db))
         (session, segments) = try StoreFixtures.session(in: sessions, segments: texts)
         service = FakeExtractionService(script)
         log = LogCollector()
@@ -201,4 +202,30 @@ private func collect(_ events: AsyncStream<ExtractionEvent>, count: Int, timeout
     let elapsed = await clock.measure { await queue.drain() }
     #expect(elapsed < .seconds(2), "Stop must not wait on a slow network: \(elapsed)")
     #expect(try env.store.sessions.fetchSegment(env.segments[0].id)?.status == .pending)
+}
+
+private let blankOutput = ExtractorOutput(memories: [MemoryOut(ref: "", kind: .other, title: "", quote: "", segmentSpan: WordSpan(startWord: 0, endWord: 0), peopleRefs: [],
+                                                               placeText: nil, anchors: [], sameAsMemoryID: nil, collectionHint: nil, chapterHint: nil, confidence: 0)],
+                                          mentions: [], flags: .none)
+
+@Test func aBlankAnswerIsRetriedOnceBeforeItCounts() async throws {
+    // The API once returned a memory with every field empty and nothing else. That is noise, not an answer.
+    let env = try Env(texts: ["the garden had a pomegranate tree"], script: [.success(blankOutput), .success(gardenOutput())])
+    let queue = env.queue()
+    let events = await queue.events
+    await queue.enqueue(env.segments[0].id)
+    guard case .candidates(let shown, _)? = await collect(events, count: 1).first else { Issue.record("no event"); return }
+    #expect(env.service.requests.count == 2, "asked again")
+    #expect(shown.count == 1 && shown[0].kind == .memory)
+    #expect(try env.store.candidates.candidates(for: env.segments[0].id).count == 1, "the blank answer leaves no rows")
+}
+
+@Test func twoBlankAnswersInARowAreStoredAsAFailure() async throws {
+    let env = try Env(texts: ["the garden had a pomegranate tree"], script: [.success(blankOutput), .success(blankOutput)])
+    let queue = env.queue()
+    let events = await queue.events
+    await queue.enqueue(env.segments[0].id)
+    guard case .failed(_, let error)? = await collect(events, count: 1).first else { Issue.record("expected a failure"); return }
+    #expect(error == .badOutput("blank answer"))
+    #expect(try env.store.sessions.fetchSegment(env.segments[0].id)?.status == .pending, "left for a later run, like any failure")
 }

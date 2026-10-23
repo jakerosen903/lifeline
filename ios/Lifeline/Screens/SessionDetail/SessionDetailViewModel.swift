@@ -16,10 +16,11 @@ final class SessionDetailViewModel {
     private(set) var segments: [Segment] = []
     private(set) var memories: [MemoryRow] = []
     private(set) var waiting: [Card] = []
+    private(set) var dismissed: [Candidate] = []
     private(set) var error: String?
     let player = SegmentPlayer()
     let cards: CardHandler
-    private let deps: Dependencies
+    let deps: Dependencies
 
     init(session: Session, deps: Dependencies) {
         self.session = session
@@ -33,11 +34,12 @@ final class SessionDetailViewModel {
             segments = try deps.sessions.segments(in: session.id)
             memories = try deps.extractionStore.memories.memories(in: session.id).map { memory in
                 MemoryRow(memory: memory,
-                          kind: (try? deps.extractionStore.candidates.fetch(memory.createdFromCandidateID)).flatMap { CandidatePayload.memory($0) }?.kindOrDefault ?? .other,
+                          kind: memory.createdFromCandidateID.flatMap { try? deps.extractionStore.candidates.fetch($0) }.flatMap { CandidatePayload.memory($0) }?.kindOrDefault ?? .other,
                           people: try deps.extractionStore.memories.people(of: memory.id).map(\.displayName),
                           anchors: try deps.extractionStore.memories.anchors(of: memory.id).map(\.phrase))
             }
-            let pending = try deps.extractionStore.candidates.pending(in: session.id).compactMap(Card.init)
+            let candidates = deps.extractionStore.candidates
+            let pending = CardQueue.waitingCards(pending: try candidates.pending(in: session.id)) { (try? candidates.fetch($0))?.status }
             // Names a memory listed that never had their own card wait here as well.
             let segmentIDs = Set(segments.map(\.id))
             let shownNames = Set(pending.compactMap { if case .whoIsThis(_, let text) = $0 { PeopleRepository.normalize(text) } else { nil } })
@@ -45,9 +47,15 @@ final class SessionDetailViewModel {
                 .filter { segmentIDs.contains($0.segmentID) && !shownNames.contains(PeopleRepository.normalize($0.text)) }
                 .map(Card.init)
             waiting = pending + openNames
+            dismissed = try candidates.dismissed(in: session.id)
         } catch {
             self.error = error.localizedDescription
         }
+    }
+
+    func bringBack(_ candidate: Candidate) {
+        do { try deps.actions.restore(candidate); error = nil; refresh() }
+        catch { self.error = "Could not bring that back: \(error.localizedDescription)" }
     }
 
     func accept(_ card: Card) { if cards.accept(card) { refresh() } }

@@ -96,10 +96,57 @@ extension Candidate: FetchableRecord, PersistableRecord {
 
 extension Memory: FetchableRecord, PersistableRecord {
     public static let databaseTableName = "memory"
+}
+
+extension Chapter: FetchableRecord, PersistableRecord {
+    public static let databaseTableName = "chapter"
+    enum CodingKeys: String, CodingKey { case id, title, range, order }
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: ChapterColumns.self)
+        id = try c.decode(ChapterID.self, forKey: .id)
+        title = try c.decodeIfPresent(String.self, forKey: .title)
+        order = try c.decode(Int.self, forKey: .order)
+        range = TimeRange(earliest: try c.decodeIfPresent(CivilDate.self, forKey: .earliest),
+                          latest: try c.decodeIfPresent(CivilDate.self, forKey: .latest),
+                          likelyStart: try c.decodeIfPresent(CivilDate.self, forKey: .likelyStart),
+                          likelyEnd: try c.decodeIfPresent(CivilDate.self, forKey: .likelyEnd),
+                          granularity: try c.decodeIfPresent(Granularity.self, forKey: .granularity),
+                          origin: try c.decodeIfPresent(RangeOrigin.self, forKey: .origin),
+                          evidenceText: try c.decodeIfPresent(String.self, forKey: .evidenceText))
+    }
+    public func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: ChapterColumns.self)
+        try c.encode(id, forKey: .id)
+        try c.encode(title, forKey: .title)
+        try c.encode(order, forKey: .order)
+        try c.encode(range.earliest, forKey: .earliest)
+        try c.encode(range.latest, forKey: .latest)
+        try c.encode(range.likelyStart, forKey: .likelyStart)
+        try c.encode(range.likelyEnd, forKey: .likelyEnd)
+        try c.encode(range.granularity, forKey: .granularity)
+        try c.encode(range.origin, forKey: .origin)
+        try c.encode(range.evidenceText, forKey: .evidenceText)
+    }
+}
+
+enum ChapterColumns: String, CodingKey {
+    case id, title, order
+    case earliest, latest, likelyStart = "likely_start", likelyEnd = "likely_end", granularity, origin, evidenceText = "evidence_text"
+}
+
+extension Collection: FetchableRecord, PersistableRecord {
+    public static let databaseTableName = "collection"
+}
+
+extension CollectionMemory: FetchableRecord, PersistableRecord {
+    public static let databaseTableName = "collection_memory"
+    enum CodingKeys: String, CodingKey { case collectionID = "collection_id", memoryID = "memory_id" }
+}
+
+extension CuriosityItem: FetchableRecord, PersistableRecord {
+    public static let databaseTableName = "curiosity_item"
     enum CodingKeys: String, CodingKey {
-        case id, title, summaryQuote = "summary_quote", visibility, chapterID = "chapter_id"
-        case createdFromCandidateID = "created_from_candidate_id", createdAt = "created_at"
-        case earliest, latest, likelyStart = "likely_start", likelyEnd = "likely_end", granularity, origin, evidenceText = "evidence_text"
+        case id, kind, text, payoffCount = "payoff_count", status, sourceMemoryID = "source_memory_id", targetMemoryID = "target_memory_id"
     }
 }
 
@@ -138,6 +185,6 @@ extension Mention: FetchableRecord, PersistableRecord {
 extension Anchor: FetchableRecord, PersistableRecord {
     public static let databaseTableName = "anchor"
     enum CodingKeys: String, CodingKey {
-        case id, memoryID = "memory_id", phrase, relation, targetKind = "target_kind", targetID = "target_id", value, resolved
+        case id, memoryID = "memory_id", phrase, relation, targetKind = "target_kind", targetID = "target_id", targetText = "target_text", value, resolved
     }
 }

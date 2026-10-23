@@ -5,35 +5,70 @@ public enum Visibility: String, Codable, Sendable {
 }
 
 /// The confirmed thing on the timeline. Text comes from the owner except `title`, which the
-/// extractor proposes and the owner accepts by tapping. Range columns stay nil until the
-/// resolver (M3) places the memory.
+/// extractor proposes and the owner accepts by tapping. `range` is nil-dated until the resolver
+/// places the memory. A memory with no candidate is one the resolver created to stand for a
+/// target the owner named ("graduation") but has not told yet.
 public struct Memory: Codable, Sendable, Equatable, Identifiable {
     public var id: MemoryID
     public var title: String
     public var summaryQuote: String
     public var visibility: Visibility
-    public var chapterID: String?
-    public var createdFromCandidateID: CandidateID
+    public var chapterID: ChapterID?
+    public var createdFromCandidateID: CandidateID?
     public var createdAt: Date
-    public var earliest: String?
-    public var latest: String?
-    public var likelyStart: String?
-    public var likelyEnd: String?
-    public var granularity: String?
-    public var origin: String?
-    public var evidenceText: String?
+    public var range: TimeRange
 
-    public init(id: MemoryID, title: String, summaryQuote: String, visibility: Visibility, chapterID: String?,
-                createdFromCandidateID: CandidateID, createdAt: Date, earliest: String?, latest: String?, likelyStart: String?,
-                likelyEnd: String?, granularity: String?, origin: String?, evidenceText: String?) {
+    public init(id: MemoryID, title: String, summaryQuote: String, visibility: Visibility, chapterID: ChapterID?,
+                createdFromCandidateID: CandidateID?, createdAt: Date, range: TimeRange = .unplaced) {
         self.id = id; self.title = title; self.summaryQuote = summaryQuote; self.visibility = visibility; self.chapterID = chapterID
-        self.createdFromCandidateID = createdFromCandidateID; self.createdAt = createdAt; self.earliest = earliest; self.latest = latest
-        self.likelyStart = likelyStart; self.likelyEnd = likelyEnd; self.granularity = granularity; self.origin = origin
-        self.evidenceText = evidenceText
+        self.createdFromCandidateID = createdFromCandidateID; self.createdAt = createdAt; self.range = range
     }
 
-    /// True when no range column is set: the memory belongs on the shelf.
-    public var isUnplaced: Bool { earliest == nil && latest == nil && likelyStart == nil && likelyEnd == nil }
+    public var isUnplaced: Bool { !range.isPlaced }
+    public var isFloating: Bool { createdFromCandidateID == nil }
+
+    // The range is flattened onto the row's columns.
+    enum CodingKeys: String, CodingKey {
+        case id, title, summaryQuote = "summary_quote", visibility, chapterID = "chapter_id"
+        case createdFromCandidateID = "created_from_candidate_id", createdAt = "created_at"
+        case earliest, latest, likelyStart = "likely_start", likelyEnd = "likely_end", granularity, origin, evidenceText = "evidence_text"
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(MemoryID.self, forKey: .id)
+        title = try c.decode(String.self, forKey: .title)
+        summaryQuote = try c.decode(String.self, forKey: .summaryQuote)
+        visibility = try c.decode(Visibility.self, forKey: .visibility)
+        chapterID = try c.decodeIfPresent(ChapterID.self, forKey: .chapterID)
+        createdFromCandidateID = try c.decodeIfPresent(CandidateID.self, forKey: .createdFromCandidateID)
+        createdAt = try c.decode(Date.self, forKey: .createdAt)
+        range = TimeRange(earliest: try c.decodeIfPresent(CivilDate.self, forKey: .earliest),
+                          latest: try c.decodeIfPresent(CivilDate.self, forKey: .latest),
+                          likelyStart: try c.decodeIfPresent(CivilDate.self, forKey: .likelyStart),
+                          likelyEnd: try c.decodeIfPresent(CivilDate.self, forKey: .likelyEnd),
+                          granularity: try c.decodeIfPresent(Granularity.self, forKey: .granularity),
+                          origin: try c.decodeIfPresent(RangeOrigin.self, forKey: .origin),
+                          evidenceText: try c.decodeIfPresent(String.self, forKey: .evidenceText))
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(id, forKey: .id)
+        try c.encode(title, forKey: .title)
+        try c.encode(summaryQuote, forKey: .summaryQuote)
+        try c.encode(visibility, forKey: .visibility)
+        try c.encode(chapterID, forKey: .chapterID)
+        try c.encode(createdFromCandidateID, forKey: .createdFromCandidateID)
+        try c.encode(createdAt, forKey: .createdAt)
+        try c.encode(range.earliest, forKey: .earliest)
+        try c.encode(range.latest, forKey: .latest)
+        try c.encode(range.likelyStart, forKey: .likelyStart)
+        try c.encode(range.likelyEnd, forKey: .likelyEnd)
+        try c.encode(range.granularity, forKey: .granularity)
+        try c.encode(range.origin, forKey: .origin)
+        try c.encode(range.evidenceText, forKey: .evidenceText)
+    }
 }
 
 /// A memory's span of one segment. The span with order 0 is the primary.

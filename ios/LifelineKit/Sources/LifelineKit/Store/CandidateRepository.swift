@@ -63,6 +63,19 @@ public struct CandidateRepository: Sendable {
         }
     }
 
+    /// Memory and person candidates the owner dismissed (not ones the validator rejected or the app withheld).
+    public func dismissed(in session: SessionID) throws -> [Candidate] {
+        try db.writer.read { db in
+            try Candidate.fetchAll(db, sql: """
+                select candidate.* from candidate
+                join segment on segment.id = candidate.segment_id
+                where segment.session_id = ? and candidate.status = 'dismissed' and candidate.rejection is null
+                  and candidate.kind in ('memory', 'person')
+                order by segment."index", candidate.ordinal
+                """, arguments: [session.rawValue])
+        }
+    }
+
     /// True when any candidate of this version exists for the segment.
     public func hasCandidates(for segment: SegmentID, version: String) throws -> Bool {
         try db.writer.read { db in

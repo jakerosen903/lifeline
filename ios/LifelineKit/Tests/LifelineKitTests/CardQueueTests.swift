@@ -53,3 +53,17 @@ private func mentionCandidate(_ segment: SegmentID, ordinal: Int = 1) throws -> 
     queue.apply(.candidates([StoreFixtures.candidate(segment, kind: .memory, payload: "{}")], segment: segment))
     #expect(queue.cards.isEmpty)
 }
+
+@Test func waitingCardsHoldHintsUntilTheirMemoryIsAccepted() throws {
+    let segment = SegmentID()
+    let memory = try memoryCandidate(segment, ordinal: 0)
+    let hintOut = HintOut(kind: .collection, phrase: "every summer", memoryCandidateID: memory.id.rawValue)
+    let hint = StoreFixtures.candidate(segment, ordinal: 1, kind: .hint, payload: try CandidatePayload.encode(hintOut))
+    let orphan = StoreFixtures.candidate(segment, ordinal: 2, kind: .hint, payload: try CandidatePayload.encode(HintOut(kind: .chapter, phrase: "x", memoryCandidateID: "gone")))
+    let pendingMemory = CardQueue.waitingCards(pending: [memory, hint, orphan], statusOf: { id in id == memory.id ? .pending : nil })
+    #expect(pendingMemory.map(\.id) == [memory.id.rawValue], "a hint waits for its memory; an orphan hint is never shown")
+    let accepted = CardQueue.waitingCards(pending: [hint, orphan], statusOf: { id in id == memory.id ? .accepted : nil })
+    #expect(accepted.map(\.id) == [hint.id.rawValue])
+    let dismissed = CardQueue.waitingCards(pending: [hint], statusOf: { _ in .dismissed })
+    #expect(dismissed.isEmpty)
+}

@@ -16,6 +16,7 @@ public enum CLI {
       lifeline extract --session <id> --db <path> [--version v1] [--model <id>]
                                                            run the extractor over the session's pending segments
                                                            (reads ANTHROPIC_API_KEY from the environment)
+      lifeline resolve --all --db <path>                   re-run the resolver over every memory and print what changed
 
     """
 
@@ -38,6 +39,13 @@ public enum CLI {
             let repo = SessionRepository(try AppDatabase.open(at: URL(fileURLWithPath: dbPath)))
             let id = try TranscriptImport.importTranscript(at: URL(fileURLWithPath: args[0]), into: repo)
             return Result(exitCode: 0, output: id.rawValue + "\n")
+        case "resolve":
+            guard args == ["--all"] else { return Result(exitCode: 2, output: usage) }
+            let store = ExtractionStore(try AppDatabase.open(at: URL(fileURLWithPath: dbPath)))
+            let report = try ResolverRunner(store: store).run()
+            var lines = report.changes.map { "\($0.title)\t\($0.before.displayText)\t→\t\($0.after.displayText)" }
+            lines.append("\(report.placed) placed, \(report.floatingCreated) floating created, \(report.curiosityOpen) questions open")
+            return Result(exitCode: 0, output: lines.joined(separator: "\n") + "\n")
         case "extract":
             guard let sessionArg = takeOption("--session", from: &args) else { return Result(exitCode: 2, output: usage) }
             var config = ExtractorConfig.default
@@ -66,7 +74,7 @@ public enum CLI {
         }
 
         let segments = try store.sessions.segments(in: session)
-        let queue = ExtractionQueue(session: session, service: service, store: store)
+        let queue = ExtractionQueue(session: session, service: service, store: store, log: { FileHandle.standardError.write(Data("[extract] \($0)\n".utf8)) })
         for segment in segments where segment.status == .pending { await queue.enqueue(segment.id) }
         await queue.drain()
 

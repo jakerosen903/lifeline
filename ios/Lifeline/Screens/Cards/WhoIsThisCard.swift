@@ -48,6 +48,7 @@ struct WhoIsThisCard: View {
             .tint(Theme.olive)
             .accessibilityIdentifier("card.newPerson")
             Button("Not a person") { onChoose(.notAPerson) }
+                .buttonStyle(.borderless)
                 .foregroundStyle(Theme.stone)
                 .accessibilityIdentifier("card.notAPerson")
         }

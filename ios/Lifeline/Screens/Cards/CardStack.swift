@@ -18,6 +18,8 @@ struct CardStack: View {
                 case .whoIsThis(_, let text):
                     WhoIsThisCard(text: text, people: handler.peopleChoices(for: text)) { onResolve(card, $0) }
                         .onAppear { handler.shown(card) }
+                case .hint(_, let hint):
+                    HintCard(hint: hint, onAccept: { onAccept(card) }, onDismiss: { onDismiss(card) })
                 }
             }
         }

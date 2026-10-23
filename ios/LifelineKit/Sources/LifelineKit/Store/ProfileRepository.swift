@@ -25,6 +25,15 @@ public struct ProfileRepository: Sendable {
         }
     }
 
+    /// The owner's birthday as a calendar date, from the profile (typed) or the owner row (stated).
+    public func ownerBirthDate() throws -> CivilDate? {
+        let date = try fetch()?.birthDate ?? owner()?.birthDate
+        guard let date else { return nil }
+        let parts = Calendar.current.dateComponents([.year, .month, .day], from: date)
+        guard let y = parts.year, let m = parts.month, let d = parts.day else { return nil }
+        return CivilDate(year: y, month: m, day: d)
+    }
+
     public func owner() throws -> Person? {
         try db.writer.read { try Person.filter(Column("is_owner") == true).fetchOne($0) }
     }

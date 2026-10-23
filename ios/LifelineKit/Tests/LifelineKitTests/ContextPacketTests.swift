@@ -50,3 +50,14 @@ private func person(_ name: String, owner: Bool = false, aliases: [String] = [])
     let text = String(decoding: try build().encodedJSON(), as: UTF8.self)
     #expect(text.firstRange(of: "\"chapters\"")!.lowerBound < text.firstRange(of: "\"people\"")!.lowerBound)
 }
+
+@Test func packetCarriesChaptersAndOpenQuestions() {
+    let chapter = Chapter(id: .init(), title: "The Boston years", range: .year(2011, origin: .derived, evidence: nil), order: 0)
+    let untitled = Chapter(id: .init(), title: nil, range: .unplaced, order: 1)
+    let questions = (0..<12).map { CuriosityItem(id: .init(), kind: .unresolvedAnchor, text: "q\($0)", payoffCount: 12 - $0, status: .open, sourceMemoryID: nil, targetMemoryID: nil) }
+    let packet = ContextPacketBuilder.build(segment: seg(0, "x"), previous: [], people: [], memories: [], profileFreeText: nil, stage: "open",
+                                            chapters: [chapter, untitled], curiosity: questions)
+    #expect(packet.chapters.map(\.title) == ["The Boston years", "untitled"])
+    #expect(packet.chapters[0].rangeText == "2011" && packet.chapters[1].rangeText == nil)
+    #expect(packet.curiosity.count == 10 && packet.curiosity.first == "q0")
+}

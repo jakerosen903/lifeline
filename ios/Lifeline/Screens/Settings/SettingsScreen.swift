@@ -10,7 +10,11 @@ struct SettingsScreen: View {
     var body: some View {
         NavigationStack {
             Form {
-                AboutYouFields(viewModel: AboutYouViewModel(profile: deps.profile, mode: .settings) { dismiss() })
+                AboutYouFields(viewModel: AboutYouViewModel(profile: deps.profile, mode: .settings) {
+                    // A new birthday can place every age-anchored memory.
+                    _ = try? ResolverRunner(store: deps.extractionStore).run()
+                    dismiss()
+                })
 
                 APIKeySection(key: key, secrets: deps.secrets)
             }
@@ -44,11 +48,13 @@ private struct APIKeySection: View {
                 .accessibilityIdentifier("settings.apiKey")
             HStack {
                 Button("Save key") { key.save(into: secrets) }
+                    .buttonStyle(.borderless)
                     .disabled(!key.canSave)
                     .accessibilityIdentifier("settings.apiKeySave")
                 Spacer()
                 if key.isSaved {
                     Button("Remove", role: .destructive) { key.remove(from: secrets) }
+                        .buttonStyle(.borderless)
                         .accessibilityIdentifier("settings.apiKeyRemove")
                 }
             }

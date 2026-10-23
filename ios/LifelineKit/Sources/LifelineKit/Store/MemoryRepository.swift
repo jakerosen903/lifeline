@@ -29,20 +29,27 @@ public struct MemoryRepository: Sendable {
         }
     }
 
+    /// Removes a memory and, by cascade, its spans, people, places and anchors.
+    public func delete(_ id: MemoryID) throws {
+        _ = try db.writer.write { try Memory.deleteOne($0, key: id.rawValue) }
+    }
+
     public func fetch(_ id: MemoryID) throws -> Memory? {
         try db.writer.read { try Memory.fetchOne($0, key: id.rawValue) }
     }
 
-    /// Memories with a span in this session, in session order (first span's segment, then start).
-    public func memories(in session: SessionID) throws -> [Memory] {
+    /// Memories told in this session, in session order (first span's segment, then start).
+    /// Stand-ins the resolver made borrow a span here but are not told stories; they are left out
+    /// unless asked for.
+    public func memories(in session: SessionID, includingStandIns: Bool = false) throws -> [Memory] {
         try db.writer.read { db in
             try Memory.fetchAll(db, sql: """
                 select memory.* from memory
                 join memory_span on memory_span.memory_id = memory.id and memory_span."order" = 0
                 join segment on segment.id = memory_span.segment_id
-                where segment.session_id = ?
+                where segment.session_id = ? and (? or memory.created_from_candidate_id is not null)
                 order by segment."index", memory_span.start_ms, memory.created_at
-                """, arguments: [session.rawValue])
+                """, arguments: [session.rawValue, includingStandIns])
         }
     }
 
@@ -79,6 +86,14 @@ public struct MemoryRepository: Sendable {
         try db.writer.read { try Anchor.filter(Column("memory_id") == memory.rawValue).fetchAll($0) }
     }
 
+    public func allAnchors() throws -> [Anchor] {
+        try db.writer.read { try Anchor.fetchAll($0) }
+    }
+
+    public func update(_ anchor: Anchor) throws {
+        try db.writer.write { try anchor.update($0) }
+    }
+
     public func places(of memory: MemoryID) throws -> [Place] {
         try db.writer.read { db in
             try Place.fetchAll(db, sql: """
@@ -86,6 +101,40 @@ public struct MemoryRepository: Sendable {
                 where memory_place.memory_id = ? order by place.name_text
                 """, arguments: [memory.rawValue])
         }
+    }
+
+    public func updateRange(_ id: MemoryID, _ range: TimeRange) throws {
+        try db.writer.write { db in
+            guard var memory = try Memory.fetchOne(db, key: id.rawValue) else { return }
+            memory.range = range
+            try memory.update(db)
+        }
+    }
+
+    public func allMemories() throws -> [Memory] {
+        try db.writer.read { try Memory.order(Column("created_at")).fetchAll($0) }
+    }
+
+    public func memories(inChapter chapter: ChapterID) throws -> [Memory] {
+        try db.writer.read { try Memory.filter(Column("chapter_id") == chapter.rawValue).order(Column("created_at")).fetchAll($0) }
+    }
+
+    /// Memories with no range at all.
+    public func unplacedMemories() throws -> [Memory] {
+        try db.writer.read {
+            try Memory.filter(Column("earliest") == nil && Column("latest") == nil && Column("likely_start") == nil && Column("likely_end") == nil)
+                .order(Column("created_at")).fetchAll($0)
+        }
+    }
+
+    /// A memory the resolver creates to stand for a target the owner named but has not told
+    /// yet. It has no candidate; its span is the span of the memory that named it.
+    public func insertFloating(title: String, segment: SegmentID, startMs: Milliseconds, endMs: Milliseconds) throws -> Memory {
+        let memory = Memory(id: .init(), title: title, summaryQuote: title, visibility: .timeline, chapterID: nil,
+                            createdFromCandidateID: nil, createdAt: .now)
+        try insert(memory, spans: [MemorySpan(memoryID: memory.id, segmentID: segment, startMs: startMs, endMs: endMs, order: 0)],
+                   people: [], places: [], anchors: [])
+        return memory
     }
 
     /// Links a person to a memory; a second link to the same person is a no-op.

@@ -59,10 +59,10 @@ public actor ScriptedVoiceSession: VoiceSession {
 
     /// Invented content. Never a real person's data.
     public static let sampleScript: [SegmentTranscript] = [
-        SegmentTranscript(range: MsRange(start: 0, end: 4_000), text: "the house had a blue door and a pomegranate tree",
-                          words: words("the house had a blue door and a pomegranate tree", from: 0, to: 4_000)),
-        SegmentTranscript(range: MsRange(start: 5_500, end: 9_000), text: "my sister Maya used to climb it every summer",
-                          words: words("my sister Maya used to climb it every summer", from: 5_500, to: 9_000)),
+        SegmentTranscript(range: MsRange(start: 0, end: 4_000), text: "the house had a blue door when I was six before Maya climbed it",
+                          words: words("the house had a blue door when I was six before Maya climbed it", from: 0, to: 4_000)),
+        SegmentTranscript(range: MsRange(start: 5_500, end: 9_000), text: "my sister Maya climbed it in 1998 every summer",
+                          words: words("my sister Maya climbed it in 1998 every summer", from: 5_500, to: 9_000)),
         SegmentTranscript(range: MsRange(start: 10_500, end: 13_000), text: "we moved away the year before she was born",
                           words: words("we moved away the year before she was born", from: 10_500, to: 13_000)),
     ]

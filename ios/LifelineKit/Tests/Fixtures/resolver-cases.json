@@ -1,0 +1,564 @@
+[
+ {
+  "phrase": "in 1998",
+  "value": null,
+  "relation": "absolute",
+  "expect": {
+   "earliest": "1998-01-01",
+   "latest": "1998-12-31",
+   "granularity": "year"
+  }
+ },
+ {
+  "phrase": "back in '98",
+  "value": null,
+  "relation": "absolute",
+  "expect": {
+   "earliest": "1998-01-01",
+   "latest": "1998-12-31",
+   "granularity": "year"
+  }
+ },
+ {
+  "phrase": "March 1994",
+  "value": null,
+  "relation": "absolute",
+  "expect": {
+   "earliest": "1994-03-01",
+   "latest": "1994-03-31",
+   "granularity": "month"
+  }
+ },
+ {
+  "phrase": "in march of 1994",
+  "value": null,
+  "relation": "absolute",
+  "expect": {
+   "earliest": "1994-03-01",
+   "latest": "1994-03-31",
+   "granularity": "month"
+  }
+ },
+ {
+  "phrase": "the summer of 1998",
+  "value": null,
+  "relation": "absolute",
+  "expect": {
+   "earliest": "1998-06-01",
+   "latest": "1998-08-31",
+   "granularity": "season"
+  }
+ },
+ {
+  "phrase": "summer 98",
+  "value": null,
+  "relation": "absolute",
+  "expect": {
+   "earliest": "1998-06-01",
+   "latest": "1998-08-31",
+   "granularity": "season"
+  }
+ },
+ {
+  "phrase": "spring of 2004",
+  "value": null,
+  "relation": "absolute",
+  "expect": {
+   "earliest": "2004-03-01",
+   "latest": "2004-05-31",
+   "granularity": "season"
+  }
+ },
+ {
+  "phrase": "that fall, 2011",
+  "value": null,
+  "relation": "absolute",
+  "expect": {
+   "earliest": "2011-09-01",
+   "latest": "2011-11-30",
+   "granularity": "season"
+  }
+ },
+ {
+  "phrase": "autumn 2011",
+  "value": null,
+  "relation": "absolute",
+  "expect": {
+   "earliest": "2011-09-01",
+   "latest": "2011-11-30",
+   "granularity": "season"
+  }
+ },
+ {
+  "phrase": "the winter of 1999",
+  "value": null,
+  "relation": "absolute",
+  "expect": {
+   "earliest": "1999-12-01",
+   "latest": "2000-02-29",
+   "granularity": "season"
+  }
+ },
+ {
+  "phrase": "winter 2002",
+  "value": null,
+  "relation": "absolute",
+  "expect": {
+   "earliest": "2002-12-01",
+   "latest": "2003-02-28",
+   "granularity": "season"
+  }
+ },
+ {
+  "phrase": "the nineties",
+  "value": null,
+  "relation": "absolute",
+  "expect": {
+   "earliest": "1990-01-01",
+   "latest": "1999-12-31",
+   "granularity": "decade"
+  }
+ },
+ {
+  "phrase": "the 1990s",
+  "value": null,
+  "relation": "absolute",
+  "expect": {
+   "earliest": "1990-01-01",
+   "latest": "1999-12-31",
+   "granularity": "decade"
+  }
+ },
+ {
+  "phrase": "the 90s",
+  "value": null,
+  "relation": "absolute",
+  "expect": {
+   "earliest": "1990-01-01",
+   "latest": "1999-12-31",
+   "granularity": "decade"
+  }
+ },
+ {
+  "phrase": "the early 2000s",
+  "value": null,
+  "relation": "absolute",
+  "expect": {
+   "earliest": "2000-01-01",
+   "latest": "2009-12-31",
+   "granularity": "decade"
+  }
+ },
+ {
+  "phrase": "on my birthday",
+  "value": "1994-03-12",
+  "relation": "absolute",
+  "expect": {
+   "earliest": "1994-03-12",
+   "latest": "1994-03-12",
+   "granularity": "day"
+  }
+ },
+ {
+  "phrase": "that day",
+  "value": "2004-06-05",
+  "relation": "absolute",
+  "expect": {
+   "earliest": "2004-06-05",
+   "latest": "2004-06-05",
+   "granularity": "day"
+  }
+ },
+ {
+  "phrase": "a year I don't remember",
+  "value": "2010",
+  "relation": "absolute",
+  "expect": {
+   "earliest": "2010-01-01",
+   "latest": "2010-12-31",
+   "granularity": "year"
+  }
+ },
+ {
+  "phrase": "in 1850",
+  "value": null,
+  "relation": "absolute",
+  "expect": null
+ },
+ {
+  "phrase": "the summer after graduation",
+  "value": null,
+  "relation": "after",
+  "expect": null
+ },
+ {
+  "phrase": "before Maya was born",
+  "value": null,
+  "relation": "before",
+  "expect": null
+ },
+ {
+  "phrase": "a long time ago",
+  "value": null,
+  "relation": "absolute",
+  "expect": null
+ },
+ {
+  "phrase": "when I was six",
+  "value": null,
+  "relation": "age",
+  "expect": {
+   "age": {
+    "years": [
+     6,
+     6
+    ]
+   }
+  }
+ },
+ {
+  "phrase": "when I was 6",
+  "value": null,
+  "relation": "age",
+  "expect": {
+   "age": {
+    "years": [
+     6,
+     6
+    ]
+   }
+  }
+ },
+ {
+  "phrase": "I was eleven",
+  "value": "11",
+  "relation": "age",
+  "expect": {
+   "age": {
+    "years": [
+     11,
+     11
+    ]
+   }
+  }
+ },
+ {
+  "phrase": "at eleven or twelve",
+  "value": null,
+  "relation": "age",
+  "expect": {
+   "age": {
+    "years": [
+     11,
+     12
+    ]
+   }
+  }
+ },
+ {
+  "phrase": "around ten",
+  "value": null,
+  "relation": "age",
+  "expect": {
+   "age": {
+    "approximate": [
+     10,
+     1
+    ]
+   }
+  }
+ },
+ {
+  "phrase": "about twenty-five",
+  "value": null,
+  "relation": "age",
+  "expect": {
+   "age": {
+    "approximate": [
+     25,
+     1
+    ]
+   }
+  }
+ },
+ {
+  "phrase": "I was thirty-ish",
+  "value": null,
+  "relation": "age",
+  "expect": {
+   "age": {
+    "approximate": [
+     30,
+     1
+    ]
+   }
+  }
+ },
+ {
+  "phrase": "my sixth birthday",
+  "value": null,
+  "relation": "age",
+  "expect": {
+   "age": {
+    "years": [
+     6,
+     6
+    ]
+   }
+  }
+ },
+ {
+  "phrase": "when I turned twenty one",
+  "value": null,
+  "relation": "age",
+  "expect": {
+   "age": {
+    "years": [
+     21,
+     21
+    ]
+   }
+  }
+ },
+ {
+  "phrase": "third grade",
+  "value": null,
+  "relation": "age",
+  "expect": {
+   "age": {
+    "grade": 3
+   }
+  }
+ },
+ {
+  "phrase": "in 3rd grade",
+  "value": null,
+  "relation": "age",
+  "expect": {
+   "age": {
+    "grade": 3
+   }
+  }
+ },
+ {
+  "phrase": "kindergarten",
+  "value": null,
+  "relation": "age",
+  "expect": {
+   "age": {
+    "grade": 0
+   }
+  }
+ },
+ {
+  "phrase": "a freshman in high school",
+  "value": null,
+  "relation": "age",
+  "expect": {
+   "age": {
+    "grade": 9
+   }
+  }
+ },
+ {
+  "phrase": "my sophomore year",
+  "value": null,
+  "relation": "age",
+  "expect": {
+   "age": {
+    "grade": 10
+   }
+  }
+ },
+ {
+  "phrase": "junior year of high school",
+  "value": null,
+  "relation": "age",
+  "expect": {
+   "age": {
+    "grade": 11
+   }
+  }
+ },
+ {
+  "phrase": "senior year",
+  "value": null,
+  "relation": "age",
+  "expect": {
+   "age": {
+    "grade": 12
+   }
+  }
+ },
+ {
+  "phrase": "in middle school",
+  "value": null,
+  "relation": "age",
+  "expect": {
+   "age": {
+    "years": [
+     11,
+     14
+    ]
+   }
+  }
+ },
+ {
+  "phrase": "in high school",
+  "value": null,
+  "relation": "age",
+  "expect": {
+   "age": {
+    "years": [
+     14,
+     18
+    ]
+   }
+  }
+ },
+ {
+  "phrase": "in college",
+  "value": null,
+  "relation": "age",
+  "expect": {
+   "age": {
+    "years": [
+     18,
+     22
+    ]
+   }
+  }
+ },
+ {
+  "phrase": "when I was little",
+  "value": null,
+  "relation": "age",
+  "expect": null
+ },
+ {
+  "phrase": "when I was a hundred and five",
+  "value": null,
+  "relation": "age",
+  "expect": null
+ },
+ {
+  "phrase": "1997 or 1998",
+  "value": null,
+  "relation": "absolute",
+  "expect": {
+   "earliest": "1997-01-01",
+   "latest": "1998-12-31",
+   "granularity": "year",
+   "origin": "inferred"
+  }
+ },
+ {
+  "phrase": "around 1998",
+  "value": null,
+  "relation": "absolute",
+  "expect": {
+   "earliest": "1998-01-01",
+   "latest": "1998-12-31",
+   "granularity": "year",
+   "origin": "inferred"
+  }
+ },
+ {
+  "phrase": "1998 or so",
+  "value": null,
+  "relation": "absolute",
+  "expect": {
+   "earliest": "1998-01-01",
+   "latest": "1998-12-31",
+   "granularity": "year",
+   "origin": "inferred"
+  }
+ },
+ {
+  "phrase": "it may have been 1998",
+  "value": null,
+  "relation": "absolute",
+  "expect": {
+   "earliest": "1998-01-01",
+   "latest": "1998-12-31",
+   "granularity": "year",
+   "origin": "inferred"
+  }
+ },
+ {
+  "phrase": "maybe 2004",
+  "value": "2004",
+  "relation": "absolute",
+  "expect": {
+   "earliest": "2004-01-01",
+   "latest": "2004-12-31",
+   "granularity": "year",
+   "origin": "inferred"
+  }
+ },
+ {
+  "phrase": "May 1998",
+  "value": null,
+  "relation": "absolute",
+  "expect": {
+   "earliest": "1998-05-01",
+   "latest": "1998-05-31",
+   "granularity": "month"
+  }
+ },
+ {
+  "phrase": "junior year of college",
+  "value": null,
+  "relation": "age",
+  "expect": {
+   "age": {
+    "years": [
+     20,
+     20
+    ]
+   }
+  }
+ },
+ {
+  "phrase": "a sophomore in college",
+  "value": null,
+  "relation": "age",
+  "expect": {
+   "age": {
+    "years": [
+     19,
+     19
+    ]
+   }
+  }
+ },
+ {
+  "phrase": "grade 3",
+  "value": null,
+  "relation": "age",
+  "expect": {
+   "age": {
+    "grade": 3
+   }
+  }
+ },
+ {
+  "phrase": "six months old",
+  "value": null,
+  "relation": "age",
+  "expect": null
+ },
+ {
+  "phrase": "twelve or eleven",
+  "value": null,
+  "relation": "age",
+  "expect": {
+   "age": {
+    "years": [
+     11,
+     12
+    ]
+   }
+  }
+ }
+]

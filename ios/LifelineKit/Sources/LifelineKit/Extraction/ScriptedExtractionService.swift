@@ -1,8 +1,9 @@
 import Foundation
 
 /// Deterministic candidates for UI tests and demos, matched to `ScriptedVoiceSession.sampleScript`:
-/// a segment that mentions a blue door yields one memory; a segment that names Maya yields one
-/// unknown-person mention; everything else yields nothing.
+/// the blue-door segment yields a memory anchored by an age and by "before Maya climbed it";
+/// the Maya segment yields a memory stated "in 1998" and an unknown-person mention; everything
+/// else yields nothing.
 public struct ScriptedExtractionService: ExtractionService {
     public let version = "scripted"
     public var delayMs: Int
@@ -12,14 +13,23 @@ public struct ScriptedExtractionService: ExtractionService {
     public func extract(_ request: ExtractionRequest) async throws(ExtractionError) -> ExtractionResponse {
         try? await Task.sleep(for: .milliseconds(delayMs))
         let words = request.words
+        let text = request.segmentText
         var memories: [MemoryOut] = []
         var mentions: [MentionOut] = []
-        if request.segmentText.localizedCaseInsensitiveContains("blue door") {
-            memories.append(MemoryOut(ref: "m1", kind: .event, title: "The blue door", quote: request.segmentText,
+        if text.localizedCaseInsensitiveContains("blue door") {
+            memories.append(MemoryOut(ref: "m1", kind: .event, title: "The blue door", quote: text,
                                       segmentSpan: WordSpan(startWord: 0, endWord: max(0, words.count - 1)),
                                       peopleRefs: [], placeText: nil,
-                                      anchors: [AnchorOut(phrase: "blue door", relation: .during, targetText: nil, value: nil)],
+                                      anchors: [AnchorOut(phrase: "when I was six", relation: .age, targetText: nil, value: nil),
+                                                AnchorOut(phrase: "before Maya climbed it", relation: .before, targetText: "Maya climbed it", value: nil)],
                                       sameAsMemoryID: nil, collectionHint: nil, chapterHint: nil, confidence: 0.9))
+        }
+        if text.localizedCaseInsensitiveContains("climbed it in 1998") {
+            memories.append(MemoryOut(ref: "m2", kind: .event, title: "Maya climbed it", quote: text,
+                                      segmentSpan: WordSpan(startWord: 0, endWord: max(0, words.count - 1)),
+                                      peopleRefs: ["Maya"], placeText: nil,
+                                      anchors: [AnchorOut(phrase: "in 1998", relation: .absolute, targetText: nil, value: nil)],
+                                      sameAsMemoryID: nil, collectionHint: "every summer", chapterHint: nil, confidence: 0.8))
         }
         if words.contains(where: { $0.caseInsensitiveCompare("Maya") == .orderedSame }) {
             mentions.append(MentionOut(text: "Maya", kind: .person, likelyAliasOfPersonID: nil, confidence: 0.8, relationText: "my sister"))

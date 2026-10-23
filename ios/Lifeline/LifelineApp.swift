@@ -39,7 +39,7 @@ struct RootView: View {
     var body: some View {
         if let deps = model.deps {
             if model.hasProfile {
-                HomeScreen(viewModel: HomeViewModel(deps: deps))
+                TimelineScreen(viewModel: TimelineViewModel(deps: deps))
             } else {
                 AboutYouScreen(viewModel: AboutYouViewModel(profile: deps.profile, mode: .firstOpen) { model.profileSaved() })
             }

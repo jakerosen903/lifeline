@@ -29,7 +29,6 @@ enum StoreFixtures {
 
     static func memory(from candidate: CandidateID, title: String = "The pomegranate tree") -> Memory {
         Memory(id: .init(), title: title, summaryQuote: "the garden had a pomegranate tree", visibility: .timeline, chapterID: nil,
-               createdFromCandidateID: candidate, createdAt: .now,
-               earliest: nil, latest: nil, likelyStart: nil, likelyEnd: nil, granularity: nil, origin: nil, evidenceText: nil)
+               createdFromCandidateID: candidate, createdAt: .now)
     }
 }

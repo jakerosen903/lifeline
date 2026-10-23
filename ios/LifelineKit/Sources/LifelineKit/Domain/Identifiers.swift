@@ -27,3 +27,6 @@ public struct MemoryID: TypedID { public let rawValue: String; public init(rawVa
 public struct PlaceID: TypedID { public let rawValue: String; public init(rawValue: String) { self.rawValue = rawValue } }
 public struct MentionID: TypedID { public let rawValue: String; public init(rawValue: String) { self.rawValue = rawValue } }
 public struct AnchorID: TypedID { public let rawValue: String; public init(rawValue: String) { self.rawValue = rawValue } }
+public struct ChapterID: TypedID { public let rawValue: String; public init(rawValue: String) { self.rawValue = rawValue } }
+public struct CollectionID: TypedID { public let rawValue: String; public init(rawValue: String) { self.rawValue = rawValue } }
+public struct CuriosityItemID: TypedID { public let rawValue: String; public init(rawValue: String) { self.rawValue = rawValue } }

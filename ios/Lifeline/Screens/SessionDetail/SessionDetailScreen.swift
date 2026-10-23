@@ -20,6 +20,9 @@ struct SessionDetailScreen: View {
             if !viewModel.memories.isEmpty {
                 Section("Memories") {
                     ForEach(viewModel.memories) { row in
+                        NavigationLink {
+                            MemoryScreen(viewModel: MemoryViewModel(memory: row.memory, deps: viewModel.deps)) { viewModel.refresh() }
+                        } label: {
                         VStack(alignment: .leading, spacing: 4) {
                             if row.kind != .event && row.kind != .other {
                                 Text(row.kind.cardLabel).font(.caption2.weight(.semibold)).foregroundStyle(Theme.olive)
@@ -39,7 +42,7 @@ struct SessionDetailScreen: View {
                             }
                         }
                         .padding(.vertical, 4)
-                        .accessibilityElement(children: .combine)
+                        }
                         .accessibilityIdentifier("detail.memory")
                     }
                 }
@@ -68,6 +71,22 @@ struct SessionDetailScreen: View {
                         .padding(.vertical, 4)
                     }
                     .accessibilityIdentifier("detail.segment")
+                }
+            }
+            if !viewModel.dismissed.isEmpty {
+                Section("Dismissed") {
+                    ForEach(viewModel.dismissed) { candidate in
+                        HStack {
+                            Text(CandidatePayload.memory(candidate)?.title ?? CandidatePayload.mention(candidate)?.text ?? "")
+                                .font(.system(.subheadline, design: .serif))
+                                .foregroundStyle(Theme.stone)
+                            Spacer()
+                            Button("Bring back") { viewModel.bringBack(candidate) }
+                                .buttonStyle(.bordered)
+                                .tint(Theme.olive)
+                                .accessibilityIdentifier("detail.bringBack")
+                        }
+                    }
                 }
             }
             if let error = viewModel.error ?? viewModel.cards.error {

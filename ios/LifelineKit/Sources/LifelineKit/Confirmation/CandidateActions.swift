@@ -16,6 +16,13 @@ public struct CandidateActions: Sendable {
         case badPayload
         case segmentMissing
         case emptySpan
+        case memoryNotAccepted
+        case notDismissed
+    }
+
+    public enum HintResult: Equatable, Sendable {
+        case collection(Collection)
+        case chapter(Chapter)
     }
 
     public struct AcceptedMemory: Sendable, Equatable {
@@ -37,8 +44,7 @@ public struct CandidateActions: Sendable {
               out.segmentSpan.startWord <= out.segmentSpan.endWord else { throw Error.emptySpan }
 
         let memory = Memory(id: .init(), title: out.title, summaryQuote: out.quote, visibility: .timeline, chapterID: nil,
-                            createdFromCandidateID: candidate.id, createdAt: .now, earliest: nil, latest: nil, likelyStart: nil,
-                            likelyEnd: nil, granularity: nil, origin: nil, evidenceText: nil)
+                            createdFromCandidateID: candidate.id, createdAt: .now)
         let span = MemorySpan(memoryID: memory.id, segmentID: candidate.segmentID,
                               startMs: words[out.segmentSpan.startWord].startMs, endMs: words[out.segmentSpan.endWord].endMs, order: 0)
 
@@ -63,7 +69,7 @@ public struct CandidateActions: Sendable {
         }
         let anchors = out.anchors.map {
             Anchor(id: .init(), memoryID: memory.id, phrase: $0.phrase, relation: $0.relation, targetKind: .none, targetID: nil,
-                   value: $0.value, resolved: false)
+                   targetText: $0.targetText, value: $0.value, resolved: false)
         }
 
         try store.memories.insert(memory, spans: [span], people: people, places: places, anchors: anchors, acceptingCandidate: candidate.id)
@@ -73,12 +79,32 @@ public struct CandidateActions: Sendable {
         for name in unknown {
             newMentions.append(try mention(for: name, in: candidate.segmentID))
         }
+        // Place what the new anchors allow, and re-place anything that pointed at this title.
+        _ = try ResolverRunner(store: store).run()
         return AcceptedMemory(memory: memory, newMentions: newMentions)
     }
 
     public func dismiss(_ candidate: Candidate) throws {
         try requirePending(candidate)
         try store.candidates.setStatus(candidate.id, .dismissed)
+    }
+
+    /// A wrong tap costs nothing: a dismissed card waits again. Only what the owner dismissed
+    /// comes back; what the validator rejected or the app withheld stays out.
+    public func restore(_ candidate: Candidate) throws {
+        guard let current = try store.candidates.fetch(candidate.id), current.status == .dismissed, current.rejection == nil else {
+            throw Error.notDismissed
+        }
+        try store.candidates.setStatus(candidate.id, .pending)
+        if current.kind == .person, let mention = try store.people.mentions(in: current.segmentID).first(where: { m in
+            CandidatePayload.mention(current).map { Self.same($0.text, m.text) } ?? false
+        }), mention.status == .notAPerson {
+            try store.people.reopen(mention.id)
+        }
+    }
+
+    public func restoreMention(_ id: MentionID) throws {
+        try store.people.reopen(id)
     }
 
     /// Writes the mention row for a `person` candidate, reusing one the same segment already has
@@ -143,6 +169,78 @@ public struct CandidateActions: Sendable {
         }
     }
 
+    // MARK: - Relative questions
+
+    /// The owner answered: the range is confirmed, the anchor behind the question is settled,
+    /// any open question about this memory closes, and the resolver places whatever follows.
+    public func answer(_ question: RelativeQuestion, with choice: RelativeQuestion.Choice) throws {
+        guard let memory = try store.memories.fetch(question.memoryID) else { return }
+        let span = try store.memories.spans(of: memory.id).first
+        let ref = MemoryRef(id: memory.id, title: memory.title, range: memory.range,
+                            primarySpan: MemoryRef.Span(segmentID: span?.segmentID ?? SegmentID(rawValue: ""), startMs: span?.startMs ?? 0, endMs: span?.endMs ?? 0))
+        try store.memories.updateRange(memory.id, RelativeQuestions.apply(choice, to: ref))
+        if let anchorID = question.anchorID, var anchor = try store.memories.anchors(of: memory.id).first(where: { $0.id == anchorID }) {
+            anchor.resolved = true
+            try store.memories.update(anchor)
+        }
+        // The runner refreshes the open questions from what is still unplaced.
+        _ = try ResolverRunner(store: store).run()
+    }
+
+    // MARK: - Hints, chapters and collections
+
+    /// "Sounds like it belongs here", accepted: the hint's memory joins a collection or chapter
+    /// titled with the owner's phrase, reusing one that already exists.
+    public func acceptHint(_ candidate: Candidate) throws -> HintResult {
+        guard candidate.kind == .hint else { throw Error.wrongKind }
+        try requirePending(candidate)
+        guard let out = CandidatePayload.hint(candidate) else { throw Error.badPayload }
+        guard let memory = try store.memories.memories(fromSegment: candidate.segmentID)
+                .first(where: { $0.createdFromCandidateID?.rawValue == out.memoryCandidateID }) else { throw Error.memoryNotAccepted }
+        let result: HintResult
+        switch out.kind {
+        case .collection:
+            result = .collection(try addToCollection(memory.id, titled: out.phrase))
+        case .chapter:
+            if let existing = try store.chapters.chapters().first(where: { Self.same($0.title ?? "", out.phrase) }) {
+                try assign(memory: memory.id, toChapter: existing.id)
+                result = .chapter(try store.chapters.chapter(id: existing.id) ?? existing)
+            } else {
+                result = .chapter(try createChapter(title: out.phrase, containing: memory.id))
+            }
+        }
+        try store.candidates.setStatus(candidate.id, .accepted)
+        return result
+    }
+
+    public func createChapter(title: String?, containing memory: MemoryID) throws -> Chapter {
+        let chapter = try store.chapters.insertChapter(title: title)
+        try assign(memory: memory, toChapter: chapter.id)
+        return try store.chapters.chapter(id: chapter.id) ?? chapter
+    }
+
+    /// Moves a memory between chapters and refreshes both chapters' member-derived ranges.
+    public func assign(memory: MemoryID, toChapter chapter: ChapterID?) throws {
+        let previous = try store.memories.fetch(memory)?.chapterID
+        try store.chapters.assign(memory: memory, toChapter: chapter)
+        for id in [previous, chapter].compactMap({ $0 }) { try chapterRangeFromMembers(id) }
+    }
+
+    public func addToCollection(_ memory: MemoryID, titled title: String) throws -> Collection {
+        let collection = try store.chapters.insertCollection(titled: title)
+        try store.chapters.add(memory: memory, to: collection.id)
+        return collection
+    }
+
+    public func removeFromCollection(_ memory: MemoryID, from collection: CollectionID) throws {
+        try store.chapters.remove(memory: memory, from: collection)
+    }
+
+    /// A chapter's range is the span of its placed members, origin `derived`; unplaced when none are placed.
+    public func chapterRangeFromMembers(_ chapter: ChapterID) throws {
+        try store.chapters.setRange(chapter, ChapterRepository.span(over: try store.memories.memories(inChapter: chapter).map(\.range)))
+    }
+
     // MARK: - Helpers
 
     private func requirePending(_ candidate: Candidate) throws {
@@ -159,7 +257,8 @@ public struct CandidateActions: Sendable {
 
     /// True when the memory's candidate named this person.
     private func names(_ memory: Memory, _ text: String) throws -> Bool {
-        guard let candidate = try store.candidates.fetch(memory.createdFromCandidateID), let out = CandidatePayload.memory(candidate) else { return false }
+        guard let candidateID = memory.createdFromCandidateID, let candidate = try store.candidates.fetch(candidateID),
+              let out = CandidatePayload.memory(candidate) else { return false }
         return out.peopleRefs.contains { Self.same($0, text) }
     }
 
