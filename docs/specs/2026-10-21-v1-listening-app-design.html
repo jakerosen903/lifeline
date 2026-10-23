@@ -556,6 +556,29 @@ footer{margin-top:64px;padding-top:16px;border-top:1px solid var(--line);font-si
   <div class="question"><b>2. Disclosure card.</b> When the owner says something that signals serious harm (for example past abuse, or thoughts of self-harm), the app must show a fixed, pre-written card. It must not improvise a reply. The builder needs two things from the owner before M4: approval of the card's words, and the crisis line the card shows, which depends on the owner's country. Proposed draft, US: <i>"Thank you for telling me that. You can stop here, or keep going. It is your choice. If you need to talk to someone now, call or text 988 (Suicide and Crisis Lifeline, US)."</i></div>
 </section>
 
+<section id="revisions">
+  <h2>15. Revisions after the design review (2026-10-22)</h2>
+  <p>An external review of this spec, the M1 to M4 plans, the canvases and the Swift code found one theme: the combination of confirmation cards, people resolution, date refinement and session review could make the owner feel responsible for maintaining a database. The decisions below are recorded in <code>docs/DECISIONS.md</code> (entries dated 2026-10-22) and drawn as canvases R1 to R9. They change this spec as follows. The new principle is P9, <i>preserve first, organize later</i>.</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Section</th><th>Change</th></tr></thead>
+    <tbody>
+      <tr><td>§2 Goals 1, 6</td><td>Two session lengths: a quick story (a few minutes) and settling in. Goal 6 becomes: end every session with a light landing; per-memory choices are optional and can happen later.</td></tr>
+      <tr><td>§3 First open</td><td>Two equally valid ways in; the optional About You screen stays but is secondary ("Add a little context"). The first payoff is the owner's own voice played back, minutes in.</td></tr>
+      <tr><td>§3 Session</td><td>Two views. Listen (default): prompt, status, pause, finish, a small "N possible memories" count that never scrolls the screen. Transcript &amp; memories: the review view, opened by choice. The session works with zero card taps.</td></tr>
+      <tr><td>§3 Landing</td><td>"Your recording is saved. A few moments from today. Done for now · Review these moments." No required per-memory decision. Hide and delete one tap away. Neutral closing line after a heavy session. The copy "nothing is saved until you say so" is removed.</td></tr>
+      <tr><td>§5 Deletion</td><td>Deletion must handle overlapping memories that reference the same audio and preserve playback offsets.</td></tr>
+      <tr><td>§6 Data model</td><td>Add <code>story</code> and <code>story_moment</code>. <code>memory</code> is the moment. Chapters may overlap. <code>visibility</code> becomes two flags: <code>hidden_from_timeline</code>, <code>excluded_from_ai</code>.</td></tr>
+      <tr><td>§7 Extraction</td><td>Reconcile related segments before presenting cards. Budget the context packet by tokens and relevance. Pending candidates count as context. <code>same_as_memory_id</code> becomes <code>story_ref</code>. Low confidence is a "Check this" label, never reduced opacity.</td></tr>
+      <tr><td>§9 Arc</td><td><code>hardStopAt</code> becomes a wrap-up offer with an explicit "keep going", not a stop. During a heavy moment, suppress every organizational prompt including "who's this?". The disclosure flag distinguishes narration of the past from present danger.</td></tr>
+      <tr><td>§9 Wind-down</td><td>Replaced by the light landing. Keep / private / let go moves to the review view and the privacy controls: Hide from timeline, Exclude from AI processing, Share…, Delete…. Local-only is chosen before recording.</td></tr>
+      <tr><td>§9 Stop</td><td><code>stop</code> must not wait for the extraction hook. Persist, show the landing, finish sorting in the background with durable retries.</td></tr>
+      <tr><td>Cards</td><td><code>MemoryCard</code>: Keep / Change… / Dismiss (with Undo; recording untouched). Keeping does not confirm inferred details. <code>FlowChips</code> must wrap. Visible alternatives to swipe and long-press.</td></tr>
+      <tr><td>§11 Milestones</td><td>M4 absorbs the landing and correction changes. M5 adds stories, the privacy controls and backup/restore. A minimal photo prompt (one photo, one story) follows as Phase 1.5.</td></tr>
+    </tbody>
+  </table></div>
+  <p class="note">The interactive arc above still shows the pre-review timer behaviour (a hard stop at 60 minutes). After the revision the 60-minute mark is a wrap-up offer, not a stop.</p>
+</section>
+
 <footer>Life Timeline · V1 design · Companion to <code>docs/PRINCIPLES.md</code>, <code>docs/OVERVIEW.md</code> and <code>docs/DECISIONS.md</code>. Sample names, places and dates are invented.</footer>
 </div>
 
