@@ -100,6 +100,10 @@ The owner's sessions run a few minutes and that is the intended shape. A session
 
 Why: the design was written imagining long oral-history sittings; real use is lighter, and every session must still land. Cost: a 90-minute session is cut at 60, which the owner can reopen by starting again.
 
+## 2026-10-23 · Direction: a short daily activity that builds over time
+
+The owner's picture of the product (2026-10-23): a few minutes a day, one story at a time, with the timeline growing over weeks rather than being filled in one long sitting. Not a milestone of its own yet. It shapes what follows: each session opens with one fresh question (M3, done); the summary ends with one line for next time (M4); the spoken interviewer, when it comes, asks for one scene and stops. No streaks, counters or reminders that turn it into a chore; the principles rule out pressure. Open: whether a gentle daily nudge belongs in V1 at all.
+
 ## Open · Memory kinds and domains
 
 A later version will sub-divide memories by kind (fact, feeling, goal or intention, event, other) and by domain (relationships, health, education, travel, work, more). V1 ships one memory type and keeps the seam open: the candidate payload is JSON so a new extractor version can back-fill, no V1 code or copy assumes a memory is an event, and collection and chapter hints stay free text. Design after V1 has real sessions.
