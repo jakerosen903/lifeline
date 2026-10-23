@@ -79,6 +79,14 @@ public struct MemoryRepository: Sendable {
         try db.writer.read { try Anchor.filter(Column("memory_id") == memory.rawValue).fetchAll($0) }
     }
 
+    public func allAnchors() throws -> [Anchor] {
+        try db.writer.read { try Anchor.fetchAll($0) }
+    }
+
+    public func update(_ anchor: Anchor) throws {
+        try db.writer.write { try anchor.update($0) }
+    }
+
     public func places(of memory: MemoryID) throws -> [Place] {
         try db.writer.read { db in
             try Place.fetchAll(db, sql: """

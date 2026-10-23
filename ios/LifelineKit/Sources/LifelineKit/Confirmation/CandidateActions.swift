@@ -62,7 +62,7 @@ public struct CandidateActions: Sendable {
         }
         let anchors = out.anchors.map {
             Anchor(id: .init(), memoryID: memory.id, phrase: $0.phrase, relation: $0.relation, targetKind: .none, targetID: nil,
-                   value: $0.value, resolved: false)
+                   targetText: $0.targetText, value: $0.value, resolved: false)
         }
 
         try store.memories.insert(memory, spans: [span], people: people, places: places, anchors: anchors, acceptingCandidate: candidate.id)

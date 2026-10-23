@@ -187,6 +187,9 @@ enum Migrations {
             try db.drop(table: "memory")
             try db.rename(table: "memory_v4", to: "memory")
             try db.create(indexOn: "memory", columns: ["chapter_id"])
+            try db.alter(table: "anchor") { t in
+                t.add(column: "target_text", .text)
+            }
         }
         return m
     }

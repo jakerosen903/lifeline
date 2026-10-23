@@ -185,6 +185,6 @@ extension Mention: FetchableRecord, PersistableRecord {
 extension Anchor: FetchableRecord, PersistableRecord {
     public static let databaseTableName = "anchor"
     enum CodingKeys: String, CodingKey {
-        case id, memoryID = "memory_id", phrase, relation, targetKind = "target_kind", targetID = "target_id", value, resolved
+        case id, memoryID = "memory_id", phrase, relation, targetKind = "target_kind", targetID = "target_id", targetText = "target_text", value, resolved
     }
 }

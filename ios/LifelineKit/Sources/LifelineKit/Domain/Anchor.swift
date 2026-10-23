@@ -17,13 +17,15 @@ public struct Anchor: Codable, Sendable, Equatable, Identifiable {
     public var relation: AnchorRelation
     public var targetKind: AnchorTargetKind
     public var targetID: String?
-    /// JSON for the relation's value (a stated date, an age); nil when the phrase is all there is.
+    /// The owner's phrase for what this is relative to ("graduation", "the Boston years"), or nil.
+    public var targetText: String?
+    /// The relation's value as the extractor gave it (a stated date, an age); nil when the phrase is all there is.
     public var value: String?
     public var resolved: Bool
 
     public init(id: AnchorID, memoryID: MemoryID, phrase: String, relation: AnchorRelation, targetKind: AnchorTargetKind,
-                targetID: String?, value: String?, resolved: Bool) {
+                targetID: String?, targetText: String? = nil, value: String?, resolved: Bool) {
         self.id = id; self.memoryID = memoryID; self.phrase = phrase; self.relation = relation; self.targetKind = targetKind
-        self.targetID = targetID; self.value = value; self.resolved = resolved
+        self.targetID = targetID; self.targetText = targetText; self.value = value; self.resolved = resolved
     }
 }
