@@ -190,3 +190,12 @@ private func input(_ memories: [MemoryRef], _ anchors: [Anchor], birth: String? 
     #expect(range?.earliest == d("2000-09-01") && range?.latest == d("2001-06-30") && range?.origin == .inferred, "\(String(describing: range))")
     #expect(out.floating.isEmpty, "the phrase settled the memory, so nothing is asked")
 }
+
+@Test func aStatedRangeSurvivesAResolverRun() {
+    let graduation = ref("Graduation", range: .year(1990, origin: .stated, evidence: "in 1990"))
+    let told = ref("The move", range: .stated(year: 1998))
+    let before = anchor(told, "before graduation", .before, target: "Graduation")
+    let out = Resolver.resolve(input([graduation, told], [before]))
+    #expect(out.placements[told.id] == nil || out.placements[told.id] == told.range, "a stated range is never re-placed")
+    #expect(!out.resolvedAnchorIDs.contains(before.id), "its anchors stay as they are")
+}

@@ -270,6 +270,14 @@ public struct CandidateActions: Sendable {
         _ = try ResolverRunner(store: store).run()
     }
 
+    /// "Tell me when": the person's own date, at their precision. Only a stated range may be
+    /// written here; the app never dresses a guess as a fact.
+    public func setStatedRange(_ memory: MemoryID, _ range: TimeRange) throws {
+        guard range.origin == .stated, range.isPlaced else { throw Error.notStated }
+        try store.memories.updateRange(memory, range)
+        _ = try ResolverRunner(store: store).run()
+    }
+
     // MARK: - Hints, chapters and collections
 
     /// "Sounds like it belongs here", accepted: the hint's memory joins a collection or chapter

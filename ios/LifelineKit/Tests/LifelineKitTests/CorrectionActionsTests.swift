@@ -145,3 +145,13 @@ private func rowCounts(_ db: AppDatabase, doomed: SessionID, pending: Segment, s
     #expect(try env.store.memories.fetch(target.id) != nil)
     _ = sessions
 }
+
+@Test func setStatedRangeRejectsOtherOrigins() throws {
+    let env = try Env()
+    let (_, _, memories) = try env.told(["we lived in an orange house"])
+    let m = memories[0].id
+    #expect(throws: CandidateActions.Error.notStated) { try env.actions.setStatedRange(m, .year(1998, origin: .inferred, evidence: nil)) }
+    try env.actions.setStatedRange(m, .stated(around: 1998))
+    let range = try #require(try env.store.memories.fetch(m)?.range)
+    #expect(range.displayText == "around 1998" && range.origin == .stated)
+}

@@ -75,7 +75,7 @@ public enum Resolver {
         // Rules 1 and 2 need nothing but the anchor; rule 3 needs a placed target. Iterate.
         for _ in 0...(input.memories.count + 1) {
             var changed = false
-            for memory in input.memories where !(original[memory.id]?.isConfirmed ?? false) {
+            for memory in input.memories where !(original[memory.id]?.isSettled ?? false) {
                 let anchors = anchorsByMemory[memory.id] ?? []
                 var candidates: [(Anchor, TimeRange)] = []
                 for anchor in anchors {
@@ -97,7 +97,7 @@ public enum Resolver {
         var floating: [FloatingTarget] = []
         var seenPhrases = Set<String>()
         var payoff: [String: (count: Int, memories: Set<MemoryID>, targetID: MemoryID?)] = [:]
-        for anchor in input.anchors where anchor.isRelative && !resolved.contains(anchor.id) && !(original[anchor.memoryID]?.isConfirmed ?? false) {
+        for anchor in input.anchors where anchor.isRelative && !resolved.contains(anchor.id) && !(original[anchor.memoryID]?.isSettled ?? false) {
             guard let phrase = anchor.targetText?.trimmingCharacters(in: .whitespacesAndNewlines), !phrase.isEmpty else { continue }
             let key = PeopleRepository.normalize(phrase)
             let target = findTarget(phrase, in: input, excluding: anchor.memoryID)
