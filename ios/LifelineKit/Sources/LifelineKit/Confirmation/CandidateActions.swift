@@ -35,6 +35,27 @@ public struct CandidateActions: Sendable {
 
     public init(store: ExtractionStore) { self.store = store }
 
+    // MARK: - Privacy (M4)
+
+    public func setHidden(_ memory: MemoryID, _ hidden: Bool) throws { try store.memories.setHidden(memory, hidden) }
+    public func setExcluded(_ memory: MemoryID, _ excluded: Bool) throws { try store.memories.setExcluded(memory, excluded) }
+
+    /// "Hide today from the timeline": every memory told in the session leaves everyday browsing.
+    public func hideSession(_ session: SessionID) throws {
+        for memory in try store.memories.memories(in: session, includingStandIns: true) {
+            try store.memories.setHidden(memory.id, true)
+        }
+    }
+
+    /// "Delete today's recording…": the audio file goes first, then every row derived from the
+    /// session. A file already gone is not an error. The caller cancels any sorting worker first.
+    public func deleteSession(_ session: SessionID, audioURL: URL) throws {
+        if FileManager.default.fileExists(atPath: audioURL.path) {
+            try FileManager.default.removeItem(at: audioURL)
+        }
+        try store.sessions.deleteSession(session)
+    }
+
     public func acceptMemory(_ candidate: Candidate) throws -> AcceptedMemory {
         guard candidate.kind == .memory else { throw Error.wrongKind }
         try requirePending(candidate)

@@ -74,7 +74,7 @@ final class TimelineViewModel {
     func refresh() {
         do {
             let store = deps.extractionStore
-            let all = try store.memories.allMemories().filter { !$0.isFloating }
+            let all = try store.memories.visibleMemories().filter { !$0.isFloating }
             let birth = try store.profile.ownerBirthDate()
             let rows = Dictionary(uniqueKeysWithValues: try all.map { ($0.id, try row(for: $0, birth: birth)) })
             let allCollections = try store.chapters.collections()
@@ -90,7 +90,7 @@ final class TimelineViewModel {
             }
             unchaptered = loose.filter { $0.memory.chapterID == nil && $0.memory.range.isPlaced }.sorted(by: Self.byTime)
             shelf = loose.filter { !$0.memory.range.isPlaced }
-            floatingCount = try store.memories.allMemories().filter { $0.isFloating && !$0.range.isPlaced }.count
+            floatingCount = try store.memories.visibleMemories().filter { $0.isFloating && !$0.range.isPlaced }.count
 
             let years = all.flatMap { [$0.range.earliest?.year, $0.range.latest?.year].compactMap { $0 } }
             axis = years.isEmpty ? nil : (years.min()! ... max(years.max()!, Calendar.current.component(.year, from: .now)))

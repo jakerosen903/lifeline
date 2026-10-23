@@ -25,3 +25,26 @@ import GRDB
         #expect(tables.contains(t), "missing \(t)")
     }
 }
+
+@Test func privateBecomesHiddenAndOldSessionsAreLanded() throws {
+    var config = Configuration()
+    config.foreignKeysEnabled = true
+    let queue = try DatabaseQueue(configuration: config)
+    try Migrations.migrator.migrate(queue, upTo: "v4")
+    try queue.write { db in
+        try db.execute(sql: "insert into session (id, started_at, ended_at, audio_path, stage_log, landing_choice_made) values ('s1', '2026-10-01', '2026-10-01', 'a.m4a', '[]', 0)")
+        try db.execute(sql: "insert into session (id, started_at, ended_at, audio_path, stage_log, landing_choice_made) values ('s2', '2026-10-02', NULL, 'b.m4a', '[]', 0)")
+        try db.execute(sql: "insert into memory (id, title, summary_quote, visibility, created_at) values ('m1', 'A', 'a', 'private', '2026-10-01')")
+        try db.execute(sql: "insert into memory (id, title, summary_quote, visibility, created_at) values ('m2', 'B', 'b', 'timeline', '2026-10-01')")
+    }
+    try Migrations.migrator.migrate(queue)
+    let (hidden, excluded, landed, kinds) = try queue.read { db in
+        (try Bool.fetchAll(db, sql: "select hidden_from_timeline from memory order by id"),
+         try Bool.fetchAll(db, sql: "select excluded_from_ai from memory order by id"),
+         try Bool.fetchAll(db, sql: "select landing_choice_made from session order by id"),
+         try String.fetchAll(db, sql: "select kind from session order by id"))
+    }
+    #expect(hidden == [true, false] && excluded == [false, false])
+    #expect(landed == [true, false], "a session that ended before M4 never gets a surprise landing; a crashed one still resumes")
+    #expect(kinds == ["quick", "quick"])
+}

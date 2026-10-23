@@ -17,11 +17,17 @@ public struct Memory: Codable, Sendable, Equatable, Identifiable {
     public var createdFromCandidateID: CandidateID?
     public var createdAt: Date
     public var range: TimeRange
+    /// Out of everyday browsing; still in Sessions. Named by its effect (decision 2026-10-22).
+    public var hiddenFromTimeline: Bool
+    /// Never enters a context packet again.
+    public var excludedFromAI: Bool
 
     public init(id: MemoryID, title: String, summaryQuote: String, visibility: Visibility, chapterID: ChapterID?,
-                createdFromCandidateID: CandidateID?, createdAt: Date, range: TimeRange = .unplaced) {
+                createdFromCandidateID: CandidateID?, createdAt: Date, range: TimeRange = .unplaced,
+                hiddenFromTimeline: Bool = false, excludedFromAI: Bool = false) {
         self.id = id; self.title = title; self.summaryQuote = summaryQuote; self.visibility = visibility; self.chapterID = chapterID
         self.createdFromCandidateID = createdFromCandidateID; self.createdAt = createdAt; self.range = range
+        self.hiddenFromTimeline = hiddenFromTimeline; self.excludedFromAI = excludedFromAI
     }
 
     public var isUnplaced: Bool { !range.isPlaced }
@@ -31,6 +37,7 @@ public struct Memory: Codable, Sendable, Equatable, Identifiable {
     enum CodingKeys: String, CodingKey {
         case id, title, summaryQuote = "summary_quote", visibility, chapterID = "chapter_id"
         case createdFromCandidateID = "created_from_candidate_id", createdAt = "created_at"
+        case hiddenFromTimeline = "hidden_from_timeline", excludedFromAI = "excluded_from_ai"
         case earliest, latest, likelyStart = "likely_start", likelyEnd = "likely_end", granularity, origin, evidenceText = "evidence_text"
     }
 
@@ -43,6 +50,8 @@ public struct Memory: Codable, Sendable, Equatable, Identifiable {
         chapterID = try c.decodeIfPresent(ChapterID.self, forKey: .chapterID)
         createdFromCandidateID = try c.decodeIfPresent(CandidateID.self, forKey: .createdFromCandidateID)
         createdAt = try c.decode(Date.self, forKey: .createdAt)
+        hiddenFromTimeline = try c.decodeIfPresent(Bool.self, forKey: .hiddenFromTimeline) ?? false
+        excludedFromAI = try c.decodeIfPresent(Bool.self, forKey: .excludedFromAI) ?? false
         range = TimeRange(earliest: try c.decodeIfPresent(CivilDate.self, forKey: .earliest),
                           latest: try c.decodeIfPresent(CivilDate.self, forKey: .latest),
                           likelyStart: try c.decodeIfPresent(CivilDate.self, forKey: .likelyStart),
@@ -61,6 +70,8 @@ public struct Memory: Codable, Sendable, Equatable, Identifiable {
         try c.encode(chapterID, forKey: .chapterID)
         try c.encode(createdFromCandidateID, forKey: .createdFromCandidateID)
         try c.encode(createdAt, forKey: .createdAt)
+        try c.encode(hiddenFromTimeline, forKey: .hiddenFromTimeline)
+        try c.encode(excludedFromAI, forKey: .excludedFromAI)
         try c.encode(range.earliest, forKey: .earliest)
         try c.encode(range.latest, forKey: .latest)
         try c.encode(range.likelyStart, forKey: .likelyStart)

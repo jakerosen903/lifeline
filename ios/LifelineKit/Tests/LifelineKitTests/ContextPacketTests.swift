@@ -61,3 +61,12 @@ private func person(_ name: String, owner: Bool = false, aliases: [String] = [])
     #expect(packet.chapters[0].rangeText == "2011" && packet.chapters[1].rangeText == nil)
     #expect(packet.curiosity.count == 10 && packet.curiosity.first == "q0")
 }
+
+@Test func excludedMemoriesNeverEnterThePacket() {
+    var kept = StoreFixtures.memory(from: CandidateID(), title: "The blue door")
+    var excluded = StoreFixtures.memory(from: CandidateID(), title: "Something private")
+    excluded.excludedFromAI = true
+    kept.hiddenFromTimeline = true   // hidden from browsing is not excluded from AI
+    let packet = ContextPacketBuilder.build(segment: seg(0, "x"), previous: [], people: [], memories: [kept, excluded], profileFreeText: nil, stage: "open")
+    #expect(packet.memories.map(\.title) == ["The blue door"])
+}

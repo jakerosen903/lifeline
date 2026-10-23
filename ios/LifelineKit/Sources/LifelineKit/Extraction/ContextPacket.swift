@@ -60,7 +60,7 @@ public enum ContextPacketBuilder {
                 ContextPacket.PersonEntry(id: person.id.rawValue, name: person.displayName,
                                           aliases: aliases.map(\.text).filter { $0.caseInsensitiveCompare(person.displayName) != .orderedSame })
             }
-        let memoryEntries = memories.map { ContextPacket.MemoryEntry(id: $0.id.rawValue, title: $0.title, rangeText: $0.range.isPlaced ? $0.range.displayText : nil) }
+        let memoryEntries = memories.filter { !$0.excludedFromAI }.map { ContextPacket.MemoryEntry(id: $0.id.rawValue, title: $0.title, rangeText: $0.range.isPlaced ? $0.range.displayText : nil) }
         let chapterEntries = chapters.map {
             ContextPacket.ChapterEntry(id: $0.id.rawValue, title: $0.title ?? "untitled", rangeText: $0.range.isPlaced ? $0.range.displayText : nil)
         }

@@ -1,0 +1,107 @@
+import Foundation
+import Testing
+import GRDB
+@testable import LifelineKit
+
+/// Correction and privacy actions (M4): hide, exclude, hide today, delete today, rename, link.
+private struct Env {
+    let db: AppDatabase, store: ExtractionStore, actions: CandidateActions
+    init() throws {
+        db = try AppDatabase.inMemory()
+        store = ExtractionStore(db)
+        actions = CandidateActions(store: store)
+    }
+    /// A session with one segment per text and one accepted memory per segment.
+    func told(_ texts: [String]) throws -> (SessionID, [Segment], [Memory]) {
+        let (session, segments) = try StoreFixtures.session(in: store.sessions, segments: texts)
+        var memories: [Memory] = []
+        for (i, segment) in segments.enumerated() {
+            let out = MemoryOut(ref: "m\(i)", kind: .event, title: "Memory \(i)", quote: String(texts[i].split(separator: " ").prefix(2).joined(separator: " ")),
+                                segmentSpan: WordSpan(startWord: 0, endWord: 1), peopleRefs: [], placeText: nil, anchors: [],
+                                sameAsMemoryID: nil, collectionHint: nil, chapterHint: nil, confidence: 0.9)
+            let candidate = StoreFixtures.candidate(segment.id, ordinal: 0, kind: .memory, payload: try CandidatePayload.encode(out))
+            try store.candidates.insert(candidate)
+            try store.sessions.setStatus(.extracted, for: segment.id)   // as the queue does when it stores the rows
+            memories.append(try actions.acceptMemory(candidate).memory)
+        }
+        return (session, segments, memories)
+    }
+}
+
+@Test func hiddenMemoriesLeaveTheTimelineQueryButStayInSessions() throws {
+    let env = try Env()
+    let (session, _, memories) = try env.told(["the garden had a pomegranate tree", "my sister climbed it"])
+    try env.actions.setHidden(memories[0].id, true)
+    #expect(try env.store.memories.visibleMemories().map(\.id) == [memories[1].id])
+    #expect(try env.store.memories.memories(in: session).map(\.id) == memories.map(\.id), "Sessions still shows it")
+    #expect(try env.store.memories.fetch(memories[0].id)?.hiddenFromTimeline == true)
+    try env.actions.setHidden(memories[0].id, false)
+    #expect(try env.store.memories.visibleMemories().count == 2)
+}
+
+@Test func excludedFlagIsStoredAndIndependentOfHidden() throws {
+    let env = try Env()
+    let (_, _, memories) = try env.told(["the garden had a pomegranate tree"])
+    try env.actions.setExcluded(memories[0].id, true)
+    let m = try #require(try env.store.memories.fetch(memories[0].id))
+    #expect(m.excludedFromAI && !m.hiddenFromTimeline)
+    #expect(try env.store.memories.visibleMemories().count == 1, "excluded from AI is not hidden from the person")
+}
+
+@Test func hideTodayFlagsEverySessionMemory() throws {
+    let env = try Env()
+    let (today, _, mine) = try env.told(["the garden had a pomegranate tree", "my sister climbed it"])
+    let (_, _, other) = try env.told(["we drove to the coast"])
+    try env.actions.hideSession(today)
+    #expect(try mine.allSatisfy { try env.store.memories.fetch($0.id)?.hiddenFromTimeline == true })
+    #expect(try env.store.memories.fetch(other[0].id)?.hiddenFromTimeline == false)
+}
+
+@Test func deleteSessionDropsPendingSortingAndEverything() async throws {
+    let env = try Env()
+    let (doomed, segments, memories) = try env.told(["the garden had a pomegranate tree"])
+    let (kept, _, keptMemories) = try env.told(["we drove to the coast"])
+    // A second, still-pending segment in the doomed session, a mention and a prompt-log row.
+    let pending = Segment(id: .init(), sessionID: doomed, index: 1, startMs: 10_000, endMs: 14_000, text: "my sister climbed it", status: .pending)
+    try env.store.sessions.insert(pending, words: [Word(segmentID: pending.id, index: 0, text: "my", startMs: 10_000, endMs: 10_200)])
+    try env.store.people.insertMention(Mention(id: .init(), segmentID: segments[0].id, text: "Maya", status: .unresolved, personID: nil, relationText: "my sister"))
+    try PromptLogRepository(env.db).record(promptID: "p1", session: doomed, at: .now)
+    let audio = FileManager.default.temporaryDirectory.appending(path: "\(doomed.rawValue).m4a")
+    try Data("tone".utf8).write(to: audio)
+
+    let service = FakeExtractionService()
+    let worker = SortingWorker(store: env.store, service: service)
+    await worker.cancel(session: doomed)
+    try env.actions.deleteSession(doomed, audioURL: audio)
+
+    #expect(!FileManager.default.fileExists(atPath: audio.path))
+    let counts = try rowCounts(env.db, doomed: doomed, pending: pending, segment: segments[0], memory: memories[0])
+    #expect(counts.values.allSatisfy { $0 == 0 }, "\(counts)")
+    #expect(try env.store.sessions.fetch(kept) != nil)
+    #expect(try env.store.memories.fetch(keptMemories[0].id) != nil)
+    _ = await worker.start()
+    #expect(service.requests.isEmpty, "nothing left to sort, and nothing was asked about the deleted session")
+}
+
+@Test func deleteSessionWithoutAFileStillRemovesTheRows() throws {
+    let env = try Env()
+    let (doomed, _, _) = try env.told(["the garden had a pomegranate tree"])
+    try env.actions.deleteSession(doomed, audioURL: FileManager.default.temporaryDirectory.appending(path: "missing-\(UUID().uuidString).m4a"))
+    #expect(try env.store.sessions.fetch(doomed) == nil)
+}
+
+private func rowCounts(_ db: AppDatabase, doomed: SessionID, pending: Segment, segment: Segment, memory: Memory) throws -> [String: Int] {
+    try db.writer.read { db -> [String: Int] in
+        var out: [String: Int] = [:]
+        out["session"] = try Int.fetchOne(db, sql: "select count(*) from session where id = ?", arguments: [doomed.rawValue])
+        out["segment"] = try Int.fetchOne(db, sql: "select count(*) from segment where session_id = ?", arguments: [doomed.rawValue])
+        out["word"] = try Int.fetchOne(db, sql: "select count(*) from word where segment_id = ?", arguments: [pending.id.rawValue])
+        out["candidate"] = try Int.fetchOne(db, sql: "select count(*) from candidate where segment_id = ?", arguments: [segment.id.rawValue])
+        out["mention"] = try Int.fetchOne(db, sql: "select count(*) from mention where segment_id = ?", arguments: [segment.id.rawValue])
+        out["memory"] = try Int.fetchOne(db, sql: "select count(*) from memory where id = ?", arguments: [memory.id.rawValue])
+        out["memory_span"] = try Int.fetchOne(db, sql: "select count(*) from memory_span where memory_id = ?", arguments: [memory.id.rawValue])
+        out["anchor"] = try Int.fetchOne(db, sql: "select count(*) from anchor where memory_id = ?", arguments: [memory.id.rawValue])
+        out["prompt_log"] = try Int.fetchOne(db, sql: "select count(*) from prompt_log where session_id = ?", arguments: [doomed.rawValue])
+        return out
+    }
+}

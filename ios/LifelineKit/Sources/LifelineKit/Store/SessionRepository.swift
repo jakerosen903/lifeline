@@ -86,6 +86,24 @@ extension SessionRepository {
     public func delete(_ id: SessionID) throws {
         _ = try db.writer.write { try Session.deleteOne($0, key: id.rawValue) }
     }
+
+    /// Removes the session and everything derived from it: segments, words, candidates, mentions
+    /// and prompt-log rows go by cascade; memories told in it (by span or by candidate) are
+    /// deleted first, and their spans, anchors, people and places follow them. One transaction.
+    public func deleteSession(_ id: SessionID) throws {
+        try db.writer.write { db in
+            try db.execute(sql: """
+                delete from memory where id in (
+                    select memory_span.memory_id from memory_span
+                    join segment on segment.id = memory_span.segment_id where segment.session_id = ?
+                    union
+                    select memory.id from memory
+                    join candidate on candidate.id = memory.created_from_candidate_id
+                    join segment on segment.id = candidate.segment_id where segment.session_id = ?)
+                """, arguments: [id.rawValue, id.rawValue])
+            _ = try Session.deleteOne(db, key: id.rawValue)
+        }
+    }
 }
 
 extension SessionRepository {

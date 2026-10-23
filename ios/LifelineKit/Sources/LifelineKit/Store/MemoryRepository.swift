@@ -115,6 +115,19 @@ public struct MemoryRepository: Sendable {
         try db.writer.read { try Memory.order(Column("created_at")).fetchAll($0) }
     }
 
+    /// Everyday browsing: every memory not hidden from the timeline.
+    public func visibleMemories() throws -> [Memory] {
+        try db.writer.read { try Memory.filter(Column("hidden_from_timeline") == false).order(Column("created_at")).fetchAll($0) }
+    }
+
+    public func setHidden(_ id: MemoryID, _ hidden: Bool) throws {
+        try db.writer.write { try $0.execute(sql: "update memory set hidden_from_timeline = ? where id = ?", arguments: [hidden, id.rawValue]) }
+    }
+
+    public func setExcluded(_ id: MemoryID, _ excluded: Bool) throws {
+        try db.writer.write { try $0.execute(sql: "update memory set excluded_from_ai = ? where id = ?", arguments: [excluded, id.rawValue]) }
+    }
+
     public func memories(inChapter chapter: ChapterID) throws -> [Memory] {
         try db.writer.read { try Memory.filter(Column("chapter_id") == chapter.rawValue).order(Column("created_at")).fetchAll($0) }
     }

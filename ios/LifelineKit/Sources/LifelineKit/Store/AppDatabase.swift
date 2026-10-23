@@ -33,7 +33,7 @@ extension Session: FetchableRecord, PersistableRecord {
     public static let databaseTableName = "session"
     enum CodingKeys: String, CodingKey {
         case id, startedAt = "started_at", endedAt = "ended_at", audioPath = "audio_path"
-        case stageLog = "stage_log", landingChoiceMade = "landing_choice_made"
+        case stageLog = "stage_log", landingChoiceMade = "landing_choice_made", kind
     }
 }
 
