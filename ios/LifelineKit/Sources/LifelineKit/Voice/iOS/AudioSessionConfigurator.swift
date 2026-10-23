@@ -1,14 +1,15 @@
 #if os(iOS)
 import AVFoundation
 
-/// The audio session for each mode. Recording: record category, spoken-audio mode, Bluetooth
-/// headsets allowed; `UIBackgroundModes: audio` keeps it alive with the screen off.
-/// Playback: the playback category, because `.record` silences output and the default
-/// category obeys the silent switch.
+/// The audio session for each mode. Recording: play-and-record category with spoken-audio
+/// mode, Bluetooth headsets allowed; `UIBackgroundModes: audio` keeps it alive with the
+/// screen off. The spoken-audio mode is rejected (OSStatus -50) with the plain record
+/// category on device, and play-and-record is what the voice interviewer needs later anyway.
+/// Playback: the playback category, which ignores the silent switch and routes to the speaker.
 public enum AudioSessionConfigurator {
     public static func activateForRecording() throws {
         let session = AVAudioSession.sharedInstance()
-        try session.setCategory(.record, mode: .spokenAudio, options: [.allowBluetoothHFP])
+        try session.setCategory(.playAndRecord, mode: .spokenAudio, options: [.allowBluetoothHFP, .defaultToSpeaker])
         try session.setActive(true)
     }
 
