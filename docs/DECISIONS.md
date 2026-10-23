@@ -167,6 +167,8 @@ Numbers chosen here, all configuration: a quick story has no time element; settl
 
 Waits for M5: span-level deletion with offsets preserved (M4 deletes whole sessions and single memories); the privacy screen with Share and Local-only; stories and `story_moment`; reconciliation of related segments and the token-budgeted context packet; backup and restore; "Which part of the recording" and "Just tell me" on the Change sheet, shown disabled so the shape of correction is visible.
 
+Added 2026-10-23 after the M4.1 device run: **duplicates among memories already kept.** M4.1 only compares a new card with one earlier memory, so three tellings of the same moment can sit on the timeline. M5 adds a pass over existing memories: the matcher ranks pairs, the extractor is asked in one batch which pairs tell the same moment, and each agreed pair becomes an "Are these the same?" card in Waiting for you with Play on each, Same story and Keep separate. A retelling that matches more than one memory names them all ("Same as X and 1 more?") and Same story merges the group into the oldest with one receipt, so Undo takes the whole thing back.
+
 Why: the review's "preserve first, organize later" changes the landing and the session more than the data model; shipping those first lets the owner feel the new shape before the model grows. Cost: a memory told across two sessions goes with the first one deleted until span deletion lands.
 
 ## 2026-10-23 · Same story is offered, never applied; dates are stated, never inferred by the app
