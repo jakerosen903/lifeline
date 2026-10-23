@@ -74,7 +74,7 @@ public enum CLI {
         }
 
         let segments = try store.sessions.segments(in: session)
-        let queue = ExtractionQueue(session: session, service: service, store: store)
+        let queue = ExtractionQueue(session: session, service: service, store: store, log: { FileHandle.standardError.write(Data("[extract] \($0)\n".utf8)) })
         for segment in segments where segment.status == .pending { await queue.enqueue(segment.id) }
         await queue.drain()
 

@@ -112,12 +112,19 @@ public actor ExtractionQueue {
             }
             let words = try store.sessions.words(in: segmentID).map(\.text)
             let request = ExtractionRequest(segmentID: segmentID, segmentText: segment.text, words: words, packet: try packet(for: segment))
-            let response = try await service.extract(request)
+            var response = try await service.extract(request)
+            if Self.isBlank(response.output) {
+                // Seen once on device: one memory with every field empty and nothing else. Noise, not an answer. Ask again once.
+                log("segment \(segment.index): blank answer from \(response.model), asking again")
+                response = try await service.extract(request)
+                if Self.isBlank(response.output) { throw ExtractionError.badOutput("blank answer") }
+            }
             let validated = OutputValidator.validate(response.output, segmentText: segment.text, words: words)
             let shown = try storeCandidates(validated, segment: segmentID, version: response.version)
             lastFailure[segmentID] = nil
-            log("segment \(segment.index): \(shown.count) shown, \(validated.rejected.count) rejected, "
+            log("segment \(segment.index): \(shown.count) shown, \(validated.rejected.count) rejected, model \(response.model), "
                 + "\(response.usage.inputTokens) in / \(response.usage.outputTokens) out, cache read \(response.usage.cacheReadInputTokens)")
+            for rejected in validated.rejected { log("  rejected: \(rejected.reason)") }
             // Flags first: a listener must know about a disclosure before it sees any card.
             if validated.flags.isAnySet { emit.yield(.flags(validated.flags, segment: segmentID)) }
             emit.yield(.candidates(shown, segment: segmentID))
@@ -130,6 +137,12 @@ public actor ExtractionQueue {
             log("segment \(segmentID) store error: \(error)")
             emit.yield(.failed(segment: segmentID, .badOutput("store: \(error)")))
         }
+    }
+
+    /// A memory with no words at all, and nothing else in the reply.
+    static func isBlank(_ output: ExtractorOutput) -> Bool {
+        !output.memories.isEmpty && output.mentions.isEmpty && !output.flags.isAnySet
+            && output.memories.allSatisfy { $0.quote.trimmingCharacters(in: .whitespaces).isEmpty && $0.title.trimmingCharacters(in: .whitespaces).isEmpty }
     }
 
     private func packet(for segment: Segment) throws -> ContextPacket {

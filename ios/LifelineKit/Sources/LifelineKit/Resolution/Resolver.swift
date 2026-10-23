@@ -136,7 +136,13 @@ public enum Resolver {
             return ageRange(age, birth: birth, config: config, evidence: anchor.phrase)
         case .before, .after, .during, .sameYearAs:
             guard let phrase = anchor.targetText,
-                  let target = targetRange(phrase, input: input, ranges: ranges, excluding: anchor.memoryID), target.isPlaced else { return nil }
+                  let target = targetRange(phrase, input: input, ranges: ranges, excluding: anchor.memoryID), target.isPlaced else {
+                // "freshman year, during college": until college has a range, the phrase itself says how old they were.
+                if let birth = input.birthDate, let age = AnchorPhrase.parseAge(anchor.phrase, value: nil) {
+                    return clamp(ageRange(age, birth: birth, config: config, evidence: anchor.phrase), input: input)
+                }
+                return nil
+            }
             var out: TimeRange
             switch anchor.relation {
             case .after: out = target.widened(by: config.relativeSlackYears, toward: .later)
