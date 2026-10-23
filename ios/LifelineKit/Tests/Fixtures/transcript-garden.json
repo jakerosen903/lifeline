@@ -1,0 +1,32 @@
+{
+  "started_at": "2026-03-14T18:20:00Z",
+  "segments": [
+    { "start_ms": 0, "end_ms": 5200, "words": [
+      { "text": "the", "start_ms": 0, "end_ms": 180 }, { "text": "garden", "start_ms": 180, "end_ms": 620 },
+      { "text": "behind", "start_ms": 620, "end_ms": 980 }, { "text": "the", "start_ms": 980, "end_ms": 1100 },
+      { "text": "house", "start_ms": 1100, "end_ms": 1500 }, { "text": "had", "start_ms": 1500, "end_ms": 1700 },
+      { "text": "a", "start_ms": 1700, "end_ms": 1780 }, { "text": "pomegranate", "start_ms": 1780, "end_ms": 2600 },
+      { "text": "tree", "start_ms": 2600, "end_ms": 2950 }, { "text": "that", "start_ms": 2950, "end_ms": 3150 },
+      { "text": "never", "start_ms": 3150, "end_ms": 3500 }, { "text": "fruited", "start_ms": 3500, "end_ms": 4100 },
+      { "text": "until", "start_ms": 4100, "end_ms": 4400 }, { "text": "we", "start_ms": 4400, "end_ms": 4550 },
+      { "text": "left", "start_ms": 4550, "end_ms": 5100 }
+    ]},
+    { "start_ms": 7000, "end_ms": 12400, "words": [
+      { "text": "my", "start_ms": 7000, "end_ms": 7200 }, { "text": "grandmother", "start_ms": 7200, "end_ms": 7900 },
+      { "text": "Tove", "start_ms": 7900, "end_ms": 8300 }, { "text": "watered", "start_ms": 8300, "end_ms": 8800 },
+      { "text": "it", "start_ms": 8800, "end_ms": 8950 }, { "text": "every", "start_ms": 8950, "end_ms": 9300 },
+      { "text": "morning", "start_ms": 9300, "end_ms": 9800 }, { "text": "in", "start_ms": 9800, "end_ms": 9950 },
+      { "text": "her", "start_ms": 9950, "end_ms": 10150 }, { "text": "green", "start_ms": 10150, "end_ms": 10500 },
+      { "text": "coat", "start_ms": 10500, "end_ms": 10900 }, { "text": "even", "start_ms": 10900, "end_ms": 11200 },
+      { "text": "in", "start_ms": 11200, "end_ms": 11350 }, { "text": "July", "start_ms": 11350, "end_ms": 12300 }
+    ]},
+    { "start_ms": 14000, "end_ms": 18100, "words": [
+      { "text": "the", "start_ms": 14000, "end_ms": 14150 }, { "text": "summer", "start_ms": 14150, "end_ms": 14600 },
+      { "text": "after", "start_ms": 14600, "end_ms": 14900 }, { "text": "I", "start_ms": 14900, "end_ms": 15000 },
+      { "text": "finished", "start_ms": 15000, "end_ms": 15500 }, { "text": "school", "start_ms": 15500, "end_ms": 15950 },
+      { "text": "it", "start_ms": 15950, "end_ms": 16100 }, { "text": "finally", "start_ms": 16100, "end_ms": 16600 },
+      { "text": "gave", "start_ms": 16600, "end_ms": 16900 }, { "text": "one", "start_ms": 16900, "end_ms": 17200 },
+      { "text": "fruit", "start_ms": 17200, "end_ms": 18000 }
+    ]}
+  ]
+}
