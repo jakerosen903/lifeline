@@ -29,6 +29,11 @@ public struct MemoryRepository: Sendable {
         }
     }
 
+    /// Removes a memory and, by cascade, its spans, people, places and anchors.
+    public func delete(_ id: MemoryID) throws {
+        _ = try db.writer.write { try Memory.deleteOne($0, key: id.rawValue) }
+    }
+
     public func fetch(_ id: MemoryID) throws -> Memory? {
         try db.writer.read { try Memory.fetchOne($0, key: id.rawValue) }
     }

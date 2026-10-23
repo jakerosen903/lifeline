@@ -34,3 +34,11 @@ private func d(_ s: String) -> CivilDate { CivilDate(iso: s)! }
     let before = y1998.widened(by: 5, toward: .earlier)
     #expect(before.earliest == d("1993-01-01") && before.latest == d("1998-12-31"))
 }
+
+@Test func aGuessOverTwoCalendarYearsStillReadsAsAround() {
+    // An age band from a May birthday: 1992-05-10 to 1993-05-09 is one year that touches two calendar years.
+    let ageBand = TimeRange(earliest: d("1992-05-10"), latest: d("1993-05-09"), likelyStart: nil, likelyEnd: nil, granularity: .year, origin: .inferred, evidenceText: "when I was six")
+    #expect(ageBand.displayText == "around 1992–93")
+    let wide = TimeRange(earliest: d("1993-01-01"), latest: d("1998-12-31"), likelyStart: nil, likelyEnd: nil, granularity: .year, origin: .inferred, evidenceText: nil)
+    #expect(wide.displayText == "sometime between 1993–98")
+}

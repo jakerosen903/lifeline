@@ -18,14 +18,18 @@ final class ExtractionUITests: XCTestCase {
         let app = launchToHome()
         app.buttons["home.start"].tap()
         XCTAssertTrue(app.staticTexts["Sounds like a memory"].waitForExistence(timeout: 15), "a memory card should appear")
+        let blueDoorCard = app.staticTexts.matching(identifier: "card.title").matching(NSPredicate(format: "label == %@", "The blue door")).firstMatch
+        XCTAssertTrue(blueDoorCard.exists)
         app.buttons["card.add"].firstMatch.tap()
-        XCTAssertFalse(app.staticTexts["Sounds like a memory"].waitForExistence(timeout: 2), "the card goes once added")
+        XCTAssertFalse(blueDoorCard.waitForExistence(timeout: 2), "the card goes once added")
         app.buttons["session.stop"].tap()
 
+        XCTAssertTrue(app.buttons["timeline.sessions"].waitForExistence(timeout: 10))
+        app.buttons["timeline.sessions"].tap()
         let row = app.buttons["home.sessionRow"].firstMatch
         XCTAssertTrue(row.waitForExistence(timeout: 5))
         row.tap()
-        let memory = app.staticTexts["detail.memory"].firstMatch
+        let memory = app.buttons["detail.memory"].firstMatch
         XCTAssertTrue(memory.waitForExistence(timeout: 5), "the accepted memory shows in the session's detail")
         XCTAssertTrue(memory.label.contains("The blue door"))
     }
@@ -62,6 +66,8 @@ final class ExtractionUITests: XCTestCase {
         app.buttons["home.start"].tap()
         XCTAssertTrue(app.staticTexts["Sounds like a memory"].waitForExistence(timeout: 15))
         app.buttons["session.stop"].tap()
+        XCTAssertTrue(app.buttons["timeline.sessions"].waitForExistence(timeout: 10))
+        app.buttons["timeline.sessions"].tap()
         let row = app.buttons["home.sessionRow"].firstMatch
         XCTAssertTrue(row.waitForExistence(timeout: 5))
         row.tap()

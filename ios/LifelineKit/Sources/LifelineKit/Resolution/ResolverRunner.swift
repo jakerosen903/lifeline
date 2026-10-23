@@ -31,6 +31,18 @@ public struct ResolverRunner: Sendable {
         let chapters = try store.chapters.chapters()
         let birth = try store.profile.ownerBirthDate()
 
+        // A stand-in the resolver made earlier gives way once the owner tells that story:
+        // anchors move to the real memory and the placeholder goes.
+        for placeholder in memories where placeholder.isFloating && !placeholder.range.isPlaced {
+            guard let real = memories.first(where: { !$0.isFloating && $0.id != placeholder.id && Resolver.matches($0.title, placeholder.title) }) else { continue }
+            for i in anchors.indices where anchors[i].targetID == placeholder.id.rawValue {
+                anchors[i].targetID = real.id.rawValue
+                try store.memories.update(anchors[i])
+            }
+            try store.memories.delete(placeholder.id)
+            memories.removeAll { $0.id == placeholder.id }
+        }
+
         // Pass 1: find targets that need a floating memory, create them, point the anchors at them.
         var output = Resolver.resolve(try input(memories, anchors, birth, chapters))
         var floatingCreated = 0

@@ -87,7 +87,9 @@ public struct TimeRange: Codable, Sendable, Equatable {
                 return "probably " + Self.yearSpan(ls.year, le.year)
             }
             let span = Self.yearSpan(earliest.year, latest.year)
-            return guess ? (earliest.year == latest.year ? "around \(span)" : "sometime between \(span)") : span
+            // A guess that fits in two calendar years (an age band from a mid-year birthday) is
+            // still "around"; wider than that it is honestly "sometime between".
+            return guess ? (latest.year - earliest.year <= 1 ? "around \(span)" : "sometime between \(span)") : span
         }
     }
 

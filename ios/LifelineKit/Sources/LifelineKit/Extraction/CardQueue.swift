@@ -74,6 +74,18 @@ public struct CardQueue: Equatable, Sendable {
         }
     }
 
+    /// Cards for candidates still pending after a session: a hint shows only once its memory
+    /// was accepted, and never when the memory was declined or is unknown.
+    public static func waitingCards(pending: [Candidate], statusOf: (CandidateID) -> CandidateStatus?) -> [Card] {
+        pending.compactMap { candidate in
+            guard let card = Card(candidate) else { return nil }
+            if case .hint(_, let out) = card {
+                return statusOf(CandidateID(rawValue: out.memoryCandidateID)) == .accepted ? card : nil
+            }
+            return card
+        }
+    }
+
     /// The memory was added: its hints become cards.
     public mutating func memoryAccepted(_ memoryCandidateID: String) {
         guard let hints = heldHints.removeValue(forKey: memoryCandidateID) else { return }

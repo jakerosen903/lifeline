@@ -81,3 +81,16 @@ private struct Env {
     _ = try env.runner.run()
     #expect(try env.store.memories.fetch(memory.id)?.range == confirmed)
 }
+
+@Test func floatingTargetIsReplacedWhenTheRealMemoryArrives() throws {
+    let env = try Env(text: "we moved after graduation and graduation was in 2004")
+    let move = try env.accept("The move", anchors: [AnchorOut(phrase: "after graduation", relation: .after, targetText: "graduation", value: nil)], ordinal: 0)
+    #expect(try env.store.memories.allMemories().filter(\.isFloating).count == 1)
+    let graduation = try env.accept("Graduation", anchors: [AnchorOut(phrase: "in 2004", relation: .absolute, targetText: nil, value: nil)], ordinal: 1)
+    #expect(try env.store.memories.allMemories().filter(\.isFloating).isEmpty, "the placeholder gives way to the real memory")
+    let anchor = try #require(try env.store.memories.anchors(of: move.id).first)
+    #expect(anchor.targetID == graduation.id.rawValue && anchor.resolved)
+    #expect(try env.store.memories.fetch(move.id)?.range.earliest?.iso == "2004-01-01")
+    #expect(try env.store.memories.fetch(move.id)?.range.latest?.iso == "2009-12-31")
+    #expect(try env.store.curiosity.open().isEmpty)
+}

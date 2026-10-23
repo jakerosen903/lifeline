@@ -186,8 +186,10 @@ public enum Resolver {
         return nil
     }
 
+    /// A placed match beats an unplaced one, so a stand-in never shadows the told story.
     private static func findTarget(_ phrase: String, in input: ResolverInput) -> MemoryRef? {
-        input.memories.first { matches($0.title, phrase) || ($0.range.evidenceText.map { matches($0, phrase) } ?? false) }
+        let hits = input.memories.filter { matches($0.title, phrase) || ($0.range.evidenceText.map { matches($0, phrase) } ?? false) }
+        return hits.first(where: \.range.isPlaced) ?? hits.first
     }
 
     private static func isChapter(_ phrase: String, _ input: ResolverInput) -> Bool {

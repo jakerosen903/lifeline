@@ -19,7 +19,7 @@ final class SessionDetailViewModel {
     private(set) var error: String?
     let player = SegmentPlayer()
     let cards: CardHandler
-    private let deps: Dependencies
+    let deps: Dependencies
 
     init(session: Session, deps: Dependencies) {
         self.session = session
@@ -37,7 +37,8 @@ final class SessionDetailViewModel {
                           people: try deps.extractionStore.memories.people(of: memory.id).map(\.displayName),
                           anchors: try deps.extractionStore.memories.anchors(of: memory.id).map(\.phrase))
             }
-            let pending = try deps.extractionStore.candidates.pending(in: session.id).compactMap(Card.init)
+            let candidates = deps.extractionStore.candidates
+            let pending = CardQueue.waitingCards(pending: try candidates.pending(in: session.id)) { (try? candidates.fetch($0))?.status }
             // Names a memory listed that never had their own card wait here as well.
             let segmentIDs = Set(segments.map(\.id))
             let shownNames = Set(pending.compactMap { if case .whoIsThis(_, let text) = $0 { PeopleRepository.normalize(text) } else { nil } })

@@ -10,7 +10,11 @@ struct SettingsScreen: View {
     var body: some View {
         NavigationStack {
             Form {
-                AboutYouFields(viewModel: AboutYouViewModel(profile: deps.profile, mode: .settings) { dismiss() })
+                AboutYouFields(viewModel: AboutYouViewModel(profile: deps.profile, mode: .settings) {
+                    // A new birthday can place every age-anchored memory.
+                    _ = try? ResolverRunner(store: deps.extractionStore).run()
+                    dismiss()
+                })
 
                 APIKeySection(key: key, secrets: deps.secrets)
             }

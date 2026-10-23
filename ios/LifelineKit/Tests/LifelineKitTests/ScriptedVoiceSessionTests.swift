@@ -33,3 +33,20 @@ import Testing
     let values: [String] = lines.map { line in String(line.split(separator: "\t").last ?? "") }
     #expect(values == ["1200", "300"])
 }
+
+@Test func scriptedExtractionMatchesTheScriptedVoice() async throws {
+    // Every anchor phrase the scripted extractor returns must be in its segment, or the validator drops it.
+    let service = ScriptedExtractionService(delayMs: 0)
+    for segment in ScriptedVoiceSession.sampleScript {
+        let words = segment.words.map(\.text)
+        let packet = ContextPacketBuilder.build(segment: Segment(id: .init(), sessionID: .init(), index: 0, startMs: 0, endMs: 1, text: segment.text, status: .pending),
+                                                previous: [], people: [], memories: [], profileFreeText: nil, stage: "open")
+        let response = try await service.extract(ExtractionRequest(segmentID: .init(), segmentText: segment.text, words: words, packet: packet))
+        let validated = OutputValidator.validate(response.output, segmentText: segment.text, words: words)
+        #expect(validated.rejected.isEmpty, Comment(rawValue: "\(segment.text): \(validated.rejected.map(\.reason))"))
+    }
+    let blueDoor = try await service.extract(ExtractionRequest(segmentID: .init(), segmentText: ScriptedVoiceSession.sampleScript[0].text,
+                                                                words: ScriptedVoiceSession.sampleScript[0].words.map(\.text),
+                                                                packet: ContextPacketBuilder.build(segment: Segment(id: .init(), sessionID: .init(), index: 0, startMs: 0, endMs: 1, text: "", status: .pending), previous: [], people: [], memories: [], profileFreeText: nil, stage: "open")))
+    #expect(blueDoor.output.memories.first?.anchors.map(\.relation) == [.age, .before])
+}
