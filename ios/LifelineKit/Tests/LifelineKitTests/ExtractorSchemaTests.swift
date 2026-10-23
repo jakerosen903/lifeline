@@ -64,10 +64,12 @@ import Testing
     #expect(flags["serious_disclosure"] == nil)
     let text = try ExtractorPrompt.system(version: "v3")
     #expect(text.contains("`present`") && text.contains("`past`"))
+    let v4 = try ExtractorPrompt.system(version: "v4")
+    #expect(v4.contains("Prefer null when unsure") && v4.contains("`related`"), "v4 asks for same-as on retellings across recordings")
 }
 
 @Test func configDefaultsMatchTheSpec() {
     let c = ExtractorConfig.default
-    #expect(c.model == "claude-opus-5-5" && c.effort == "low" && c.maxTokens == 4096 && c.version == "v3")
+    #expect(c.model == "claude-opus-5-5" && c.effort == "low" && c.maxTokens == 4096 && c.version == "v4")
     #expect(c.betas.contains("server-side-fallback-2026-07-01"))
 }

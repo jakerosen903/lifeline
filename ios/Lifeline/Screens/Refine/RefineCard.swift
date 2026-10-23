@@ -8,6 +8,8 @@ struct RefineCard: View {
     let question: RelativeQuestion?
     let onChoose: (RelativeQuestion.Choice) -> Void
     let onKeep: () -> Void
+    /// "Tell me when": the person gives the date themselves (M4.1). Nil where that is not offered.
+    var onTellMeWhen: (() -> Void)? = nil
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -28,9 +30,15 @@ struct RefineCard: View {
                             .accessibilityIdentifier("refine.choice")
                     }
                 }
-            } else {
+            } else if onTellMeWhen == nil {
                 Text("Nothing you've said so far can narrow this. Keep telling your story.")
                     .font(.footnote).foregroundStyle(Theme.stone)
+            }
+            if let onTellMeWhen {
+                Button("Tell me when", systemImage: "calendar", action: onTellMeWhen)
+                    .buttonStyle(.bordered)
+                    .tint(Theme.olive)
+                    .accessibilityIdentifier("refine.tellMeWhen")
             }
             Button("Keep “\(bestGuess)” for now", action: onKeep)
                 .buttonStyle(.borderless)

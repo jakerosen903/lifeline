@@ -48,10 +48,8 @@ final class LandingViewModel: Identifiable {
             let store = deps.extractionStore
             session = try store.sessions.fetch(session.id) ?? session
             let segments = try store.sessions.segments(in: session.id)
-            let kept = try store.memories.memories(in: session.id).compactMap { memory -> (Memory, MemorySpan)? in
-                guard let span = try store.memories.spans(of: memory.id).first else { return nil }
-                return (memory, span)
-            }
+            // A telling merged into an older memory is a kept moment of this session too (M4.1).
+            let kept = try store.memories.spans(in: session.id)
             let possible = try store.candidates.pending(in: session.id).compactMap { candidate -> (Candidate, MemoryOut)? in
                 guard let out = CandidatePayload.memory(candidate) else { return nil }
                 return (candidate, out)

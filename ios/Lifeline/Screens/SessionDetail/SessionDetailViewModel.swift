@@ -33,7 +33,9 @@ final class SessionDetailViewModel {
     func refresh() {
         do {
             segments = try deps.sessions.segments(in: session.id)
-            memories = try deps.extractionStore.memories.memories(in: session.id).map { memory in
+            // Every telling in this recording counts, including one merged into an older memory.
+            var seen = Set<MemoryID>()
+            memories = try deps.extractionStore.memories.spans(in: session.id).map(\.0).filter { seen.insert($0.id).inserted }.map { memory in
                 MemoryRow(memory: memory,
                           kind: memory.createdFromCandidateID.flatMap { try? deps.extractionStore.candidates.fetch($0) }.flatMap { CandidatePayload.memory($0) }?.kindOrDefault ?? .other,
                           people: try deps.extractionStore.memories.people(of: memory.id).map(\.displayName),
@@ -63,6 +65,8 @@ final class SessionDetailViewModel {
     func change(_ card: Card) { if let memory = cards.keep(card) { refresh(); changing = memory } }
     func dismiss(_ card: Card) { if cards.dismiss(card) { refresh() } }
     func undo() { if cards.undo() != nil { refresh() } }
+    func undoMerge() { if cards.undoMerge() != nil { refresh() } }
+    func sameStory(_ card: Card, into target: MemoryID) { if cards.sameStory(card, into: target) { refresh() } }
     func resolve(_ card: Card, _ choice: MentionChoice) { if cards.resolve(card, choice) { refresh() } }
 
     func isPlaying(_ segment: Segment) -> Bool { player.playingRange == segment.range && player.isPlaying }

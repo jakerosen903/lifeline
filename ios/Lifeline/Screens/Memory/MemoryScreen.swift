@@ -8,6 +8,8 @@ struct MemoryScreen: View {
     let deps: Dependencies
     let onChange: () -> Void
     @State private var refining = false
+    @State private var tellingWhen = false
+    @Environment(\.dismiss) private var dismiss
     @State private var changing = false
     @State private var whoIsThis: Mention?
 
@@ -47,22 +49,34 @@ struct MemoryScreen: View {
                 }
 
                 VStack(alignment: .leading, spacing: 10) {
-                    HStack {
-                        Text("In your voice").font(.caption.weight(.semibold)).foregroundStyle(Theme.olive)
-                        Spacer()
-                        if let session = viewModel.session {
-                            Text("recorded " + session.startedAt.formatted(.dateTime.month().day().year())).font(.caption).foregroundStyle(Theme.stone)
+                    Text("In your voice").font(.caption.weight(.semibold)).foregroundStyle(Theme.olive)
+                    // Every telling, first first; a retelling shows the words it was kept under (M4.1).
+                    ForEach(viewModel.spans, id: \.span.order) { telling in
+                        VStack(alignment: .leading, spacing: 6) {
+                            HStack {
+                                Button { viewModel.togglePlayback(of: telling.span) } label: {
+                                    Label(viewModel.isPlaying(telling.span) ? "Stop" : "Play",
+                                          systemImage: viewModel.isPlaying(telling.span) ? "stop.circle.fill" : "play.circle.fill")
+                                        .font(.title3)
+                                }
+                                .tint(Theme.olive)
+                                .accessibilityIdentifier("memory.play")
+                                Spacer()
+                                Text("recorded " + telling.session.startedAt.formatted(.dateTime.month().day().year())).font(.caption).foregroundStyle(Theme.stone)
+                            }
+                            if telling.span.order == 0 {
+                                Text("“\(viewModel.memory.summaryQuote)”")
+                                    .font(.system(.body, design: .serif))
+                                    .foregroundStyle(Theme.ink)
+                            } else if let title = telling.span.titleText {
+                                Text("also told as: “\(title)”")
+                                    .font(.system(.body, design: .serif))
+                                    .foregroundStyle(Theme.ink)
+                            }
                         }
+                        .accessibilityElement(children: .contain)
+                        .accessibilityIdentifier("memory.span")
                     }
-                    Button { viewModel.togglePlayback() } label: {
-                        Label(viewModel.isPlaying ? "Stop" : "Play", systemImage: viewModel.isPlaying ? "stop.circle.fill" : "play.circle.fill")
-                            .font(.title3)
-                    }
-                    .tint(Theme.olive)
-                    .accessibilityIdentifier("memory.play")
-                    Text("“\(viewModel.memory.summaryQuote)”")
-                        .font(.system(.body, design: .serif))
-                        .foregroundStyle(Theme.ink)
                 }
                 .padding(16)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -94,7 +108,7 @@ struct MemoryScreen: View {
             Button("Change…") { changing = true }.accessibilityIdentifier("memory.change")
         }
         .sheet(isPresented: $changing, onDismiss: { viewModel.refresh(); onChange() }) {
-            ChangeSheet(viewModel: ChangeViewModel(memory: viewModel.memory, deps: deps)) {}
+            ChangeSheet(memory: viewModel.memory, deps: deps) {}
         }
         .sheet(item: $whoIsThis, onDismiss: { viewModel.refresh(); onChange() }) { mention in
             let handler = CardHandler(deps: deps)
@@ -106,13 +120,18 @@ struct MemoryScreen: View {
             .presentationDetents([.medium, .large])
             .presentationBackground(Theme.linen)
         }
-        .sheet(isPresented: $refining, onDismiss: { viewModel.refresh(); onChange() }) {
+        .sheet(isPresented: $refining, onDismiss: { viewModel.refresh(); onChange(); if tellingWhen { } }) {
             RefineCard(title: viewModel.memory.title, bestGuess: viewModel.rangeText, question: viewModel.question,
-                       onChoose: { viewModel.answer($0); refining = false }, onKeep: { refining = false })
+                       onChoose: { viewModel.answer($0); refining = false }, onKeep: { refining = false },
+                       onTellMeWhen: { refining = false; tellingWhen = true })
                 .padding(24)
                 .presentationDetents([.medium, .large])
                 .presentationBackground(Theme.linen)
         }
+        .sheet(isPresented: $tellingWhen, onDismiss: { viewModel.refresh(); onChange() }) {
+            TellMeWhenSheet(title: viewModel.memory.title, birthDate: viewModel.birthDate) { viewModel.setStated($0) }
+        }
+        .onChange(of: viewModel.isGone) { if viewModel.isGone { onChange(); dismiss() } }
         .onDisappear { viewModel.stop() }
     }
 }

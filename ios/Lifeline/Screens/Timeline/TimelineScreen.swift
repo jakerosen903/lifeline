@@ -9,6 +9,7 @@ struct TimelineScreen: View {
     @State private var showSettings = false
     @State private var openMemory: MemoryRow?
     @State private var collectionTarget: MemoryRow?
+    @State private var dateTarget: MemoryRow?
     @State private var collectionTitle = ""
 
     init(viewModel: TimelineViewModel) {
@@ -20,6 +21,7 @@ struct TimelineScreen: View {
         MemoryRowActions(open: { openMemory = $0 },
                          newChapter: { viewModel.newChapter(for: $0.id, title: nil) },
                          addToCollection: { collectionTarget = $0 },
+                         addDate: { dateTarget = $0 },
                          hide: { viewModel.hide($0.id) },
                          setExcluded: { viewModel.setExcluded($0.id, $1) },
                          delete: { viewModel.deleteTarget = $0 })
@@ -38,7 +40,8 @@ struct TimelineScreen: View {
                         Section("Waiting for you") {
                             CardStack(cards: viewModel.waiting, handler: viewModel.cards,
                                       onAccept: { viewModel.accept($0) }, onChange: { viewModel.change($0) }, onDismiss: { viewModel.dismiss($0) },
-                                      onResolve: { viewModel.resolve($0, $1) }, onUndo: { viewModel.undo() })
+                                      onResolve: { viewModel.resolve($0, $1) }, onUndo: { viewModel.undo() },
+                              onSameStory: { viewModel.sameStory($0, into: $1) }, onUndoMerge: { viewModel.undoMerge() })
                                 .listRowBackground(Color.clear)
                                 .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
                                 .accessibilityIdentifier("timeline.waiting")
@@ -138,7 +141,10 @@ struct TimelineScreen: View {
                 SettingsScreen(deps: viewModel.deps)
             }
             .sheet(item: Binding(get: { viewModel.changing }, set: { viewModel.changing = $0 })) { memory in
-                ChangeSheet(viewModel: ChangeViewModel(memory: memory, deps: viewModel.deps)) { viewModel.refresh() }
+                ChangeSheet(memory: memory, deps: viewModel.deps, includeHidden: viewModel.showHidden) { viewModel.refresh() }
+            }
+            .sheet(item: $dateTarget, onDismiss: { viewModel.refresh() }) { row in
+                TellMeWhenSheet(title: row.memory.title, birthDate: try? viewModel.deps.extractionStore.profile.ownerBirthDate()) { viewModel.setStated(row.id, $0) }
             }
             .confirmationDialog("Delete this memory?", isPresented: Binding(get: { viewModel.deleteTarget != nil }, set: { if !$0 { viewModel.deleteTarget = nil } }),
                                 titleVisibility: .visible, presenting: viewModel.deleteTarget) { row in

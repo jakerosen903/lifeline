@@ -7,9 +7,12 @@ import SwiftUI
 struct MemoryCard: View {
     let memory: MemoryOut
     let confidence: Double
+    /// The earlier memory this looks like a retelling of (M4.1). Keep stays the default.
+    var match: MemoryMatch? = nil
     let onKeep: () -> Void
     let onChange: () -> Void
     let onDismiss: () -> Void
+    var onSameStory: () -> Void = {}
 
     @State private var offset: CGFloat = 0
 
@@ -40,11 +43,24 @@ struct MemoryCard: View {
             if !memory.peopleRefs.isEmpty || memory.placeText != nil {
                 FlowChips(items: memory.peopleRefs + (memory.placeText.map { [$0] } ?? []))
             }
+            if let match {
+                (Text("Same as ").foregroundStyle(Theme.stone) + Text(match.title).bold().foregroundStyle(Theme.ink) + Text("?").foregroundStyle(Theme.stone)
+                 + Text(match.recordedAt.map { " · recorded " + $0.formatted(.dateTime.month(.abbreviated).day()) } ?? "").foregroundStyle(Theme.stone))
+                    .font(.subheadline)
+                    .accessibilityLabel("Same as \(match.title)?" + (match.recordedAt.map { " · recorded " + $0.formatted(.dateTime.month(.abbreviated).day()) } ?? ""))
+                    .accessibilityIdentifier("card.sameAs")
+            }
             HStack(spacing: 12) {
                 Button("Keep", action: onKeep)
                     .buttonStyle(.borderedProminent)
                     .tint(Theme.olive)
                     .accessibilityIdentifier("card.add")
+                if match != nil {
+                    Button("Same story", action: onSameStory)
+                        .buttonStyle(.bordered)
+                        .tint(Theme.olive)
+                        .accessibilityIdentifier("card.sameStory")
+                }
                 Button("Change…", action: onChange)
                     .buttonStyle(.bordered)
                     .tint(Theme.olive)
@@ -111,21 +127,24 @@ struct FlowChips: View {
     }
 }
 
-/// "Suggestion dismissed. Your recording is untouched." with Undo, for the undo window.
-struct DismissedNotice: View {
+/// "Suggestion dismissed. Your recording is untouched." or "Added to X." with Undo, for the undo window.
+struct UndoNotice: View {
+    var text = "Suggestion dismissed. Your recording is untouched."
+    var identifier = "card.dismissedNotice"
+    var undoIdentifier = "card.undo"
     let onUndo: () -> Void
 
     var body: some View {
         HStack(spacing: 12) {
-            Text("Suggestion dismissed. Your recording is untouched.")
+            Text(text)
                 .font(.footnote)
                 .foregroundStyle(Theme.stone)
-                .accessibilityIdentifier("card.dismissedNotice")
+                .accessibilityIdentifier(identifier)
             Spacer(minLength: 0)
             Button("Undo", action: onUndo)
                 .buttonStyle(.bordered)
                 .tint(Theme.olive)
-                .accessibilityIdentifier("card.undo")
+                .accessibilityIdentifier(undoIdentifier)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)

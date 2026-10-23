@@ -210,6 +210,19 @@ enum Migrations {
                 t.add(column: "hidden_from_timeline", .boolean).notNull().defaults(to: false)
             }
         }
+        // M4.1: on-device sentence embeddings for "Same as X?", and a span remembers the card it came from.
+        m.registerMigration("v7") { db in
+            try db.create(table: "memory_embedding") { t in
+                t.primaryKey("memory_id", .text).references("memory", onDelete: .cascade)
+                t.column("model", .text).notNull()
+                t.column("dims", .integer).notNull()
+                t.column("vector", .blob).notNull()
+            }
+            try db.alter(table: "memory_span") { t in
+                t.add(column: "title_text", .text)
+                t.add(column: "candidate_id", .text)
+            }
+        }
         return m
     }
 }

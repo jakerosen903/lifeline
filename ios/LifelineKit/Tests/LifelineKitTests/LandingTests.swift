@@ -54,3 +54,12 @@ private func possible(_ title: String, quote: String, in seg: Segment) -> (Candi
     #expect(Landing.headline(first: false, heavy: false) == "Your recording is saved.")
     #expect(Landing.headline(first: true, heavy: true) == "Your recording is saved.", "a heavy first session is not celebrated")
 }
+
+@Test func twoTellingsOfOneMemoryInOneSessionAreTwoRows() {
+    let segs = (0..<2).map(segment)
+    let (memory, first) = kept("The blue door", quote: "the house had a blue door", in: segs[0], at: 1_000)
+    let second = MemorySpan(memoryID: memory.id, segmentID: segs[1].id, startMs: 11_000, endMs: 12_000, order: 1, titleText: "Grew up behind the door", candidateID: nil)
+    let (rows, _) = Landing.rows(kept: [(memory, first), (memory, second)], possible: [], segments: segs)
+    #expect(rows.count == 2 && Set(rows.map(\.id)).count == 2, "each telling is its own row with its own id")
+    #expect(rows[1].title == "Grew up behind the door" && rows[1].play.start == 11_000, "a retelling shows the words it was kept under")
+}

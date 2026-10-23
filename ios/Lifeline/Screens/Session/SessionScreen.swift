@@ -30,7 +30,7 @@ struct SessionScreen: View {
         .interactiveDismissDisabled()
         .onChange(of: viewModel.landed) { if viewModel.landed { onEnded() } }
         .sheet(item: $viewModel.changing) { memory in
-            ChangeSheet(viewModel: ChangeViewModel(memory: memory, deps: viewModel.deps)) {}
+            ChangeSheet(memory: memory, deps: viewModel.deps) {}
         }
     }
 
@@ -109,7 +109,8 @@ struct SessionScreen: View {
                     liveText
                     CardStack(cards: viewModel.visibleCards, handler: viewModel.cards,
                               onAccept: { viewModel.accept($0) }, onChange: { viewModel.change($0) }, onDismiss: { viewModel.dismiss($0) },
-                              onResolve: { viewModel.resolve($0, $1) }, onUndo: { viewModel.undo() })
+                              onResolve: { viewModel.resolve($0, $1) }, onUndo: { viewModel.undo() },
+                              onSameStory: { viewModel.sameStory($0, into: $1) }, onUndoMerge: { viewModel.undoMerge() })
                         .padding(.top, 8)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)

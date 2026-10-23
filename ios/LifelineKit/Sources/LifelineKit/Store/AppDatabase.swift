@@ -154,6 +154,7 @@ extension MemorySpan: FetchableRecord, PersistableRecord {
     public static let databaseTableName = "memory_span"
     enum CodingKeys: String, CodingKey {
         case memoryID = "memory_id", segmentID = "segment_id", startMs = "start_ms", endMs = "end_ms", order
+        case titleText = "title_text", candidateID = "candidate_id"
     }
 }
 

@@ -42,6 +42,38 @@ public struct TimeRange: Codable, Sendable, Equatable {
 
     public var isPlaced: Bool { earliest != nil || latest != nil || likelyStart != nil || likelyEnd != nil }
     public var isConfirmed: Bool { origin == .confirmed }
+    /// Stated by the person or confirmed by them: the resolver and the questions leave it alone.
+    public var isSettled: Bool { origin == .confirmed || origin == .stated }
+
+    // MARK: - Stated by the person (M4.1: "Tell me when")
+
+    static func clampYear(_ year: Int) -> Int { min(max(year, AnchorPhrase.yearRange.lowerBound), AnchorPhrase.yearRange.upperBound) }
+
+    /// "1998": the whole year, as said.
+    public static func stated(year: Int) -> TimeRange {
+        let y = clampYear(year)
+        return .year(y, origin: .stated, evidence: "\(y)")
+    }
+
+    /// "around 1998": a year each side, most likely the year itself.
+    public static func stated(around year: Int) -> TimeRange {
+        let y = clampYear(year)
+        return TimeRange(earliest: .firstOfYear(clampYear(y - 1)), latest: .lastOfYear(clampYear(y + 1)),
+                         likelyStart: .firstOfYear(y), likelyEnd: .lastOfYear(y), granularity: .year, origin: .stated, evidenceText: "around \(y)")
+    }
+
+    /// "1996–1999": inclusive, in either order.
+    public static func stated(between a: Int, and b: Int) -> TimeRange {
+        let lo = clampYear(min(a, b)), hi = clampYear(max(a, b))
+        return TimeRange.span(.firstOfYear(lo), .lastOfYear(hi), granularity: .year, origin: .stated, evidence: Self.yearSpan(lo, hi))
+    }
+
+    /// "about 8": the age band the resolver would give an age anchor, but as the person's word.
+    public static func stated(age: AgeSpan, birth: CivilDate, config: ResolverConfig = .default, evidence: String) -> TimeRange {
+        var range = Resolver.ageRange(age, birth: birth, config: config, evidence: evidence)
+        range.origin = .stated
+        return range
+    }
 
     /// The overlap of the two possible bands, or nil when they do not touch. Keeps this range's
     /// granularity, origin and evidence; the likely band is kept only if it still fits.
@@ -73,6 +105,8 @@ public struct TimeRange: Codable, Sendable, Equatable {
         // A confirmed relation ("before Graduation (2004)") is what the owner actually settled;
         // the band's far edge is the builder's slack and is never shown as a fact.
         if origin == .confirmed, let evidenceText, Self.isRelationEvidence(evidenceText) { return evidenceText }
+        // "around 1998", "about 8": what the person typed in, shown as said (M4.1).
+        if origin == .stated, let evidenceText, Self.isAsSaidEvidence(evidenceText) { return evidenceText }
         let guess = origin == .inferred
         switch granularity ?? .year {
         case .day:
@@ -94,6 +128,10 @@ public struct TimeRange: Codable, Sendable, Equatable {
             // still "around"; wider than that it is honestly "sometime between".
             return guess ? (latest.year - earliest.year <= 1 ? "around \(span)" : "sometime between \(span)") : span
         }
+    }
+
+    static func isAsSaidEvidence(_ text: String) -> Bool {
+        ["around ", "about "].contains { text.lowercased().hasPrefix($0) }
     }
 
     static func isRelationEvidence(_ text: String) -> Bool {

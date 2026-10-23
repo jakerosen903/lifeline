@@ -189,6 +189,15 @@ final class SessionViewModel: Identifiable {
     func undo() {
         if let card = cards.undo() { cardQueue.restore(card) }
     }
+    func undoMerge() {
+        if let card = cards.undoMerge() { cardQueue.restore(card) }
+    }
+    /// "Same story": the card joins an earlier memory; its hints follow as if it were kept.
+    func sameStory(_ card: Card, into target: MemoryID) {
+        guard cards.sameStory(card, into: target) else { return }
+        cardQueue.remove(card.id)
+        cardQueue.memoryAccepted(card.id)
+    }
     func resolve(_ card: Card, _ choice: MentionChoice) { if cards.resolve(card, choice) { cardQueue.remove(card.id) } }
 
     // MARK: - The arc

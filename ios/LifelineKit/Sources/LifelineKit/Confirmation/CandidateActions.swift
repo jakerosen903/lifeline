@@ -19,6 +19,12 @@ public struct CandidateActions: Sendable {
         case memoryNotAccepted
         case notDismissed
         case emptyTitle
+        // M4.1 merging and stated ranges
+        case targetMissing
+        case sameMemory
+        case stale
+        case notStated
+        case standIn
     }
 
     public enum HintResult: Equatable, Sendable {
@@ -32,9 +38,11 @@ public struct CandidateActions: Sendable {
         public var newMentions: [Mention]
     }
 
-    private let store: ExtractionStore
+    let store: ExtractionStore
+    /// Keeps the embeddings current; nil in the CLI and under UI testing.
+    let matcher: MemoryMatcher?
 
-    public init(store: ExtractionStore) { self.store = store }
+    public init(store: ExtractionStore, matcher: MemoryMatcher? = nil) { self.store = store; self.matcher = matcher }
 
     // MARK: - Correction (M4)
 
@@ -43,6 +51,7 @@ public struct CandidateActions: Sendable {
         let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { throw Error.emptyTitle }
         try store.memories.updateTitle(memory, trimmed)
+        try reindex(memory)
     }
 
     /// Change… → Who was there. A second link to the same person is a no-op.
@@ -68,7 +77,10 @@ public struct CandidateActions: Sendable {
     // MARK: - Privacy (M4)
 
     public func setHidden(_ memory: MemoryID, _ hidden: Bool) throws { try store.memories.setHidden(memory, hidden) }
-    public func setExcluded(_ memory: MemoryID, _ excluded: Bool) throws { try store.memories.setExcluded(memory, excluded) }
+    public func setExcluded(_ memory: MemoryID, _ excluded: Bool) throws {
+        try store.memories.setExcluded(memory, excluded)
+        try reindex(memory)   // an excluded memory loses its vector; an included one gets it back
+    }
 
     /// "Hide today from the timeline": every memory told in the session leaves everyday browsing.
     public func hideSession(_ session: SessionID) throws {
@@ -102,40 +114,58 @@ public struct CandidateActions: Sendable {
         let span = MemorySpan(memoryID: memory.id, segmentID: candidate.segmentID,
                               startMs: words[out.segmentSpan.startWord].startMs, endMs: words[out.segmentSpan.endWord].endMs, order: 0)
 
-        var people: [MemoryPerson] = []
-        var unknown: [String] = []
-        var roleAliases: [(PersonID, String)] = []
-        for ref in out.peopleRefs {
-            if let person = try store.people.findPerson(matching: ref) {
-                if !people.contains(where: { $0.personID == person.id }) {
-                    people.append(MemoryPerson(memoryID: memory.id, personID: person.id, roleText: ref))
-                }
-                // "my mom, Marcel": the role half becomes an alias so "my mom" alone links next time.
-                let parts = PeopleRepository.parts(of: ref)
-                if parts.count > 1 { roleAliases += parts.dropFirst().map { (person.id, $0) } }
-            } else if !unknown.contains(where: { Self.same($0, ref) }) {
-                unknown.append(ref)
-            }
-        }
-        var places: [MemoryPlace] = []
-        if let text = out.placeText?.trimmingCharacters(in: .whitespacesAndNewlines), !text.isEmpty {
-            places.append(MemoryPlace(memoryID: memory.id, placeID: try store.people.insertPlace(nameText: text).id))
-        }
-        let anchors = out.anchors.map {
-            Anchor(id: .init(), memoryID: memory.id, phrase: $0.phrase, relation: $0.relation, targetKind: .none, targetID: nil,
-                   targetText: $0.targetText, value: $0.value, resolved: false)
-        }
-
-        try store.memories.insert(memory, spans: [span], people: people, places: places, anchors: anchors, acceptingCandidate: candidate.id)
-        for (person, alias) in roleAliases { try store.people.addAlias(alias, to: person) }
-
-        var newMentions: [Mention] = []
-        for name in unknown {
-            newMentions.append(try mention(for: name, in: candidate.segmentID))
-        }
+        let edges = try edges(of: out, for: memory.id)
+        try store.memories.insert(memory, spans: [span], people: edges.people, places: edges.places, anchors: edges.anchors, acceptingCandidate: candidate.id)
+        let newMentions = try finishEdges(edges, segment: candidate.segmentID)
+        try reindex(memory.id)
         // Place what the new anchors allow, and re-place anything that pointed at this title.
         _ = try ResolverRunner(store: store).run()
         return AcceptedMemory(memory: memory, newMentions: newMentions)
+    }
+
+    /// The people, places and anchors a card names, built for `memory`. Shared by Keep and
+    /// Same story so a retelling links exactly as a first telling does.
+    struct Edges {
+        var people: [MemoryPerson] = []
+        var unknown: [String] = []
+        var roleAliases: [(PersonID, String)] = []
+        var places: [MemoryPlace] = []
+        var anchors: [Anchor] = []
+    }
+
+    func edges(of out: MemoryOut, for memory: MemoryID) throws -> Edges {
+        var e = Edges()
+        for ref in out.peopleRefs {
+            if let person = try store.people.findPerson(matching: ref) {
+                if !e.people.contains(where: { $0.personID == person.id }) {
+                    e.people.append(MemoryPerson(memoryID: memory, personID: person.id, roleText: ref))
+                }
+                // "my mom, Marcel": the role half becomes an alias so "my mom" alone links next time.
+                let parts = PeopleRepository.parts(of: ref)
+                if parts.count > 1 { e.roleAliases += parts.dropFirst().map { (person.id, $0) } }
+            } else if !e.unknown.contains(where: { Self.same($0, ref) }) {
+                e.unknown.append(ref)
+            }
+        }
+        if let text = out.placeText?.trimmingCharacters(in: .whitespacesAndNewlines), !text.isEmpty {
+            e.places.append(MemoryPlace(memoryID: memory, placeID: try store.people.insertPlace(nameText: text).id))
+        }
+        e.anchors = out.anchors.map {
+            Anchor(id: .init(), memoryID: memory, phrase: $0.phrase, relation: $0.relation, targetKind: .none, targetID: nil,
+                   targetText: $0.targetText, value: $0.value, resolved: false)
+        }
+        return e
+    }
+
+    /// Aliases and the "Who's this?" mentions that follow the edges. Returns the new mentions.
+    func finishEdges(_ edges: Edges, segment: SegmentID) throws -> [Mention] {
+        for (person, alias) in edges.roleAliases { try store.people.addAlias(alias, to: person) }
+        return try edges.unknown.map { try mention(for: $0, in: segment) }
+    }
+
+    func reindex(_ memory: MemoryID) throws {
+        guard let matcher, let row = try store.memories.fetch(memory) else { return }
+        try matcher.index(row)
     }
 
     public func dismiss(_ candidate: Candidate) throws {
@@ -241,6 +271,14 @@ public struct CandidateActions: Sendable {
         _ = try ResolverRunner(store: store).run()
     }
 
+    /// "Tell me when": the person's own date, at their precision. Only a stated range may be
+    /// written here; the app never dresses a guess as a fact.
+    public func setStatedRange(_ memory: MemoryID, _ range: TimeRange) throws {
+        guard range.origin == .stated, range.isPlaced else { throw Error.notStated }
+        try store.memories.updateRange(memory, range)
+        _ = try ResolverRunner(store: store).run()
+    }
+
     // MARK: - Hints, chapters and collections
 
     /// "Sounds like it belongs here", accepted: the hint's memory joins a collection or chapter
@@ -249,8 +287,10 @@ public struct CandidateActions: Sendable {
         guard candidate.kind == .hint else { throw Error.wrongKind }
         try requirePending(candidate)
         guard let out = CandidatePayload.hint(candidate) else { throw Error.badPayload }
+        // The card was kept as its own memory, or merged into one as a later telling (M4.1).
         guard let memory = try store.memories.memories(fromSegment: candidate.segmentID)
-                .first(where: { $0.createdFromCandidateID?.rawValue == out.memoryCandidateID }) else { throw Error.memoryNotAccepted }
+                .first(where: { $0.createdFromCandidateID?.rawValue == out.memoryCandidateID })
+                ?? store.memories.memory(withSpanFrom: CandidateID(rawValue: out.memoryCandidateID)) else { throw Error.memoryNotAccepted }
         let result: HintResult
         switch out.kind {
         case .collection:
@@ -297,11 +337,11 @@ public struct CandidateActions: Sendable {
 
     // MARK: - Helpers
 
-    private func requirePending(_ candidate: Candidate) throws {
+    func requirePending(_ candidate: Candidate) throws {
         guard try store.candidates.fetch(candidate.id)?.status == .pending else { throw Error.notPending }
     }
 
-    private func mention(for text: String, in segment: SegmentID, relation: String? = nil) throws -> Mention {
+    func mention(for text: String, in segment: SegmentID, relation: String? = nil) throws -> Mention {
         if let existing = try store.people.mentions(in: segment).first(where: { Self.same($0.text, text) }) { return existing }
         let row = Mention(id: .init(), segmentID: segment, text: text.trimmingCharacters(in: .whitespacesAndNewlines), status: .unresolved,
                           personID: nil, relationText: relation?.trimmingCharacters(in: .whitespacesAndNewlines))

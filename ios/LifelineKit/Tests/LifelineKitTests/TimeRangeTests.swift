@@ -42,3 +42,23 @@ private func d(_ s: String) -> CivilDate { CivilDate(iso: s)! }
     let wide = TimeRange(earliest: d("1993-01-01"), latest: d("1998-12-31"), likelyStart: nil, likelyEnd: nil, granularity: .year, origin: .inferred, evidenceText: nil)
     #expect(wide.displayText == "sometime between 1993–98")
 }
+
+// MARK: - Stated ranges (M4.1: "Tell me when")
+
+@Test func statedShapesDisplayAsSaid() {
+    let year = TimeRange.stated(year: 1998)
+    #expect(year.displayText == "1998" && year.origin == .stated && year.isSettled && year.evidenceText == "1998")
+    let around = TimeRange.stated(around: 1998)
+    #expect(around.displayText == "around 1998" && around.earliest?.year == 1997 && around.latest?.year == 1999 && around.likelyStart?.year == 1998 && around.origin == .stated)
+    let between = TimeRange.stated(between: 1999, and: 1996)
+    #expect(between.displayText == "1996–99" && between.earliest?.year == 1996 && between.latest?.year == 1999 && between.origin == .stated)
+    #expect(TimeRange.stated(year: 1800).earliest?.year == 1900 && TimeRange.stated(year: 2500).latest?.year == 2099, "years clamp to the resolver's range")
+    #expect(TimeRange.year(1998, origin: .stated, evidence: "in 1998").displayText == "1998", "an anchor's evidence still reads as a year")
+}
+
+@Test func statedAgeUsesTheBirthday() throws {
+    let birth = try #require(CivilDate(iso: "1990-06-15"))
+    let range = TimeRange.stated(age: .approximate(center: 8, slack: 0), birth: birth, evidence: "about 8")
+    #expect(range.earliest == CivilDate(iso: "1998-06-15") && range.latest == CivilDate(iso: "1999-06-14"))
+    #expect(range.origin == .stated && range.evidenceText == "about 8" && range.displayText == "about 8")
+}

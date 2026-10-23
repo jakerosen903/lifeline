@@ -35,7 +35,18 @@ final class AppModel {
                 if crashed.contains(where: { $0.id == session.id }) { print("[lifeline] resuming a session cut short") }
                 timeline.home.present(landing: LandingViewModel(resuming: session, deps: deps))
             }
-            Task { await deps.worker.start() }
+            // Off the main actor: the backfill loads the embedding model and walks every memory.
+            Task.detached(priority: .utility) {
+                print("[matching] \(NLSentenceEmbedder.availability)")
+                // Memories kept before M4.1 get their vectors once; idempotent.
+                do {
+                    let n = try deps.matcher.backfill()
+                    print("[matching] backfill embedded \(n) earlier memories")
+                } catch {
+                    print("[matching] backfill failed: \(error)")
+                }
+                await deps.worker.start()
+            }
         } catch {
             loadError = "Lifeline could not open its storage: \(error.localizedDescription)"
         }

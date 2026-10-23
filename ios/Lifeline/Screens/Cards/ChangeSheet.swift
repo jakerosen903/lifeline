@@ -3,10 +3,19 @@ import SwiftUI
 
 /// Change… : one tap from any card. The title, who was there, when it was; two rows that wait.
 struct ChangeSheet: View {
-    @Bindable var viewModel: ChangeViewModel
+    @State private var viewModel: ChangeViewModel
     let onDone: () -> Void
     @Environment(\.dismiss) private var dismiss
+
+    /// The model is created once per presentation: a parent re-render must not reset a merge
+    /// in progress or a half-typed title.
+    init(memory: Memory, deps: Dependencies, includeHidden: Bool = false, onDone: @escaping () -> Void) {
+        _viewModel = State(initialValue: ChangeViewModel(memory: memory, deps: deps, includeHidden: includeHidden))
+        self.onDone = onDone
+    }
     @State private var showWhen = false
+    @State private var tellingWhen = false
+    @State private var pickingSameAs = false
 
     var body: some View {
         NavigationStack {
@@ -75,6 +84,32 @@ struct ChangeSheet: View {
                             .listRowInsets(EdgeInsets())
                             .listRowBackground(Color.clear)
                     }
+                    Button("Tell me when", systemImage: "calendar") { tellingWhen = true }
+                        .buttonStyle(.borderless)
+                        .tint(Theme.olive)
+                        .accessibilityIdentifier("change.tellMeWhen")
+                }
+
+                Section {
+                    if let merged = viewModel.mergedInto {
+                        HStack {
+                            Text("Merged into “\(merged)”").foregroundStyle(Theme.ink)
+                                .accessibilityIdentifier("change.merged")
+                            Spacer()
+                            Button("Undo") { viewModel.undoMerge() }
+                                .buttonStyle(.bordered).tint(Theme.olive)
+                                .accessibilityIdentifier("change.undoMerge")
+                        }
+                    } else {
+                        Button("Same as another memory…", systemImage: "arrow.triangle.merge") { pickingSameAs = true }
+                            .buttonStyle(.borderless)
+                            .tint(Theme.olive)
+                            .accessibilityIdentifier("change.sameAs")
+                    }
+                } header: {
+                    Text("Same story")
+                } footer: {
+                    Text("This becomes a later telling of the one you pick. Its words and audio stay.")
                 }
 
                 Section {
@@ -98,6 +133,15 @@ struct ChangeSheet: View {
         }
         .presentationDetents([.large])
         .onDisappear { onDone() }
+        .sheet(isPresented: $tellingWhen) {
+            TellMeWhenSheet(title: viewModel.memory.title, birthDate: viewModel.when.birthDate) { viewModel.setStated($0) }
+        }
+        .sheet(isPresented: $pickingSameAs) {
+            SameAsPicker(matches: viewModel.pickerMatches(), title: "Same as which memory?") { chosen in
+                pickingSameAs = false
+                if let chosen { viewModel.merge(into: chosen) }
+            }
+        }
     }
 
     private func laterRow(_ title: String) -> some View {

@@ -90,3 +90,13 @@ private func anchor(_ memory: MemoryRef, _ phrase: String, _ relation: AnchorRel
     #expect(RelativeQuestions.question(for: bear, anchors: [a], placed: [movedLake], siblings: [], birthDate: nil, config: .default) == nil,
             "a confirmed memory is not asked again")
 }
+
+@Test func aStatedRangeGetsNoRelativeQuestion() {
+    let target = ref("Graduation", range: .year(2004, origin: .stated, evidence: "in 2004"))
+    let stated = ref("The move", range: .stated(year: 1998))
+    let a = anchor(stated, "before graduation", .before, target: "graduation", targetID: target.id)
+    #expect(RelativeQuestions.question(for: stated, anchors: [a], placed: [target], siblings: [], birthDate: nil, config: .default) == nil)
+    let guess = ref("The move")
+    let b = anchor(guess, "before graduation", .before, target: "graduation", targetID: target.id)
+    #expect(RelativeQuestions.question(for: guess, anchors: [b], placed: [target], siblings: [], birthDate: nil, config: .default) != nil, "a guess still gets one")
+}

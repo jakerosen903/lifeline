@@ -52,6 +52,7 @@ struct MemoryRowActions {
     let open: (MemoryRow) -> Void
     let newChapter: (MemoryRow) -> Void
     let addToCollection: (MemoryRow) -> Void
+    let addDate: (MemoryRow) -> Void
     let hide: (MemoryRow) -> Void
     let setExcluded: (MemoryRow, Bool) -> Void
     let delete: (MemoryRow) -> Void
@@ -63,6 +64,8 @@ struct MemoryRowView: View {
     let row: MemoryRow
     let axis: ClosedRange<Int>?
     let actions: MemoryRowActions
+    /// On the shelf the two useful moves are shown inline; the "…" menu stays (M4.1).
+    var inline = false
 
     var body: some View {
         HStack(alignment: .top, spacing: 8) {
@@ -74,6 +77,18 @@ struct MemoryRowView: View {
                     FlowLayout(spacing: 8) {
                         ForEach(row.checkThis, id: \.label) { CheckThisTag(tag: $0) }
                     }
+                    .padding(.bottom, 6)
+                }
+                if inline {
+                    HStack(spacing: 8) {
+                        Button("Add a date", systemImage: "calendar") { actions.addDate(row) }
+                            .accessibilityIdentifier("row.addDate")
+                        Button("Add to a collection", systemImage: "square.stack") { actions.addToCollection(row) }
+                            .accessibilityIdentifier("row.addCollection")
+                    }
+                    .buttonStyle(.bordered)
+                    .tint(Theme.olive)
+                    .font(.caption)
                     .padding(.bottom, 6)
                 }
             }

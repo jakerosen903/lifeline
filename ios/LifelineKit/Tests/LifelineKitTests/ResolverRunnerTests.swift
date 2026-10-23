@@ -136,3 +136,15 @@ private struct Env {
     #expect(try env.store.memories.fetch(move.id)?.range.latest?.iso == "2009-12-31")
     #expect(try env.store.curiosity.open().isEmpty)
 }
+
+@Test func statedRangeKeepsItsAnchorFlagsAcrossRuns() throws {
+    let env = try Env()
+    try env.birthday("1986-05-10")
+    let memory = try env.accept("The blue door", anchors: [AnchorOut(phrase: "I was six", relation: .age, targetText: nil, value: nil)], ordinal: 0)
+    #expect(try env.store.memories.anchors(of: memory.id).first?.resolved == true)
+    let actions = CandidateActions(store: env.store)
+    try actions.setStatedRange(memory.id, .stated(year: 1998))
+    _ = try env.runner.run()
+    #expect(try env.store.memories.fetch(memory.id)?.range == .stated(year: 1998))
+    #expect(try env.store.memories.anchors(of: memory.id).first?.resolved == true, "a stated memory keeps its anchor flags, like a confirmed one")
+}

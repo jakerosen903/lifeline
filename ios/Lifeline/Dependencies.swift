@@ -22,6 +22,8 @@ struct Dependencies {
     let arcConfig: ArcConfig
     /// Durable sorting: started at launch, cancelled per session before a delete.
     let worker: SortingWorker
+    /// "Same as X?": retrieval by on-device embeddings; the extractor decides, the person confirms.
+    let matcher: MemoryMatcher
 
     /// A fresh question for the next session: an open thread first, then the bank without repeats.
     func opening() -> Opening {
@@ -40,7 +42,7 @@ struct Dependencies {
     }
 
     func makeExtractionQueue(for session: SessionID) -> ExtractionQueue {
-        ExtractionQueue(session: session, service: extraction, store: extractionStore, log: { print("[extract] \($0)") })
+        ExtractionQueue(session: session, service: extraction, store: extractionStore, matcher: matcher, log: { print("[extract] \($0)") })
     }
 
     /// A recorder whose stored segments feed `queue`. Finish returns at once; the queue keeps
@@ -59,6 +61,7 @@ struct Dependencies {
         let secrets = KeychainSecretStore()
         let store = ExtractionStore(db)
         let extraction = AnthropicExtractionService(apiKey: { try? secrets.read(.anthropicAPIKey) })
+        let matcher = MemoryMatcher(store: store, embedder: NLSentenceEmbedder())
         return Dependencies(
             sessions: sessions,
             profile: ProfileRepository(db),
@@ -80,10 +83,11 @@ struct Dependencies {
             secrets: secrets,
             extraction: extraction,
             extractionStore: store,
-            actions: CandidateActions(store: store),
+            actions: CandidateActions(store: store, matcher: matcher),
             promptLog: PromptLogRepository(db),
             arcConfig: .default,
-            worker: SortingWorker(store: store, service: extraction, log: { print("[sorting] \($0)") }))
+            worker: SortingWorker(store: store, service: extraction, matcher: matcher, log: { print("[sorting] \($0)") }),
+            matcher: matcher)
     }
 
     /// Fresh temp database, scripted voice and extraction, in-memory secrets with a fake key.
@@ -100,6 +104,9 @@ struct Dependencies {
         let db = try AppDatabase.open(at: root.appending(path: "Lifeline/lifeline.sqlite"))
         let store = ExtractionStore(db)
         let extraction = ScriptedExtractionService(delayMs: 200, heavy: args.contains("-uiTesting-heavy"))
+        // Word-overlap vectors under test: deterministic, and enough for the scripted retelling
+        // to be retrieved into the packet so the scripted extractor can name it.
+        let matcher = MemoryMatcher(store: store, embedder: HashingEmbedder())
         return Dependencies(
             sessions: SessionRepository(db),
             profile: ProfileRepository(db),
@@ -116,9 +123,10 @@ struct Dependencies {
             secrets: InMemorySecretStore([.anthropicAPIKey: "sk-ant-api03-" + String(repeating: "x", count: 40)]),
             extraction: extraction,
             extractionStore: store,
-            actions: CandidateActions(store: store),
+            actions: CandidateActions(store: store, matcher: matcher),
             promptLog: PromptLogRepository(db),
             arcConfig: .uiTesting,
-            worker: SortingWorker(store: store, service: extraction))
+            worker: SortingWorker(store: store, service: extraction, matcher: matcher),
+            matcher: matcher)
     }
 }

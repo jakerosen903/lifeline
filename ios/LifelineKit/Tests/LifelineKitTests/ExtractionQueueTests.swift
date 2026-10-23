@@ -10,7 +10,7 @@ private struct Env {
         let sessions = SessionRepository(db)
         store = ExtractionStore(candidates: CandidateRepository(db), sessions: sessions, people: PeopleRepository(db),
                                 memories: MemoryRepository(db), profile: ProfileRepository(db),
-                                chapters: ChapterRepository(db), curiosity: CuriosityRepository(db))
+                                chapters: ChapterRepository(db), curiosity: CuriosityRepository(db), embeddings: EmbeddingRepository(db))
         (session, segments) = try StoreFixtures.session(in: sessions, segments: texts)
         service = FakeExtractionService(script)
         log = LogCollector()
@@ -228,4 +228,42 @@ private let blankOutput = ExtractorOutput(memories: [MemoryOut(ref: "", kind: .o
     guard case .failed(_, let error)? = await collect(events, count: 1).first else { Issue.record("expected a failure"); return }
     #expect(error == .badOutput("blank answer"))
     #expect(try env.store.sessions.fetchSegment(env.segments[0].id)?.status == .pending, "left for a later run, like any failure")
+}
+
+@Test func queueAsksTheMatcherForRelatedMemories() async throws {
+    let env = try Env(texts: ["grew up in an orange house"], script: [.success(gardenOutput())])
+    // A memory from another session whose vector equals the new segment's.
+    let (_, earlier) = try StoreFixtures.session(in: env.store.sessions, segments: ["we lived in an orange house"])
+    let c = StoreFixtures.candidate(earlier[0].id)
+    try env.store.candidates.insert(c)
+    let a = StoreFixtures.memory(from: c.id, title: "Orange house")
+    try env.store.memories.insert(a, spans: [MemorySpan(memoryID: a.id, segmentID: earlier[0].id, startMs: 0, endMs: 500, order: 0)], people: [], places: [], anchors: [])
+    let table = [MemoryMatcher.text(title: a.title, quote: a.summaryQuote): [Float]([1, 0]), env.segments[0].text: [1, 0]]
+    let matcher = MemoryMatcher(store: env.store, embedder: FakeEmbedder(table: table))
+    try matcher.index(a)
+    let queue = ExtractionQueue(session: env.session, service: env.service, store: env.store, matcher: matcher)
+    await queue.enqueue(env.segments[0].id)
+    await queue.drain()
+    let request = try #require(env.service.requests.first)
+    #expect(request.packet.memories.first?.id == a.id.rawValue && request.packet.memories.first?.related == true)
+}
+
+@Test func extractorSameAsStillSuggestsWithoutVectors() async throws {
+    let env = try Env(texts: ["grew up in an orange house"])
+    let (_, earlier) = try StoreFixtures.session(in: env.store.sessions, segments: ["we lived in an orange house"])
+    let c = StoreFixtures.candidate(earlier[0].id)
+    try env.store.candidates.insert(c)
+    let a = StoreFixtures.memory(from: c.id, title: "Orange house")
+    try env.store.memories.insert(a, spans: [MemorySpan(memoryID: a.id, segmentID: earlier[0].id, startMs: 0, endMs: 500, order: 0)], people: [], places: [], anchors: [])
+    var out = gardenOutput()
+    out.memories[0].sameAsMemoryID = a.id.rawValue
+    env.service.push(.success(out))
+    let matcher = MemoryMatcher(store: env.store, embedder: nil)
+    let queue = ExtractionQueue(session: env.session, service: env.service, store: env.store, matcher: matcher)
+    await queue.enqueue(env.segments[0].id)
+    await queue.drain()
+    let stored = try #require(try env.store.candidates.candidates(for: env.segments[0].id).first)
+    let card = try #require(CandidatePayload.memory(stored))
+    let match = try #require(try matcher.suggestion(for: card, extractorSameAs: card.sameAsMemoryID.map(MemoryID.init(rawValue:))))
+    #expect(match.memoryID == a.id && match.source == .extractor)
 }

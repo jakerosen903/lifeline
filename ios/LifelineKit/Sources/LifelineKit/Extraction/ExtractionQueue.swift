@@ -26,6 +26,7 @@ public actor ExtractionQueue {
     private let drainDeadline: Duration
     private let log: @Sendable (String) -> Void
     private let actions: CandidateActions
+    private let matcher: MemoryMatcher?
 
     private var waiting: [SegmentID] = []
     private var running = false
@@ -37,10 +38,10 @@ public actor ExtractionQueue {
     public static let withheldReason = "withheld: serious disclosure"
 
     public init(session: SessionID, service: any ExtractionService, store: ExtractionStore, stage: String = "open",
-                drainDeadline: Duration = ExtractionQueue.defaultDrainDeadline,
+                drainDeadline: Duration = ExtractionQueue.defaultDrainDeadline, matcher: MemoryMatcher? = nil,
                 log: @escaping @Sendable (String) -> Void = { _ in }) {
         self.session = session; self.service = service; self.store = store; self.stage = stage
-        self.drainDeadline = drainDeadline; self.log = log
+        self.drainDeadline = drainDeadline; self.log = log; self.matcher = matcher
         actions = CandidateActions(store: store)
         (events, emit) = AsyncStream.makeStream(bufferingPolicy: .unbounded)
     }
@@ -153,10 +154,12 @@ public actor ExtractionQueue {
         let people = try store.people.people().map { ($0, (try? store.people.aliases(of: $0.id)) ?? []) }
         let memories = try store.memories.memories(in: session)
         let freeText = try store.profile.fetch()?.freeText
+        // Earlier memories that read like this segment, so a retelling can be named (M4.1).
+        let related = try matcher?.related(to: segment.text, excluding: Set(memories.map(\.id))) ?? []
         return ContextPacketBuilder.build(segment: segment, previous: previous, people: people, memories: memories,
                                           profileFreeText: freeText, stage: stage,
                                           chapters: try store.chapters.chapters(), curiosity: try store.curiosity.open(),
-                                          excludedMemoryIDs: try store.memories.excludedIDs())
+                                          excludedMemoryIDs: try store.memories.excludedIDs(), related: related)
     }
 
     /// Writes one row per candidate in output order, plus a flag row when any flag is set, and

@@ -221,11 +221,18 @@ final class TimelineViewModel {
     func change(_ card: Card) { if let memory = cards.keep(card) { refresh(); changing = memory } }
     func dismiss(_ card: Card) { if cards.dismiss(card) { refresh() } }
     func undo() { if cards.undo() != nil { refresh() } }
+    func undoMerge() { if cards.undoMerge() != nil { refresh() } }
+    func sameStory(_ card: Card, into target: MemoryID) { if cards.sameStory(card, into: target) { refresh() } }
 
     // MARK: - The "…" menu on a row (every long-press has a visible alternative)
 
     func hide(_ memory: MemoryID) {
         attempt("Could not hide that") { try deps.actions.setHidden(memory, true) }
+    }
+
+    /// "Add a date" on a shelf row.
+    func setStated(_ memory: MemoryID, _ range: TimeRange) {
+        attempt("Could not save that") { try deps.actions.setStatedRange(memory, range) }
     }
 
     func setExcluded(_ memory: MemoryID, _ excluded: Bool) {

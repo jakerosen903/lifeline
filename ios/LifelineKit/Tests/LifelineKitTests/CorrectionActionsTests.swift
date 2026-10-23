@@ -105,3 +105,53 @@ private func rowCounts(_ db: AppDatabase, doomed: SessionID, pending: Segment, s
         return out
     }
 }
+
+@Test func deletingASessionRemovesOnlyItsSpans() throws {
+    let env = try Env()
+    let (s1, _, memories) = try env.told(["we lived in an orange house"])
+    let target = memories[0]
+    let (s2, segs2) = try StoreFixtures.session(in: env.store.sessions, segments: ["grew up in an orange house"])
+    let out = MemoryOut(ref: "m1", kind: .event, title: "Grew up", quote: "grew up", segmentSpan: WordSpan(startWord: 0, endWord: 1), peopleRefs: [], placeText: nil,
+                        anchors: [], sameAsMemoryID: nil, collectionHint: nil, chapterHint: nil, confidence: 0.9)
+    let c = StoreFixtures.candidate(segs2[0].id, payload: try CandidatePayload.encode(out))
+    try env.store.candidates.insert(c)
+    try env.store.sessions.setStatus(.extracted, for: segs2[0].id)
+    _ = try env.actions.mergeCandidate(c, into: target.id)
+    #expect(try env.store.memories.spans(of: target.id).count == 2)
+    try env.store.sessions.deleteSession(s2)
+    let left = try env.store.memories.spans(of: target.id)
+    #expect(left.count == 1 && left[0].order == 0, "the older memory keeps its first telling")
+    try env.store.sessions.deleteSession(s1)
+    #expect(try env.store.memories.fetch(target.id) == nil, "a memory with no span left goes too")
+}
+
+@Test func deletingASessionRenumbersSurvivingSpans() throws {
+    let env = try Env()
+    let (s1, _, memories) = try env.told(["we lived in an orange house"])
+    let target = memories[0]
+    var sessions: [SessionID] = []
+    for text in ["grew up in an orange house", "the orange house had a canal"] {
+        let (s, segs) = try StoreFixtures.session(in: env.store.sessions, segments: [text])
+        let out = MemoryOut(ref: "m1", kind: .event, title: text, quote: text, segmentSpan: WordSpan(startWord: 0, endWord: 1), peopleRefs: [], placeText: nil,
+                            anchors: [], sameAsMemoryID: nil, collectionHint: nil, chapterHint: nil, confidence: 0.9)
+        let c = StoreFixtures.candidate(segs[0].id, payload: try CandidatePayload.encode(out))
+        try env.store.candidates.insert(c)
+        _ = try env.actions.mergeCandidate(c, into: target.id)
+        sessions.append(s)
+    }
+    try env.store.sessions.deleteSession(s1)
+    let spans = try env.store.memories.spans(of: target.id)
+    #expect(spans.map(\.order) == [0, 1] && spans[0].titleText == "grew up in an orange house")
+    #expect(try env.store.memories.fetch(target.id) != nil)
+    _ = sessions
+}
+
+@Test func setStatedRangeRejectsOtherOrigins() throws {
+    let env = try Env()
+    let (_, _, memories) = try env.told(["we lived in an orange house"])
+    let m = memories[0].id
+    #expect(throws: CandidateActions.Error.notStated) { try env.actions.setStatedRange(m, .year(1998, origin: .inferred, evidence: nil)) }
+    try env.actions.setStatedRange(m, .stated(around: 1998))
+    let range = try #require(try env.store.memories.fetch(m)?.range)
+    #expect(range.displayText == "around 1998" && range.origin == .stated)
+}
