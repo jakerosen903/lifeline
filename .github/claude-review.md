@@ -33,7 +33,8 @@ owner, not a professional reviewer. Follow these rules in every sentence:
 - Put a condition before the instruction. "If the PR adds a migration, back up
   the phone's database before you install."
 - Use lists for steps and parallel items. Use a table for the blast radius.
-- No emoji, no exclamation marks, no praise.
+- No exclamation marks, no praise. The only emoji are the verdict and
+  blast-radius markers defined below (✅ 🟡 🛑 ⚠️ 🔴). Do not add others.
 
 ## Part 1 — the summary comment
 
@@ -44,19 +45,23 @@ structure and these headings, in this order.
 
 Start with one of these lines, in bold:
 
-- **Safe to merge at any time.** — Nothing in the PR can change what is
+- **✅ LGTM — Safe to merge at any time.** — Nothing in the PR can change what is
   recorded, stored, sent off the device, or shown as fact. Copy, layout, docs,
   tests only, or logic with no path to a stored row or a network call.
-- **Merge, then reinstall only after a backup.** — The PR changes the schema,
+- **🟡 Merge, then reinstall only after a backup.** — The PR changes the schema,
   the audio file layout, or a confirmation action that rewrites rows. The
   change is contained, but the phone's database is the only copy. Name what to
   back up.
-- **Do not merge until: …** — A model or repository change has no registered
+- **🛑 Do not merge until: …** — A model or repository change has no registered
   migration, a shipped migration is edited, new data leaves the device, a
   fixed response is improvised, a test that guards the store or the data
   posture is removed or weakened, a secret or a real person's data is in the
   diff, or you found a defect that can lose or corrupt a stored row. List
   every blocker as its own bullet.
+
+Also put the same marker at the very top of the comment as a one-line header,
+so Jake can read the verdict from the PR list without opening the comment:
+`## ✅ LGTM`, `## 🟡 Merge, back up before install`, or `## 🛑 Do not merge`.
 
 Then give the reason in two or three sentences.
 
@@ -67,8 +72,13 @@ timeline they see, or for the system, in plain words. Do not list files here.
 
 ### Blast radius
 
-A table with one row per area. Mark each row **Yes**, **No**, or **Indirect**
-and say why in one sentence. Base this on the real diff, not the PR title.
+A table with one row per area. Mark each row with one of these, then say why
+in one sentence. Base this on the real diff, not the PR title.
+
+- `✅ No` — the PR does not touch this area.
+- `⚠️ Indirect` — the PR reads or derives data from this area, or changes a
+  caller of it, but does not change the area itself.
+- `🔴 Yes` — the PR changes code in this area.
 
 | Area | Touched? | What can happen to the person's data |
 |---|---|---|
@@ -182,9 +192,17 @@ Do all of these checks and report each result on its own line.
   problem.
 - UI tests in `ios/LifelineUITests/` need a simulator. Say whether the PR
   changes a screen without a UI test, and name the screen.
-- If a CI test run is available, report the result. If not, say "CI tests not
-  available in this run. Run `swift test` in `ios/LifelineKit` before you
-  install."
+- Report the CI results given to you in the prompt, one line per job:
+  guards, kit-tests. For any job that is not `success`, quote the failing
+  test names or guard lines from the run log.
+- The guards job (`.github/scripts/pr_guards.py`) already enforces: no edit
+  to a shipped migration, numbering, destructive statements need "destructive
+  migration approved" in the PR body, a new migration needs a test change, a
+  Domain/ column change needs a migration, no new network host, no real
+  phone/email in fixtures, no API key or device ID. If it failed, the verdict
+  is "Do not merge" and you list its output as the blockers. If it passed,
+  still do the Migration check and the data-posture check yourself; the
+  guard is a floor, not the review.
 
 ### Install note for Jake
 
