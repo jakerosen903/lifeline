@@ -40,7 +40,7 @@ struct Dependencies {
                 ListenOnlyVoiceSession(
                     source: AVAudioEngineSource(),
                     sink: AudioFileWriter(),
-                    transcriber: SpeechAnalyzerTranscriber(onStatus: onStatus),
+                    transcriber: SpeechAnalyzerTranscriber(onStatus: onStatus, log: { print("[speech] \($0)") }),
                     log: { line in
                         print("[voice] \(line)")
                         Task { await pauseLog.record(line) }

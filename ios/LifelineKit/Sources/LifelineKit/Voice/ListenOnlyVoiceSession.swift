@@ -27,6 +27,7 @@ public actor ListenOnlyVoiceSession: VoiceSession {
     private var resultsTask: Task<Void, Never>?
     private var closeWaiter: (segmentEndMs: Milliseconds, deadline: ContinuousClock.Instant, generation: Int, continuation: CheckedContinuation<Void, Never>)?
     private var waiterGeneration = 0
+    private var isStopping = false
     private var graceTimer: Task<Void, Never>?
 
     public init(source: any AudioSource, sink: any AudioSink, transcriber: any Transcriber,
@@ -50,6 +51,7 @@ public actor ListenOnlyVoiceSession: VoiceSession {
         let chunks = try await source.start()
         resultsTask = Task { [weak self] in
             for await result in results { await self?.handle(result) }
+            await self?.resultsEnded()
         }
         sourceTask = Task { [weak self] in
             for await event in chunks { await self?.handle(event) }
@@ -60,6 +62,7 @@ public actor ListenOnlyVoiceSession: VoiceSession {
     /// Order matters: drain the transcriber completely, then close the last segment(s), so the
     /// owner's closing words (which often arrive only at finish) are stored and not dropped.
     public func stop() async throws {
+        isStopping = true
         await source.stop()
         await sourceTask?.value
         var closing: [MsRange] = []
@@ -93,6 +96,9 @@ public actor ListenOnlyVoiceSession: VoiceSession {
             do { try await sink.write(chunk) } catch { emit(.failed("audio write: \(error)")) }
             await transcriber.feed(chunk)
             lastChunkEndMs = max(lastChunkEndMs, chunk.range.end)
+            if chunk.startMs / 5_000 != (chunk.startMs - chunk.durationMs) / 5_000 {
+                log("level \(Int(chunk.levelDb)) dBFS at \(chunk.startMs) ms, pending words \(pendingWords.count)")
+            }
             await closeSegments(segmenter.observe(levelDb: chunk.levelDb, startMs: chunk.startMs, durationMs: chunk.durationMs))
         case .interrupted:
             await closeSegments(segmenter.flush(atMs: lastChunkEndMs))
@@ -106,6 +112,7 @@ public actor ListenOnlyVoiceSession: VoiceSession {
         for event in segmenterEvents {
             switch event {
             case .speechStarted(let ms):
+                log("speech started at \(ms) ms")
                 emit(.speechStarted(atMs: ms))
             case .pauseObserved(let ms):
                 log("pause \(ms)")
@@ -115,7 +122,9 @@ public actor ListenOnlyVoiceSession: VoiceSession {
                 let transcriber = self.transcriber
                 Task { await transcriber.finalize(throughMs: min(range.end, lastChunkEndMs)) }
                 await waitForFinals(throughMs: range.end)
-                emit(.segmentClosed(takeSegment(range)))
+                let segment = takeSegment(range)
+                log("segment \(segment.range.start)-\(segment.range.end) ms, \(segment.words.count) words")
+                emit(.segmentClosed(segment))
             }
         }
     }
@@ -134,12 +143,20 @@ public actor ListenOnlyVoiceSession: VoiceSession {
 
     // MARK: Transcriber results
 
+    /// The results stream ends on its own only when the framework gave up. Audio capture goes on,
+    /// so the session stays recordable; the person is told that words stopped.
+    private func resultsEnded() {
+        guard !isStopping else { return }
+        log("transcriber results ended before stop")
+        emit(.failed("The transcriber stopped. Audio is still being recorded."))
+    }
     private func handle(_ result: TranscriptResult) {
         guard result.isFinal else {
             emit(.transcriptPartial(result.text))
             return
         }
         pendingWords.append(contentsOf: result.words)
+        log("final \(result.words.count) words \(result.range.start)-\(result.range.end) ms")
         emit(.transcriptFinal(result))
         if let waiter = closeWaiter {
             if result.range.end >= waiter.segmentEndMs {

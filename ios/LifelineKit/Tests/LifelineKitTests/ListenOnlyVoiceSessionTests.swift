@@ -170,3 +170,13 @@ private func collect(_ events: AsyncStream<VoiceEvent>, count: Int, timeoutMs: I
     _ = try await firstEvent(events) { if case .segmentClosed = $0 { true } else { false } }
     #expect(h.log.all.contains("pause 1000"))
 }
+
+@Test func resultsStreamEndingBeforeStopIsReportedAsFailure() async throws {
+    let h = Harness()
+    let events = try await h.vs.start(writingTo: URL(fileURLWithPath: "/dev/null"))
+    h.tr.endResults()
+    let event = try await firstEvent(events) { if case .failed = $0 { true } else { false } }
+    guard case .failed(let message) = event else { Issue.record("expected failed"); return }
+    #expect(message.contains("transcriber"))
+    try await h.vs.stop()
+}

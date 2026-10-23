@@ -13,6 +13,9 @@ public actor SpeechAnalyzerTranscriber: Transcriber {
 
     private let locale: Locale
     private let onStatus: @Sendable (TranscriberAvailability) -> Void
+    private let log: @Sendable (String) -> Void
+    private var fedBuffers = 0
+    private var timeline = AnalyzerInputTimeline()
     private var transcriber: SpeechTranscriber?
     private var analyzer: SpeechAnalyzer?
     private var input: AsyncStream<AnalyzerInput>.Continuation?
@@ -20,9 +23,12 @@ public actor SpeechAnalyzerTranscriber: Transcriber {
     private var analyzerFormat: AVAudioFormat?
     private var resultsTask: Task<Void, Never>?
 
-    public init(locale: Locale = .current, onStatus: @escaping @Sendable (TranscriberAvailability) -> Void = { _ in }) {
+    public init(locale: Locale = .current,
+                onStatus: @escaping @Sendable (TranscriberAvailability) -> Void = { _ in },
+                log: @escaping @Sendable (String) -> Void = { _ in }) {
         self.locale = locale
         self.onStatus = onStatus
+        self.log = log
     }
 
     public func start(format: AVAudioFormat) async throws -> AsyncStream<TranscriptResult> {
@@ -34,6 +40,7 @@ public actor SpeechAnalyzerTranscriber: Transcriber {
         }
         let availability = TranscriberAvailability.decide(isSupported: supportedLocale != nil, isInstalled: installed)
         onStatus(availability)
+        log("transcriber locale \(supportedLocale?.identifier(.bcp47) ?? "none") installed \(installed)")
         guard let supportedLocale else { throw Error.unsupportedLocale(locale) }
 
         let transcriber = SpeechTranscriber(locale: supportedLocale, transcriptionOptions: [],
@@ -48,6 +55,7 @@ public actor SpeechAnalyzerTranscriber: Transcriber {
             throw Error.noCompatibleFormat
         }
         analyzerFormat = best
+        log("analyzer format \(best.sampleRate) Hz, \(best.channelCount) ch, \(best.commonFormat.rawValue), interleaved \(best.isInterleaved); capture \(format.sampleRate) Hz \(format.commonFormat.rawValue)")
         if best != format {
             converter = AVAudioConverter(from: format, to: best)
         }
@@ -62,10 +70,12 @@ public actor SpeechAnalyzerTranscriber: Transcriber {
         resultsTask = Task {
             do {
                 for try await result in transcriber.results {
+                    log("result final \(result.isFinal) \(result.text.characters.count) chars")
                     resultsContinuation.yield(Self.convert(result))
                 }
+                log("results stream ended")
             } catch {
-                // The stream ends; the session's stop() will finish normally.
+                log("results stream failed: \(error)")
             }
             resultsContinuation.finish()
         }
@@ -77,18 +87,27 @@ public actor SpeechAnalyzerTranscriber: Transcriber {
     public func feed(_ chunk: AudioChunk) {
         guard let input else { return }
         let buffer = converter == nil ? chunk.buffer : converted(chunk.buffer)
-        guard let buffer, buffer.frameLength > 0 else { return }
-        input.yield(AnalyzerInput(buffer: buffer, bufferStartTime: CMTime(value: CMTimeValue(chunk.startMs), timescale: 1_000)))
+        guard let buffer, buffer.frameLength > 0 else {
+            log("feed dropped buffer at \(chunk.startMs) ms (converted \(buffer?.frameLength ?? 0) frames)")
+            return
+        }
+        let rate = Int64(buffer.format.sampleRate)
+        let fileFrame = Int64(chunk.startMs) * rate / 1_000
+        let startFrame = timeline.start(fileFrame: fileFrame, frames: Int(buffer.frameLength))
+        fedBuffers += 1
+        if fedBuffers <= 3 { log("fed \(buffer.frameLength) frames at \(chunk.startMs) ms, stamped frame \(startFrame)") }
+        input.yield(AnalyzerInput(buffer: buffer, bufferStartTime: CMTime(value: startFrame, timescale: CMTimeScale(rate))))
     }
 
     public func finalize(throughMs: Milliseconds) async {
-        try? await analyzer?.finalize(through: CMTime(value: CMTimeValue(throughMs), timescale: 1_000))
+        do { try await analyzer?.finalize(through: CMTime(value: CMTimeValue(throughMs), timescale: 1_000)) }
+        catch { log("finalize failed: \(error)") }
     }
 
     public func finish() async {
         input?.finish()
         input = nil
-        try? await analyzer?.finalizeAndFinishThroughEndOfInput()
+        do { try await analyzer?.finalizeAndFinishThroughEndOfInput() } catch { log("finish failed: \(error)") }
         await resultsTask?.value
     }
 

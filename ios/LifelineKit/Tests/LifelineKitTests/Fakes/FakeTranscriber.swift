@@ -32,4 +32,6 @@ final class FakeTranscriber: Transcriber, Sendable {
     }
 
     func push(_ result: TranscriptResult) { continuation.yield(result) }
+    /// Simulates the framework ending the results stream on its own, before finish().
+    func endResults() { continuation.finish() }
 }
