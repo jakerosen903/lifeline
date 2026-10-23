@@ -13,9 +13,11 @@ final class SessionViewModel: Identifiable {
     private(set) var cardQueue = CardQueue()
     private(set) var extractionStatus: String?
     private(set) var opening: Opening
+    /// The memory just kept with Change…; the screen opens the Change sheet on it.
+    var changing: Memory?
     let cards: CardHandler
 
-    private let deps: Dependencies
+    let deps: Dependencies
     private var recorder: SessionRecorder?
     private var queue: ExtractionQueue?
     private var observation: Task<Void, Never>?
@@ -96,10 +98,19 @@ final class SessionViewModel: Identifiable {
         cardQueue.remove(card.id)
         if case .memory = card { cardQueue.memoryAccepted(card.id) }
     }
+    func change(_ card: Card) {
+        guard let memory = cards.keep(card) else { return }
+        cardQueue.remove(card.id)
+        cardQueue.memoryAccepted(card.id)
+        changing = memory
+    }
     func dismiss(_ card: Card) {
         guard cards.dismiss(card) else { return }
         cardQueue.remove(card.id)
         if case .memory = card { cardQueue.memoryDismissed(card.id) }
+    }
+    func undo() {
+        if let card = cards.undo() { cardQueue.restore(card) }
     }
     func resolve(_ card: Card, _ choice: MentionChoice) { if cards.resolve(card, choice) { cardQueue.remove(card.id) } }
 

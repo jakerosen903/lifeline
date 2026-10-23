@@ -11,6 +11,8 @@ struct MemoryRow: Identifiable, Equatable, Hashable {
     let people: [String]
     let place: String?
     let durationText: String
+    /// Details keeping did not settle: an inferred range, names still open.
+    let checkThis: [CheckThis]
     var id: MemoryID { memory.id }
 
     func hash(into hasher: inout Hasher) { hasher.combine(memory.id) }
@@ -118,7 +120,8 @@ final class TimelineViewModel {
         return MemoryRow(memory: memory, kind: kind, rangeText: memory.range.displayText, isGuess: memory.range.origin == .inferred, ageText: age,
                          people: try store.memories.people(of: memory.id).map(\.displayName),
                          place: try store.memories.places(of: memory.id).first?.nameText,
-                         durationText: span.map { Format.duration(ms: $0.endMs - $0.startMs) } ?? "")
+                         durationText: span.map { Format.duration(ms: $0.endMs - $0.startMs) } ?? "",
+                         checkThis: CheckThisTags.tags(range: memory.range, mentions: try span.map { try store.people.mentions(in: $0.segmentID) } ?? []))
     }
 
     private static func byTime(_ a: MemoryRow, _ b: MemoryRow) -> Bool {
@@ -209,8 +212,32 @@ final class TimelineViewModel {
 
     // MARK: - Cards and editing
 
+    var changing: Memory?
+    var deleteTarget: MemoryRow?
+
     func accept(_ card: Card) { if cards.accept(card) { refresh() } }
+    func change(_ card: Card) { if let memory = cards.keep(card) { refresh(); changing = memory } }
     func dismiss(_ card: Card) { if cards.dismiss(card) { refresh() } }
+    func undo() { if cards.undo() != nil { refresh() } }
+
+    // MARK: - The "…" menu on a row (every long-press has a visible alternative)
+
+    func hide(_ memory: MemoryID) {
+        attempt("Could not hide that") { try deps.actions.setHidden(memory, true) }
+    }
+
+    func setExcluded(_ memory: MemoryID, _ excluded: Bool) {
+        attempt("Could not change that") { try deps.actions.setExcluded(memory, excluded) }
+    }
+
+    /// After the confirmation: the memory and its spans, people and anchors go; the recording stays.
+    func delete(_ memory: MemoryID) {
+        attempt("Could not delete that") { try deps.extractionStore.memories.delete(memory) }
+    }
+
+    private func attempt(_ message: String, _ work: () throws -> Void) {
+        do { try work(); error = nil; refresh() } catch { self.error = "\(message): \(error.localizedDescription)" }
+    }
     func resolve(_ card: Card, _ choice: MentionChoice) { if cards.resolve(card, choice) { refresh() } }
 
     func newChapter(for memory: MemoryID, title: String?) {

@@ -45,6 +45,7 @@ final class PeopleViewModel {
 
     func resolve(_ card: Card, _ choice: MentionChoice) { if cards.resolve(card, choice) { refresh() } }
     func dismiss(_ card: Card) { if cards.dismiss(card) { refresh() } }
+    func undo() { if cards.undo() != nil { refresh() } }
 
     /// Fixes a spelling. The old spelling stays as an alias so later transcripts still link.
     func rename(_ person: Person, to name: String) {

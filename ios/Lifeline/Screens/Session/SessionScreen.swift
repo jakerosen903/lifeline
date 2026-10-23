@@ -24,8 +24,8 @@ struct SessionScreen: View {
                         }
                         liveText
                         CardStack(cards: viewModel.visibleCards, handler: viewModel.cards,
-                                  onAccept: { viewModel.accept($0) }, onDismiss: { viewModel.dismiss($0) },
-                                  onResolve: { viewModel.resolve($0, $1) })
+                                  onAccept: { viewModel.accept($0) }, onChange: { viewModel.change($0) }, onDismiss: { viewModel.dismiss($0) },
+                                  onResolve: { viewModel.resolve($0, $1) }, onUndo: { viewModel.undo() })
                             .padding(.top, 8)
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -42,6 +42,9 @@ struct SessionScreen: View {
         }
         .linenBackground()
         .interactiveDismissDisabled()
+        .sheet(item: Binding(get: { viewModel.changing }, set: { viewModel.changing = $0 })) { memory in
+            ChangeSheet(viewModel: ChangeViewModel(memory: memory, deps: viewModel.deps)) {}
+        }
     }
 
     private var header: some View {

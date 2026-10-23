@@ -11,8 +11,8 @@ struct SessionDetailScreen: View {
             if !viewModel.waiting.isEmpty {
                 Section("Waiting for you") {
                     CardStack(cards: viewModel.waiting, handler: viewModel.cards,
-                              onAccept: { viewModel.accept($0) }, onDismiss: { viewModel.dismiss($0) },
-                              onResolve: { viewModel.resolve($0, $1) })
+                              onAccept: { viewModel.accept($0) }, onChange: { viewModel.change($0) }, onDismiss: { viewModel.dismiss($0) },
+                              onResolve: { viewModel.resolve($0, $1) }, onUndo: { viewModel.undo() })
                         .listRowBackground(Color.clear)
                         .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
                 }
@@ -21,7 +21,7 @@ struct SessionDetailScreen: View {
                 Section("Memories") {
                     ForEach(viewModel.memories) { row in
                         NavigationLink {
-                            MemoryScreen(viewModel: MemoryViewModel(memory: row.memory, deps: viewModel.deps)) { viewModel.refresh() }
+                            MemoryScreen(viewModel: MemoryViewModel(memory: row.memory, deps: viewModel.deps), deps: viewModel.deps) { viewModel.refresh() }
                         } label: {
                         VStack(alignment: .leading, spacing: 4) {
                             if row.kind != .event && row.kind != .other {
@@ -99,5 +99,8 @@ struct SessionDetailScreen: View {
         .navigationBarTitleDisplayMode(.inline)
         .onAppear { viewModel.refresh() }
         .onDisappear { viewModel.stop() }
+        .sheet(item: Binding(get: { viewModel.changing }, set: { viewModel.changing = $0 })) { memory in
+            ChangeSheet(viewModel: ChangeViewModel(memory: memory, deps: viewModel.deps)) { viewModel.refresh() }
+        }
     }
 }

@@ -18,6 +18,7 @@ final class SessionDetailViewModel {
     private(set) var waiting: [Card] = []
     private(set) var dismissed: [Candidate] = []
     private(set) var error: String?
+    var changing: Memory?
     let player = SegmentPlayer()
     let cards: CardHandler
     let deps: Dependencies
@@ -59,7 +60,9 @@ final class SessionDetailViewModel {
     }
 
     func accept(_ card: Card) { if cards.accept(card) { refresh() } }
+    func change(_ card: Card) { if let memory = cards.keep(card) { refresh(); changing = memory } }
     func dismiss(_ card: Card) { if cards.dismiss(card) { refresh() } }
+    func undo() { if cards.undo() != nil { refresh() } }
     func resolve(_ card: Card, _ choice: MentionChoice) { if cards.resolve(card, choice) { refresh() } }
 
     func isPlaying(_ segment: Segment) -> Bool { player.playingRange == segment.range && player.isPlaying }

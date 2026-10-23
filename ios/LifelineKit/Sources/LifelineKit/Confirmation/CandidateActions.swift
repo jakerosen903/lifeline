@@ -18,6 +18,7 @@ public struct CandidateActions: Sendable {
         case emptySpan
         case memoryNotAccepted
         case notDismissed
+        case emptyTitle
     }
 
     public enum HintResult: Equatable, Sendable {
@@ -34,6 +35,35 @@ public struct CandidateActions: Sendable {
     private let store: ExtractionStore
 
     public init(store: ExtractionStore) { self.store = store }
+
+    // MARK: - Correction (M4)
+
+    /// Change… → The title. The quote is the owner's words and is never edited.
+    public func renameMemory(_ memory: MemoryID, to title: String) throws {
+        let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { throw Error.emptyTitle }
+        try store.memories.updateTitle(memory, trimmed)
+    }
+
+    /// Change… → Who was there. A second link to the same person is a no-op.
+    public func linkPerson(_ person: PersonID, to memory: MemoryID, roleText: String?) throws {
+        try store.memories.link(person, to: memory, roleText: roleText)
+    }
+
+    /// A name typed in: an existing person by that name is reused, otherwise one is created.
+    @discardableResult
+    public func linkNewPerson(named name: String, to memory: MemoryID) throws -> Person {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { throw Error.emptyTitle }
+        let person = try store.people.findPerson(matching: trimmed) ?? store.people.insertPerson(displayName: trimmed)
+        try store.memories.link(person.id, to: memory, roleText: nil)
+        return person
+    }
+
+    /// Unlinking never deletes the person: they may be in other memories, and People keeps them.
+    public func unlinkPerson(_ person: PersonID, from memory: MemoryID) throws {
+        try store.memories.unlink(person, from: memory)
+    }
 
     // MARK: - Privacy (M4)
 

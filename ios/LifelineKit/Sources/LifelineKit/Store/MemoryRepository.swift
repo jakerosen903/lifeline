@@ -150,6 +150,16 @@ public struct MemoryRepository: Sendable {
         return memory
     }
 
+    public func updateTitle(_ id: MemoryID, _ title: String) throws {
+        try db.writer.write { try $0.execute(sql: "update memory set title = ? where id = ?", arguments: [title, id.rawValue]) }
+    }
+
+    public func unlink(_ person: PersonID, from memory: MemoryID) throws {
+        try db.writer.write { db in
+            try db.execute(sql: "delete from memory_person where memory_id = ? and person_id = ?", arguments: [memory.rawValue, person.rawValue])
+        }
+    }
+
     /// Links a person to a memory; a second link to the same person is a no-op.
     public func link(_ person: PersonID, to memory: MemoryID, roleText: String?) throws {
         try db.writer.write { db in

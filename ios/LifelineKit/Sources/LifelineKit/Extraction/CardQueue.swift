@@ -98,6 +98,12 @@ public struct CardQueue: Equatable, Sendable {
         heldHints[memoryCandidateID] = nil
     }
 
+    /// Undo: a card dismissed moments ago comes back at the end of the stack.
+    public mutating func restore(_ card: Card) {
+        guard !cards.contains(where: { $0.id == card.id }) else { return }
+        cards.append(card)
+    }
+
     public mutating func remove(_ id: String) {
         cards.removeAll { $0.id == id }
     }

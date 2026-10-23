@@ -8,6 +8,11 @@ import LifelineKit
 @Observable
 final class CardHandler {
     private(set) var error: String?
+    /// The card dismissed moments ago, while Undo is still offered.
+    private(set) var undoCard: Card?
+    static let undoWindow: Duration = .seconds(6)
+    private var recentDismiss = DismissUndo<Card>(window: CardHandler.undoWindow)
+    private var undoTimer: Task<Void, Never>?
     private var mentions: [String: Mention] = [:]
     private var rankedChoices: [String: [Person]] = [:]
     private let deps: Dependencies
@@ -24,11 +29,19 @@ final class CardHandler {
         }
     }
 
+    /// Keep: the memory is created and returned, so Change… can open on it at once.
+    func keep(_ card: Card) -> Memory? {
+        guard case .memory(let candidate, _) = card else { return nil }
+        var memory: Memory?
+        _ = attempt("Could not keep that") { memory = try deps.actions.acceptMemory(candidate).memory }
+        return memory
+    }
+
     /// Returns true when the card is done with.
     func accept(_ card: Card) -> Bool {
         switch card {
-        case .memory(let candidate, _):
-            return attempt("Could not add that") { _ = try deps.actions.acceptMemory(candidate) }
+        case .memory:
+            return keep(card) != nil
         case .hint(let candidate, _):
             return attempt("Could not file that") { _ = try deps.actions.acceptHint(candidate) }
         case .whoIsThis:
@@ -36,8 +49,9 @@ final class CardHandler {
         }
     }
 
+    /// Dismiss never touches the recording; for a few seconds it can be undone.
     func dismiss(_ card: Card) -> Bool {
-        attempt("Could not dismiss that") {
+        let done = attempt("Could not dismiss that") {
             switch card {
             case .memory(let candidate, _), .hint(let candidate, _):
                 try deps.actions.dismiss(candidate)
@@ -45,6 +59,33 @@ final class CardHandler {
                 try deps.actions.resolveMention(try mention(for: card).id, to: .notAPerson)
             }
         }
+        if done {
+            recentDismiss.dismissed(card, at: .now)
+            undoCard = card
+            undoTimer?.cancel()
+            undoTimer = Task { [weak self] in
+                try? await Task.sleep(for: Self.undoWindow)
+                guard !Task.isCancelled else { return }
+                self?.undoCard = nil
+            }
+        }
+        return done
+    }
+
+    /// Brings the last dismissed card back, exactly as it was. Returns it for the caller's stack.
+    func undo() -> Card? {
+        guard let card = recentDismiss.take(at: .now) else { undoCard = nil; return nil }
+        undoTimer?.cancel()
+        undoCard = nil
+        let done = attempt("Could not bring that back") {
+            switch card {
+            case .memory(let candidate, _), .hint(let candidate, _):
+                try deps.actions.restore(candidate)
+            case .whoIsThis:
+                try deps.actions.restoreMention(try mention(for: card).id)
+            }
+        }
+        return done ? card : nil
     }
 
     func resolve(_ card: Card, _ choice: MentionChoice) -> Bool {

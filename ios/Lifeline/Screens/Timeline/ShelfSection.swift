@@ -5,20 +5,12 @@ import SwiftUI
 struct ShelfSection: View {
     let title: String
     let memories: [MemoryRow]
-    let onOpen: (MemoryRow) -> Void
-    let onNewChapter: (MemoryRow) -> Void
-    let onAddToCollection: (MemoryRow) -> Void
+    let actions: MemoryRowActions
 
     var body: some View {
         Section {
             ForEach(memories) { row in
-                Button { onOpen(row) } label: { MemoryBand(row: row, axis: nil) }
-                    .buttonStyle(.plain)
-                    .accessibilityIdentifier("timeline.memory")
-                    .contextMenu {
-                        Button("New chapter from here", systemImage: "book") { onNewChapter(row) }
-                        Button("Add to a collection…", systemImage: "square.stack") { onAddToCollection(row) }
-                    }
+                MemoryRowView(row: row, axis: nil, actions: actions)
             }
         } header: {
             HStack {
