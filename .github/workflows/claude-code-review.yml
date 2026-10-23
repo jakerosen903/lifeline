@@ -1,45 +1,71 @@
 name: Claude Code Review
 
+# Every PR gets one summary comment (merge verdict, blast radius, what leaves
+# the device, principle check, migration check, install note) plus inline
+# comments for real defects. The rules live in .github/claude-review.md — edit
+# that file, not this one, to change how reviews read.
+
 on:
   pull_request:
     types: [opened, synchronize, ready_for_review, reopened]
-    # Optional: Only run on specific file changes
-    # paths:
-    #   - "src/**/*.ts"
-    #   - "src/**/*.tsx"
-    #   - "src/**/*.js"
-    #   - "src/**/*.jsx"
+
+concurrency:
+  group: claude-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
 
 jobs:
   claude-review:
-    # Optional: Filter by PR author
-    # if: |
-    #   github.event.pull_request.user.login == 'external-contributor' ||
-    #   github.event.pull_request.user.login == 'new-developer' ||
-    #   github.event.pull_request.author_association == 'FIRST_TIME_CONTRIBUTOR'
-
+    if: github.event.pull_request.draft == false
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      pull-requests: read
-      issues: read
+      pull-requests: write
+      issues: write
       id-token: write
+      actions: read
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          fetch-depth: 1
+          # Full history so the reviewer can diff against the base branch and
+          # read the registered migrations as they were before the PR.
+          fetch-depth: 0
 
       - name: Run Claude Code Review
         id: claude-review
         uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          plugin_marketplaces: 'https://github.com/anthropics/claude-code.git'
-          plugins: 'code-review@claude-code-plugins'
-          prompt: '/code-review:code-review --comment ${{ github.repository }}/pull/${{ github.event.pull_request.number }}'
-          claude_args: '--allowedTools "mcp__github_inline_comment__create_inline_comment"'
-          # See https://github.com/anthropics/claude-code-action/blob/main/docs/usage.md
-          # or https://code.claude.com/docs/en/cli-reference for available options
+          # One comment per PR, updated in place on each push instead of a new
+          # comment every time.
+          use_sticky_comment: true
+          prompt: |
+            REPO: ${{ github.repository }}
+            PR NUMBER: ${{ github.event.pull_request.number }}
+            BASE BRANCH: ${{ github.event.pull_request.base.ref }}
 
+            Read `.github/claude-review.md` and follow it exactly. It defines the
+            writing style, the summary comment structure, the principle and
+            migration checks, and what counts as a finding.
+
+            Steps:
+            1. Read `CLAUDE.md`, `.github/claude-review.md`, and the "Principles"
+               and "Design implications" sections of `docs/PRINCIPLES.md`.
+            2. Get the PR title and description: `gh pr view ${{ github.event.pull_request.number }} --json title,body,files`.
+            3. Get the full diff: `gh pr diff ${{ github.event.pull_request.number }}`.
+            4. Open every changed file in full, plus any file it calls on a
+               store, network, confirmation, or fixed-response path, so you judge
+               the real blast radius and not just the hunks.
+            5. For the migration check, diff `ios/LifelineKit/Sources/LifelineKit/Store/Migrations.swift`
+               and `ios/LifelineKit/Tests/LifelineKitTests/MigrationsTests.swift`
+               against `origin/${{ github.event.pull_request.base.ref }}`.
+            6. For the data-posture check, diff every file under
+               `ios/LifelineKit/Sources/LifelineKit/Extraction/` and `Secrets/`
+               against the base branch, and grep the diff for `print(`, `Logger`,
+               `os_log`, `URLSession`, and `UserDefaults`.
+            7. Post the summary comment with `gh pr comment ${{ github.event.pull_request.number }} --body-file <file>`
+               (write the body to a temp file first so formatting survives).
+            8. Post one inline comment per real defect with the inline comment tool.
+          claude_args: |
+            --allowedTools "Read,Grep,Glob,LS,Write,mcp__github_inline_comment__create_inline_comment,Bash(gh pr view:*),Bash(gh pr diff:*),Bash(gh pr comment:*),Bash(git diff:*),Bash(git log:*),Bash(git show:*),Bash(ls:*),Bash(cat:*),Bash(grep:*)"
