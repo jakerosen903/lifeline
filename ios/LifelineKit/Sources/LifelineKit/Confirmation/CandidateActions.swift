@@ -150,6 +150,24 @@ public struct CandidateActions: Sendable {
         }
     }
 
+    // MARK: - Relative questions
+
+    /// The owner answered: the range is confirmed, the anchor behind the question is settled,
+    /// any open question about this memory closes, and the resolver places whatever follows.
+    public func answer(_ question: RelativeQuestion, with choice: RelativeQuestion.Choice) throws {
+        guard let memory = try store.memories.fetch(question.memoryID) else { return }
+        let span = try store.memories.spans(of: memory.id).first
+        let ref = MemoryRef(id: memory.id, title: memory.title, range: memory.range,
+                            primarySpan: MemoryRef.Span(segmentID: span?.segmentID ?? SegmentID(rawValue: ""), startMs: span?.startMs ?? 0, endMs: span?.endMs ?? 0))
+        try store.memories.updateRange(memory.id, RelativeQuestions.apply(choice, to: ref))
+        if let anchorID = question.anchorID, var anchor = try store.memories.anchors(of: memory.id).first(where: { $0.id == anchorID }) {
+            anchor.resolved = true
+            try store.memories.update(anchor)
+        }
+        if let item = try store.curiosity.item(forTarget: memory.id) { try store.curiosity.setStatus(item.id, .answered) }
+        _ = try ResolverRunner(store: store).run()
+    }
+
     // MARK: - Hints, chapters and collections
 
     /// "Sounds like it belongs here", accepted: the hint's memory joins a collection or chapter
