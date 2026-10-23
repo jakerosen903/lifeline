@@ -48,3 +48,32 @@ import GRDB
     #expect(landed == [true, false], "a session that ended before M4 never gets a surprise landing; a crashed one still resumes")
     #expect(kinds == ["quick", "quick"])
 }
+
+@Test func v7AddsEmbeddingsAndSpanColumns() throws {
+    var config = Configuration()
+    config.foreignKeysEnabled = true
+    let queue = try DatabaseQueue(configuration: config)
+    try Migrations.migrator.migrate(queue, upTo: "v6")
+    try queue.write { db in
+        try db.execute(sql: "insert into session (id, started_at, ended_at, audio_path, stage_log, landing_choice_made) values ('s1', '2026-10-01', '2026-10-01', 'a.m4a', '[]', 1)")
+        try db.execute(sql: "insert into segment (id, session_id, \"index\", start_ms, end_ms, text, status) values ('g1', 's1', 0, 0, 1000, 'hi', 'extracted')")
+        try db.execute(sql: "insert into memory (id, title, summary_quote, visibility, created_at) values ('m1', 'A', 'a', 'timeline', '2026-10-01')")
+        try db.execute(sql: "insert into memory_span (memory_id, segment_id, start_ms, end_ms, \"order\") values ('m1', 'g1', 0, 500, 0)")
+    }
+    try Migrations.migrator.migrate(queue)
+    let (embeddingColumns, spanColumns) = try queue.read { db in
+        (try db.columns(in: "memory_embedding").map(\.name), try db.columns(in: "memory_span").map(\.name))
+    }
+    #expect(Set(embeddingColumns) == ["memory_id", "model", "dims", "vector"])
+    #expect(spanColumns.contains("title_text") && spanColumns.contains("candidate_id"))
+    let (title, candidate) = try queue.read { db in
+        (try String?.fetchOne(db, sql: "select title_text from memory_span where memory_id = 'm1'") ?? nil,
+         try String?.fetchOne(db, sql: "select candidate_id from memory_span where memory_id = 'm1'") ?? nil)
+    }
+    #expect(title == nil && candidate == nil)
+    try queue.write { db in
+        try db.execute(sql: "insert into memory_embedding (memory_id, model, dims, vector) values ('m1', 'fake', 1, x'0000803f')")
+        try db.execute(sql: "delete from memory where id = 'm1'")
+    }
+    #expect(try queue.read { try Int.fetchOne($0, sql: "select count(*) from memory_embedding") } == 0, "the embedding row goes with its memory")
+}

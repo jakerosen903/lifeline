@@ -82,6 +82,54 @@ public struct MemoryRepository: Sendable {
         }
     }
 
+    // MARK: - Spans (M4.1: a memory told more than once)
+
+    public func insertSpan(_ span: MemorySpan) throws {
+        try db.writer.write { try span.insert($0) }
+    }
+
+    public func deleteSpans(of memory: MemoryID) throws {
+        try db.writer.write { try $0.execute(sql: "delete from memory_span where memory_id = ?", arguments: [memory.rawValue]) }
+    }
+
+    /// One past the highest order, so a new telling goes last.
+    public func nextSpanOrder(of memory: MemoryID) throws -> Int {
+        try db.writer.read { db in
+            (try Int.fetchOne(db, sql: "select max(\"order\") from memory_span where memory_id = ?", arguments: [memory.rawValue]) ?? -1) + 1
+        }
+    }
+
+    /// Every telling recorded in this session, with its memory, in session order. Stand-ins
+    /// are left out as in `memories(in:)`; a later span of any real memory counts.
+    public func spans(in session: SessionID) throws -> [(Memory, MemorySpan)] {
+        try db.writer.read { db in
+            let rows = try Row.fetchAll(db, sql: """
+                select memory.*, memory_span.memory_id as s_memory_id, memory_span.segment_id as s_segment_id, memory_span.start_ms as s_start_ms,
+                       memory_span.end_ms as s_end_ms, memory_span."order" as s_order, memory_span.title_text as s_title_text, memory_span.candidate_id as s_candidate_id
+                from memory_span
+                join memory on memory.id = memory_span.memory_id
+                join segment on segment.id = memory_span.segment_id
+                where segment.session_id = ? and memory.created_from_candidate_id is not null
+                order by segment."index", memory_span.start_ms, memory.created_at
+                """, arguments: [session.rawValue])
+            return try rows.map { row in
+                let memory = try Memory(row: row)
+                let span = MemorySpan(memoryID: MemoryID(rawValue: row["s_memory_id"]), segmentID: SegmentID(rawValue: row["s_segment_id"]),
+                                      startMs: row["s_start_ms"], endMs: row["s_end_ms"], order: row["s_order"],
+                                      titleText: row["s_title_text"], candidateID: (row["s_candidate_id"] as String?).map(CandidateID.init(rawValue:)))
+                return (memory, span)
+            }
+        }
+    }
+
+    /// A stand-in becomes a real memory when a telling is merged into it.
+    public func updateFields(_ id: MemoryID, title: String, summaryQuote: String, createdFromCandidateID: CandidateID?) throws {
+        try db.writer.write { db in
+            try db.execute(sql: "update memory set title = ?, summary_quote = ?, created_from_candidate_id = ? where id = ?",
+                           arguments: [title, summaryQuote, createdFromCandidateID?.rawValue, id.rawValue])
+        }
+    }
+
     public func anchors(of memory: MemoryID) throws -> [Anchor] {
         try db.writer.read { try Anchor.filter(Column("memory_id") == memory.rawValue).fetchAll($0) }
     }

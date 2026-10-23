@@ -82,16 +82,21 @@ public struct Memory: Codable, Sendable, Equatable, Identifiable {
     }
 }
 
-/// A memory's span of one segment. The span with order 0 is the primary.
+/// A memory's span of one segment. The span with order 0 is the primary. A later span is a
+/// retelling: it remembers the card's title and the candidate it came from (M4.1).
 public struct MemorySpan: Codable, Sendable, Equatable {
     public var memoryID: MemoryID
     public var segmentID: SegmentID
     public var startMs: Milliseconds
     public var endMs: Milliseconds
     public var order: Int
+    public var titleText: String?
+    public var candidateID: CandidateID?
 
-    public init(memoryID: MemoryID, segmentID: SegmentID, startMs: Milliseconds, endMs: Milliseconds, order: Int) {
+    public init(memoryID: MemoryID, segmentID: SegmentID, startMs: Milliseconds, endMs: Milliseconds, order: Int,
+                titleText: String? = nil, candidateID: CandidateID? = nil) {
         self.memoryID = memoryID; self.segmentID = segmentID; self.startMs = startMs; self.endMs = endMs; self.order = order
+        self.titleText = titleText; self.candidateID = candidateID
     }
 }
 
