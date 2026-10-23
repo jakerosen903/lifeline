@@ -98,6 +98,14 @@ public actor SessionRecorder {
         hooks.onStopped()
     }
 
+    /// The arc's stage log, written whenever it changes so a crash keeps the story of the session.
+    public func record(stageLog: String) throws {
+        guard var row = session else { return }
+        row.stageLog = stageLog
+        try sessions.update(row)
+        session = row
+    }
+
     public func pause() async throws {
         guard let row = session, row.endedAt == nil else { return }
         try await voice.pause()

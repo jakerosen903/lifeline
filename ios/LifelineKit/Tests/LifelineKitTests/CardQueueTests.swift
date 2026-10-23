@@ -71,3 +71,17 @@ private func mentionCandidate(_ segment: SegmentID, ordinal: Int = 1) throws -> 
     let dismissed = CardQueue.waitingCards(pending: [hint], statusOf: { _ in .dismissed })
     #expect(dismissed.isEmpty)
 }
+
+@Test func possibleMemoryCountCountsMemoryCardsOnly() throws {
+    let segment = SegmentID()
+    var queue = CardQueue()
+    #expect(queue.possibleMemoryCount == 0)
+    queue.apply(.candidates([try memoryCandidate(segment), try mentionCandidate(segment)], segment: segment))
+    #expect(queue.possibleMemoryCount == 1, "a who-is-this card is not a memory")
+    queue.apply(.candidates([try memoryCandidate(segment, ordinal: 2)], segment: segment))
+    #expect(queue.possibleMemoryCount == 2)
+    let first = queue.cards[0].id
+    queue.remove(first)
+    queue.memoryAccepted(first)
+    #expect(queue.possibleMemoryCount == 1, "a kept memory is no longer only possible")
+}

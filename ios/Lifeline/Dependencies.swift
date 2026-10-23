@@ -18,6 +18,8 @@ struct Dependencies {
     let extractionStore: ExtractionStore
     let actions: CandidateActions
     let promptLog: PromptLogRepository
+    /// The arc's numbers: short under `-uiTesting`.
+    let arcConfig: ArcConfig
 
     /// A fresh question for the next session: an open thread first, then the bank without repeats.
     func opening() -> Opening {
@@ -78,7 +80,8 @@ struct Dependencies {
             extraction: AnthropicExtractionService(apiKey: { try? secrets.read(.anthropicAPIKey) }),
             extractionStore: store,
             actions: CandidateActions(store: store),
-            promptLog: PromptLogRepository(db))
+            promptLog: PromptLogRepository(db),
+            arcConfig: .default)
     }
 
     /// Fresh temp database, scripted voice and extraction, in-memory secrets with a fake key.
@@ -100,9 +103,10 @@ struct Dependencies {
             deactivateAudio: {},
             requestMicrophone: { true },
             secrets: InMemorySecretStore([.anthropicAPIKey: "sk-ant-api03-" + String(repeating: "x", count: 40)]),
-            extraction: ScriptedExtractionService(delayMs: 200),
+            extraction: ScriptedExtractionService(delayMs: 200, heavy: CommandLine.arguments.contains("-uiTesting-heavy")),
             extractionStore: store,
             actions: CandidateActions(store: store),
-            promptLog: PromptLogRepository(db))
+            promptLog: PromptLogRepository(db),
+            arcConfig: .uiTesting)
     }
 }

@@ -16,13 +16,13 @@ final class ExtractionUITests: XCTestCase {
     @MainActor
     func testMemoryCardAppearsAndAddsAMemory() {
         let app = launchToHome()
-        app.buttons["home.start"].tap()
+        app.startSession()
         XCTAssertTrue(app.staticTexts["Sounds like a memory"].waitForExistence(timeout: 15), "a memory card should appear")
         let blueDoorCard = app.staticTexts.matching(identifier: "card.title").matching(NSPredicate(format: "label == %@", "The blue door")).firstMatch
         XCTAssertTrue(blueDoorCard.exists)
         app.buttons["card.add"].firstMatch.tap()
         XCTAssertFalse(blueDoorCard.waitForExistence(timeout: 2), "the card goes once added")
-        app.buttons["session.stop"].tap()
+        app.buttons["session.finish"].tap()
 
         XCTAssertTrue(app.buttons["timeline.sessions"].waitForExistence(timeout: 10))
         app.buttons["timeline.sessions"].tap()
@@ -37,10 +37,10 @@ final class ExtractionUITests: XCTestCase {
     @MainActor
     func testWhoIsThisResolvesToANewPerson() {
         let app = launchToHome()
-        app.buttons["home.start"].tap()
+        app.startSession()
         XCTAssertTrue(app.staticTexts["Who's this?"].waitForExistence(timeout: 20), "a who-is-this card should appear")
         app.buttons["card.newPerson"].firstMatch.tap()
-        app.buttons["session.stop"].tap()
+        app.buttons["session.finish"].tap()
         XCTAssertTrue(app.buttons["home.people"].waitForExistence(timeout: 5))
         app.buttons["home.people"].tap()
         let person = app.buttons["people.row"].firstMatch
@@ -63,9 +63,9 @@ final class ExtractionUITests: XCTestCase {
     @MainActor
     func testPendingCardsShowInSessionDetail() {
         let app = launchToHome()
-        app.buttons["home.start"].tap()
+        app.startSession()
         XCTAssertTrue(app.staticTexts["Sounds like a memory"].waitForExistence(timeout: 15))
-        app.buttons["session.stop"].tap()
+        app.buttons["session.finish"].tap()
         XCTAssertTrue(app.buttons["timeline.sessions"].waitForExistence(timeout: 10))
         app.buttons["timeline.sessions"].tap()
         let row = app.buttons["home.sessionRow"].firstMatch

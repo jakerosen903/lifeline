@@ -1,19 +1,34 @@
 import Foundation
 import LifelineKit
 
+/// The live session. Owns the recorder, the extraction queue, the card queue and the arc.
+/// A quick story never sees the clock; settling in is offered the next question when the room
+/// goes quiet and a wrap-up at the planned length. Finishing never waits for sorting.
 @MainActor
 @Observable
 final class SessionViewModel: Identifiable {
+    enum ViewMode: Hashable { case listen, review }
+
     let id = UUID()
+    let kind: SessionKind
     private(set) var state = RecorderState()
     private(set) var transcriberStatus: TranscriberAvailability?
     private(set) var isStopping = false
+    /// True once the arc ended; the screen then leaves for the landing.
+    private(set) var landed = false
     private(set) var startError: String?
     private(set) var stopError: String?
     private(set) var cardQueue = CardQueue()
     private(set) var extractionStatus: String?
     private(set) var opening: Opening
-    /// The memory just kept with Change…; the screen opens the Change sheet on it.
+    private(set) var arc: SessionArc
+    /// The wrap-up banner (settle in only).
+    private(set) var wrapUpOffered = false
+    /// The next question, offered after a quiet moment (settle in only).
+    private(set) var nextPrompt: OpeningPrompt?
+    /// The fixed words shown once after a disclosure.
+    private(set) var disclosure: String?
+    var view: ViewMode = .listen
     var changing: Memory?
     let cards: CardHandler
 
@@ -22,15 +37,30 @@ final class SessionViewModel: Identifiable {
     private var queue: ExtractionQueue?
     private var observation: Task<Void, Never>?
     private var cardObservation: Task<Void, Never>?
+    private var ticker: Task<Void, Never>?
+    private var quietTimer: Task<Void, Never>?
+    private var segmentsSeen = 0
+    private var declinedOffers = 0
 
-    init(deps: Dependencies) {
+    init(deps: Dependencies, kind: SessionKind = .quick) {
         self.deps = deps
+        self.kind = kind
         cards = CardHandler(deps: deps)
         opening = deps.opening()
+        arc = SessionArc(kind: kind, config: deps.arcConfig, startedAt: .now)
     }
 
     var prompt: String { opening.main.text }
     var alternates: [String] { opening.alternates.map(\.text) }
+    var kindText: String { kind == .quick ? "a quick story" : "settling in" }
+    var possibleMemoryCount: Int { cardQueue.possibleMemoryCount }
+    var countText: String {
+        let n = possibleMemoryCount
+        return n == 1 ? "1 possible memory" : "\(n) possible memories"
+    }
+    var heavy: Bool { arc.heavy }
+    var presentDanger: Bool { arc.presentDanger }
+    var crisisLine: CrisisLine { FixedResponses.crisisLine() }
 
     /// Tapping an alternate makes it the question; the old main becomes an alternate.
     func swapIn(alternate index: Int) {
@@ -42,18 +72,21 @@ final class SessionViewModel: Identifiable {
     }
 
     var startedAt: Date { state.startedAt ?? .now }
-    /// True until start() has created the recorder; Stop is disabled meanwhile.
+    /// True until start() has created the recorder; Finish is disabled meanwhile.
     var recorderNotStarted: Bool { recorder == nil }
     var visibleCards: [Card] { cardQueue.cards }
+    var isPaused: Bool { state.isPaused }
 
     /// Errors first, then an interruption, then the download hint, then extraction: a stuck hint must not hide a failure.
     var statusLine: String? {
         if let error = state.error ?? stopError ?? cards.error { return error }
-        if state.isInterrupted { return "Paused" }
+        if state.isInterrupted { return "Paused by another app" }
         if transcriberStatus == .needsDownload { return "Getting the speech model ready…" }
         if transcriberStatus == .unsupportedLocale { return "On-device transcription is not available for your language." }
         return extractionStatus
     }
+
+    // MARK: - Lifecycle
 
     /// Starts the recorder. A failure is shown on the session screen, not thrown past it.
     func start() async {
@@ -73,8 +106,16 @@ final class SessionViewModel: Identifiable {
             for await event in queue.events { await self?.apply(event) }
         }
         do {
-            try await recorder.start(id: sessionID)
+            try await recorder.start(id: sessionID, kind: kind)
+            arc = SessionArc(kind: kind, config: deps.arcConfig, startedAt: startedAt)
+            persistLog()
             try? deps.promptLog.record(promptID: opening.main.logID, session: sessionID)
+            ticker = Task { [weak self] in
+                while !Task.isCancelled {
+                    try? await Task.sleep(for: .seconds(1))
+                    await self?.tick()
+                }
+            }
         } catch {
             startError = "Could not start recording: \(error.localizedDescription)"
             observation?.cancel()
@@ -83,12 +124,48 @@ final class SessionViewModel: Identifiable {
         }
     }
 
-    func stop() async {
+    /// Finish: stops capture, writes the row, returns at once. Sorting carries on behind the landing.
+    func finish() async {
         guard let recorder, !isStopping else { return }
         isStopping = true
+        apply(arc.apply(.finish, now: .now))
+        ticker?.cancel()
+        quietTimer?.cancel()
         do { try await recorder.stop() } catch { stopError = error.localizedDescription }
+        persistLog()
         await queue?.finish()
         observation?.cancel()
+        landed = true
+    }
+
+    func pause() async {
+        guard let recorder else { return }
+        do { try await recorder.pause() } catch { stopError = error.localizedDescription }
+    }
+
+    func resume() async {
+        guard let recorder else { return }
+        do { try await recorder.resume() } catch { stopError = error.localizedDescription }
+    }
+
+    func keepGoing() {
+        wrapUpOffered = false
+        apply(arc.apply(.keepGoing, now: .now))
+    }
+
+    func dismissDisclosure() { disclosure = nil }
+
+    /// "If you like: …" taken: it becomes the question on screen.
+    func takeNextPrompt() {
+        guard let nextPrompt else { return }
+        opening.alternates.insert(opening.main, at: 0)
+        opening.main = nextPrompt
+        self.nextPrompt = nil
+    }
+
+    func declineNextPrompt() {
+        nextPrompt = nil
+        declinedOffers += 1
     }
 
     // MARK: - Cards
@@ -114,7 +191,66 @@ final class SessionViewModel: Identifiable {
     }
     func resolve(_ card: Card, _ choice: MentionChoice) { if cards.resolve(card, choice) { cardQueue.remove(card.id) } }
 
-    private func apply(_ s: RecorderState) { state = s }
+    // MARK: - The arc
+
+    private func tick() {
+        guard !isStopping else { return }
+        apply(arc.apply(.tick(elapsed: .seconds(Date.now.timeIntervalSince(startedAt))), now: .now))
+    }
+
+    private func apply(_ effect: ArcEffect?) {
+        persistLog()
+        switch effect {
+        case .offerWrapUp:
+            wrapUpOffered = true
+        case .showDisclosureCard:
+            disclosure = (try? FixedResponses.disclosure()) ?? ""
+            nextPrompt = nil
+        case .land:
+            if !isStopping { Task { await finish() } }
+        case nil:
+            break
+        }
+    }
+
+    private var lastPersistedLogCount = 0
+    private func persistLog() {
+        guard arc.log.count != lastPersistedLogCount, let recorder, let json = try? SessionArc.encode(arc.log) else { return }
+        lastPersistedLogCount = arc.log.count
+        Task { try? await recorder.record(stageLog: json) }
+    }
+
+    /// Settling in: after a story lands and the room stays quiet, offer the next question.
+    private func offerNextPromptAfterQuiet() {
+        quietTimer?.cancel()
+        guard kind == .settleIn, !arc.heavy, nextPrompt == nil, !isStopping else { return }
+        let wait = deps.arcConfig.nextPromptAfterQuiet
+        quietTimer = Task { [weak self] in
+            try? await Task.sleep(for: wait)
+            guard !Task.isCancelled else { return }
+            await self?.offerNextPrompt()
+        }
+    }
+
+    private func offerNextPrompt() {
+        guard kind == .settleIn, !arc.heavy, !state.isSpeaking, nextPrompt == nil, !isStopping else { return }
+        let next = deps.opening().main
+        guard next != opening.main else { return }
+        nextPrompt = next
+        if let id = state.sessionID { try? deps.promptLog.record(promptID: next.logID, session: id) }
+    }
+
+    // MARK: - Events
+
+    private func apply(_ s: RecorderState) {
+        let wasSpeaking = state.isSpeaking
+        state = s
+        if s.isSpeaking, !wasSpeaking { quietTimer?.cancel() }
+        if s.segments.count > segmentsSeen {
+            segmentsSeen = s.segments.count
+            offerNextPromptAfterQuiet()
+        }
+    }
     private func apply(_ status: TranscriberAvailability) { transcriberStatus = status }
 
     private func apply(_ event: ExtractionEvent) {
@@ -130,7 +266,9 @@ final class SessionViewModel: Identifiable {
         case .candidates:
             extractionStatus = nil
             cardQueue.cards.forEach { cards.shown($0) }
-        case .flags, .skipped:
+        case .flags(let flags, _):
+            apply(arc.apply(.flags(flags), now: .now))
+        case .skipped:
             break
         }
     }

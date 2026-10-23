@@ -37,7 +37,7 @@ final class HomeViewModel {
     /// Asks for the microphone, activates audio, presents the session screen, then starts the
     /// recorder inside it so the owner sees the speech-model download and any start error.
     /// A second tap while starting or recording does nothing.
-    func startSession() async {
+    func startSession(kind: SessionKind = .quick) async {
         guard !isStarting, activeSession == nil else { return }
         isStarting = true
         defer { isStarting = false }
@@ -52,7 +52,7 @@ final class HomeViewModel {
             self.error = "Could not start audio: \(error.localizedDescription)"
             return
         }
-        let vm = SessionViewModel(deps: deps)
+        let vm = SessionViewModel(deps: deps, kind: kind)
         activeSession = vm
         await vm.start()
     }

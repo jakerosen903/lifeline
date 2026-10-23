@@ -7,8 +7,10 @@ import Foundation
 public struct ScriptedExtractionService: ExtractionService {
     public let version = "scripted"
     public var delayMs: Int
+    /// UI tests of the heavy path: the Maya segment is flagged as narration of past harm.
+    public var heavy: Bool
 
-    public init(delayMs: Int = 300) { self.delayMs = delayMs }
+    public init(delayMs: Int = 300, heavy: Bool = false) { self.delayMs = delayMs; self.heavy = heavy }
 
     public func extract(_ request: ExtractionRequest) async throws(ExtractionError) -> ExtractionResponse {
         try? await Task.sleep(for: .milliseconds(delayMs))
@@ -35,7 +37,9 @@ public struct ScriptedExtractionService: ExtractionService {
             mentions.append(MentionOut(text: "Maya", kind: .person, likelyAliasOfPersonID: nil, confidence: 0.8, relationText: "my sister"))
         }
         let empty = Usage(inputTokens: 0, outputTokens: 0, cacheReadInputTokens: 0, cacheCreationInputTokens: 0)
-        return ExtractionResponse(output: ExtractorOutput(memories: memories, mentions: mentions, flags: .none),
+        var flags = Flags.none
+        if heavy, text.localizedCaseInsensitiveContains("climbed it in 1998") { flags.disclosure = .past }
+        return ExtractionResponse(output: ExtractorOutput(memories: memories, mentions: mentions, flags: flags),
                                   version: version, model: "scripted", usage: empty)
     }
 }

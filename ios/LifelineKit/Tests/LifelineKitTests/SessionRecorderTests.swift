@@ -203,3 +203,12 @@ private func waitUntil(_ cond: @escaping () async -> Bool, timeoutMs: Int = 2_00
     #expect(await voice.resumeCalls == 1)
     await waitUntil { await !rec.state.isPaused }
 }
+
+@Test func stageLogIsStoredOnTheRow() async throws {
+    let db = try AppDatabase.inMemory(); let repo = SessionRepository(db); let voice = FakeVoiceSession()
+    let rec = makeRecorder(voice: voice, repo: repo)
+    let id = try await rec.start(kind: .settleIn)
+    try await rec.record(stageLog: #"[{"stage":"open"}]"#)
+    let row = try #require(try repo.fetch(id))
+    #expect(row.stageLog == #"[{"stage":"open"}]"# && row.kind == .settleIn)
+}

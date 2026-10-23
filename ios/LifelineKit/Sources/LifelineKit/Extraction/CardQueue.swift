@@ -55,6 +55,11 @@ public struct CardQueue: Equatable, Sendable {
 
     public var heldHintCount: Int { heldHints.values.reduce(0) { $0 + $1.count } }
 
+    /// "N possible memories" on the Listen view: memory cards not yet kept or dismissed.
+    public var possibleMemoryCount: Int {
+        cards.reduce(0) { if case .memory = $1 { $0 + 1 } else { $0 } }
+    }
+
     public mutating func apply(_ event: ExtractionEvent) {
         switch event {
         case .flags(let flags, _):

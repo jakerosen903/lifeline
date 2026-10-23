@@ -38,15 +38,15 @@ final class LaunchUITests: XCTestCase {
         let app = launch()
         XCTAssertTrue(app.buttons["aboutYou.skip"].waitForExistence(timeout: 5))
         app.buttons["aboutYou.skip"].tap()
-        app.buttons["home.start"].tap()
+        app.startSession()
 
-        XCTAssertTrue(app.buttons["session.stop"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["session.finish"].waitForExistence(timeout: 5))
         let firstMoment = app.staticTexts["session.segment"].firstMatch
         XCTAssertTrue(firstMoment.waitForExistence(timeout: 10), "a scripted segment should appear")
         XCTAssertTrue(firstMoment.label.contains("blue door"))
         XCTAssertTrue(app.staticTexts["session.prompt"].exists, "the prompt stays on screen while the person talks")
         XCTAssertTrue(app.otherElements["session.listening"].exists, "the listening indicator stays on screen")
-        app.buttons["session.stop"].tap()
+        app.buttons["session.finish"].tap()
 
         XCTAssertTrue(app.buttons["timeline.sessions"].waitForExistence(timeout: 10))
         app.buttons["timeline.sessions"].tap()
