@@ -114,17 +114,42 @@ extension SessionRepository {
     /// Removes the session and everything derived from it: segments, words, candidates, mentions
     /// and prompt-log rows go by cascade; memories told in it (by span or by candidate) are
     /// deleted first, and their spans, anchors, people and places follow them. One transaction.
+    /// Deleting a recording removes the tellings recorded in it. A memory that keeps a telling
+    /// from another recording survives, renumbered so its earliest telling is order 0; a memory
+    /// with no telling left goes with the recording (M4.1).
     public func deleteSession(_ id: SessionID) throws {
         try db.writer.write { db in
+            let touched = try String.fetchAll(db, sql: """
+                select distinct memory_span.memory_id from memory_span
+                join segment on segment.id = memory_span.segment_id where segment.session_id = ?
+                """, arguments: [id.rawValue])
             try db.execute(sql: """
-                delete from memory where id in (
-                    select memory_span.memory_id from memory_span
-                    join segment on segment.id = memory_span.segment_id where segment.session_id = ?
-                    union
-                    select memory.id from memory
-                    join candidate on candidate.id = memory.created_from_candidate_id
-                    join segment on segment.id = candidate.segment_id where segment.session_id = ?)
-                """, arguments: [id.rawValue, id.rawValue])
+                delete from memory_span where segment_id in (select id from segment where session_id = ?)
+                """, arguments: [id.rawValue])
+            for memory in touched {
+                let spans = try Row.fetchAll(db, sql: """
+                    select memory_span.rowid as rid, memory_span.candidate_id as cid from memory_span
+                    join segment on segment.id = memory_span.segment_id
+                    where memory_span.memory_id = ? order by segment."index", memory_span.start_ms
+                    """, arguments: [memory])
+                guard !spans.isEmpty else {
+                    _ = try Memory.deleteOne(db, key: memory)
+                    continue
+                }
+                // Two passes so the (memory_id, order) key never collides mid-renumber.
+                for (i, row) in spans.enumerated() {
+                    try db.execute(sql: "update memory_span set \"order\" = ? where rowid = ?", arguments: [-(i + 1), row["rid"] as Int64])
+                }
+                try db.execute(sql: "update memory_span set \"order\" = -\"order\" - 1 where memory_id = ?", arguments: [memory])
+                // The memory's own card may be leaving with the recording; its first surviving telling takes over.
+                let ownCandidateLeaving = try Bool.fetchOne(db, sql: """
+                    select exists(select 1 from memory join candidate on candidate.id = memory.created_from_candidate_id
+                                  join segment on segment.id = candidate.segment_id where memory.id = ? and segment.session_id = ?)
+                    """, arguments: [memory, id.rawValue]) ?? false
+                if ownCandidateLeaving {
+                    try db.execute(sql: "update memory set created_from_candidate_id = ? where id = ?", arguments: [spans[0]["cid"] as String?, memory])
+                }
+            }
             _ = try Session.deleteOne(db, key: id.rawValue)
         }
     }

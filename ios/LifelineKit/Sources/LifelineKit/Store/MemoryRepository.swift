@@ -122,11 +122,91 @@ public struct MemoryRepository: Sendable {
         }
     }
 
+    /// The memory a card was merged into as a later telling, if any.
+    public func memory(withSpanFrom candidate: CandidateID) throws -> Memory? {
+        try db.writer.read { db in
+            try Memory.fetchOne(db, sql: "select memory.* from memory join memory_span on memory_span.memory_id = memory.id where memory_span.candidate_id = ? limit 1",
+                                arguments: [candidate.rawValue])
+        }
+    }
+
     /// A stand-in becomes a real memory when a telling is merged into it.
     public func updateFields(_ id: MemoryID, title: String, summaryQuote: String, createdFromCandidateID: CandidateID?) throws {
         try db.writer.write { db in
             try db.execute(sql: "update memory set title = ?, summary_quote = ?, created_from_candidate_id = ? where id = ?",
                            arguments: [title, summaryQuote, createdFromCandidateID?.rawValue, id.rawValue])
+        }
+    }
+
+    // MARK: - Snapshot (M4.1: undo a merge)
+
+    /// Everything a memory owns, so a merge can be taken back exactly.
+    public struct Snapshot: Sendable, Equatable {
+        public var memory: Memory
+        public var spans: [MemorySpan]
+        public var people: [MemoryPerson]
+        public var places: [MemoryPlace]
+        public var anchors: [Anchor]
+        public var collectionIDs: [CollectionID]
+        public var takenAt: Date
+    }
+
+    public func snapshot(of id: MemoryID) throws -> Snapshot? {
+        try db.writer.read { db in
+            guard let memory = try Memory.fetchOne(db, key: id.rawValue) else { return nil }
+            return Snapshot(
+                memory: memory,
+                spans: try MemorySpan.filter(Column("memory_id") == id.rawValue).order(Column("order")).fetchAll(db),
+                people: try MemoryPerson.filter(Column("memory_id") == id.rawValue).fetchAll(db),
+                places: try MemoryPlace.filter(Column("memory_id") == id.rawValue).fetchAll(db),
+                anchors: try Anchor.filter(Column("memory_id") == id.rawValue).fetchAll(db),
+                collectionIDs: try String.fetchAll(db, sql: "select collection_id from collection_memory where memory_id = ?", arguments: [id.rawValue]).map(CollectionID.init(rawValue:)),
+                takenAt: .now)
+        }
+    }
+
+    /// Puts the memory back exactly as the snapshot has it, re-creating the row if it was deleted.
+    public func restore(_ snapshot: Snapshot) throws {
+        try db.writer.write { db in
+            let id = snapshot.memory.id.rawValue
+            try snapshot.memory.save(db)
+            for table in ["memory_span", "memory_person", "memory_place", "anchor", "collection_memory"] {
+                try db.execute(sql: "delete from \(table) where memory_id = ?", arguments: [id])
+            }
+            for span in snapshot.spans { try span.insert(db) }
+            for person in snapshot.people { try person.insert(db) }
+            for place in snapshot.places { try place.insert(db) }
+            for anchor in snapshot.anchors { try anchor.insert(db) }
+            for collection in snapshot.collectionIDs {
+                try db.execute(sql: "insert or ignore into collection_memory (collection_id, memory_id) values (?, ?)", arguments: [collection.rawValue, id])
+            }
+        }
+    }
+
+    /// Re-points every edge of `source` at `target` and appends its spans after the target's.
+    /// Collections and the chapter move only when the target has none. The source row is deleted.
+    public func fold(_ source: MemoryID, into target: MemoryID, sourceTitle: String, sourceCandidate: CandidateID?) throws {
+        try db.writer.write { db in
+            let next = (try Int.fetchOne(db, sql: "select max(\"order\") from memory_span where memory_id = ?", arguments: [target.rawValue]) ?? -1) + 1
+            let spans = try MemorySpan.filter(Column("memory_id") == source.rawValue).order(Column("order")).fetchAll(db)
+            for (i, var span) in spans.enumerated() {
+                span.memoryID = target
+                span.order = next + i
+                if i == 0 { span.titleText = span.titleText ?? sourceTitle; span.candidateID = span.candidateID ?? sourceCandidate }
+                try span.insert(db)
+            }
+            try db.execute(sql: "insert or ignore into memory_person (memory_id, person_id, role_text) select ?, person_id, role_text from memory_person where memory_id = ?", arguments: [target.rawValue, source.rawValue])
+            try db.execute(sql: "insert or ignore into memory_place (memory_id, place_id) select ?, place_id from memory_place where memory_id = ?", arguments: [target.rawValue, source.rawValue])
+            try db.execute(sql: "update anchor set memory_id = ? where memory_id = ?", arguments: [target.rawValue, source.rawValue])
+            let targetCollections = try Int.fetchOne(db, sql: "select count(*) from collection_memory where memory_id = ?", arguments: [target.rawValue]) ?? 0
+            if targetCollections == 0 {
+                try db.execute(sql: "insert or ignore into collection_memory (collection_id, memory_id) select collection_id, ? from collection_memory where memory_id = ?", arguments: [target.rawValue, source.rawValue])
+            }
+            let targetChapter = try String?.fetchOne(db, sql: "select chapter_id from memory where id = ?", arguments: [target.rawValue]) ?? nil
+            if targetChapter == nil {
+                try db.execute(sql: "update memory set chapter_id = (select chapter_id from memory where id = ?) where id = ?", arguments: [source.rawValue, target.rawValue])
+            }
+            _ = try Memory.deleteOne(db, key: source.rawValue)
         }
     }
 
@@ -136,6 +216,16 @@ public struct MemoryRepository: Sendable {
 
     public func allAnchors() throws -> [Anchor] {
         try db.writer.read { try Anchor.fetchAll($0) }
+    }
+
+    public func insertAnchor(_ anchor: Anchor) throws {
+        try db.writer.write { try anchor.insert($0) }
+    }
+
+    public func insertPlace(_ place: MemoryPlace) throws {
+        try db.writer.write { db in
+            try db.execute(sql: "insert or ignore into memory_place (memory_id, place_id) values (?, ?)", arguments: [place.memoryID.rawValue, place.placeID.rawValue])
+        }
     }
 
     public func update(_ anchor: Anchor) throws {
