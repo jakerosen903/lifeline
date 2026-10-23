@@ -10,7 +10,7 @@ The short version: ask for scenes, not facts; use silence and reflection instead
 
 ## Principles
 
-This document is the project's grounding reference. Every interviewer behavior, prompt and UI decision should be checkable against these eight rules, which the rest of the document justifies.
+This document is the project's grounding reference. Every interviewer behavior, prompt and UI decision should be checkable against these nine rules, which the rest of the document justifies.
 
 1. **The person is the author.** The app listens, reflects and organizes; it never interprets, evaluates or corrects a life.
 2. **Ask for scenes, not facts.** Baseline facts (places, people, dates) are harvested from stories, never requested as a form.
@@ -20,6 +20,7 @@ This document is the project's grounding reference. Every interviewer behavior, 
 6. **Hard chapters are doors, not destinations.** Loss, illness and regret are offered once and left alone.
 7. **Many true versions.** Family accounts of the same event sit side by side; the app never adjudicates.
 8. **Every session lands.** Sessions end deliberately, on time or early when things get heavy, with a summary and the person's say over what is kept.
+9. **Preserve first, organize later.** The recording is kept the moment it is made. Every card, check and refinement approves organization; none of them decides whether a story survives. The person must never feel they are maintaining a database.
 
 ## Oral history: the listener's craft
 
@@ -161,20 +162,24 @@ Both props follow the uncertainty rule. A song from the charts is a suggestion; 
 
 ## Session arc and emotional safety
 
-Every session has a shape, and the app owns the landing. Therapy sessions and oral history interviews both end deliberately because ending on a hard memory is what stops people coming back. Sessions run 30 to 60 minutes; one speaker at a time.
+Every session has a shape, and the app owns the landing. Therapy sessions and oral history interviews both end deliberately because ending on a hard memory is what stops people coming back. One speaker at a time.
+
+**Two lengths, equally valid (revised 2026-10-22).** A quick story is a few minutes and one memory; it is also the shape of a daily habit. Settling in is a longer sit-down with prompts on offer. The app never presents the long session as the expected commitment. There is no automatic stop: at the planned length the app offers a gentle wrap-up and an explicit "keep going" unless a real recording limit forces a stop.
 
 | Stage | When | What the interviewer does | What it does not do |
 | --- | --- | --- | --- |
-| Open | First few minutes | One invitation, then listens | No second question until the person has told something |
-| Middle | Until about minute 30 to 45 | Reflections, follow-ups on what was said, at most one door per session | No new door after a heavy moment |
-| Wind-down | Last 10 minutes | No new doors; summary in the person's words; one light, forward-looking question; a clear "let's leave it there for today" | Never ends mid-story or on a low point |
+| Open | First minute or two | One invitation, then listens | No second question until the person has told something |
+| Middle | Until the planned length | Reflections, follow-ups on what was said, at most one door per session | No new door after a heavy moment; no organizational question of any kind during a heavy moment |
+| Wind-down | The last few minutes | No new doors; "your recording is saved"; a few moments from today with play; "done for now" as the default, review optional; a neutral closing line | Never ends mid-story or on a low point; never demands a per-memory decision |
 | Early wind-down | On a signal, any time | Same landing, sooner: reflect, offer to pause ("we can leave this here and come back whenever you want") | No follow-up on the thing that hurt |
 
-**Signals for an early wind-down.** The app does not diagnose anyone. It responds to what it can observe: the person says they are upset or want to stop, asks to change the subject, goes quiet for a long time after a heavy topic, or is audibly crying. Any of these starts the landing.
+**Signals for an early wind-down.** The app does not diagnose anyone. It responds to what it can observe: the person says they are upset or want to stop, asks to change the subject, goes quiet for a long time after a heavy topic, or is audibly crying. Any of these starts the landing. During a heavy moment the app suppresses every organizational prompt, including "who's this?".
 
-**Serious disclosures have a fixed response.** If someone discloses abuse, danger to themselves or others, or similar, the interviewer stops interviewing. It gives a short, warm, pre-written response, offers help once without insisting, and lands the session. This is scripted and tested, never improvised by the model in the moment.
+**Serious disclosures have a fixed response.** If someone discloses abuse, danger to themselves or others, or similar, the interviewer stops interviewing. It gives a short, warm, pre-written response, offers help once without insisting, and lands the session. This is scripted and tested, never improvised by the model in the moment. The flag must distinguish narration of the past from present danger; one broad flag is too coarse to shape the whole experience.
 
-**The person controls what is kept.** After an emotional session the summary asks plainly: keep this memory on the timeline, keep it private, or let it go. Recording something painful without asking would break the authorship principle at the moment it matters most. The audio is deleted if they choose to let it go.
+**The landing is light (revised 2026-10-22).** The screen says the recording is saved (true: saving is continuous) and shows a few moments from today with play. Sorting continues in the background. "Done for now" is the default; "Review these moments" is optional and can happen later. Hide and delete are one tap away but never required. The closing line after a heavy session is neutral; it never turns the loss into "something lighter".
+
+**The person controls what is kept, in words that say what they do.** Hide from timeline keeps the recording and the memory but removes them from everyday browsing. Exclude from AI processing stops future processing and context use; it cannot unsend what was already sent, so a genuinely local-only session is a choice made before recording. Share chooses exact content and recipients. Delete removes the selected recording content and everything derived from it, and asks first.
 
 **Voice pipeline note.** V1 runs a cascade (voice activity detection, streaming speech-to-text, the interviewer as a text model, text-to-speech) behind a single voice-session interface, so a realtime speech model can replace it later without touching extraction, the session arc or the turn policy. Turn-taking numbers live in that policy: a short silence (about 1 s) triggers a fast end-of-thought check; a complete thought gets a reply after a 1 to 2 s grace; an unfinished one gets a capped wait (6 to 8 s) and then a soft acknowledgement only. Plus a cap on interviewer words per turn and a minimum number of user turns between questions.
 
@@ -204,6 +209,9 @@ The interviewer should behave like an oral historian with a therapist's listenin
 | Scene, not summary | Memoir | When the person generalizes, ask for one instance |
 | Walk the senses | Memoir | The follow-up ladder: wide, senses, zoom in, body |
 | "What was that like?" | Journalism (Terkel) | The interviewer's default follow-up |
+| Hear it back | Oral history, life review | The first payoff is the person's own voice played back, minutes into the first session, before any sorting |
+| Correction over dismissal | MI (summaries invite correction) | Cards offer Keep / Change… / Dismiss; keeping a memory does not endorse its inferred details, which carry a visible "check this" tag |
+| Story over card | Memoir (scene) | Related moments connect into a story across sessions; the archive is chapters → stories → moments, with years as an optional lens |
 
 ### Anti-patterns to avoid
 
@@ -212,6 +220,8 @@ The interviewer should behave like an oral historian with a therapist's listenin
 - **Forcing the hard chapters.** Life review is contraindicated for people who don't want to revisit the past. Loss, illness and regret are offered as doors, never opened by the app.
 - **Evaluating.** Praise, interpretation and advice all shift the person from author to subject. The interviewer notices and reflects; it doesn't judge.
 - **Adjudicating family accounts.** Different versions of one event are kept side by side. The app never picks a "correct" one.
+- **Making the person a database maintainer.** Confirmation cards, people resolution, date refinement and session review, stacked, feel like homework. Every one of them is optional; the recording survives without any of them.
+- **Fading what is uncertain.** Low confidence is a label ("check this"), never reduced opacity; text stays readable and ochre is paired with a word or symbol.
 - **Over-using the person's name or past facts.** Pulling in stored details to seem attentive reads as surveillance. Use what the person said in this session; reach back only when it unlocks something ("if I knew when you moved, I could place four memories").
 
 ## Sources

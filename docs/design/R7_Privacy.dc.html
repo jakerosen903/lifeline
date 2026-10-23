@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>R7 — Privacy controls</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#5F7046}a:hover{color:#45533A}
+</style>
+</helmet>
+<div style="width: 390px; height: 844px; box-sizing: border-box; background: #8F8575; font-family: Inter, system-ui, sans-serif; display: flex; flex-direction: column; justify-content: flex-end; overflow: hidden">
+
+  <div style="padding: 64px 24px 0 24px; color: #F6F0E4; opacity: 0.8">
+    <div style="font-size: 13px">Memory · The hospital parking lot</div>
+  </div>
+
+  <div style="margin-top: auto; background: #F6F0E4; color: #332A23; border-radius: 24px 24px 0 0; padding: 14px 24px 44px 24px; display: flex; flex-direction: column; gap: 14px">
+    <div style="width: 36px; height: 4px; border-radius: 2px; background: #CDBFA6; align-self: center"></div>
+    <div style="display: flex; flex-direction: column; gap: 4px">
+      <div style="font-family: Fraunces, Georgia, serif; font-size: 22px; font-weight: 500">This memory</div>
+      <div style="font-size: 13px; color: #7A6E60">Each control says what it actually does.</div>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 8px">
+      <button type="button" style="border-radius: 14px; border: 1px solid #E3D8C3; background: #FFFDF8; padding: 14px; display: flex; align-items: center; gap: 12px; text-align: left; font: 400 14px Inter, system-ui, sans-serif; color: #332A23">
+        <span style="width: 36px; height: 36px; border-radius: 18px; background: #ECE3D2; display: flex; align-items: center; justify-content: center; flex: none"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#332A23" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3l18 18M10.6 10.6A2 2 0 0 0 13.4 13.4M9.9 5.1A10 10 0 0 1 21 12a10.5 10.5 0 0 1-2.3 3.3M6.6 6.6A10.5 10.5 0 0 0 3 12a10 10 0 0 0 11.4 6.9"/></svg></span>
+        <span style="flex: 1; display: flex; flex-direction: column; gap: 2px"><span style="font-weight: 500">Hide from timeline</span><span style="font-size: 12px; color: #7A6E60">Keeps the recording and the memory. Removes them from everyday browsing.</span></span>
+      </button>
+      <button type="button" style="border-radius: 14px; border: 1px solid #E3D8C3; background: #FFFDF8; padding: 14px; display: flex; align-items: center; gap: 12px; text-align: left; font: 400 14px Inter, system-ui, sans-serif; color: #332A23">
+        <span style="width: 36px; height: 36px; border-radius: 18px; background: #ECE3D2; display: flex; align-items: center; justify-content: center; flex: none"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#332A23" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="M9 9h6v6H9zM3 10h1M3 14h1M20 10h1M20 14h1M10 3v1M14 3v1M10 20v1M14 20v1"/></svg></span>
+        <span style="flex: 1; display: flex; flex-direction: column; gap: 2px"><span style="font-weight: 500">Exclude from AI processing</span><span style="font-size: 12px; color: #7A6E60">No future sorting, and never used as context. What was already sent can&#39;t be unsent.</span></span>
+      </button>
+      <button type="button" style="border-radius: 14px; border: 1px solid #E3D8C3; background: #FFFDF8; padding: 14px; display: flex; align-items: center; gap: 12px; text-align: left; font: 400 14px Inter, system-ui, sans-serif; color: #332A23">
+        <span style="width: 36px; height: 36px; border-radius: 18px; background: #ECE3D2; display: flex; align-items: center; justify-content: center; flex: none"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#332A23" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12v7a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-7M12 15V3m-4 4l4-4 4 4"/></svg></span>
+        <span style="flex: 1; display: flex; flex-direction: column; gap: 2px"><span style="font-weight: 500">Share…</span><span style="font-size: 12px; color: #7A6E60">You choose exactly what, and with whom.</span></span>
+      </button>
+      <button type="button" style="border-radius: 14px; border: 1px solid #E8C9C0; background: #FFFDF8; padding: 14px; display: flex; align-items: center; gap: 12px; text-align: left; font: 400 14px Inter, system-ui, sans-serif; color: #8A3B2E">
+        <span style="width: 36px; height: 36px; border-radius: 18px; background: #F5E3DE; display: flex; align-items: center; justify-content: center; flex: none"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#8A3B2E" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/></svg></span>
+        <span style="flex: 1; display: flex; flex-direction: column; gap: 2px"><span style="font-weight: 500">Delete…</span><span style="font-size: 12px; color: #7A6E60">Removes this part of the recording and everything made from it. Asks first.</span></span>
+      </button>
+    </div>
+
+    <div style="border-top: 1px solid #E3D8C3; padding-top: 12px; display: flex; flex-direction: column; gap: 6px">
+      <div style="font-size: 12px; color: #7A6E60; line-height: 1.5">Want a session that never leaves the phone at all? Choose <span style="font-weight: 500; color: #332A23">Local only</span> before you start recording. It can&#39;t be switched on afterwards.</div>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

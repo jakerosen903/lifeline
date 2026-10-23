@@ -284,3 +284,25 @@ M1 before M2 is deliberate: the owner starts recording real sessions on day one,
 
 1. ~~Birth date.~~ Resolved 2026-10-21: it comes from the "About you" screen at first open. See §3, §8 and decision 6.
 2. Disclosure card. When the owner says something that signals serious harm (for example, past abuse, or thoughts of self-harm), the app must show a fixed, pre-written card and must not improvise a reply (principle 6; CLAUDE.md non-negotiable 4). The builder needs two things from the owner before M4: approval of the card's words, and the crisis line the card shows, which depends on the owner's country. Proposed draft, US: "Thank you for telling me that. You can stop here, or keep going. It is your choice. If you need to talk to someone now, call or text 988 (Suicide and Crisis Lifeline, US)."
+
+## 15. Revisions after the design review (2026-10-22)
+
+An external review of this spec, the M1 to M4 plans, the canvases and the Swift code found one theme: the combination of confirmation cards, people resolution, date refinement and session review could make the owner feel responsible for maintaining a database. The decisions below are recorded in `docs/DECISIONS.md` (entries dated 2026-10-22) and drawn as canvases R1 to R9. They change this spec as follows.
+
+| Section | Change |
+| --- | --- |
+| §2 Goals 1, 6 | Two session lengths: a quick story (a few minutes) and settling in. Goal 6 becomes: end every session with a light landing; per-memory choices are optional and can happen later. |
+| §3 First open | Two equally valid ways in; the optional About You screen stays but is secondary ("Add a little context"). The first payoff is the owner's own voice played back, minutes in. |
+| §3 Session | Two views. Listen (default): prompt, status, pause, finish, a small "N possible memories" count that never scrolls the screen. Transcript & memories: the review view, opened by choice. The session works with zero card taps. |
+| §3 Landing | "Your recording is saved. A few moments from today. Done for now · Review these moments." No required per-memory decision. Hide and delete one tap away. Neutral closing line after a heavy session. The copy "nothing is saved until you say so" is removed. |
+| §5 Deletion | Deletion must handle overlapping memories that reference the same audio and preserve playback offsets. |
+| §6 Data model | Add `story` and `story_moment`. `memory` is the moment. Chapters may overlap. `visibility` becomes two flags: `hidden_from_timeline`, `excluded_from_ai`. |
+| §7 Extraction | Reconcile related segments before presenting cards. Budget the context packet by tokens and relevance. Pending candidates count as context. `same_as_memory_id` becomes `story_ref`. |
+| §7 UI rule | Low confidence is a "Check this" label, never reduced opacity. |
+| §9 Arc | `hardStopAt` becomes a wrap-up offer with an explicit "keep going", not a stop. During a heavy moment, suppress every organizational prompt including "who's this?". The disclosure flag distinguishes narration of the past from present danger. |
+| §9 Wind-down | Replaced by the light landing above. Keep / private / let go moves to the review view and the privacy controls: Hide from timeline, Exclude from AI processing, Share…, Delete…. Local-only is chosen before recording. |
+| §9 Stop | `stop` must not wait for the extraction hook. Persist, show the landing, finish sorting in the background with durable retries. |
+| Cards | `MemoryCard`: Keep / Change… / Dismiss (with Undo; recording untouched). Keeping does not confirm inferred details. `FlowChips` must wrap. Visible alternatives to swipe and long-press. |
+| §11 Milestones | M4 absorbs the landing and correction changes. M5 adds stories, the privacy controls and backup/restore. A minimal photo prompt (one photo, one story) follows as Phase 1.5. |
+
+Serves P1, P5, P8 and the new P9 (preserve first, organize later).

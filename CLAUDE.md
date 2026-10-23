@@ -4,7 +4,7 @@ A voice-first app: a person tells stories from their life, a timeline fills in, 
 
 ## Read these first
 
-- `docs/PRINCIPLES.md` — the grounding document. Eight principles, the literature behind them, the session arc and safety rules. Every prompt, feature and PR is checked against it.
+- `docs/PRINCIPLES.md` — the grounding document. Nine principles, the literature behind them, the session arc and safety rules. Every prompt, feature and PR is checked against it.
 - `docs/OVERVIEW.md` — what we are building, what we are learning, and how it works under the hood (data flow, data model, turn policy).
 - `docs/DECISIONS.md` — the decision log. Add an entry when a choice is made; do not re-litigate closed ones without a new entry.
 - `docs/TECHNICAL_DESIGN.md` — the detailed design, in progress.
@@ -12,7 +12,7 @@ A voice-first app: a person tells stories from their life, a timeline fills in, 
 
 ## Non-negotiables
 
-1. The eight principles in `docs/PRINCIPLES.md` apply to code, prompts and UI copy. In particular: the person is the author; uncertainty is shown, never hidden; every session lands.
+1. The nine principles in `docs/PRINCIPLES.md` apply to code, prompts and UI copy. In particular: the person is the author; uncertainty is shown, never hidden; every session lands; preserve first, organize later.
 2. Data posture (V1): audio, transcripts, timeline and people live on the device. The server is stateless and keeps nothing. Sharing is explicit. Nothing in the server may persist user content.
 3. Anything inferred (dates, names, places) is stored and displayed with its uncertainty. Never fill in a detail the person did not say.
 4. Serious disclosures get a fixed, pre-written response, never an improvised one.

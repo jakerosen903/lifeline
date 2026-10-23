@@ -2,6 +2,71 @@
 
 One entry per decision. Newest first. Status is Decided, Open, or Superseded.
 
+## 2026-10-22 · Preserve first, organize later (review follow-up)
+
+**Status:** Decided. Source: external design review of the V1 spec, M1 to M4 plans, design canvases and Swift code; mock-ups R1 to R9 on the design canvas.
+
+**Decision.** The recording is the product; organization is optional. Finishing a session never waits for extraction: persist, show the landing, let sorting finish in the background with durable retries. Extracted memories are drafts until reviewed; accepting a memory approves its organization, not its survival. Principle 9 added to `docs/PRINCIPLES.md`.
+
+**Consequences for M4 and later.** `stop` must not block on the extraction hook. The session screen gets two views: Listen (default; prompt, status, pause, finish, a small "N possible memories" count that never scrolls the screen) and Transcript & memories (the review view, opened by choice). The landing says "Your recording is saved", shows a few moments with play, and makes "Done for now" the default with review optional. Per-memory keep / private / let go is no longer required at landing; it moves to the review view and the privacy controls.
+
+## 2026-10-22 · Session length: quick story or settle in; no automatic stop
+
+**Status:** Decided.
+
+**Decision.** Two equally valid ways in: "Tell a quick story" (a few minutes, one memory) and "Settle in" (longer, prompts on offer). The quick story is also the shape of a daily habit; the home screen invites "today's story" without streaks or counters. The 60-minute hard stop is replaced by a gentle wrap-up at the planned length and an explicit "keep going", unless a real recording limit forces a stop. `ArcConfig.hardStopAt` becomes a wrap-up prompt, not a stop.
+
+## 2026-10-22 · Correction is a first-class action
+
+**Status:** Decided.
+
+**Decision.** Memory cards offer Keep · Change… · Dismiss. "Change…" offers the title, who was there, when it was, which part of the recording, and "just tell me" (spoken correction, later). Dismiss has Undo and leaves the recording untouched; deleting recording content is a separate, explicit action. Accepting a memory does not confirm its inferred details: each inferred value carries a visible "Check this" tag (ochre plus a symbol or word, never reduced opacity) until the person settles it. Supersedes "Add / Not quite" on `MemoryCard` and the low-confidence fade.
+
+## 2026-10-22 · Archive structure: chapters → stories → moments; years as a lens
+
+**Status:** Decided.
+
+**Decision.** A session is when you recorded. A moment is a scene you described, with its original audio. A story connects related moments, possibly across sessions. A chapter is broader life context. Years and months are an optional chronological lens, shown only when they help (three stories in a year: show the stories; forty: offer seasons or months). Collections remain the thematic thread across chapters ("Family trips"); a moment can sit in its story and in a collection without being copied. Chapters may overlap. The person approves any composed story or chapter title. Every level has "Listen at this level": a playlist in the person's voice (life: chosen highlights; chapter: selected stories; story: its moments; moment: the audio). Narrated assembly comes later. Pinch-to-zoom is an enhancement; Life / Chapter / Year controls, tappable headings and a clear back path are the baseline.
+
+**Fuzzy time, progressively disclosed.** List: "During the Boston years." Detail: "Probably 2011 to 2013." Editor: likely and possible bands with evidence. Undated stories look as valuable as dated ones.
+
+**Consequences.** The data model gains `story` (id, title, chapter_id?) and `story_moment` (story_id, memory_id, order). "Memory" in code is the moment. The extractor's `same_as_memory_id` becomes "belongs to story"; segment reconciliation (below) feeds it.
+
+## 2026-10-22 · Privacy controls named by effect; local-only is chosen before recording
+
+**Status:** Decided.
+
+**Decision.** Replace the single word "private" with four controls: Hide from timeline (keep recording and memory; remove from everyday browsing); Exclude from AI processing (no future processing or context use; cannot unsend); Share… (exact content and recipients); Delete… (the selected recording content and its derivatives, with confirmation). A session that must never leave the phone is chosen before recording ("Local only") and cannot be switched on afterwards. The copy "nothing is saved until you say so" is wrong and is removed everywhere; saving is continuous. A usable backup-and-restore path (audio included, explicitly) ships before anyone beyond the owner uses the app.
+
+## 2026-10-22 · Pipeline changes from the review
+
+**Status:** Decided; scheduled into M4/M5.
+
+- Finish recording independently of extraction (see Preserve first).
+- Separate audio segments from story boundaries: a silence threshold ends a segment; one story may span several segments. Accumulate or reconcile related segments before presenting several cards.
+- Budget the context packet by tokens and relevance, not by fixed caps per table. Select relevant memories and people within a total budget.
+- Treat pending (unreviewed) stories as context, so someone who never touches the screen still gets continuity and duplicate handling.
+- Evaluate cheaper extraction configurations on consented sessions against invented details, fragmentation, missed memories and editing effort before choosing a default.
+- Deletion must handle overlapping memories that reference the same audio and preserve playback offsets.
+
+## 2026-10-22 · Readability and interaction fixes
+
+**Status:** Decided.
+
+Keep the palette, serif titles and the tree-ring icon. Do not fade uncertain memories. Pair ochre with a word or symbol. Reduce small uppercase labels and metadata on primary screens. Serif for titles and chosen quotes; a highly readable body face for transcripts. Chips must wrap (replace the `HStack` in `FlowChips`). Every swipe or long-press action has a visible alternative. Validate large text and VoiceOver before testing with older relatives.
+
+## 2026-10-22 · Roadmap: minimal photo prompt pulled forward; playback tested early
+
+**Status:** Decided.
+
+Choose one photo and tell its story, with no clustering or face work, moves into Phase 1.5. Simple playback of an accepted story (the first payoff) ships before narrated chapter assembly.
+
+## 2026-10-22 · Closing question after a hard session
+
+**Status:** Decided (closes the open item).
+
+Neutral by default ("Thank you. That's enough for today."). Never a question about the person or loss just discussed, and never framed as "something lighter".
+
 ## 2026-10-21 · Platform: iOS native app + stateless server; web viewer deferred
 
 **Status:** Decided.
@@ -120,6 +185,6 @@ TypeScript or Python. Python is the natural home for the recording experiment an
 
 Verbatim quotes assembled into chapters, or prose the app composes in the person's style? The principles favor verbatim; replay narration may need light stitching. Decide with real transcripts in hand.
 
-## Open · Closing question after a hard session
+## Open · Closing question after a hard session (closed 2026-10-22, see above)
 
 Unrelated by default, or tied gently to the memory? Decide after the recording study.

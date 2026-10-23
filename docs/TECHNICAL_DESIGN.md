@@ -12,7 +12,10 @@ V1 is a personal timeline for one person on one iPhone. The system has an iOS ap
 | --- | --- | --- | --- |
 | VoiceSession | device | Audio capture, VAD, streaming STT, TTS, behind one interface | To design |
 | Turn policy | device | Decides when the interviewer speaks; end-of-thought check | To design |
-| Session controller | device | Elapsed time, stage (open / middle / wind-down), early wind-down signals | To design |
+| Session controller | device | Elapsed time, stage (open / middle / wind-down), early wind-down signals, wrap-up offer at the planned length (no automatic stop) | To design |
+| Landing | device | "Your recording is saved"; a few moments with play; done for now by default; review optional; finish never waits for extraction | To design |
+| Review view | device | Transcript & memories: Keep / Change… / Dismiss with Undo; "check this" tags on inferred details | To design |
+| Privacy controls | device | Hide from timeline · Exclude from AI processing · Share… · Delete…; Local-only chosen before recording; backup and restore | To design |
 | Device memory | device | Audio files, transcripts with word timestamps, timeline store, people, curiosity list | To design |
 | Context packet builder | device | Selects the slice of memory a turn needs | To design |
 | Interviewer | server | Text model: reflections, acknowledgements, rare questions | To design |
@@ -42,7 +45,7 @@ Fields: people (names and aliases), chapters (titles and spans), recent memories
 
 ## 4. Data model
 
-See `docs/OVERVIEW.md`, "6. Data model". To specify here: table definitions, the time-range representation (`earliest`, `latest`, `likely`, granularity), relative anchors as a table of typed edges, visibility per event, and the source pointer (audio file, start ms, end ms).
+See `docs/OVERVIEW.md`, "6. Data model". Structure: chapters → stories → moments; years and months are a lens; collections carry themes across chapters. A session is when the person recorded; it is not a story. Tables to add: `story` (id, title, title_origin, chapter_id?) and `story_moment` (story_id, memory_id, order). To specify here: table definitions, the time-range representation (`earliest`, `latest`, `likely`, granularity), relative anchors as a table of typed edges, visibility per event, and the source pointer (audio file, start ms, end ms).
 
 ## 5. Turn policy
 
@@ -50,11 +53,11 @@ Initial values from `docs/DECISIONS.md`. To specify: the end-of-thought classifi
 
 ## 6. Session arc and safety
 
-From `docs/PRINCIPLES.md`, "Session arc and emotional safety". To specify: the signal detectors, the fixed-response library and its tests, and the keep / private / let-go flow including audio deletion.
+From `docs/PRINCIPLES.md`, "Session arc and emotional safety" (revised 2026-10-22). Two session lengths. No automatic stop. During a heavy moment, no organizational prompt of any kind. The disclosure flag distinguishes narration of the past from present danger. To specify: the signal detectors, the fixed-response library and its tests, and the four privacy controls, deletion across overlapping moments that share audio (offsets must survive), and the local-only session.
 
 ## 7. Extraction and resolution
 
-To specify after the recording study (`docs/experiments/recording-study.md`): the extractor prompt and output schema, the confidence rules, the resolver algorithm for relative anchors, and the reprocessing (idempotency) guarantees.
+Rules from the review (2026-10-22): a silence threshold ends an audio segment, but one story may span several segments, so related segments are reconciled before cards are shown; the context packet is selected by relevance within a token budget; pending stories count as context; cheaper extraction configurations are evaluated on consented sessions against invented details, fragmentation, missed memories and editing effort. To specify after the recording study (`docs/experiments/recording-study.md`): the extractor prompt and output schema, the confidence rules, the resolver algorithm for relative anchors, and the reprocessing (idempotency) guarantees.
 
 ## 8. Phase 2 props
 

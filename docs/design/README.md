@@ -47,3 +47,28 @@ Sample content (names, places, dates) is invented.
 ## App icon
 
 `icon/lifeline-icon.svg` (light) and `icon/lifeline-icon-dark.svg` are the sources; `ios/Assets.xcassets/AppIcon.appiconset/` holds the 1024 px light, dark and tinted PNGs with a `Contents.json` Xcode reads directly. The mark: five tree rings, the years of a life read in cross-section, with a soft split through them the way rings open around a knot, and one ochre ring for a year that mattered. Same palette as the screens. Chosen 2026-10-22 over a rising-line mark, a radial waveform and a constellation.
+
+## Timeline directions (2026-10-22)
+
+| File | Direction |
+| --- | --- |
+| TL_Spine.dc.html | True-time vertical spine with "quiet years" pills |
+| TL_Book.dc.html | Chapters-first contents page |
+| TL_Rings.dc.html | Decade rings overview (superseded: a ring holds marks, not memories) |
+| Z1_Life.dc.html · Z2_Chapter.dc.html · Z3_Memories.dc.html | The Photos model: one scroll, three altitudes, a year scrubber on the edge |
+
+## Review revisions (2026-10-22) — preserve first, organize later
+
+These supersede the matching Phase 1 screens. See `docs/DECISIONS.md`, entries dated 2026-10-22.
+
+| File | Screen | Replaces |
+| --- | --- | --- |
+| R1_FirstOpen.dc.html | Two ways in: quick story / settle in; context optional | Onboard1 |
+| R2_Listen.dc.html | Quiet default session view; a small "possible memories" count | Main |
+| R3_Review.dc.html | Transcript & memories: Keep / Change… / Dismiss with Undo; "Check this" tags | Main cards |
+| R4_FirstPayoff.dc.html | First story played back in the person's voice | — |
+| R5_Home.dc.html | Today's story · listen again · explore; checks are optional | Timeline (home) |
+| R6_Landing.dc.html | Light landing: saved, a few moments, done for now | WindDown, Onboard3 |
+| R7_Privacy.dc.html | Hide from timeline · Exclude from AI processing · Share… · Delete…; Local-only before recording | — |
+| R8_Chapter.dc.html | Chapter → stories; years as an optional lens; Listen at this level | Z2 |
+| R9_Story.dc.html | Story → moments with original audio; shape the story; add a moment | Z3 |

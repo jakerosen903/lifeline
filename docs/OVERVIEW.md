@@ -62,9 +62,17 @@ People rarely give dates. They say “the summer after I graduated” or “when
 
 Every name mentioned becomes a pending “who’s this?” card. The person resolves it once, to a contact, to someone already in the story, or as someone new, and the link then holds across every memory. This is what keeps two Sams apart and lets “my sister” and “Maya” be one person. In Phase 2, photos use the same card: the person says who is in the picture, and that tag links the photo to a person.
 
+### Preserve first, organize later
+
+The recording is kept the moment it is made, and the first payoff is hearing your own voice play back a story, minutes in. Every card, check and refinement after that approves organization; none of them decides whether a story survives. A person who never touches a card still gets their story. Two ways in are equally valid: a quick story of a few minutes (also the shape of a daily habit) or a longer sit-down.
+
+### Chapters, stories, moments
+
+A session is when you recorded. A moment is a scene you described, with its original audio. A story connects related moments, often told across several sessions. A chapter is the broader life context, titled in the person's words. Years and months are a lens for navigating, shown only when they help; collections carry themes across chapters. Every level can be listened to as a playlist in the person's voice.
+
 ### Every session has a shape
 
-Sessions run 30 to 60 minutes, one speaker at a time. The app owns the landing. Therapy sessions and oral-history interviews both end deliberately, because ending on a hard memory is what stops people from coming back. A heavy moment triggers the same landing early.
+A quick story is a few minutes; settling in is longer, one speaker at a time. The app owns the landing but keeps it light: the recording is saved, a few moments from today with play, done for now by default. Therapy sessions and oral-history interviews both end deliberately, because ending on a hard memory is what stops people from coming back. A heavy moment triggers the same landing early.
 
 
 
@@ -73,7 +81,7 @@ Sessions run 30 to 60 minutes, one speaker at a time. The app owns the landing. 
 
 
 
-*The arc every session follows. An early signal moves the ochre wind-down block to wherever the person is.*
+*The arc a longer session follows. An early signal moves the ochre wind-down block to wherever the person is. There is no automatic stop: at the planned length the app offers a wrap-up and an explicit way to keep going.*
 
 ## How it works under the hood
 
@@ -134,11 +142,13 @@ The extractor is a text model on the server. The extractor receives a transcript
 
 The resolver is a module on the device. The resolver turns time anchors into ranges. The resolver uses events that are already placed. If the anchor refers to an event that is not placed, the resolver creates a floating event. The resolver adds a question to the curiosity list. One answer can place many floating events.
 
+A silence threshold ends an audio segment. One story can span several segments. The app reconciles related segments before it shows cards, so one story does not become several cards. The context packet is selected within a token budget by relevance, not by fixed caps per table. Pending, unreviewed stories count as context too.
+
 The extractor and the resolver can run again on old sessions. The pipeline must be idempotent. The raw audio and transcript are the source of truth. All other data can be derived again.
 
 ### 6. Data model
 
-The timeline store is a local relational database. The store has six main tables. An event has a time range, not a date. An event points to the transcript segment it came from.
+The timeline store is a local relational database. A moment (the `memory` row) has a time range, not a date. A moment points to the audio and transcript span it came from. A story groups related moments, across sessions if needed. A chapter groups stories. A collection carries a theme across chapters. A session records when the person spoke; it is not part of the story structure.
 
 
 
@@ -147,13 +157,17 @@ The timeline store is a local relational database. The store has six main tables
 
 
 
-*Every event keeps a pointer to the audio it came from, so the recording stays the truth and the extraction stays a derivative. Collection spans are derived from members; chapters are titled by the person.*
+*Every moment keeps a pointer to the audio it came from, so the recording stays the truth and the extraction stays a derivative. Stories connect moments; story and collection spans are derived from members; chapters and stories are titled by the person, or by a proposal the person approves.*
 
 ### 7. Session arc and safety
 
-The session controller runs on the device. The session controller tracks the elapsed time and the stage. The stages are open, middle, and wind-down. The controller starts wind-down at 30 to 45 minutes. The controller starts wind-down early when it receives a signal. The signals are: the person asks to stop, the person asks to change the subject, a long silence after a heavy topic, or audible crying.
+The session controller runs on the device. The session controller tracks the elapsed time and the stage. The stages are open, middle, and wind-down. The controller starts wind-down at the planned length. The controller does not stop the recording by itself. At the planned length the app offers a wrap-up and a way to keep going. The controller starts wind-down early when it receives a signal. The signals are: the person asks to stop, the person asks to change the subject, a long silence after a heavy topic, or audible crying.
 
-In wind-down, the interviewer must not open a new door. The app shows a summary in the person’s words. The app asks the person what to keep. The options are: keep on the timeline, keep private, or let go. If the person selects let go, the device deletes the audio and the transcript for those events.
+In wind-down, the interviewer must not open a new door. During a heavy moment, the app must not show any organizational prompt, including "who's this?". The landing screen shows that the recording is saved and a few moments from today with play. "Done for now" is the default. Review is optional and can happen later. The closing line after a heavy session is neutral.
+
+Finishing a session must not wait for extraction. The app persists the recording, shows the landing, and finishes sorting in the background with retries.
+
+The person controls what is kept with four controls. Hide from timeline keeps the recording and the moment and removes them from everyday browsing. Exclude from AI processing stops future processing and context use; it cannot unsend what was already sent. Share chooses exact content and recipients. Delete removes the selected recording content and everything made from it, and asks first. A session that must never leave the phone is chosen before recording.
 
 ### 8. Phase 2 props
 
