@@ -1,0 +1,404 @@
+{
+ "started_at": "2026-04-02T19:00:00Z",
+ "segments": [
+  {
+   "start_ms": 0,
+   "end_ms": 9860,
+   "words": [
+    {
+     "text": "every",
+     "start_ms": 0,
+     "end_ms": 480
+    },
+    {
+     "text": "July",
+     "start_ms": 540,
+     "end_ms": 960
+    },
+    {
+     "text": "my",
+     "start_ms": 1020,
+     "end_ms": 1320
+    },
+    {
+     "text": "dad",
+     "start_ms": 1380,
+     "end_ms": 1740
+    },
+    {
+     "text": "would",
+     "start_ms": 1800,
+     "end_ms": 2280
+    },
+    {
+     "text": "load",
+     "start_ms": 2340,
+     "end_ms": 2760
+    },
+    {
+     "text": "the",
+     "start_ms": 2820,
+     "end_ms": 3180
+    },
+    {
+     "text": "station",
+     "start_ms": 3240,
+     "end_ms": 3840
+    },
+    {
+     "text": "wagon",
+     "start_ms": 3900,
+     "end_ms": 4380
+    },
+    {
+     "text": "and",
+     "start_ms": 4440,
+     "end_ms": 4800
+    },
+    {
+     "text": "drive",
+     "start_ms": 4860,
+     "end_ms": 5340
+    },
+    {
+     "text": "us",
+     "start_ms": 5400,
+     "end_ms": 5700
+    },
+    {
+     "text": "up",
+     "start_ms": 5760,
+     "end_ms": 6060
+    },
+    {
+     "text": "to",
+     "start_ms": 6120,
+     "end_ms": 6420
+    },
+    {
+     "text": "Bass",
+     "start_ms": 6480,
+     "end_ms": 6900
+    },
+    {
+     "text": "Lake",
+     "start_ms": 6960,
+     "end_ms": 7380
+    },
+    {
+     "text": "before",
+     "start_ms": 7440,
+     "end_ms": 7980
+    },
+    {
+     "text": "the",
+     "start_ms": 8040,
+     "end_ms": 8400
+    },
+    {
+     "text": "sun",
+     "start_ms": 8460,
+     "end_ms": 8820
+    },
+    {
+     "text": "was",
+     "start_ms": 8880,
+     "end_ms": 9240
+    },
+    {
+     "text": "up",
+     "start_ms": 9300,
+     "end_ms": 9600
+    }
+   ]
+  },
+  {
+   "start_ms": 12060,
+   "end_ms": 24140,
+   "words": [
+    {
+     "text": "I",
+     "start_ms": 12060,
+     "end_ms": 12300
+    },
+    {
+     "text": "was",
+     "start_ms": 12360,
+     "end_ms": 12720
+    },
+    {
+     "text": "eleven",
+     "start_ms": 12780,
+     "end_ms": 13320
+    },
+    {
+     "text": "the",
+     "start_ms": 13380,
+     "end_ms": 13740
+    },
+    {
+     "text": "summer",
+     "start_ms": 13800,
+     "end_ms": 14340
+    },
+    {
+     "text": "my",
+     "start_ms": 14400,
+     "end_ms": 14700
+    },
+    {
+     "text": "sister",
+     "start_ms": 14760,
+     "end_ms": 15300
+    },
+    {
+     "text": "got",
+     "start_ms": 15360,
+     "end_ms": 15720
+    },
+    {
+     "text": "carsick",
+     "start_ms": 15780,
+     "end_ms": 16380
+    },
+    {
+     "text": "on",
+     "start_ms": 16440,
+     "end_ms": 16740
+    },
+    {
+     "text": "the",
+     "start_ms": 16800,
+     "end_ms": 17160
+    },
+    {
+     "text": "grapevine",
+     "start_ms": 17220,
+     "end_ms": 17940
+    },
+    {
+     "text": "and",
+     "start_ms": 18000,
+     "end_ms": 18360
+    },
+    {
+     "text": "we",
+     "start_ms": 18420,
+     "end_ms": 18720
+    },
+    {
+     "text": "had",
+     "start_ms": 18780,
+     "end_ms": 19140
+    },
+    {
+     "text": "to",
+     "start_ms": 19200,
+     "end_ms": 19500
+    },
+    {
+     "text": "stop",
+     "start_ms": 19560,
+     "end_ms": 19980
+    },
+    {
+     "text": "at",
+     "start_ms": 20040,
+     "end_ms": 20340
+    },
+    {
+     "text": "that",
+     "start_ms": 20400,
+     "end_ms": 20820
+    },
+    {
+     "text": "gas",
+     "start_ms": 20880,
+     "end_ms": 21240
+    },
+    {
+     "text": "station",
+     "start_ms": 21300,
+     "end_ms": 21900
+    },
+    {
+     "text": "with",
+     "start_ms": 21960,
+     "end_ms": 22380
+    },
+    {
+     "text": "the",
+     "start_ms": 22440,
+     "end_ms": 22800
+    },
+    {
+     "text": "peach",
+     "start_ms": 22860,
+     "end_ms": 23340
+    },
+    {
+     "text": "stand",
+     "start_ms": 23400,
+     "end_ms": 23880
+    }
+   ]
+  },
+  {
+   "start_ms": 26340,
+   "end_ms": 34760,
+   "words": [
+    {
+     "text": "the",
+     "start_ms": 26340,
+     "end_ms": 26700
+    },
+    {
+     "text": "cabin",
+     "start_ms": 26760,
+     "end_ms": 27240
+    },
+    {
+     "text": "had",
+     "start_ms": 27300,
+     "end_ms": 27660
+    },
+    {
+     "text": "a",
+     "start_ms": 27720,
+     "end_ms": 27960
+    },
+    {
+     "text": "screen",
+     "start_ms": 28020,
+     "end_ms": 28560
+    },
+    {
+     "text": "door",
+     "start_ms": 28620,
+     "end_ms": 29040
+    },
+    {
+     "text": "that",
+     "start_ms": 29100,
+     "end_ms": 29520
+    },
+    {
+     "text": "slammed",
+     "start_ms": 29580,
+     "end_ms": 30180
+    },
+    {
+     "text": "and",
+     "start_ms": 30240,
+     "end_ms": 30600
+    },
+    {
+     "text": "a",
+     "start_ms": 30660,
+     "end_ms": 30900
+    },
+    {
+     "text": "dock",
+     "start_ms": 30960,
+     "end_ms": 31380
+    },
+    {
+     "text": "where",
+     "start_ms": 31440,
+     "end_ms": 31920
+    },
+    {
+     "text": "my",
+     "start_ms": 31980,
+     "end_ms": 32280
+    },
+    {
+     "text": "dad",
+     "start_ms": 32340,
+     "end_ms": 32700
+    },
+    {
+     "text": "taught",
+     "start_ms": 32760,
+     "end_ms": 33300
+    },
+    {
+     "text": "me",
+     "start_ms": 33360,
+     "end_ms": 33660
+    },
+    {
+     "text": "to",
+     "start_ms": 33720,
+     "end_ms": 34020
+    },
+    {
+     "text": "cast",
+     "start_ms": 34080,
+     "end_ms": 34500
+    }
+   ]
+  },
+  {
+   "start_ms": 36960,
+   "end_ms": 42620,
+   "words": [
+    {
+     "text": "we",
+     "start_ms": 36960,
+     "end_ms": 37260
+    },
+    {
+     "text": "did",
+     "start_ms": 37320,
+     "end_ms": 37680
+    },
+    {
+     "text": "that",
+     "start_ms": 37740,
+     "end_ms": 38160
+    },
+    {
+     "text": "drive",
+     "start_ms": 38220,
+     "end_ms": 38700
+    },
+    {
+     "text": "every",
+     "start_ms": 38760,
+     "end_ms": 39240
+    },
+    {
+     "text": "summer",
+     "start_ms": 39300,
+     "end_ms": 39840
+    },
+    {
+     "text": "until",
+     "start_ms": 39900,
+     "end_ms": 40380
+    },
+    {
+     "text": "I",
+     "start_ms": 40440,
+     "end_ms": 40680
+    },
+    {
+     "text": "was",
+     "start_ms": 40740,
+     "end_ms": 41100
+    },
+    {
+     "text": "about",
+     "start_ms": 41160,
+     "end_ms": 41640
+    },
+    {
+     "text": "fourteen",
+     "start_ms": 41700,
+     "end_ms": 42360
+    }
+   ]
+  }
+ ]
+}

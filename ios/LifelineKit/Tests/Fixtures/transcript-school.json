@@ -1,0 +1,369 @@
+{
+ "started_at": "2026-04-09T20:15:00Z",
+ "segments": [
+  {
+   "start_ms": 0,
+   "end_ms": 10520,
+   "words": [
+    {
+     "text": "Mr.",
+     "start_ms": 0,
+     "end_ms": 360
+    },
+    {
+     "text": "Alvarez",
+     "start_ms": 420,
+     "end_ms": 1020
+    },
+    {
+     "text": "was",
+     "start_ms": 1080,
+     "end_ms": 1440
+    },
+    {
+     "text": "my",
+     "start_ms": 1500,
+     "end_ms": 1800
+    },
+    {
+     "text": "third",
+     "start_ms": 1860,
+     "end_ms": 2340
+    },
+    {
+     "text": "grade",
+     "start_ms": 2400,
+     "end_ms": 2880
+    },
+    {
+     "text": "teacher",
+     "start_ms": 2940,
+     "end_ms": 3540
+    },
+    {
+     "text": "at",
+     "start_ms": 3600,
+     "end_ms": 3900
+    },
+    {
+     "text": "Lincoln",
+     "start_ms": 3960,
+     "end_ms": 4560
+    },
+    {
+     "text": "Elementary",
+     "start_ms": 4620,
+     "end_ms": 5400
+    },
+    {
+     "text": "and",
+     "start_ms": 5460,
+     "end_ms": 5820
+    },
+    {
+     "text": "he",
+     "start_ms": 5880,
+     "end_ms": 6180
+    },
+    {
+     "text": "kept",
+     "start_ms": 6240,
+     "end_ms": 6660
+    },
+    {
+     "text": "a",
+     "start_ms": 6720,
+     "end_ms": 6960
+    },
+    {
+     "text": "tarantula",
+     "start_ms": 7020,
+     "end_ms": 7740
+    },
+    {
+     "text": "in",
+     "start_ms": 7800,
+     "end_ms": 8100
+    },
+    {
+     "text": "a",
+     "start_ms": 8160,
+     "end_ms": 8400
+    },
+    {
+     "text": "tank",
+     "start_ms": 8460,
+     "end_ms": 8880
+    },
+    {
+     "text": "by",
+     "start_ms": 8940,
+     "end_ms": 9240
+    },
+    {
+     "text": "the",
+     "start_ms": 9300,
+     "end_ms": 9660
+    },
+    {
+     "text": "window",
+     "start_ms": 9720,
+     "end_ms": 10260
+    }
+   ]
+  },
+  {
+   "start_ms": 12720,
+   "end_ms": 21080,
+   "words": [
+    {
+     "text": "that",
+     "start_ms": 12720,
+     "end_ms": 13140
+    },
+    {
+     "text": "was",
+     "start_ms": 13200,
+     "end_ms": 13560
+    },
+    {
+     "text": "the",
+     "start_ms": 13620,
+     "end_ms": 13980
+    },
+    {
+     "text": "year",
+     "start_ms": 14040,
+     "end_ms": 14460
+    },
+    {
+     "text": "we",
+     "start_ms": 14520,
+     "end_ms": 14820
+    },
+    {
+     "text": "moved",
+     "start_ms": 14880,
+     "end_ms": 15360
+    },
+    {
+     "text": "from",
+     "start_ms": 15420,
+     "end_ms": 15840
+    },
+    {
+     "text": "the",
+     "start_ms": 15900,
+     "end_ms": 16260
+    },
+    {
+     "text": "apartment",
+     "start_ms": 16320,
+     "end_ms": 17040
+    },
+    {
+     "text": "on",
+     "start_ms": 17100,
+     "end_ms": 17400
+    },
+    {
+     "text": "Olive",
+     "start_ms": 17460,
+     "end_ms": 17940
+    },
+    {
+     "text": "Avenue",
+     "start_ms": 18000,
+     "end_ms": 18540
+    },
+    {
+     "text": "to",
+     "start_ms": 18600,
+     "end_ms": 18900
+    },
+    {
+     "text": "the",
+     "start_ms": 18960,
+     "end_ms": 19320
+    },
+    {
+     "text": "house",
+     "start_ms": 19380,
+     "end_ms": 19860
+    },
+    {
+     "text": "in",
+     "start_ms": 19920,
+     "end_ms": 20220
+    },
+    {
+     "text": "Clovis",
+     "start_ms": 20280,
+     "end_ms": 20820
+    }
+   ]
+  },
+  {
+   "start_ms": 23280,
+   "end_ms": 29480,
+   "words": [
+    {
+     "text": "my",
+     "start_ms": 23280,
+     "end_ms": 23580
+    },
+    {
+     "text": "brother",
+     "start_ms": 23640,
+     "end_ms": 24240
+    },
+    {
+     "text": "Danny",
+     "start_ms": 24300,
+     "end_ms": 24780
+    },
+    {
+     "text": "started",
+     "start_ms": 24840,
+     "end_ms": 25440
+    },
+    {
+     "text": "kindergarten",
+     "start_ms": 25500,
+     "end_ms": 26400
+    },
+    {
+     "text": "at",
+     "start_ms": 26460,
+     "end_ms": 26760
+    },
+    {
+     "text": "the",
+     "start_ms": 26820,
+     "end_ms": 27180
+    },
+    {
+     "text": "same",
+     "start_ms": 27240,
+     "end_ms": 27660
+    },
+    {
+     "text": "school",
+     "start_ms": 27720,
+     "end_ms": 28260
+    },
+    {
+     "text": "that",
+     "start_ms": 28320,
+     "end_ms": 28740
+    },
+    {
+     "text": "fall",
+     "start_ms": 28800,
+     "end_ms": 29220
+    }
+   ]
+  },
+  {
+   "start_ms": 31680,
+   "end_ms": 40880,
+   "words": [
+    {
+     "text": "I",
+     "start_ms": 31680,
+     "end_ms": 31920
+    },
+    {
+     "text": "remember",
+     "start_ms": 31980,
+     "end_ms": 32640
+    },
+    {
+     "text": "the",
+     "start_ms": 32700,
+     "end_ms": 33060
+    },
+    {
+     "text": "first",
+     "start_ms": 33120,
+     "end_ms": 33600
+    },
+    {
+     "text": "day",
+     "start_ms": 33660,
+     "end_ms": 34020
+    },
+    {
+     "text": "because",
+     "start_ms": 34080,
+     "end_ms": 34680
+    },
+    {
+     "text": "Mr.",
+     "start_ms": 34740,
+     "end_ms": 35100
+    },
+    {
+     "text": "Alvarez",
+     "start_ms": 35160,
+     "end_ms": 35760
+    },
+    {
+     "text": "let",
+     "start_ms": 35820,
+     "end_ms": 36180
+    },
+    {
+     "text": "me",
+     "start_ms": 36240,
+     "end_ms": 36540
+    },
+    {
+     "text": "hold",
+     "start_ms": 36600,
+     "end_ms": 37020
+    },
+    {
+     "text": "the",
+     "start_ms": 37080,
+     "end_ms": 37440
+    },
+    {
+     "text": "tarantula",
+     "start_ms": 37500,
+     "end_ms": 38220
+    },
+    {
+     "text": "and",
+     "start_ms": 38280,
+     "end_ms": 38640
+    },
+    {
+     "text": "I",
+     "start_ms": 38700,
+     "end_ms": 38940
+    },
+    {
+     "text": "did",
+     "start_ms": 39000,
+     "end_ms": 39360
+    },
+    {
+     "text": "not",
+     "start_ms": 39420,
+     "end_ms": 39780
+    },
+    {
+     "text": "drop",
+     "start_ms": 39840,
+     "end_ms": 40260
+    },
+    {
+     "text": "it",
+     "start_ms": 40320,
+     "end_ms": 40620
+    }
+   ]
+  }
+ ]
+}
