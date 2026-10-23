@@ -10,8 +10,11 @@ final class MemoryViewModel {
     private(set) var people: [Person] = []
     private(set) var place: Place?
     private(set) var chapterTitle: String?
-    private(set) var span: MemorySpan?
-    private(set) var session: Session?
+    /// Every telling, first telling first (M4.1). `span` and `session` are the first.
+    private(set) var spans: [(span: MemorySpan, session: Session)] = []
+    private(set) var playingOrder: Int?
+    var span: MemorySpan? { spans.first?.span }
+    var session: Session? { spans.first?.session }
     private(set) var ageText: String?
     private(set) var question: RelativeQuestion?
     private(set) var checkThis: [CheckThis] = []
@@ -38,8 +41,10 @@ final class MemoryViewModel {
             people = try store.memories.people(of: memory.id)
             place = try store.memories.places(of: memory.id).first
             chapterTitle = try memory.chapterID.flatMap { try store.chapters.chapter(id: $0) }?.title
-            span = try store.memories.spans(of: memory.id).first
-            session = try span.flatMap { try store.sessions.fetchSegment($0.segmentID) }.flatMap { try store.sessions.fetch($0.sessionID) }
+            spans = try store.memories.spans(of: memory.id).compactMap { span in
+                guard let segment = try store.sessions.fetchSegment(span.segmentID), let session = try store.sessions.fetch(segment.sessionID) else { return nil }
+                return (span, session)
+            }
             let placedByAge = try store.memories.anchors(of: memory.id).contains { $0.relation == .age && $0.resolved }
             if placedByAge, let birth = try store.profile.ownerBirthDate(), let year = memory.range.earliest?.year, isGuess, year - birth.year >= 0 {
                 ageText = "age ~\(year - birth.year)"
@@ -74,16 +79,25 @@ final class MemoryViewModel {
     }
 
     func togglePlayback() {
-        if player.isPlaying { player.stop(); return }
-        guard let span, let session else { error = "This memory has no audio."; return }
+        guard let first = spans.first else { error = "This memory has no audio."; return }
+        togglePlayback(of: first.span)
+    }
+
+    /// Plays one telling; a second tap on the same telling stops.
+    func togglePlayback(of span: MemorySpan) {
+        if player.isPlaying, playingOrder == span.order { player.stop(); playingOrder = nil; return }
+        guard let telling = spans.first(where: { $0.span.order == span.order }) else { return }
         do {
             try deps.activatePlayback()
-            try player.play(url: try deps.audioURL(for: session), range: MsRange(start: span.startMs, end: span.endMs))
+            try player.play(url: try deps.audioURL(for: telling.session), range: MsRange(start: span.startMs, end: span.endMs))
+            playingOrder = span.order
             error = nil
         } catch {
             self.error = "Could not play this memory: \(error.localizedDescription)"
         }
     }
+
+    func isPlaying(_ span: MemorySpan) -> Bool { player.isPlaying && playingOrder == span.order }
 
     func answer(_ choice: RelativeQuestion.Choice) {
         guard let question else { return }

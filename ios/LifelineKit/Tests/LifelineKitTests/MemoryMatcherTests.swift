@@ -126,3 +126,14 @@ private func card(_ title: String, quote: String) -> MemoryOut {
     #expect(try matcher.backfill() == 0)
     #expect(try env.store.embeddings.memoryIDsWithRows().count == 3)
 }
+
+@Test func hashingEmbedderScoresWordOverlap() {
+    let e = HashingEmbedder()
+    let a = e.vector(for: "the house had a blue door")!
+    let b = e.vector(for: "The house had a BLUE door!")!
+    let c = e.vector(for: "we drove to disney in the wagon")!
+    #expect(a.count == HashingEmbedder.dimensions && Similarity.cosine(a, b) > 0.999, "case and punctuation do not matter")
+    #expect(Similarity.cosine(a, c) < 0.5)
+    #expect(e.vector(for: "   ") == nil)
+    #expect(e.vector(for: "blue door") == HashingEmbedder().vector(for: "blue door"), "deterministic across instances")
+}

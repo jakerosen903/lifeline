@@ -13,6 +13,11 @@ final class CardHandler {
     static let undoWindow: Duration = .seconds(6)
     private var recentDismiss = DismissUndo<Card>(window: CardHandler.undoWindow)
     private var undoTimer: Task<Void, Never>?
+    /// "Same story" moments ago, while Undo is still offered.
+    private(set) var mergedNotice: String?
+    private var recentMerge: (card: Card, receipt: MergeReceipt)?
+    private var mergeTimer: Task<Void, Never>?
+    private var suggestions: [String: MemoryMatch?] = [:]
     private var mentions: [String: Mention] = [:]
     private var rankedChoices: [String: [Person]] = [:]
     private let deps: Dependencies
@@ -86,6 +91,55 @@ final class CardHandler {
             }
         }
         return done ? card : nil
+    }
+
+    // MARK: - Same story (M4.1)
+
+    /// The memory this card looks like a retelling of, or nil. Read once per card.
+    func suggestion(for card: Card) -> MemoryMatch? {
+        guard case .memory(_, let out) = card else { return nil }
+        if let cached = suggestions[card.id] { return cached }
+        let match = try? deps.matcher.suggestion(for: out, extractorSameAs: out.sameAsMemoryID.map(MemoryID.init(rawValue:)))
+        suggestions[card.id] = .some(match)
+        return match
+    }
+
+    /// "Which one?": the nearest few, with the suggested one first.
+    func pickerMatches(for card: Card) -> [MemoryMatch] {
+        guard case .memory(_, let out) = card else { return [] }
+        let text = MemoryMatcher.text(title: out.title, quote: out.quote)
+        var matches = (try? deps.matcher.picker(for: text, excluding: [], includeHidden: false)) ?? []
+        if let suggested = suggestion(for: card), !matches.contains(where: { $0.memoryID == suggested.memoryID }) { matches.insert(suggested, at: 0) }
+        return matches
+    }
+
+    /// The card becomes a later telling of `target`. Undo stays open for the usual window.
+    func sameStory(_ card: Card, into target: MemoryID) -> Bool {
+        guard case .memory(let candidate, _) = card else { return false }
+        var merged: CandidateActions.MergedCandidate?
+        let done = attempt("Could not add that") { merged = try deps.actions.mergeCandidate(candidate, into: target) }
+        guard done, let merged else { return false }
+        recentMerge = (card, merged.receipt)
+        mergedNotice = "Added to \(merged.receipt.targetTitle)."
+        suggestions[card.id] = nil
+        mergeTimer?.cancel()
+        mergeTimer = Task { [weak self] in
+            try? await Task.sleep(for: Self.undoWindow)
+            guard !Task.isCancelled else { return }
+            self?.mergedNotice = nil
+            self?.recentMerge = nil
+        }
+        return true
+    }
+
+    /// Takes the last Same story back; the card returns for the caller's stack.
+    func undoMerge() -> Card? {
+        guard let recent = recentMerge else { return nil }
+        mergeTimer?.cancel()
+        mergedNotice = nil
+        recentMerge = nil
+        let done = attempt("That can't be undone any more") { try deps.actions.unmerge(recent.receipt) }
+        return done ? recent.card : nil
     }
 
     func resolve(_ card: Card, _ choice: MentionChoice) -> Bool {
