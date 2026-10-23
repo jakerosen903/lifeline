@@ -159,6 +159,10 @@ The Anthropic Console key is entered in Settings and stored in the device Keycha
 
 Why: nothing secret in the build; the owner can rotate the key without a rebuild; the same code path serves a second phone later. Cost: a first-run setup step, and sessions before the key is added are recorded but not sorted (they are retried by the CLI or a later re-run).
 
+## 2026-10-23 · Quick story and settle in differ in shape, not in length
+
+The owner's words: one is answering a prompt, the other is more of a conversation. A quick story is one prompt, finished when the person is done, with nothing about time on screen however long it runs. Settling in offers the next question when the room goes quiet after a story, and a gentle wrap-up with "Keep going" at the planned length. Nobody is stopped for talking longer than expected. Supersedes the entry below where they differ.
+
 ## 2026-10-23 · Sessions are short by default; the timer is a backstop
 
 The owner's sessions run a few minutes and that is the intended shape. A session ends when the owner taps "Let's leave it there". The 40-minute wind-down and 60-minute hard stop from the design become a quiet backstop: a one-line nudge at 55 minutes and the summary opening by itself at 60. No screen shows session length as a goal. The spec's `middle` stage is dropped; stages are open, windDown, ended.
