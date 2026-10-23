@@ -81,6 +81,8 @@ struct CheckThisTag: View {
         Label(tag.label, systemImage: "questionmark.circle")
             .font(.caption.weight(.semibold))
             .foregroundStyle(Theme.ochre)
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel(tag.label)
             .accessibilityIdentifier("card.checkThis")
     }
 }

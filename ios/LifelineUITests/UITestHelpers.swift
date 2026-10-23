@@ -37,6 +37,20 @@ extension XCUIApplication {
         return element.exists && element.isHittable
     }
 
+    /// Lists are lazy: a row below the fold is not in the tree until it scrolls into view.
+    func reveal(_ element: XCUIElement, swipes: Int = 6) -> Bool {
+        for _ in 0..<swipes {
+            if element.exists { return true }
+            swipeUp()
+        }
+        return element.waitForExistence(timeout: 2)
+    }
+
+    /// Any element with this identifier, whatever its type.
+    func any(_ identifier: String) -> XCUIElement {
+        descendants(matching: .any).matching(identifier: identifier).firstMatch
+    }
+
     func openReview() {
         let segment = segmentedControls["session.view"].buttons["Transcript & memories"]
         if segment.waitForExistence(timeout: 3) { segment.tap() } else { buttons["Transcript & memories"].firstMatch.tap() }

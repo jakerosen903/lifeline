@@ -106,7 +106,8 @@ struct Dependencies {
             audioRoot: root,
             makeVoiceSession: { onStatus in
                 onStatus(.ready)
-                return ScriptedVoiceSession(intervalMs: 800)
+                // `-uiTesting-slow`: a segment every few seconds, for tests that act between segments.
+                return ScriptedVoiceSession(intervalMs: args.contains("-uiTesting-slow") ? 2_500 : 800)
             },
             activateAudio: {},
             activatePlayback: {},
