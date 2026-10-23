@@ -8,8 +8,11 @@ import LifelineKit
 final class LandingViewModel: Identifiable {
     let id = UUID()
     private(set) var session: Session
-    let heavy: Bool
-    let presentDanger: Bool
+    /// What the live arc knew at Finish; storage can add to it (a flag that arrived after).
+    private let liveWeight: SessionWeight
+    private(set) var weight: SessionWeight
+    var heavy: Bool { weight.heavy }
+    var presentDanger: Bool { weight.presentDanger }
     private(set) var rows: [LandingRow] = []
     private(set) var more = 0
     private(set) var stillSorting: String?
@@ -25,17 +28,15 @@ final class LandingViewModel: Identifiable {
 
     init(session: Session, heavy: Bool, presentDanger: Bool, deps: Dependencies) {
         self.session = session
-        self.heavy = heavy
-        self.presentDanger = presentDanger
+        liveWeight = SessionWeight(heavy: heavy, presentDanger: presentDanger)
+        weight = liveWeight
         self.deps = deps
         refresh()
     }
 
-    /// A session recovered after a crash: heavy if its log says so.
+    /// A session recovered after a crash: heavy if its log or its stored flags say so.
     convenience init(resuming session: Session, deps: Dependencies) {
-        let log = (try? SessionArc.decode(session.stageLog)) ?? []
-        let heavy = log.contains { $0.reason == "disclosure" || $0.reason == "wantsToStop" }
-        self.init(session: session, heavy: heavy, presentDanger: false, deps: deps)
+        self.init(session: session, heavy: false, presentDanger: false, deps: deps)
     }
 
     var headline: String { Landing.headline(first: isFirst, heavy: heavy) }
@@ -56,6 +57,9 @@ final class LandingViewModel: Identifiable {
                 return (candidate, out)
             }
             (rows, more) = Landing.rows(kept: kept, possible: possible, segments: segments)
+            weight = liveWeight
+                || SessionWeight.of(candidates: try store.candidates.candidates(in: session.id))
+                || SessionWeight.of(log: (try? SessionArc.decode(session.stageLog)) ?? [])
             let pending = segments.filter { $0.status == .pending }.count
             stillSorting = Landing.stillSorting(pendingSegments: pending)
             closingLine = Landing.closingLine(topCuriosity: try store.curiosity.open().first, heavy: heavy)
@@ -120,7 +124,7 @@ final class LandingViewModel: Identifiable {
     private func land(tellAnother: Bool) {
         poll?.cancel()
         player.stop()
-        do { try deps.sessions.markLanded(session.id, stageLog: session.stageLog) } catch { self.error = error.localizedDescription }
+        do { try deps.sessions.markLanded(session.id) } catch { self.error = error.localizedDescription }
         finished = tellAnother
     }
 

@@ -204,6 +204,12 @@ enum Migrations {
             }
             try db.execute(sql: "update session set landing_choice_made = 1 where ended_at is not null")
         }
+        // v6 (M4 review): "Hide today" is remembered on the session so memories kept later are hidden too.
+        m.registerMigration("v6") { db in
+            try db.alter(table: "session") { t in
+                t.add(column: "hidden_from_timeline", .boolean).notNull().defaults(to: false)
+            }
+        }
         return m
     }
 }

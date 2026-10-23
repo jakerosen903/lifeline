@@ -120,6 +120,10 @@ public struct MemoryRepository: Sendable {
         try db.writer.read { try Memory.filter(Column("hidden_from_timeline") == false).order(Column("created_at")).fetchAll($0) }
     }
 
+    public func excludedIDs() throws -> Set<MemoryID> {
+        try db.writer.read { Set(try Memory.filter(Column("excluded_from_ai") == true).fetchAll($0).map(\.id)) }
+    }
+
     public func setHidden(_ id: MemoryID, _ hidden: Bool) throws {
         try db.writer.write { try $0.execute(sql: "update memory set hidden_from_timeline = ? where id = ?", arguments: [hidden, id.rawValue]) }
     }

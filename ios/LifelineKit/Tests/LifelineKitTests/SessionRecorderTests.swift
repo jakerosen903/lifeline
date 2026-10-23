@@ -187,7 +187,7 @@ private func waitUntil(_ cond: @escaping () async -> Bool, timeoutMs: Int = 2_00
     let db = try AppDatabase.inMemory(); let repo = SessionRepository(db)
     let (a, _) = try StoreFixtures.session(in: repo)
     #expect(try repo.unlandedSessions().map(\.id) == [a])
-    try repo.markLanded(a, stageLog: "[]")
+    try repo.markLanded(a)
     #expect(try repo.unlandedSessions().isEmpty)
     #expect(try repo.fetch(a)?.landingChoiceMade == true)
 }

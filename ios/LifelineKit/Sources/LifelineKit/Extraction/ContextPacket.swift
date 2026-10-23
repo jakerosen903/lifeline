@@ -50,7 +50,7 @@ public struct ContextPacketLimits: Sendable, Equatable {
 public enum ContextPacketBuilder {
     public static func build(segment: Segment, previous: [Segment], people: [(Person, [Alias])], memories: [Memory],
                              profileFreeText: String?, stage: String, limits: ContextPacketLimits = ContextPacketLimits(),
-                             chapters: [Chapter] = [], curiosity: [CuriosityItem] = []) -> ContextPacket {
+                             chapters: [Chapter] = [], curiosity: [CuriosityItem] = [], excludedMemoryIDs: Set<MemoryID> = []) -> ContextPacket {
         let earlier = previous.filter { $0.index < segment.index }.sorted { $0.index < $1.index }
         let window = earlier.suffix(limits.previousSegments).map(\.text)
         let entries = people
@@ -64,7 +64,10 @@ public enum ContextPacketBuilder {
         let chapterEntries = chapters.map {
             ContextPacket.ChapterEntry(id: $0.id.rawValue, title: $0.title ?? "untitled", rangeText: $0.range.isPlaced ? $0.range.displayText : nil)
         }
-        let questions = curiosity.prefix(limits.curiosity).map(\.text)
+        // Exclude from AI covers what was built from the memory, not only the memory's own entry.
+        let questions = curiosity
+            .filter { item in ![item.sourceMemoryID, item.targetMemoryID].compactMap { $0 }.contains { excludedMemoryIDs.contains($0) } }
+            .prefix(limits.curiosity).map(\.text)
         return ContextPacket(previousSegments: Array(window), people: Array(entries), chapters: chapterEntries, memories: memoryEntries,
                              curiosity: Array(questions), stage: stage, profileFreeText: profileFreeText)
     }

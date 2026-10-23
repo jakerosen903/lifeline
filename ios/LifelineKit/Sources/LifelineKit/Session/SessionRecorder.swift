@@ -93,7 +93,7 @@ public actor SessionRecorder {
         try await voice.stop()
         await eventTask?.value
         row.endedAt = now()
-        try sessions.update(row)
+        try sessions.markEnded(row.id, at: row.endedAt!)   // one column: a stage log written meanwhile stands
         session = row
         hooks.onStopped()
     }
@@ -102,7 +102,7 @@ public actor SessionRecorder {
     public func record(stageLog: String) throws {
         guard var row = session else { return }
         row.stageLog = stageLog
-        try sessions.update(row)
+        try sessions.updateStageLog(row.id, stageLog)
         session = row
     }
 
@@ -121,13 +121,13 @@ public actor SessionRecorder {
     /// Returns the sessions to resume, newest first.
     public nonisolated static func recoverUnfinishedSessions(_ repo: SessionRepository, now: Date = .now) throws -> [Session] {
         var resume: [Session] = []
-        for var s in try repo.unfinishedSessions() {
-            s.endedAt = now
-            try repo.update(s)
+        for s in try repo.unfinishedSessions() {
+            try repo.markEnded(s.id, at: now)
+            try repo.appendToStageLog(s.id, reason: "crash", at: now)
             if try repo.segments(in: s.id).isEmpty {
-                try repo.markLanded(s.id, stageLog: s.stageLog)
-            } else {
-                resume.append(s)
+                try repo.markLanded(s.id, now: now)
+            } else if let updated = try repo.fetch(s.id) {
+                resume.append(updated)
             }
         }
         return resume.sorted { $0.startedAt > $1.startedAt }

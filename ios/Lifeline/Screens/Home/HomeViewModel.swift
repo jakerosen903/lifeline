@@ -80,7 +80,7 @@ final class HomeViewModel {
         refresh()
         guard let ended, let id = ended.state.sessionID, let session = try? deps.sessions.fetch(id),
               !((try? deps.sessions.segments(in: id)) ?? []).isEmpty else {
-            if let id = ended?.state.sessionID { try? deps.sessions.markLanded(id, stageLog: "[]") }
+            if let id = ended?.state.sessionID { try? deps.sessions.markLanded(id) }
             presented = nil
             return
         }

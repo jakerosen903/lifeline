@@ -155,7 +155,8 @@ public actor ExtractionQueue {
         let freeText = try store.profile.fetch()?.freeText
         return ContextPacketBuilder.build(segment: segment, previous: previous, people: people, memories: memories,
                                           profileFreeText: freeText, stage: stage,
-                                          chapters: try store.chapters.chapters(), curiosity: try store.curiosity.open())
+                                          chapters: try store.chapters.chapters(), curiosity: try store.curiosity.open(),
+                                          excludedMemoryIDs: try store.memories.excludedIDs())
     }
 
     /// Writes one row per candidate in output order, plus a flag row when any flag is set, and

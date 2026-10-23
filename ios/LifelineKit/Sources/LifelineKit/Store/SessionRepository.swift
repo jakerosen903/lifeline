@@ -41,10 +41,34 @@ public struct SessionRepository: Sendable {
         }
     }
 
-    public func markLanded(_ id: SessionID, stageLog: String) throws {
+    /// Column-scoped writes: the recorder, the arc and the landing each own one column, so none
+    /// overwrites another's with a stale copy of the row.
+    public func updateStageLog(_ id: SessionID, _ stageLog: String) throws {
+        try db.writer.write { try $0.execute(sql: "UPDATE session SET stage_log = ? WHERE id = ?", arguments: [stageLog, id.rawValue]) }
+    }
+
+    public func markEnded(_ id: SessionID, at date: Date) throws {
+        try db.writer.write { try $0.execute(sql: "UPDATE session SET ended_at = ? WHERE id = ?", arguments: [date, id.rawValue]) }
+    }
+
+    /// Appends `reason` to the session's stage log (stage `ended`).
+    public func appendToStageLog(_ id: SessionID, reason: String, at date: Date) throws {
         try db.writer.write { db in
-            try db.execute(sql: "UPDATE session SET landing_choice_made = 1, stage_log = ? WHERE id = ?", arguments: [stageLog, id.rawValue])
+            let current = try String.fetchOne(db, sql: "SELECT stage_log FROM session WHERE id = ?", arguments: [id.rawValue]) ?? "[]"
+            var log = (try? SessionArc.decode(current)) ?? []
+            log.append(StageChange(stage: .ended, at: date, reason: reason))
+            try db.execute(sql: "UPDATE session SET stage_log = ? WHERE id = ?", arguments: [try SessionArc.encode(log), id.rawValue])
         }
+    }
+
+    /// The person left the landing (or had nothing to land): logged, and never shown again.
+    public func markLanded(_ id: SessionID, now: Date = .now) throws {
+        try appendToStageLog(id, reason: "landed", at: now)
+        try db.writer.write { try $0.execute(sql: "UPDATE session SET landing_choice_made = 1 WHERE id = ?", arguments: [id.rawValue]) }
+    }
+
+    public func setHidden(_ id: SessionID, _ hidden: Bool) throws {
+        try db.writer.write { try $0.execute(sql: "UPDATE session SET hidden_from_timeline = ? WHERE id = ?", arguments: [hidden, id.rawValue]) }
     }
 
     /// Sessions with at least one segment still waiting to be sorted, newest first.

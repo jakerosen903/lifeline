@@ -66,7 +66,7 @@ private func flags(disclosure: DisclosureKind = .none, stop: Bool = false, chang
     #expect(a.apply(.flags(flags(disclosure: .past)), now: at(60)) == .showDisclosureCard)
     #expect(a.stage == .windDown && a.heavy && a.log.last?.reason == "disclosure")
     #expect(a.apply(.flags(flags(disclosure: .present)), now: at(120)) == nil, "the card is shown once per session")
-    #expect(a.log.filter { $0.reason == "disclosure" }.count == 2, "but every disclosure is logged")
+    #expect(a.log.filter { $0.reason.hasPrefix("disclosure") }.count == 2, "but every disclosure is logged")
     #expect(a.presentDanger, "present danger is remembered for the landing")
 }
 

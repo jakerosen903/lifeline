@@ -85,7 +85,7 @@ public struct SessionArc: Equatable, Sendable {
             if flags.disclosure != .none {
                 heavy = true
                 if flags.disclosure == .present { presentDanger = true }
-                move(to: .windDown, "disclosure", now)
+                move(to: .windDown, flags.disclosure == .present ? "disclosure:present" : "disclosure", now)
                 if !disclosureShown { disclosureShown = true; effect = .showDisclosureCard }
             }
             if flags.wantsToStop {

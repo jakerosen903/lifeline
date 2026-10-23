@@ -72,6 +72,7 @@ public struct CandidateActions: Sendable {
 
     /// "Hide today from the timeline": every memory told in the session leaves everyday browsing.
     public func hideSession(_ session: SessionID) throws {
+        try store.sessions.setHidden(session, true)
         for memory in try store.memories.memories(in: session, includingStandIns: true) {
             try store.memories.setHidden(memory.id, true)
         }
@@ -94,8 +95,10 @@ public struct CandidateActions: Sendable {
         guard !words.isEmpty, out.segmentSpan.startWord >= 0, out.segmentSpan.endWord < words.count,
               out.segmentSpan.startWord <= out.segmentSpan.endWord else { throw Error.emptySpan }
 
+        // A session hidden from the timeline hides what is kept from it later, too.
+        let hidden = try store.sessions.fetchSegment(candidate.segmentID).flatMap { try store.sessions.fetch($0.sessionID) }?.hiddenFromTimeline ?? false
         let memory = Memory(id: .init(), title: out.title, summaryQuote: out.quote, visibility: .timeline, chapterID: nil,
-                            createdFromCandidateID: candidate.id, createdAt: .now)
+                            createdFromCandidateID: candidate.id, createdAt: .now, hiddenFromTimeline: hidden)
         let span = MemorySpan(memoryID: memory.id, segmentID: candidate.segmentID,
                               startMs: words[out.segmentSpan.startWord].startMs, endMs: words[out.segmentSpan.endWord].endMs, order: 0)
 

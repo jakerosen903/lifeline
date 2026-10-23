@@ -52,6 +52,18 @@ public struct CandidateRepository: Sendable {
     }
 
     /// Every pending candidate of a session: segment index first, then ordinal.
+    /// Every candidate row of the session, whatever its status, in session order.
+    public func candidates(in session: SessionID) throws -> [Candidate] {
+        try db.writer.read { db in
+            try Candidate.fetchAll(db, sql: """
+                select candidate.* from candidate
+                join segment on segment.id = candidate.segment_id
+                where segment.session_id = ?
+                order by segment."index", candidate.ordinal
+                """, arguments: [session.rawValue])
+        }
+    }
+
     public func pending(in session: SessionID) throws -> [Candidate] {
         try db.writer.read { db in
             try Candidate.fetchAll(db, sql: """
