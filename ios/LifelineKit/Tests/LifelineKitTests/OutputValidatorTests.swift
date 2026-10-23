@@ -9,7 +9,7 @@ private func memory(quote: String = "had a pomegranate tree", span: WordSpan = W
                     people: [String] = ["my mother"], place: String? = nil, anchors: [AnchorOut] = [],
                     title: String = "The pomegranate tree") -> MemoryOut {
     MemoryOut(ref: "m1", title: title, quote: quote, segmentSpan: span, peopleRefs: people, placeText: place, anchors: anchors,
-              sameAsMemoryID: nil, collectionHint: nil, chapterHint: nil, confidence: 0.9)
+              collectionHint: nil, chapterHint: nil, confidence: 0.9)
 }
 
 private func output(_ memories: [MemoryOut] = [], mentions: [MentionOut] = [], flags: Flags = .none) -> ExtractorOutput {

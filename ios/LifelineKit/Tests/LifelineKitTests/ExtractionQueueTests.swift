@@ -24,7 +24,7 @@ private struct Env {
 
 private func gardenOutput(quote: String = "had a pomegranate tree", people: [String] = []) -> ExtractorOutput {
     ExtractorOutput(memories: [MemoryOut(ref: "m1", title: "The pomegranate tree", quote: quote, segmentSpan: WordSpan(startWord: 2, endWord: 5),
-                                         peopleRefs: people, placeText: nil, anchors: [], sameAsMemoryID: nil, collectionHint: nil,
+                                         peopleRefs: people, placeText: nil, anchors: [], collectionHint: nil,
                                          chapterHint: nil, confidence: 0.9)],
                     mentions: [], flags: .none)
 }
@@ -206,7 +206,7 @@ private func collect(_ events: AsyncStream<ExtractionEvent>, count: Int, timeout
 }
 
 private let blankOutput = ExtractorOutput(memories: [MemoryOut(ref: "", kind: .other, title: "", quote: "", segmentSpan: WordSpan(startWord: 0, endWord: 0), peopleRefs: [],
-                                                               placeText: nil, anchors: [], sameAsMemoryID: nil, collectionHint: nil, chapterHint: nil, confidence: 0)],
+                                                               placeText: nil, anchors: [], collectionHint: nil, chapterHint: nil, confidence: 0)],
                                           mentions: [], flags: .none)
 
 @Test func aBlankAnswerIsRetriedOnceBeforeItCounts() async throws {
@@ -257,7 +257,7 @@ private let blankOutput = ExtractorOutput(memories: [MemoryOut(ref: "", kind: .o
     let a = StoreFixtures.memory(from: c.id, title: "Orange house")
     try env.store.memories.insert(a, spans: [MemorySpan(memoryID: a.id, segmentID: earlier[0].id, startMs: 0, endMs: 500, order: 0)], people: [], places: [], anchors: [])
     var out = gardenOutput()
-    out.memories[0].sameAsMemoryID = a.id.rawValue
+    out.memories[0].sameAsMemoryIDs = [a.id.rawValue]
     env.service.push(.success(out))
     let matcher = MemoryMatcher(store: env.store, embedder: nil)
     let queue = ExtractionQueue(session: env.session, service: env.service, store: env.store, matcher: matcher)

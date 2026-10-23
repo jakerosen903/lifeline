@@ -40,7 +40,7 @@ private struct MatchEnv {
 
 private func card(_ title: String, quote: String) -> MemoryOut {
     MemoryOut(ref: "m1", kind: .event, title: title, quote: quote, segmentSpan: WordSpan(startWord: 0, endWord: 0),
-              peopleRefs: [], placeText: nil, anchors: [], sameAsMemoryID: nil, collectionHint: nil, chapterHint: nil, confidence: 0.9)
+              peopleRefs: [], placeText: nil, anchors: [], collectionHint: nil, chapterHint: nil, confidence: 0.9)
 }
 
 @Test func cosineOfIdenticalIsOneAndOrthogonalIsZero() {

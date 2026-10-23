@@ -16,7 +16,7 @@ private struct Env {
         let (session, segs) = try StoreFixtures.session(in: store.sessions, segments: [text])
         let words = text.split(separator: " ").count
         let out = MemoryOut(ref: "m1", kind: .event, title: title, quote: text, segmentSpan: WordSpan(startWord: 0, endWord: words - 1),
-                            peopleRefs: people, placeText: place, anchors: anchors, sameAsMemoryID: nil, collectionHint: collection, chapterHint: nil, confidence: 0.9)
+                            peopleRefs: people, placeText: place, anchors: anchors, collectionHint: collection, chapterHint: nil, confidence: 0.9)
         let c = StoreFixtures.candidate(segs[0].id, payload: try CandidatePayload.encode(out))
         try store.candidates.insert(c)
         try store.sessions.setStatus(.extracted, for: segs[0].id)
@@ -252,7 +252,7 @@ private struct Env {
     var cards: [Candidate] = []
     for (i, seg) in segs.enumerated() {
         let out = MemoryOut(ref: "m\(i)", kind: .event, title: seg.text, quote: seg.text, segmentSpan: WordSpan(startWord: 0, endWord: 1), peopleRefs: [], placeText: nil,
-                            anchors: [], sameAsMemoryID: nil, collectionHint: nil, chapterHint: nil, confidence: 0.9)
+                            anchors: [], collectionHint: nil, chapterHint: nil, confidence: 0.9)
         let c = StoreFixtures.candidate(seg.id, payload: try CandidatePayload.encode(out))
         try env.store.candidates.insert(c)
         cards.append(c)

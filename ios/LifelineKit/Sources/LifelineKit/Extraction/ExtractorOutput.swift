@@ -61,6 +61,18 @@ public enum MemoryKind: String, Codable, Sendable, CaseIterable {
     }
 }
 
+/// A telling that carried on in another segment after a pause (M5). Written by the app when a
+/// continuation arrives, never asked of the model, so it is absent from the schema.
+public struct ExtraSpan: Codable, Sendable, Equatable {
+    public var segmentID: String
+    public var startWord: Int
+    public var endWord: Int
+
+    public init(segmentID: String, startWord: Int, endWord: Int) { self.segmentID = segmentID; self.startWord = startWord; self.endWord = endWord }
+
+    enum CodingKeys: String, CodingKey { case segmentID = "segment_id", startWord = "start_word", endWord = "end_word" }
+}
+
 public struct MemoryOut: Codable, Sendable, Equatable {
     public var ref: String
     /// nil only for payloads written by extractor v1, which had no kinds.
@@ -71,23 +83,82 @@ public struct MemoryOut: Codable, Sendable, Equatable {
     public var peopleRefs: [String]
     public var placeText: String?
     public var anchors: [AnchorOut]
-    public var sameAsMemoryID: String?
+    /// Memories from the packet that tell this same moment; several when the archive already holds duplicates (M5).
+    public var sameAsMemoryIDs: [String]
+    /// A pending card of this session this segment carries on after a pause (M5).
+    public var continuesCandidateID: String?
+    /// A story id, or a pending card's ref, when this memory is another scene of the same thread (M5).
+    public var storyRef: String?
+    /// A title for a new story in the person's words, at most 8 words (M5).
+    public var storyTitleHint: String?
     public var collectionHint: String?
     public var chapterHint: String?
     public var confidence: Double
+    public var extraSpans: [ExtraSpan]
 
     public var kindOrDefault: MemoryKind { kind ?? .other }
+    /// The first named memory, for callers that take one.
+    public var sameAsMemoryID: String? { sameAsMemoryIDs.first }
 
     public init(ref: String, kind: MemoryKind? = nil, title: String, quote: String, segmentSpan: WordSpan, peopleRefs: [String], placeText: String?,
-                anchors: [AnchorOut], sameAsMemoryID: String?, collectionHint: String?, chapterHint: String?, confidence: Double) {
+                anchors: [AnchorOut], sameAsMemoryIDs: [String] = [], continuesCandidateID: String? = nil, storyRef: String? = nil,
+                storyTitleHint: String? = nil, collectionHint: String?, chapterHint: String?, confidence: Double, extraSpans: [ExtraSpan] = []) {
         self.ref = ref; self.kind = kind; self.title = title; self.quote = quote; self.segmentSpan = segmentSpan; self.peopleRefs = peopleRefs
-        self.placeText = placeText; self.anchors = anchors; self.sameAsMemoryID = sameAsMemoryID
-        self.collectionHint = collectionHint; self.chapterHint = chapterHint; self.confidence = confidence
+        self.placeText = placeText; self.anchors = anchors; self.sameAsMemoryIDs = sameAsMemoryIDs; self.continuesCandidateID = continuesCandidateID
+        self.storyRef = storyRef; self.storyTitleHint = storyTitleHint
+        self.collectionHint = collectionHint; self.chapterHint = chapterHint; self.confidence = confidence; self.extraSpans = extraSpans
     }
 
     enum CodingKeys: String, CodingKey {
         case ref, kind, title, quote, segmentSpan = "segment_span", peopleRefs = "people_refs", placeText = "place_text", anchors
-        case sameAsMemoryID = "same_as_memory_id", collectionHint = "collection_hint", chapterHint = "chapter_hint", confidence
+        case sameAsMemoryID = "same_as_memory_id", sameAsMemoryIDs = "same_as_memory_ids", continuesCandidateID = "continues_candidate_id"
+        case storyRef = "story_ref", storyTitleHint = "story_title_hint", collectionHint = "collection_hint", chapterHint = "chapter_hint"
+        case confidence, extraSpans = "extra_spans"
+    }
+
+    /// Reads v3/v4 payloads (one `same_as_memory_id`) and v5 ones (a list); the app-written fields default when absent.
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        ref = try c.decode(String.self, forKey: .ref)
+        kind = try c.decodeIfPresent(MemoryKind.self, forKey: .kind)
+        title = try c.decode(String.self, forKey: .title)
+        quote = try c.decode(String.self, forKey: .quote)
+        segmentSpan = try c.decode(WordSpan.self, forKey: .segmentSpan)
+        peopleRefs = try c.decode([String].self, forKey: .peopleRefs)
+        placeText = try c.decodeIfPresent(String.self, forKey: .placeText)
+        anchors = try c.decode([AnchorOut].self, forKey: .anchors)
+        if let list = try c.decodeIfPresent([String].self, forKey: .sameAsMemoryIDs) {
+            sameAsMemoryIDs = list
+        } else {
+            sameAsMemoryIDs = (try c.decodeIfPresent(String.self, forKey: .sameAsMemoryID)).map { [$0] } ?? []
+        }
+        continuesCandidateID = try c.decodeIfPresent(String.self, forKey: .continuesCandidateID)
+        storyRef = try c.decodeIfPresent(String.self, forKey: .storyRef)
+        storyTitleHint = try c.decodeIfPresent(String.self, forKey: .storyTitleHint)
+        collectionHint = try c.decodeIfPresent(String.self, forKey: .collectionHint)
+        chapterHint = try c.decodeIfPresent(String.self, forKey: .chapterHint)
+        confidence = try c.decode(Double.self, forKey: .confidence)
+        extraSpans = try c.decodeIfPresent([ExtraSpan].self, forKey: .extraSpans) ?? []
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(ref, forKey: .ref)
+        try c.encode(kind, forKey: .kind)
+        try c.encode(title, forKey: .title)
+        try c.encode(quote, forKey: .quote)
+        try c.encode(segmentSpan, forKey: .segmentSpan)
+        try c.encode(peopleRefs, forKey: .peopleRefs)
+        try c.encode(placeText, forKey: .placeText)
+        try c.encode(anchors, forKey: .anchors)
+        try c.encode(sameAsMemoryIDs, forKey: .sameAsMemoryIDs)
+        try c.encode(continuesCandidateID, forKey: .continuesCandidateID)
+        try c.encode(storyRef, forKey: .storyRef)
+        try c.encode(storyTitleHint, forKey: .storyTitleHint)
+        try c.encode(collectionHint, forKey: .collectionHint)
+        try c.encode(chapterHint, forKey: .chapterHint)
+        try c.encode(confidence, forKey: .confidence)
+        try c.encode(extraSpans, forKey: .extraSpans)
     }
 }
 

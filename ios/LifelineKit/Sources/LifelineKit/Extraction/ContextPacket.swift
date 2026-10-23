@@ -27,6 +27,27 @@ public struct ContextPacket: Codable, Sendable, Equatable {
         public var rangeText: String?
     }
 
+    /// A card of this session still waiting on the person, so a continuation can name it (M5).
+    public struct PendingEntry: Codable, Sendable, Equatable {
+        public var candidateID: String
+        public var title: String
+        public var quote: String
+        public var storyRef: String?
+
+        public init(candidateID: String, title: String, quote: String, storyRef: String?) {
+            self.candidateID = candidateID; self.title = title; self.quote = quote; self.storyRef = storyRef
+        }
+    }
+
+    /// A story the packet's memories belong to (M5).
+    public struct StoryEntry: Codable, Sendable, Equatable {
+        public var id: String
+        public var title: String?
+        public var momentTitles: [String]
+
+        public init(id: String, title: String?, momentTitles: [String]) { self.id = id; self.title = title; self.momentTitles = momentTitles }
+    }
+
     public var previousSegments: [String]
     public var people: [PersonEntry]
     public var chapters: [ChapterEntry]
@@ -34,6 +55,8 @@ public struct ContextPacket: Codable, Sendable, Equatable {
     public var curiosity: [String]
     public var stage: String
     public var profileFreeText: String?
+    public var pending: [PendingEntry] = []
+    public var stories: [StoryEntry] = []
 
     /// Sorted keys, so the same packet always renders to the same bytes.
     public func encodedJSON() throws -> Data {

@@ -30,6 +30,7 @@ public struct CandidateActions: Sendable {
     public enum HintResult: Equatable, Sendable {
         case collection(Collection)
         case chapter(Chapter)
+        case story(Story)
     }
 
     public struct AcceptedMemory: Sendable, Equatable {
@@ -302,9 +303,16 @@ public struct CandidateActions: Sendable {
             } else {
                 result = .chapter(try createChapter(title: out.phrase, containing: memory.id))
             }
+        case .story:
+            result = .story(try acceptStoryHint(out.phrase, for: memory.id))
         }
         try store.candidates.setStatus(candidate.id, .accepted)
         return result
+    }
+
+    /// A story title hint, accepted: filled in by M5 Task 7 (StoryActions).
+    func acceptStoryHint(_ phrase: String, for memory: MemoryID) throws -> Story {
+        throw Error.wrongKind
     }
 
     public func createChapter(title: String?, containing memory: MemoryID) throws -> Chapter {

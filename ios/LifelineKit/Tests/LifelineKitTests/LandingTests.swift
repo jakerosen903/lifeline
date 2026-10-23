@@ -13,7 +13,7 @@ private func kept(_ title: String, quote: String, in seg: Segment, at start: Int
 }
 private func possible(_ title: String, quote: String, in seg: Segment) -> (Candidate, MemoryOut) {
     let out = MemoryOut(ref: "m", kind: .event, title: title, quote: quote, segmentSpan: WordSpan(startWord: 0, endWord: 1), peopleRefs: [], placeText: nil,
-                        anchors: [], sameAsMemoryID: nil, collectionHint: nil, chapterHint: nil, confidence: 0.8)
+                        anchors: [], collectionHint: nil, chapterHint: nil, confidence: 0.8)
     return (StoreFixtures.candidate(seg.id, payload: (try? CandidatePayload.encode(out)) ?? "{}"), out)
 }
 

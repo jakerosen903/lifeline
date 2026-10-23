@@ -4,7 +4,7 @@ import Testing
 
 private func memoryCandidate(_ segment: SegmentID, ordinal: Int = 0) throws -> Candidate {
     let out = MemoryOut(ref: "m", title: "T", quote: "q", segmentSpan: WordSpan(startWord: 0, endWord: 0), peopleRefs: [], placeText: nil,
-                        anchors: [], sameAsMemoryID: nil, collectionHint: nil, chapterHint: nil, confidence: 0.9)
+                        anchors: [], collectionHint: nil, chapterHint: nil, confidence: 0.9)
     return StoreFixtures.candidate(segment, ordinal: ordinal, kind: .memory, payload: try CandidatePayload.encode(out))
 }
 private func mentionCandidate(_ segment: SegmentID, ordinal: Int = 1) throws -> Candidate {

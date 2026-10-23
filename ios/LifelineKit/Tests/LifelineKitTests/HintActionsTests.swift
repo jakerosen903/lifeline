@@ -13,7 +13,7 @@ private struct Env {
     }
     func memoryCandidate(ordinal: Int = 0, collection: String? = nil, chapter: String? = nil) throws -> Candidate {
         let out = MemoryOut(ref: "m1", kind: .event, title: "The station wagon", quote: "the station wagon", segmentSpan: WordSpan(startWord: 7, endWord: 8),
-                            peopleRefs: [], placeText: nil, anchors: [], sameAsMemoryID: nil, collectionHint: collection, chapterHint: chapter, confidence: 0.9)
+                            peopleRefs: [], placeText: nil, anchors: [], collectionHint: collection, chapterHint: chapter, confidence: 0.9)
         let c = StoreFixtures.candidate(segment.id, ordinal: ordinal, kind: .memory, payload: try CandidatePayload.encode(out))
         try store.candidates.insert(c)
         return c
@@ -98,7 +98,7 @@ private struct Env {
     let env = try Env()
     var out = ExtractorOutput(memories: [], mentions: [], flags: .none)
     out.memories = [MemoryOut(ref: "m1", kind: .event, title: "The station wagon", quote: "the station wagon", segmentSpan: WordSpan(startWord: 7, endWord: 8),
-                              peopleRefs: [], placeText: nil, anchors: [], sameAsMemoryID: nil, collectionHint: "every August", chapterHint: nil, confidence: 0.9)]
+                              peopleRefs: [], placeText: nil, anchors: [], collectionHint: "every August", chapterHint: nil, confidence: 0.9)]
     let service = FakeExtractionService([.success(out)])
     let queue = ExtractionQueue(session: env.session, service: service, store: env.store)
     await queue.enqueue(env.segment.id)

@@ -5,7 +5,7 @@ import Testing
 private func gardenOutput() -> ExtractorOutput {
     ExtractorOutput(memories: [MemoryOut(ref: "m1", kind: .event, title: "The pomegranate tree", quote: "had a pomegranate tree",
                                          segmentSpan: WordSpan(startWord: 2, endWord: 5), peopleRefs: [], placeText: nil, anchors: [],
-                                         sameAsMemoryID: nil, collectionHint: nil, chapterHint: nil, confidence: 0.9)],
+                                         collectionHint: nil, chapterHint: nil, confidence: 0.9)],
                     mentions: [], flags: .none)
 }
 
