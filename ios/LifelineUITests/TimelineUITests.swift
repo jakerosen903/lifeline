@@ -89,6 +89,11 @@ final class TimelineUITests: XCTestCase {
         record(app, accept: 2)
         let maya = app.buttons.matching(identifier: "timeline.memory").matching(NSPredicate(format: "label CONTAINS %@", "Maya climbed it")).firstMatch
         XCTAssertTrue(reveal(maya, in: app))
+        // The Check-this tag shows its words, not an icon beside a blank row (bug seen on device 2026-10-23).
+        let tag = app.staticTexts.matching(identifier: "card.checkThis").matching(NSPredicate(format: "label == %@", "Check this: Maya?")).firstMatch
+        XCTAssertTrue(tag.exists)
+        XCTAssertGreaterThan(tag.frame.width, 60, "the tag's text is laid out: \(tag.frame)")
+        XCTAssertLessThan(maya.frame.height, 160, "a memory row is not stretched by its tags: \(maya.frame)")
         // The floating Start button can sit over a row's centre; tap the row's title instead.
         maya.coordinate(withNormalizedOffset: CGVector(dx: 0.15, dy: 0.35)).tap()
         XCTAssertTrue(app.buttons["memory.play"].waitForExistence(timeout: 5))

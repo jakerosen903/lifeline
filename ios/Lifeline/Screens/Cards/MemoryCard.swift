@@ -78,9 +78,15 @@ struct CheckThisTag: View {
     let tag: CheckThis
 
     var body: some View {
-        Label(tag.label, systemImage: "questionmark.circle")
-            .font(.caption.weight(.semibold))
-            .foregroundStyle(Theme.ochre)
+        // An HStack, not a Label: inside a List row a Label measured by a custom Layout
+        // reports an icon-sized width and a huge height, which blanked the timeline rows.
+        HStack(spacing: 4) {
+            Image(systemName: "questionmark.circle")
+            Text(tag.label)
+        }
+        .font(.caption.weight(.semibold))
+        .foregroundStyle(Theme.ochre)
+        .fixedSize()
             .accessibilityElement(children: .combine)
             .accessibilityLabel(tag.label)
             .accessibilityIdentifier("card.checkThis")

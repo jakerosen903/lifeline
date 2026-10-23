@@ -13,7 +13,8 @@ struct FlowLayout: Layout {
     func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
         let positions = arrange(subviews, in: bounds.width).positions
         for (subview, position) in zip(subviews, positions) {
-            subview.place(at: CGPoint(x: bounds.minX + position.x, y: bounds.minY + position.y), proposal: .unspecified)
+            let size = subview.sizeThatFits(.unspecified)
+            subview.place(at: CGPoint(x: bounds.minX + position.x, y: bounds.minY + position.y), proposal: ProposedViewSize(size))
         }
     }
 
