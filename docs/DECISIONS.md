@@ -94,6 +94,12 @@ The Anthropic Console key is entered in Settings and stored in the device Keycha
 
 Why: nothing secret in the build; the owner can rotate the key without a rebuild; the same code path serves a second phone later. Cost: a first-run setup step, and sessions before the key is added are recorded but not sorted (they are retried by the CLI or a later re-run).
 
+## 2026-10-23 · Sessions are short by default; the timer is a backstop
+
+The owner's sessions run a few minutes and that is the intended shape. A session ends when the owner taps "Let's leave it there". The 40-minute wind-down and 60-minute hard stop from the design become a quiet backstop: a one-line nudge at 55 minutes and the summary opening by itself at 60. No screen shows session length as a goal. The spec's `middle` stage is dropped; stages are open, windDown, ended.
+
+Why: the design was written imagining long oral-history sittings; real use is lighter, and every session must still land. Cost: a 90-minute session is cut at 60, which the owner can reopen by starting again.
+
 ## Open · Memory kinds and domains
 
 A later version will sub-divide memories by kind (fact, feeling, goal or intention, event, other) and by domain (relationships, health, education, travel, work, more). V1 ships one memory type and keeps the seam open: the candidate payload is JSON so a new extractor version can back-fill, no V1 code or copy assumes a memory is an event, and collection and chapter hints stay free text. Design after V1 has real sessions.
