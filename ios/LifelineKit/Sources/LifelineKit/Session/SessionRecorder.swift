@@ -16,6 +16,19 @@ public struct RecorderState: Equatable, Sendable {
     public init() {}
 }
 
+/// What happens around the recorder: a stored segment goes to extraction, and Stop waits for
+/// extraction to drain before the session is marked ended. Both default to nothing.
+public struct RecorderHooks: Sendable {
+    public var onSegmentStored: @Sendable (SegmentID) -> Void
+    public var onStop: @Sendable () async -> Void
+
+    public init(onSegmentStored: @escaping @Sendable (SegmentID) -> Void = { _ in },
+                onStop: @escaping @Sendable () async -> Void = {}) {
+        self.onSegmentStored = onSegmentStored
+        self.onStop = onStop
+    }
+}
+
 /// Turns voice events into database rows. The session row is written before capture starts,
 /// so a crash leaves a session with `endedAt == nil` that the next launch can recover.
 public actor SessionRecorder {
@@ -29,16 +42,19 @@ public actor SessionRecorder {
     private let sessions: SessionRepository
     private let audioURL: @Sendable (SessionID) throws -> URL
     private let now: @Sendable () -> Date
+    private let hooks: RecorderHooks
     private var session: Session?
     private var eventTask: Task<Void, Never>?
 
     public init(voice: any VoiceSession, sessions: SessionRepository,
                 audioURL: @escaping @Sendable (SessionID) throws -> URL,
-                now: @escaping @Sendable () -> Date = Date.init) {
+                now: @escaping @Sendable () -> Date = Date.init,
+                hooks: RecorderHooks = RecorderHooks()) {
         self.voice = voice
         self.sessions = sessions
         self.audioURL = audioURL
         self.now = now
+        self.hooks = hooks
         (states, stateContinuation) = AsyncStream.makeStream()
     }
 
@@ -74,6 +90,7 @@ public actor SessionRecorder {
         guard var row = session, row.endedAt == nil else { return }
         try await voice.stop()
         await eventTask?.value
+        await hooks.onStop()
         row.endedAt = now()
         try sessions.update(row)
         session = row
@@ -126,6 +143,7 @@ public actor SessionRecorder {
         do {
             try sessions.insert(segment, words: words)
             state.segments.append(segment)
+            hooks.onSegmentStored(segment.id)
         } catch {
             state.error = "could not save segment \(segment.index): \(error)"
         }
