@@ -163,7 +163,7 @@ Why: nothing secret in the build; the owner can rotate the key without a rebuild
 
 The owner's sessions run a few minutes and that is the intended shape. A session ends when the owner taps "Let's leave it there". The 40-minute wind-down and 60-minute hard stop from the design become a quiet backstop: a one-line nudge at 55 minutes and the summary opening by itself at 60. No screen shows session length as a goal. The spec's `middle` stage is dropped; stages are open, windDown, ended.
 
-Why: the design was written imagining long oral-history sittings; real use is lighter, and every session must still land. Cost: a 90-minute session is cut at 60, which the owner can reopen by starting again.
+Why: the design was written imagining long oral-history sittings; real use is lighter, and every session must still land. Revised the same day by the review's "no automatic stop": the planned length brings a wrap-up offer with an explicit "Keep going"; the only automatic landing is a real recording limit. See the M4 plan (revised).
 
 ## 2026-10-23 · Direction: a short daily activity that builds over time
 
