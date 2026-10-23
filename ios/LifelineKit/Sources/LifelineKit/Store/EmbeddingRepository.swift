@@ -29,6 +29,18 @@ public struct EmbeddingRepository: Sendable {
         }
     }
 
+    /// Every memory that has a vector of this model and is not excluded from AI, in one query.
+    public func memoriesWithVectors(model: String) throws -> [(memory: Memory, vector: [Float])] {
+        try db.writer.read { db in
+            try Row.fetchAll(db, sql: """
+                select memory.*, memory_embedding.vector as e_vector from memory
+                join memory_embedding on memory_embedding.memory_id = memory.id
+                where memory_embedding.model = ? and memory.excluded_from_ai = 0
+                """, arguments: [model])
+                .map { (memory: try Memory(row: $0), vector: Self.floats($0["e_vector"])) }
+        }
+    }
+
     public func delete(memory: MemoryID) throws {
         try db.writer.write { try $0.execute(sql: "delete from memory_embedding where memory_id = ?", arguments: [memory.rawValue]) }
     }

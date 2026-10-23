@@ -35,8 +35,9 @@ final class AppModel {
                 if crashed.contains(where: { $0.id == session.id }) { print("[lifeline] resuming a session cut short") }
                 timeline.home.present(landing: LandingViewModel(resuming: session, deps: deps))
             }
-            Task {
-                // Memories kept before M4.1 get their vectors once; seconds, idempotent.
+            // Off the main actor: the backfill loads the embedding model and walks every memory.
+            Task.detached(priority: .utility) {
+                // Memories kept before M4.1 get their vectors once; idempotent.
                 if let n = try? deps.matcher.backfill(), n > 0 { print("[matching] embedded \(n) earlier memories") }
                 await deps.worker.start()
             }

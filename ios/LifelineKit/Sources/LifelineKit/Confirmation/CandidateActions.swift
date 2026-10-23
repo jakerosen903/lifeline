@@ -24,6 +24,7 @@ public struct CandidateActions: Sendable {
         case sameMemory
         case stale
         case notStated
+        case standIn
     }
 
     public enum HintResult: Equatable, Sendable {

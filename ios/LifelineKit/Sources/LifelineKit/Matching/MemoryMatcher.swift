@@ -96,12 +96,12 @@ public struct MemoryMatcher: Sendable {
 
     /// "Which one?": the nearest few with no minimum; newest first when there are no vectors.
     public func picker(for text: String, excluding: Set<MemoryID>, includeHidden: Bool) throws -> [MemoryMatch] {
-        let byScore = try scored(text, excluding: excluding).filter { eligible($0.memory, includeHidden: includeHidden) }
+        let byScore = try scored(text, excluding: excluding).filter { pickable($0.memory, includeHidden: includeHidden) }
         if !byScore.isEmpty {
             return try byScore.prefix(config.pickerCount).map { try match($0.memory, score: $0.score, source: .embedding) }
         }
         let newest = try store.memories.allMemories()
-            .filter { !excluding.contains($0.id) && eligible($0, includeHidden: includeHidden) }
+            .filter { !excluding.contains($0.id) && pickable($0, includeHidden: includeHidden) }
             .sorted { $0.createdAt > $1.createdAt }
         return try newest.prefix(config.pickerCount).map { try match($0, score: 0, source: .embedding) }
     }
@@ -112,16 +112,18 @@ public struct MemoryMatcher: Sendable {
         !memory.excludedFromAI && (includeHidden || !memory.hiddenFromTimeline)
     }
 
+    /// The manual picker lists tellings the person can see; a resolver stand-in is not one.
+    private func pickable(_ memory: Memory, includeHidden: Bool) -> Bool {
+        eligible(memory, includeHidden: includeHidden) && !memory.isFloating
+    }
+
     /// Every embedded memory scored against `text`, best first. Empty without an embedder or a vector.
     private func scored(_ text: String, excluding: Set<MemoryID>) throws -> [(memory: Memory, score: Float)] {
         guard let embedder, let probe = embedder.vector(for: text) else { return [] }
-        let rows = try store.embeddings.all(model: embedder.model)
-        var out: [(Memory, Float)] = []
-        for (id, vector) in rows where !excluding.contains(id) {
-            guard let memory = try store.memories.fetch(id), !memory.excludedFromAI else { continue }
-            out.append((memory, Similarity.cosine(probe, vector)))
-        }
-        return out.sorted { $0.1 > $1.1 }.map { (memory: $0.0, score: $0.1) }
+        return try store.embeddings.memoriesWithVectors(model: embedder.model)
+            .filter { !excluding.contains($0.memory.id) }
+            .map { (memory: $0.memory, score: Similarity.cosine(probe, $0.vector)) }
+            .sorted { $0.score > $1.score }
     }
 
     private func match(_ memory: Memory, score: Float, source: MemoryMatch.Source) throws -> MemoryMatch {

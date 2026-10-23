@@ -167,3 +167,64 @@ private struct Env {
     guard case .collection(let collection) = try env.actions.acceptHint(hint) else { Issue.record("expected a collection"); return }
     #expect(try env.store.chapters.members(of: collection.id).map(\.id) == [target.id])
 }
+
+// MARK: - Review fixes
+
+@Test func mergingIntoAStandInMakesItReal() throws {
+    let env = try Env()
+    let (_, namer) = try env.kept("the summer before graduation we drove", title: "The drive")
+    let namerSpan = try #require(try env.store.memories.spans(of: namer.id).first)
+    let standIn = try env.store.memories.insertFloating(title: "graduation", segment: namerSpan.segmentID, startMs: namerSpan.startMs, endMs: namerSpan.endMs)
+    try env.store.memories.updateRange(standIn.id, .year(2004, origin: .stated, evidence: "in 2004"))
+    let (_, source) = try env.kept("graduation day was hot and loud", title: "Graduation day", collection: "School")
+    let sourceSpan = try #require(try env.store.memories.spans(of: source.id).first)
+    let receipt = try env.actions.merge(source.id, into: standIn.id)
+    let real = try #require(try env.store.memories.fetch(standIn.id))
+    #expect(!real.isFloating && real.title == "Graduation day" && real.summaryQuote == source.summaryQuote && real.createdFromCandidateID == source.createdFromCandidateID)
+    let spans = try env.store.memories.spans(of: standIn.id)
+    #expect(spans.count == 1 && spans[0].order == 0 && spans[0].segmentID == sourceSpan.segmentID, "the borrowed span is gone; the real telling is first")
+    #expect(real.range.earliest?.year == 2004, "the stand-in's own range stays")
+    #expect(try env.store.chapters.collections(of: standIn.id).map(\.title) == ["School"])
+    #expect(try env.store.memories.fetch(source.id) == nil)
+    try env.actions.unmerge(receipt)
+    #expect(try env.store.memories.fetch(standIn.id)?.isFloating == true && (try env.store.memories.fetch(source.id)) != nil)
+}
+
+@Test func mergingAStandInSourceThrowsAndPickerSkipsStandIns() throws {
+    let env = try Env()
+    let (_, namer) = try env.kept("the summer before graduation we drove", title: "The drive")
+    let namerSpan = try #require(try env.store.memories.spans(of: namer.id).first)
+    let standIn = try env.store.memories.insertFloating(title: "graduation", segment: namerSpan.segmentID, startMs: namerSpan.startMs, endMs: namerSpan.endMs)
+    #expect(throws: CandidateActions.Error.standIn) { try env.actions.merge(standIn.id, into: namer.id) }
+    let matcher = MemoryMatcher(store: env.store, embedder: nil)
+    #expect(try matcher.picker(for: "graduation", excluding: [], includeHidden: true).map(\.memoryID) == [namer.id], "a stand-in is not something the person can pick")
+}
+
+@Test func unmergeAfterARenameIsRefused() throws {
+    let env = try Env()
+    let (_, target) = try env.kept("we lived in an orange house", title: "Orange house")
+    let (_, source) = try env.kept("we drove to disney", title: "The drive")
+    let receipt = try env.actions.merge(source.id, into: target.id)
+    try env.actions.renameMemory(target.id, to: "The orange house on Royal Palm")
+    #expect(throws: CandidateActions.Error.stale) { try env.actions.unmerge(receipt) }
+    #expect(try env.store.memories.fetch(target.id)?.title == "The orange house on Royal Palm", "the rename stands")
+    let (_, _, c) = try env.card("grew up in an orange house", title: "Grew up")
+    let merged = try env.actions.mergeCandidate(c, into: target.id)
+    try env.store.memories.updateRange(target.id, .stated(year: 1998))
+    #expect(throws: CandidateActions.Error.stale) { try env.actions.unmerge(merged.receipt) }
+}
+
+@Test func mergeSpanIsOneTransaction() throws {
+    let env = try Env()
+    let (_, target) = try env.kept("we lived in an orange house", title: "Orange house")
+    let (_, _, c) = try env.card("grew up in an orange house", title: "Grew up")
+    // A span on a segment that does not exist fails the foreign key: nothing else may land either.
+    let bad = MemorySpan(memoryID: target.id, segmentID: SegmentID(rawValue: "missing"), startMs: 0, endMs: 1, order: 1, titleText: "Grew up", candidateID: c.id)
+    let person = try env.store.people.insertPerson(displayName: "Maya")
+    #expect(throws: (any Error).self) {
+        try env.store.memories.mergeSpan(bad, people: [MemoryPerson(memoryID: target.id, personID: person.id, roleText: nil)], places: [], anchors: [],
+                                         promotingStandIn: nil, acceptingCandidate: c.id)
+    }
+    #expect(try env.store.candidates.fetch(c.id)?.status == .pending)
+    #expect(try env.store.memories.people(of: target.id).isEmpty && (try env.store.memories.spans(of: target.id)).count == 1)
+}

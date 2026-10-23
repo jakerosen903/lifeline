@@ -183,30 +183,70 @@ public struct MemoryRepository: Sendable {
         }
     }
 
-    /// Re-points every edge of `source` at `target` and appends its spans after the target's.
-    /// Collections and the chapter move only when the target has none. The source row is deleted.
-    public func fold(_ source: MemoryID, into target: MemoryID, sourceTitle: String, sourceCandidate: CandidateID?) throws {
+    /// "Same story" on a card, in one transaction: the span, its edges, the card marked accepted.
+    /// `promotingStandIn` carries the card's title, quote and candidate when the target is a
+    /// resolver stand-in: its borrowed span goes, this telling becomes order 0 and the memory
+    /// becomes real. A failure anywhere leaves the card pending and the target untouched.
+    public func mergeSpan(_ span: MemorySpan, people: [MemoryPerson], places: [MemoryPlace], anchors: [Anchor],
+                          promotingStandIn: (title: String, summaryQuote: String)?, acceptingCandidate candidate: CandidateID) throws {
         try db.writer.write { db in
-            let next = (try Int.fetchOne(db, sql: "select max(\"order\") from memory_span where memory_id = ?", arguments: [target.rawValue]) ?? -1) + 1
-            let spans = try MemorySpan.filter(Column("memory_id") == source.rawValue).order(Column("order")).fetchAll(db)
+            var span = span
+            if let promoted = promotingStandIn {
+                try db.execute(sql: "delete from memory_span where memory_id = ?", arguments: [span.memoryID.rawValue])
+                span.order = 0
+                try db.execute(sql: "update memory set title = ?, summary_quote = ?, created_from_candidate_id = ? where id = ?",
+                               arguments: [promoted.title, promoted.summaryQuote, candidate.rawValue, span.memoryID.rawValue])
+            }
+            try span.insert(db)
+            for person in people {
+                try db.execute(sql: "insert or ignore into memory_person (memory_id, person_id, role_text) values (?, ?, ?)",
+                               arguments: [person.memoryID.rawValue, person.personID.rawValue, person.roleText])
+            }
+            for place in places {
+                try db.execute(sql: "insert or ignore into memory_place (memory_id, place_id) values (?, ?)", arguments: [place.memoryID.rawValue, place.placeID.rawValue])
+            }
+            for anchor in anchors { try anchor.insert(db) }
+            try db.execute(sql: "update candidate set status = ? where id = ?", arguments: [CandidateStatus.accepted.rawValue, candidate.rawValue])
+        }
+    }
+
+    /// Re-points every edge of `source` at `target` and appends its spans after the target's.
+    /// Collections and the chapter move only when the target has none; the range moves when
+    /// the target has none. A stand-in target becomes real: its borrowed span goes and the
+    /// source's first telling, title, quote and candidate become the target's. One transaction;
+    /// the source row is deleted at the end.
+    public func fold(_ source: Memory, into target: Memory) throws {
+        try db.writer.write { db in
+            var next = (try Int.fetchOne(db, sql: "select max(\"order\") from memory_span where memory_id = ?", arguments: [target.id.rawValue]) ?? -1) + 1
+            if target.isFloating {
+                try db.execute(sql: "delete from memory_span where memory_id = ?", arguments: [target.id.rawValue])
+                try db.execute(sql: "update memory set title = ?, summary_quote = ?, created_from_candidate_id = ? where id = ?",
+                               arguments: [source.title, source.summaryQuote, source.createdFromCandidateID?.rawValue, target.id.rawValue])
+                next = 0
+            }
+            let spans = try MemorySpan.filter(Column("memory_id") == source.id.rawValue).order(Column("order")).fetchAll(db)
             for (i, var span) in spans.enumerated() {
-                span.memoryID = target
+                span.memoryID = target.id
                 span.order = next + i
-                if i == 0 { span.titleText = span.titleText ?? sourceTitle; span.candidateID = span.candidateID ?? sourceCandidate }
+                if i == 0, !target.isFloating { span.titleText = span.titleText ?? source.title; span.candidateID = span.candidateID ?? source.createdFromCandidateID }
                 try span.insert(db)
             }
-            try db.execute(sql: "insert or ignore into memory_person (memory_id, person_id, role_text) select ?, person_id, role_text from memory_person where memory_id = ?", arguments: [target.rawValue, source.rawValue])
-            try db.execute(sql: "insert or ignore into memory_place (memory_id, place_id) select ?, place_id from memory_place where memory_id = ?", arguments: [target.rawValue, source.rawValue])
-            try db.execute(sql: "update anchor set memory_id = ? where memory_id = ?", arguments: [target.rawValue, source.rawValue])
-            let targetCollections = try Int.fetchOne(db, sql: "select count(*) from collection_memory where memory_id = ?", arguments: [target.rawValue]) ?? 0
+            if !target.range.isPlaced, source.range.isPlaced {
+                var moved = target
+                moved.range = source.range
+                try moved.update(db, columns: ["earliest", "latest", "likely_start", "likely_end", "granularity", "origin", "evidence_text"])
+            }
+            try db.execute(sql: "insert or ignore into memory_person (memory_id, person_id, role_text) select ?, person_id, role_text from memory_person where memory_id = ?", arguments: [target.id.rawValue, source.id.rawValue])
+            try db.execute(sql: "insert or ignore into memory_place (memory_id, place_id) select ?, place_id from memory_place where memory_id = ?", arguments: [target.id.rawValue, source.id.rawValue])
+            try db.execute(sql: "update anchor set memory_id = ? where memory_id = ?", arguments: [target.id.rawValue, source.id.rawValue])
+            let targetCollections = try Int.fetchOne(db, sql: "select count(*) from collection_memory where memory_id = ?", arguments: [target.id.rawValue]) ?? 0
             if targetCollections == 0 {
-                try db.execute(sql: "insert or ignore into collection_memory (collection_id, memory_id) select collection_id, ? from collection_memory where memory_id = ?", arguments: [target.rawValue, source.rawValue])
+                try db.execute(sql: "insert or ignore into collection_memory (collection_id, memory_id) select collection_id, ? from collection_memory where memory_id = ?", arguments: [target.id.rawValue, source.id.rawValue])
             }
-            let targetChapter = try String?.fetchOne(db, sql: "select chapter_id from memory where id = ?", arguments: [target.rawValue]) ?? nil
-            if targetChapter == nil {
-                try db.execute(sql: "update memory set chapter_id = (select chapter_id from memory where id = ?) where id = ?", arguments: [source.rawValue, target.rawValue])
+            if target.chapterID == nil {
+                try db.execute(sql: "update memory set chapter_id = (select chapter_id from memory where id = ?) where id = ?", arguments: [source.id.rawValue, target.id.rawValue])
             }
-            _ = try Memory.deleteOne(db, key: source.rawValue)
+            _ = try Memory.deleteOne(db, key: source.id.rawValue)
         }
     }
 

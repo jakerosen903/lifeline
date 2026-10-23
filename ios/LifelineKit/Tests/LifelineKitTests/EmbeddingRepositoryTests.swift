@@ -48,3 +48,22 @@ import Testing
     try store.memories.deleteSpans(of: a.id)
     #expect(try store.memories.spans(of: a.id).isEmpty)
 }
+
+@Test func memoriesWithVectorsIsOneQueryAndSkipsExcluded() throws {
+    let db = try AppDatabase.inMemory()
+    let store = ExtractionStore(db)
+    let (_, segs) = try StoreFixtures.session(in: store.sessions, segments: ["one", "two"])
+    var ids: [MemoryID] = []
+    for (i, seg) in segs.enumerated() {
+        let c = StoreFixtures.candidate(seg.id)
+        try store.candidates.insert(c)
+        var m = StoreFixtures.memory(from: c.id, title: "m\(i)")
+        m.excludedFromAI = i == 1
+        try store.memories.insert(m, spans: [MemorySpan(memoryID: m.id, segmentID: seg.id, startMs: 0, endMs: 1, order: 0)], people: [], places: [], anchors: [])
+        try store.embeddings.upsert(memory: m.id, model: "fake", vector: [Float(i), 1])
+        ids.append(m.id)
+    }
+    let rows = try store.embeddings.memoriesWithVectors(model: "fake")
+    #expect(rows.map { $0.memory.id } == [ids[0]] && rows[0].vector == [0, 1])
+    #expect(try store.embeddings.memoriesWithVectors(model: "other").isEmpty)
+}

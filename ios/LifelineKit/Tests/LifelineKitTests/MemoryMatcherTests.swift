@@ -137,3 +137,12 @@ private func card(_ title: String, quote: String) -> MemoryOut {
     #expect(e.vector(for: "   ") == nil)
     #expect(e.vector(for: "blue door") == HashingEmbedder().vector(for: "blue door"), "deterministic across instances")
 }
+
+@Test func nlEmbedderLoadsItsModelOnce() {
+    NLSentenceEmbedder.resetLoadCountForTesting()
+    let e = NLSentenceEmbedder()
+    _ = e.vector(for: "the house had a blue door")
+    _ = e.vector(for: "we drove to disney")
+    _ = e.vector(for: "graduation day was hot")
+    #expect(NLSentenceEmbedder.loadCount == 1, "one asset load per process, not one per sentence")
+}
