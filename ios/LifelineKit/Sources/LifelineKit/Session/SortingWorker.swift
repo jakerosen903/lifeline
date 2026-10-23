@@ -8,13 +8,15 @@ public actor SortingWorker {
     private let store: ExtractionStore
     private let service: any ExtractionService
     private let log: @Sendable (String) -> Void
+    private let matcher: MemoryMatcher?
     private var cancelled: Set<SessionID> = []
     private var active: [SessionID: ExtractionQueue] = [:]
 
     public static let drainDeadline: Duration = .seconds(10 * 60)
 
-    public init(store: ExtractionStore, service: any ExtractionService, log: @escaping @Sendable (String) -> Void = { _ in }) {
-        self.store = store; self.service = service; self.log = log
+    public init(store: ExtractionStore, service: any ExtractionService, matcher: MemoryMatcher? = nil,
+                log: @escaping @Sendable (String) -> Void = { _ in }) {
+        self.store = store; self.service = service; self.matcher = matcher; self.log = log
     }
 
     /// Sorts every pending segment it can. Returns how many segments were sorted.
@@ -26,7 +28,7 @@ public actor SortingWorker {
             let before = pendingCount(session.id)
             guard before > 0 else { continue }
             let queue = ExtractionQueue(session: session.id, service: service, store: store, stage: "landed",
-                                        drainDeadline: Self.drainDeadline, log: log)
+                                        drainDeadline: Self.drainDeadline, matcher: matcher, log: log)
             active[session.id] = queue
             for segment in (try? store.sessions.segments(in: session.id, status: .pending)) ?? [] {
                 await queue.enqueue(segment.id)

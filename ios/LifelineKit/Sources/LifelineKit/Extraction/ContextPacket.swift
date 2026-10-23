@@ -12,6 +12,13 @@ public struct ContextPacket: Codable, Sendable, Equatable {
         public var id: String
         public var title: String
         public var rangeText: String?
+        /// True for an earlier memory retrieved because it reads like this segment (M4.1);
+        /// nil, and absent from the JSON, for this session's own memories.
+        public var related: Bool?
+
+        public init(id: String, title: String, rangeText: String?, related: Bool? = nil) {
+            self.id = id; self.title = title; self.rangeText = rangeText; self.related = related
+        }
     }
 
     public struct ChapterEntry: Codable, Sendable, Equatable {
@@ -50,7 +57,8 @@ public struct ContextPacketLimits: Sendable, Equatable {
 public enum ContextPacketBuilder {
     public static func build(segment: Segment, previous: [Segment], people: [(Person, [Alias])], memories: [Memory],
                              profileFreeText: String?, stage: String, limits: ContextPacketLimits = ContextPacketLimits(),
-                             chapters: [Chapter] = [], curiosity: [CuriosityItem] = [], excludedMemoryIDs: Set<MemoryID> = []) -> ContextPacket {
+                             chapters: [Chapter] = [], curiosity: [CuriosityItem] = [], excludedMemoryIDs: Set<MemoryID> = [],
+                             related: [Memory] = []) -> ContextPacket {
         let earlier = previous.filter { $0.index < segment.index }.sorted { $0.index < $1.index }
         let window = earlier.suffix(limits.previousSegments).map(\.text)
         let entries = people
@@ -60,7 +68,15 @@ public enum ContextPacketBuilder {
                 ContextPacket.PersonEntry(id: person.id.rawValue, name: person.displayName,
                                           aliases: aliases.map(\.text).filter { $0.caseInsensitiveCompare(person.displayName) != .orderedSame })
             }
-        let memoryEntries = memories.filter { !$0.excludedFromAI }.map { ContextPacket.MemoryEntry(id: $0.id.rawValue, title: $0.title, rangeText: $0.range.isPlaced ? $0.range.displayText : nil) }
+        // Related earlier memories lead, so the extractor sees what a retelling might belong to.
+        var seen = Set<MemoryID>()
+        var memoryEntries: [ContextPacket.MemoryEntry] = []
+        for memory in related where !memory.excludedFromAI && seen.insert(memory.id).inserted {
+            memoryEntries.append(.init(id: memory.id.rawValue, title: memory.title, rangeText: memory.range.isPlaced ? memory.range.displayText : nil, related: true))
+        }
+        for memory in memories where !memory.excludedFromAI && seen.insert(memory.id).inserted {
+            memoryEntries.append(.init(id: memory.id.rawValue, title: memory.title, rangeText: memory.range.isPlaced ? memory.range.displayText : nil))
+        }
         let chapterEntries = chapters.map {
             ContextPacket.ChapterEntry(id: $0.id.rawValue, title: $0.title ?? "untitled", rangeText: $0.range.isPlaced ? $0.range.displayText : nil)
         }

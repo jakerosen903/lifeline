@@ -19,7 +19,7 @@ import Testing
 }
 
 @Test func promptV2IsTheDefaultAndNamesKindsAndRelations() throws {
-    #expect(ExtractorConfig.default.version == "v3")
+    #expect(ExtractorConfig.default.version == "v4")
     let text = try ExtractorPrompt.system(version: "v2")
     #expect(text.contains("`kind`") && text.contains("fact") && text.contains("relation_text"))
     #expect(throws: Never.self) { try ExtractorPrompt.system(version: "v1") }

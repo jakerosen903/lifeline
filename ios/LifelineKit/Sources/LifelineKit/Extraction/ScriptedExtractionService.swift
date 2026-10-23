@@ -19,12 +19,14 @@ public struct ScriptedExtractionService: ExtractionService {
         var memories: [MemoryOut] = []
         var mentions: [MentionOut] = []
         if text.localizedCaseInsensitiveContains("blue door") {
+            // A second telling names the earlier memory when the packet carries one (M4.1 "Same as X?").
+            let earlier = request.packet.memories.first { $0.title == "The blue door" }?.id
             memories.append(MemoryOut(ref: "m1", kind: .event, title: "The blue door", quote: text,
                                       segmentSpan: WordSpan(startWord: 0, endWord: max(0, words.count - 1)),
                                       peopleRefs: [], placeText: nil,
                                       anchors: [AnchorOut(phrase: "when I was six", relation: .age, targetText: nil, value: nil),
                                                 AnchorOut(phrase: "before Maya climbed it", relation: .before, targetText: "Maya climbed it", value: nil)],
-                                      sameAsMemoryID: nil, collectionHint: nil, chapterHint: nil, confidence: 0.9))
+                                      sameAsMemoryID: earlier, collectionHint: nil, chapterHint: nil, confidence: 0.9))
         }
         if text.localizedCaseInsensitiveContains("climbed it in 1998") {
             memories.append(MemoryOut(ref: "m2", kind: .event, title: "Maya climbed it", quote: text,

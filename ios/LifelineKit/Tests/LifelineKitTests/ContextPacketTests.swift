@@ -70,3 +70,22 @@ private func person(_ name: String, owner: Bool = false, aliases: [String] = [])
     let packet = ContextPacketBuilder.build(segment: seg(0, "x"), previous: [], people: [], memories: [kept, excluded], profileFreeText: nil, stage: "open")
     #expect(packet.memories.map(\.title) == ["The blue door"])
 }
+
+@Test func relatedMemoriesLeadThePacketAndAreMarked() {
+    let a = StoreFixtures.memory(from: CandidateID(), title: "Orange house")
+    let b = StoreFixtures.memory(from: CandidateID(), title: "The canal")
+    var secret = StoreFixtures.memory(from: CandidateID(), title: "Private")
+    secret.excludedFromAI = true
+    let packet = ContextPacketBuilder.build(segment: seg(0, "x"), previous: [], people: [], memories: [b, a], profileFreeText: nil, stage: "open",
+                                            related: [a, secret])
+    #expect(packet.memories.map(\.title) == ["Orange house", "The canal"], "related first, no duplicate, excluded never")
+    #expect(packet.memories[0].related == true && packet.memories[1].related == nil)
+}
+
+@Test func packetJSONOmitsRelatedWhenNil() throws {
+    let a = StoreFixtures.memory(from: CandidateID(), title: "Orange house")
+    let plain = ContextPacketBuilder.build(segment: seg(0, "x"), previous: [], people: [], memories: [a], profileFreeText: nil, stage: "open")
+    #expect(!String(decoding: try plain.encodedJSON(), as: UTF8.self).contains("related"))
+    let marked = ContextPacketBuilder.build(segment: seg(0, "x"), previous: [], people: [], memories: [], profileFreeText: nil, stage: "open", related: [a])
+    #expect(String(decoding: try marked.encodedJSON(), as: UTF8.self).contains("\"related\" : true"))
+}
