@@ -154,7 +154,24 @@ extension MemorySpan: FetchableRecord, PersistableRecord {
     public static let databaseTableName = "memory_span"
     enum CodingKeys: String, CodingKey {
         case memoryID = "memory_id", segmentID = "segment_id", startMs = "start_ms", endMs = "end_ms", order
-        case titleText = "title_text", candidateID = "candidate_id"
+        case titleText = "title_text", candidateID = "candidate_id", continuesOrder = "continues_order"
+    }
+}
+
+extension Story: FetchableRecord, PersistableRecord {
+    public static let databaseTableName = "story"
+    enum CodingKeys: String, CodingKey { case id, title, chapterID = "chapter_id", createdAt = "created_at" }
+}
+
+extension StoryMoment: FetchableRecord, PersistableRecord {
+    public static let databaseTableName = "story_moment"
+    enum CodingKeys: String, CodingKey { case storyID = "story_id", memoryID = "memory_id", order }
+}
+
+extension DuplicatePair: FetchableRecord, PersistableRecord {
+    public static let databaseTableName = "duplicate_pair"
+    enum CodingKeys: String, CodingKey {
+        case id, aMemoryID = "a_memory_id", bMemoryID = "b_memory_id", score, verdict, status, decidedAt = "decided_at"
     }
 }
 

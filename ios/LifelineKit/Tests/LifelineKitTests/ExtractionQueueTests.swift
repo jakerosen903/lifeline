@@ -10,7 +10,8 @@ private struct Env {
         let sessions = SessionRepository(db)
         store = ExtractionStore(candidates: CandidateRepository(db), sessions: sessions, people: PeopleRepository(db),
                                 memories: MemoryRepository(db), profile: ProfileRepository(db),
-                                chapters: ChapterRepository(db), curiosity: CuriosityRepository(db), embeddings: EmbeddingRepository(db))
+                                chapters: ChapterRepository(db), curiosity: CuriosityRepository(db), embeddings: EmbeddingRepository(db),
+                                stories: StoryRepository(db), pairs: DuplicatePairRepository(db))
         (session, segments) = try StoreFixtures.session(in: sessions, segments: texts)
         service = FakeExtractionService(script)
         log = LogCollector()

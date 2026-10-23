@@ -105,7 +105,8 @@ public struct MemoryRepository: Sendable {
         try db.writer.read { db in
             let rows = try Row.fetchAll(db, sql: """
                 select memory.*, memory_span.memory_id as s_memory_id, memory_span.segment_id as s_segment_id, memory_span.start_ms as s_start_ms,
-                       memory_span.end_ms as s_end_ms, memory_span."order" as s_order, memory_span.title_text as s_title_text, memory_span.candidate_id as s_candidate_id
+                       memory_span.end_ms as s_end_ms, memory_span."order" as s_order, memory_span.title_text as s_title_text, memory_span.candidate_id as s_candidate_id,
+                       memory_span.continues_order as s_continues_order
                 from memory_span
                 join memory on memory.id = memory_span.memory_id
                 join segment on segment.id = memory_span.segment_id
@@ -116,7 +117,8 @@ public struct MemoryRepository: Sendable {
                 let memory = try Memory(row: row)
                 let span = MemorySpan(memoryID: MemoryID(rawValue: row["s_memory_id"]), segmentID: SegmentID(rawValue: row["s_segment_id"]),
                                       startMs: row["s_start_ms"], endMs: row["s_end_ms"], order: row["s_order"],
-                                      titleText: row["s_title_text"], candidateID: (row["s_candidate_id"] as String?).map(CandidateID.init(rawValue:)))
+                                      titleText: row["s_title_text"], candidateID: (row["s_candidate_id"] as String?).map(CandidateID.init(rawValue:)),
+                                      continuesOrder: row["s_continues_order"])
                 return (memory, span)
             }
         }
@@ -241,6 +243,7 @@ public struct MemoryRepository: Sendable {
             for (i, var span) in spans.enumerated() {
                 span.memoryID = target.id
                 span.order = next + i
+                span.continuesOrder = span.continuesOrder.map { $0 + next }
                 if i == 0, !target.isFloating { span.titleText = span.titleText ?? source.title; span.candidateID = span.candidateID ?? source.createdFromCandidateID }
                 try span.insert(db)
             }
