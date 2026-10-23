@@ -40,6 +40,23 @@ public struct CandidateRepository: Sendable {
         }
     }
 
+    /// A card's payload changed in place: a continuation added a span (M5). The row's identity,
+    /// kind and status stay, so the stack and the timeline keep showing one card.
+    public func updatePayload(_ id: CandidateID, _ payload: String) throws {
+        try db.writer.write { db in
+            try db.execute(sql: "update candidate set payload = ? where id = ?", arguments: [payload, id.rawValue])
+        }
+    }
+
+    /// The rows stored as continuations of a card, in arrival order (M5).
+    public func continuations(of id: CandidateID) throws -> [Candidate] {
+        try db.writer.read { db in
+            try Candidate.filter(Column("rejection") == Self.continuesReason(id)).order(Column("created_at"), Column("ordinal")).fetchAll(db)
+        }
+    }
+
+    public static func continuesReason(_ id: CandidateID) -> String { "continues \(id.rawValue)" }
+
     public func fetch(_ id: CandidateID) throws -> Candidate? {
         try db.writer.read { try Candidate.fetchOne($0, key: id.rawValue) }
     }

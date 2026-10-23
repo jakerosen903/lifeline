@@ -292,3 +292,78 @@ private let blankOutput = ExtractorOutput(memories: [MemoryOut(ref: "", kind: .o
     #expect(second.people.map(\.name) == ["Maya", "Zed"], "named in this segment first, then by most recent link")
     #expect(second.stories.map(\.title) == ["The thread"], "stories of the related memories ride along")
 }
+
+// MARK: - M5 continuation
+
+private func continuation(of candidate: CandidateID, anchors: [AnchorOut] = [], people: [String] = [], collectionHint: String? = nil) -> ExtractorOutput {
+    ExtractorOutput(memories: [MemoryOut(ref: "m2", title: "The pomegranate tree", quote: "my sister Maya climbed it", segmentSpan: WordSpan(startWord: 0, endWord: 6),
+                                         peopleRefs: people, placeText: nil, anchors: anchors, continuesCandidateID: candidate.rawValue,
+                                         collectionHint: collectionHint, chapterHint: nil, confidence: 0.9)],
+                    mentions: [], flags: .none)
+}
+
+private func firstCard(_ events: [ExtractionEvent]) -> Candidate? {
+    guard case .candidates(let cards, _)? = events.first else { return nil }
+    return cards.first
+}
+
+@Test func continuationExtendsThePendingCardAndKeepMakesOneMemory() async throws {
+    let env = try Env(texts: ["the garden had a pomegranate tree", "my sister Maya climbed it in 1998"], script: [.success(gardenOutput())])
+    let queue = env.queue()
+    let events = await queue.events
+    await queue.enqueue(env.segments[0].id)
+    let a = try #require(firstCard(await collect(events, count: 1)))
+    env.service.push(.success(continuation(of: a.id, anchors: [AnchorOut(phrase: "in 1998", relation: .absolute, targetText: nil, value: "1998")], people: ["Maya"])))
+    await queue.enqueue(env.segments[1].id)
+    let again = try #require(firstCard(await collect(events, count: 1)))
+    #expect(again.id == a.id, "the first card is emitted again, not a new one")
+    let payload = try #require(CandidatePayload.memory(again))
+    #expect(payload.extraSpans == [ExtraSpan(segmentID: env.segments[1].id.rawValue, startWord: 0, endWord: 6)])
+    let pending = try env.store.candidates.pending(in: env.session).filter { $0.kind == .memory }
+    #expect(pending.map(\.id) == [a.id])
+    let rows = try env.store.candidates.continuations(of: a.id)
+    #expect(rows.count == 1 && rows[0].status == .superseded && rows[0].rejection == "continues \(a.id.rawValue)")
+
+    let actions = CandidateActions(store: env.store)
+    let kept = try actions.acceptMemory(again)
+    let spans = try env.store.memories.spans(of: kept.memory.id)
+    #expect(spans.count == 2 && spans[1].continuesOrder == 0 && spans[1].segmentID == env.segments[1].id && spans[1].order == 1)
+    let words = try env.store.sessions.words(in: env.segments[1].id)
+    #expect(spans[1].startMs == words[0].startMs && spans[1].endMs == words[6].endMs)
+    #expect(try env.store.memories.anchors(of: kept.memory.id).map(\.phrase) == ["in 1998"])
+    #expect(kept.newMentions.map(\.text) == ["Maya"])
+    #expect(try env.store.candidates.fetch(rows[0].id)?.status == .accepted)
+}
+
+@Test func continuationAfterDismissIsItsOwnCard() async throws {
+    let env = try Env(texts: ["the garden had a pomegranate tree", "my sister Maya climbed it in 1998"], script: [.success(gardenOutput())])
+    let queue = env.queue()
+    let events = await queue.events
+    await queue.enqueue(env.segments[0].id)
+    let a = try #require(firstCard(await collect(events, count: 1)))
+    try CandidateActions(store: env.store).dismiss(a)
+    env.service.push(.success(continuation(of: a.id)))
+    await queue.enqueue(env.segments[1].id)
+    let b = try #require(firstCard(await collect(events, count: 1)))
+    #expect(b.id != a.id && b.status == .pending && b.segmentID == env.segments[1].id)
+    #expect(try env.store.candidates.fetch(a.id)?.status == .dismissed)
+    #expect(CandidatePayload.memory(b)?.extraSpans.isEmpty == true)
+}
+
+@Test func continuationHintIsKeyedToTheFirstCard() async throws {
+    let env = try Env(texts: ["the garden had a pomegranate tree", "my sister Maya climbed it in 1998"], script: [.success(gardenOutput())])
+    let queue = env.queue()
+    let events = await queue.events
+    await queue.enqueue(env.segments[0].id)
+    let a = try #require(firstCard(await collect(events, count: 1)))
+    env.service.push(.success(continuation(of: a.id, collectionHint: "every summer")))
+    await queue.enqueue(env.segments[1].id)
+    guard case .candidates(let emitted, _)? = await collect(events, count: 1).first else { Issue.record("no event"); return }
+    let hint = try #require(emitted.compactMap(CandidatePayload.hint).first)
+    #expect(hint.memoryCandidateID == a.id.rawValue && hint.phrase == "every summer")
+    let actions = CandidateActions(store: env.store)
+    _ = try actions.acceptMemory(try #require(emitted.first { $0.id == a.id }))
+    let waiting = CardQueue.waitingCards(pending: try env.store.candidates.pending(in: env.session),
+                                         statusOf: { (try? env.store.candidates.fetch($0))?.status })
+    #expect(waiting.contains { if case .hint = $0 { true } else { false } })
+}

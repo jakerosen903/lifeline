@@ -199,10 +199,21 @@ public actor ExtractionQueue {
             return Candidate(id: .init(), segmentID: segment, extractorVersion: version, ordinal: ordinal, kind: kind, payload: payload,
                              confidence: confidence, status: status, rejection: rejection, createdAt: .now)
         }
+        var extended: [(CandidateID, ExtraSpan)] = []
         for candidate in validated.accepted {
             let r = try Self.describe(candidate)
             if case .memory = candidate, validated.flags.seriousDisclosure {
                 rows.append(row(r.kind, r.payload, r.confidence, Self.withheldReason))
+                continue
+            }
+            // A telling carried on after a pause: the earlier card grows a span and shows again;
+            // this row is kept, superseded, so Keep can take its people, places and anchors (M5).
+            if case .memory(let memory) = candidate, let earlier = try pendingCard(named: memory.continuesCandidateID) {
+                var c = row(r.kind, r.payload, r.confidence, CandidateRepository.continuesReason(earlier.id))
+                c.status = .superseded
+                rows.append(c)
+                extended.append((earlier.id, ExtraSpan(segmentID: segment.rawValue, startWord: memory.segmentSpan.startWord, endWord: memory.segmentSpan.endWord)))
+                rows += try hintRows(for: memory, keyedTo: earlier.id, row: row)
                 continue
             }
             let c = row(r.kind, r.payload, r.confidence, nil)
@@ -213,12 +224,7 @@ public actor ExtractionQueue {
                 shown.append(c)
             }
             if case .memory(let memory) = candidate {
-                for (kind, phrase) in [(HintKind.collection, memory.collectionHint), (.chapter, memory.chapterHint)] {
-                    guard let phrase = phrase?.trimmingCharacters(in: .whitespacesAndNewlines), !phrase.isEmpty else { continue }
-                    let hint = row(.hint, try CandidatePayload.encode(HintOut(kind: kind, phrase: phrase, memoryCandidateID: c.id.rawValue)), memory.confidence, nil)
-                    rows.append(hint)
-                    shown.append(hint)
-                }
+                rows += try hintRows(for: memory, keyedTo: c.id, row: row)
             }
         }
         for rejected in validated.rejected {
@@ -228,12 +234,40 @@ public actor ExtractionQueue {
         if validated.flags.isAnySet {
             rows.append(row(.flag, try CandidatePayload.encode(validated.flags), 1, nil))
         }
+        // Superseded rows are records with nothing to tap; only pending hint rows from this pass show.
+        shown += rows.filter { $0.kind == .hint && $0.status == .pending && !shown.contains($0) }
         try store.candidates.insertAll(rows, markingExtracted: segment, in: store.sessions)
         for (candidate, _) in knownMentions {
             let mention = try actions.acceptMention(candidate)
             try actions.resolveIfKnown(mention)
         }
+        for (earlierID, span) in extended {
+            guard let earlier = try store.candidates.fetch(earlierID), var out = CandidatePayload.memory(earlier) else { continue }
+            out.extraSpans.append(span)
+            try store.candidates.updatePayload(earlierID, try CandidatePayload.encode(out))
+            if let updated = try store.candidates.fetch(earlierID) { shown.insert(updated, at: 0) }
+        }
         return shown
+    }
+
+    /// The pending memory card of this session a continuation names, or nil: a kept, dismissed
+    /// or unknown card is never extended, so the new telling stands as its own card.
+    private func pendingCard(named id: String?) throws -> Candidate? {
+        guard let id, let card = try store.candidates.fetch(CandidateID(rawValue: id)),
+              card.kind == .memory, card.status == .pending,
+              let segment = try store.sessions.fetchSegment(card.segmentID), segment.sessionID == session else { return nil }
+        return card
+    }
+
+    /// Hint rows for a memory's collection and chapter phrases, waiting on the card `keyedTo`.
+    private func hintRows(for memory: MemoryOut, keyedTo card: CandidateID,
+                          row: (CandidateKind, String, Double, String?) -> Candidate) throws -> [Candidate] {
+        var out: [Candidate] = []
+        for (kind, phrase) in [(HintKind.collection, memory.collectionHint), (.chapter, memory.chapterHint)] {
+            guard let phrase = phrase?.trimmingCharacters(in: .whitespacesAndNewlines), !phrase.isEmpty else { continue }
+            out.append(row(.hint, try CandidatePayload.encode(HintOut(kind: kind, phrase: phrase, memoryCandidateID: card.rawValue)), memory.confidence, nil))
+        }
+        return out
     }
 
     private static func describe(_ candidate: OutputValidator.ValidatedCandidate) throws -> (kind: CandidateKind, payload: String, confidence: Double) {

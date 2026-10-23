@@ -112,11 +112,16 @@ public struct CandidateActions: Sendable {
         let hidden = try store.sessions.fetchSegment(candidate.segmentID).flatMap { try store.sessions.fetch($0.sessionID) }?.hiddenFromTimeline ?? false
         let memory = Memory(id: .init(), title: out.title, summaryQuote: out.quote, visibility: .timeline, chapterID: nil,
                             createdFromCandidateID: candidate.id, createdAt: .now, hiddenFromTimeline: hidden)
-        let span = MemorySpan(memoryID: memory.id, segmentID: candidate.segmentID,
-                              startMs: words[out.segmentSpan.startWord].startMs, endMs: words[out.segmentSpan.endWord].endMs, order: 0)
+        var spans = [MemorySpan(memoryID: memory.id, segmentID: candidate.segmentID,
+                                startMs: words[out.segmentSpan.startWord].startMs, endMs: words[out.segmentSpan.endWord].endMs, order: 0)]
+        spans += try continuationSpans(of: out, for: memory.id)
 
-        let edges = try edges(of: out, for: memory.id)
-        try store.memories.insert(memory, spans: [span], people: edges.people, places: edges.places, anchors: edges.anchors, acceptingCandidate: candidate.id)
+        // The card's edges and every continuation's, as one telling (M5).
+        let continuations = try store.candidates.continuations(of: candidate.id)
+        var edges = try edges(of: out, for: memory.id)
+        for row in continuations.compactMap(CandidatePayload.memory) { edges.merge(try self.edges(of: row, for: memory.id)) }
+        try store.memories.insert(memory, spans: spans, people: edges.people, places: edges.places, anchors: edges.anchors, acceptingCandidate: candidate.id)
+        for row in continuations { try store.candidates.setStatus(row.id, .accepted) }
         let newMentions = try finishEdges(edges, segment: candidate.segmentID)
         try reindex(memory.id)
         // Place what the new anchors allow, and re-place anything that pointed at this title.
@@ -132,6 +137,29 @@ public struct CandidateActions: Sendable {
         var roleAliases: [(PersonID, String)] = []
         var places: [MemoryPlace] = []
         var anchors: [Anchor] = []
+
+        /// The union with another segment's edges, deduplicated as one segment's are.
+        mutating func merge(_ other: Edges) {
+            for person in other.people where !people.contains(where: { $0.personID == person.personID }) { people.append(person) }
+            for name in other.unknown where !unknown.contains(where: { CandidateActions.same($0, name) }) { unknown.append(name) }
+            roleAliases += other.roleAliases.filter { pair in !roleAliases.contains { $0.0 == pair.0 && $0.1 == pair.1 } }
+            for place in other.places where !places.contains(where: { $0.placeID == place.placeID }) { places.append(place) }
+            anchors += other.anchors.filter { a in !anchors.contains { $0.phrase == a.phrase && $0.relation == a.relation } }
+        }
+    }
+
+    /// One span per continuation segment, each carrying on the first telling (M5). Words are
+    /// looked up per segment; a span that no longer fits its segment is skipped, not guessed.
+    func continuationSpans(of out: MemoryOut, for memory: MemoryID) throws -> [MemorySpan] {
+        var spans: [MemorySpan] = []
+        for (i, extra) in out.extraSpans.enumerated() {
+            let segment = SegmentID(rawValue: extra.segmentID)
+            let words = try store.sessions.words(in: segment)
+            guard extra.startWord >= 0, extra.endWord < words.count, extra.startWord <= extra.endWord else { continue }
+            spans.append(MemorySpan(memoryID: memory, segmentID: segment, startMs: words[extra.startWord].startMs, endMs: words[extra.endWord].endMs,
+                                    order: i + 1, continuesOrder: 0))
+        }
+        return spans
     }
 
     func edges(of out: MemoryOut, for memory: MemoryID) throws -> Edges {

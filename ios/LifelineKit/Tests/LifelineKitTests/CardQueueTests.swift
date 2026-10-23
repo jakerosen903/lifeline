@@ -85,3 +85,18 @@ private func mentionCandidate(_ segment: SegmentID, ordinal: Int = 1) throws -> 
     queue.memoryAccepted(first)
     #expect(queue.possibleMemoryCount == 1, "a kept memory is no longer only possible")
 }
+
+@Test func cardQueueReplacesACardWithTheSameID() throws {
+    let segment = SegmentID()
+    let a = try memoryCandidate(segment, ordinal: 0), b = try mentionCandidate(segment, ordinal: 1)
+    var queue = CardQueue()
+    queue.apply(.candidates([a, b], segment: segment))
+    var out = try #require(CandidatePayload.memory(a))
+    out.extraSpans = [ExtraSpan(segmentID: SegmentID().rawValue, startWord: 0, endWord: 2)]
+    var changed = a
+    changed.payload = try CandidatePayload.encode(out)
+    queue.apply(.candidates([changed], segment: segment))
+    #expect(queue.cards.map(\.id) == [a.id.rawValue, b.id.rawValue], "same position, still one card")
+    guard case .memory(_, let shown) = queue.cards[0] else { Issue.record("expected memory card"); return }
+    #expect(shown.extraSpans.count == 1)
+}
