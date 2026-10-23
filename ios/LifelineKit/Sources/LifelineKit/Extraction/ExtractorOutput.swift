@@ -122,19 +122,51 @@ public struct MentionOut: Codable, Sendable, Equatable {
     }
 }
 
+/// A disclosure of harm. Narration of the past and danger now call for the same fixed words but
+/// a different landing; one broad flag was too coarse to shape the whole experience.
+public enum DisclosureKind: String, Codable, Sendable, CaseIterable {
+    case none, past, present
+}
+
 public struct Flags: Codable, Sendable, Equatable {
-    public var seriousDisclosure: Bool
+    public var disclosure: DisclosureKind
     public var wantsToStop: Bool
     public var wantsToChangeSubject: Bool
 
-    public init(seriousDisclosure: Bool, wantsToStop: Bool, wantsToChangeSubject: Bool) {
-        self.seriousDisclosure = seriousDisclosure; self.wantsToStop = wantsToStop; self.wantsToChangeSubject = wantsToChangeSubject
+    public init(disclosure: DisclosureKind, wantsToStop: Bool, wantsToChangeSubject: Bool) {
+        self.disclosure = disclosure; self.wantsToStop = wantsToStop; self.wantsToChangeSubject = wantsToChangeSubject
     }
 
-    public static let none = Flags(seriousDisclosure: false, wantsToStop: false, wantsToChangeSubject: false)
-    public var isAnySet: Bool { seriousDisclosure || wantsToStop || wantsToChangeSubject }
+    /// Extractor v2 rows and older call sites: a serious disclosure reads as narration of the past.
+    public init(seriousDisclosure: Bool, wantsToStop: Bool, wantsToChangeSubject: Bool) {
+        self.init(disclosure: seriousDisclosure ? .past : .none, wantsToStop: wantsToStop, wantsToChangeSubject: wantsToChangeSubject)
+    }
+
+    public static let none = Flags(disclosure: .none, wantsToStop: false, wantsToChangeSubject: false)
+    public var seriousDisclosure: Bool { disclosure != .none }
+    /// Winds the session down and suppresses every organizational prompt.
+    public var isHeavy: Bool { disclosure != .none || wantsToStop }
+    public var isAnySet: Bool { disclosure != .none || wantsToStop || wantsToChangeSubject }
 
     enum CodingKeys: String, CodingKey {
-        case seriousDisclosure = "serious_disclosure", wantsToStop = "wants_to_stop", wantsToChangeSubject = "wants_to_change_subject"
+        case disclosure, seriousDisclosure = "serious_disclosure", wantsToStop = "wants_to_stop", wantsToChangeSubject = "wants_to_change_subject"
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        if let kind = try c.decodeIfPresent(DisclosureKind.self, forKey: .disclosure) {
+            disclosure = kind
+        } else {
+            disclosure = try c.decodeIfPresent(Bool.self, forKey: .seriousDisclosure) == true ? .past : .none
+        }
+        wantsToStop = try c.decodeIfPresent(Bool.self, forKey: .wantsToStop) ?? false
+        wantsToChangeSubject = try c.decodeIfPresent(Bool.self, forKey: .wantsToChangeSubject) ?? false
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(disclosure, forKey: .disclosure)
+        try c.encode(wantsToStop, forKey: .wantsToStop)
+        try c.encode(wantsToChangeSubject, forKey: .wantsToChangeSubject)
     }
 }

@@ -15,7 +15,7 @@ let package = Package(
         .target(
             name: "LifelineKit",
             dependencies: [.product(name: "GRDB", package: "GRDB.swift")],
-            resources: [.copy("Extraction/Prompts")],
+            resources: [.copy("Extraction/Prompts"), .copy("Arc/FixedResponses")],
             swiftSettings: [.swiftLanguageMode(.v6)]
         ),
         .executableTarget(

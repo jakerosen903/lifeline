@@ -127,7 +127,7 @@ private func collect(_ events: AsyncStream<ExtractionEvent>, count: Int, timeout
     #expect(got.contains { if case .flags(let f, _) = $0 { f.seriousDisclosure } else { false } })
     let stored = try env.store.candidates.candidates(for: env.segments[0].id)
     #expect(stored.map(\.kind) == [.memory, .flag])
-    #expect(stored[1].payload.contains("\"serious_disclosure\":true"))
+    #expect(stored[1].payload.contains("\"disclosure\":\"past\""))
 }
 
 @Test func profileFreeTextAndPeopleReachThePacket() async throws {

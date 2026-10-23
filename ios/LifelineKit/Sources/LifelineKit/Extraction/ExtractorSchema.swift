@@ -10,7 +10,7 @@ public enum ExtractorSchema {
             "memories": array(memory),
             "mentions": array(mention),
             "flags": object([
-                "serious_disclosure": ["type": "boolean"],
+                "disclosure": ["type": "string", "enum": DisclosureKind.allCases.map(\.rawValue)],
                 "wants_to_stop": ["type": "boolean"],
                 "wants_to_change_subject": ["type": "boolean"],
             ]),

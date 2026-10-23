@@ -29,22 +29,26 @@ private func mentionCandidate(_ segment: SegmentID, ordinal: Int = 1) throws -> 
     #expect(queue.cards.count == 2, "the same candidate is never shown twice")
 }
 
-@Test func seriousDisclosureSuppressesLaterMemoryCards() throws {
+@Test func disclosureSuppressesOrganizationalPrompts() throws {
+    // During a heavy moment no organizational prompt of any kind appears, who-is-this included.
     let segment = SegmentID()
     var queue = CardQueue()
-    queue.apply(.flags(Flags(seriousDisclosure: true, wantsToStop: false, wantsToChangeSubject: false), segment: segment))
+    queue.apply(.flags(Flags(disclosure: .past, wantsToStop: false, wantsToChangeSubject: false), segment: segment))
     #expect(queue.suppressed)
     queue.apply(.candidates([try memoryCandidate(segment), try mentionCandidate(segment)], segment: segment))
-    #expect(queue.cards.count == 1)
-    guard case .whoIsThis = queue.cards[0] else { Issue.record("expected a who-is-this card"); return }
+    #expect(queue.cards.isEmpty)
 }
 
-@Test func otherFlagsDoNotSuppress() throws {
+@Test func wantsToStopSuppressesTooButChangeSubjectDoesNot() throws {
     let segment = SegmentID()
-    var queue = CardQueue()
-    queue.apply(.flags(Flags(seriousDisclosure: false, wantsToStop: true, wantsToChangeSubject: true), segment: segment))
-    queue.apply(.candidates([try memoryCandidate(segment)], segment: segment))
-    #expect(!queue.suppressed && queue.cards.count == 1)
+    var stopping = CardQueue()
+    stopping.apply(.flags(Flags(disclosure: .none, wantsToStop: true, wantsToChangeSubject: false), segment: segment))
+    stopping.apply(.candidates([try memoryCandidate(segment)], segment: segment))
+    #expect(stopping.suppressed && stopping.cards.isEmpty)
+    var changing = CardQueue()
+    changing.apply(.flags(Flags(disclosure: .none, wantsToStop: false, wantsToChangeSubject: true), segment: segment))
+    changing.apply(.candidates([try memoryCandidate(segment)], segment: segment))
+    #expect(!changing.suppressed && changing.cards.count == 1)
 }
 
 @Test func undecodablePayloadIsNotACard() {
