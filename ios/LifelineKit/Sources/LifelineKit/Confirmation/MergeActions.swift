@@ -62,7 +62,12 @@ extension CandidateActions {
             guard let memory = try store.memories.fetch(id) else { throw Error.targetMissing }
             rows.append((memory, try firstTelling(of: memory) ?? memory.createdAt))
         }
-        rows.sort { $0.firstTold != $1.firstTold ? $0.firstTold < $1.firstTold : $0.memory.id.rawValue < $1.memory.id.rawValue }
+        // Oldest first; on a tie a real memory beats a stand-in that borrowed a span from the same session.
+        rows.sort {
+            if $0.firstTold != $1.firstTold { return $0.firstTold < $1.firstTold }
+            if $0.memory.isFloating != $1.memory.isFloating { return !$0.memory.isFloating }
+            return $0.memory.id.rawValue < $1.memory.id.rawValue
+        }
         guard let oldest = rows.first?.memory else { throw Error.targetMissing }
         let later = rows.dropFirst().map(\.memory)
         guard !later.contains(where: \.isFloating) else { throw Error.standIn }
