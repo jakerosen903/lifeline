@@ -21,6 +21,11 @@ struct SessionsScreen: View {
                             .font(.system(.headline, design: .serif))
                         Text("\(row.durationText) · \(row.segmentCount) moments")
                             .font(.subheadline).foregroundStyle(Theme.stone)
+                        if row.pendingCount > 0 {
+                            Label(row.pendingCount == 1 ? "1 moment still to sort" : "\(row.pendingCount) moments still to sort", systemImage: "arrow.triangle.2.circlepath")
+                                .font(.caption).foregroundStyle(Theme.ochre)
+                                .accessibilityIdentifier("sessions.sorting")
+                        }
                     }
                     .padding(.vertical, 4)
                 }

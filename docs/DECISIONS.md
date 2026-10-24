@@ -2,6 +2,16 @@
 
 One entry per decision. Newest first. Status is Decided, Open, or Superseded.
 
+## 2026-10-24 · Copies of the archive stay out of the phone's cloud backup
+
+**Status:** Decided. Source: Claude review of #9 (Backup.swift).
+
+**Decision.** Every `.lifeline` file the app writes is excluded from the phone's cloud backup: an export, a safety copy before a restore, and the replaced archive zipped at launch. The audio folder is already excluded, so a copy must not send the same audio and transcripts out by another path.
+
+**Why.** Data posture (V1): content leaves the device only when the person shares it. A copy in Files is on the device. The person moves it off the phone by sharing the file, which is an explicit act.
+
+**Consequence.** A copy left in Files does not protect against a lost phone until the person shares it to iCloud Drive or another place. The export screen must say so.
+
 ## 2026-10-22 · Preserve first, organize later (review follow-up)
 
 **Status:** Decided. Source: external design review of the V1 spec, M1 to M4 plans, design canvases and Swift code; mock-ups R1 to R9 on the design canvas.
@@ -188,6 +198,14 @@ On the second day of the M4 build a story told in two recordings became two memo
 **Decision.** Retrieval by on-device sentence embeddings (Apple's NaturalLanguage, cosine over `title. quote`) finds the nearest earlier memories across all recordings; they ride in the extractor's packet marked `related`. The extractor decides whether a segment retells one of them; a strong on-device match alone is also enough to put "Same as X?" on the card. The person decides: Keep stays the default and primary; "Same story" is one tap and undoable for six seconds. A merge is one memory with several audio spans (the V1 spec's `memory_span`); stories in M5 can group memories without undoing it. Merging into a resolver stand-in makes it real: the telling becomes its first span and `created_from_candidate_id` is set, so a memory with a nil candidate is only ever a stand-in. Undo is offered for six seconds and is refused if the target changed in any way since the merge; both merge and undo are single transactions. "Tell me when" writes a year, an around-year, a between, or an age with origin `stated`, shown as said; the resolver and the relative questions treat a stated range as settled. A memory excluded from AI is never embedded or suggested; a hidden one is never suggested on a card.
 
 **Consequences.** Migration v7 (`memory_embedding`, span `title_text` and `candidate_id`); extractor prompt v4; deleting a recording removes only its spans, and a memory with a telling elsewhere survives; the Change sheet gains "Same as another memory…" and "Tell me when"; shelf rows show "Add a date" and "Add to a collection" inline. Thresholds (retrieve 0.55, suggest 0.80) are starting points to tune on the owner's recordings. Embeddings for earlier memories are backfilled in a detached launch task before the sorting worker runs, per model, not on the main actor. "Between two years" displays in the app's year-span style ("1996–99"). Spec: `docs/specs/2026-10-23-m4.1-same-story-and-when.md`.
+
+## 2026-10-23 · Steady: sorting is visible and restartable, a copy is a file the person owns, a telling can be trimmed
+
+After M5 the landing said sorting was still going on and the timeline said nothing; the phone held the only copy of everything; the Change sheet promised two corrections it could not do.
+
+**Decision.** One quiet line on the timeline says what is still being sorted ("Still sorting 2 moments from today's recording…"), that the duplicate pass is checking for repeats, that sorting stopped ("Not sorting right now", Try again), or that a key is missing (the line opens Settings). The worker can start again: a saved key, the foreground, Try again. Hidden recordings count; deleted ones do not. "Your copy" in Settings exports one `.lifeline` file (a zip: the database copied through GRDB's backup API after a checkpoint, the audio, the pause log, a manifest; never the key) and restores one: the app writes a safety copy of what is on the phone to Files first, stages the copy, and applies it at the next launch before the database opens; a copy with a newer schema is refused, an older one migrates on open. "Which part of the recording" moves a telling's start and end to word boundaries within its segment, one part at a time for a telling told across a pause, and rewrites the card's span so Separate agrees later; Undo stays until the sheet closes. "Just tell me" waits for the interviewer. Two tests that flaked on the clock and on a timestamp tie are deterministic.
+
+**Consequences.** ZIPFoundation 0.9.19 is the kit's second dependency (owner's call 0 in the spec; AppleArchive and a hand-written zip were the alternatives). `SortingReporter` is one more thing the composition root owns. Under `-uiTesting` the export skips the system share sheet, which a UI test cannot drive, and keeps the file in Documents. A restore never merges.
 
 ## 2026-10-23 · One moment, one story: pairs are asked, groups merge on one tap, stories ride on Keep in view
 

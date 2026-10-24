@@ -32,5 +32,25 @@
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>
 	</array>
+	<key>UTExportedTypeDeclarations</key>
+	<array>
+		<dict>
+			<key>UTTypeConformsTo</key>
+			<array>
+				<string>public.zip-archive</string>
+			</array>
+			<key>UTTypeDescription</key>
+			<string>Lifeline copy</string>
+			<key>UTTypeIdentifier</key>
+			<string>com.jakerosen.lifeline.archive</string>
+			<key>UTTypeTagSpecification</key>
+			<dict>
+				<key>public.filename-extension</key>
+				<array>
+					<string>lifeline</string>
+				</array>
+			</dict>
+		</dict>
+	</array>
 </dict>
 </plist>

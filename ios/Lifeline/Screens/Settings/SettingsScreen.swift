@@ -4,8 +4,11 @@ import SwiftUI
 /// Settings: the About you form in edit mode, and the key that lets the app sort what you say.
 struct SettingsScreen: View {
     let deps: Dependencies
+    /// True while a session is live or unlanded; export and restore wait for it (M6).
+    var isSessionLive: () -> Bool = { false }
     @Environment(\.dismiss) private var dismiss
     @State private var key = APIKeyViewModel()
+    @State private var backup: BackupViewModel?
 
     var body: some View {
         NavigationStack {
@@ -16,7 +19,12 @@ struct SettingsScreen: View {
                     dismiss()
                 })
 
-                APIKeySection(key: key, secrets: deps.secrets)
+                // A saved key starts sorting whatever waited for one (M6).
+                APIKeySection(key: key, secrets: deps.secrets, onSaved: { deps.worker.requestStart() })
+
+                if let backup {
+                    YourCopySection(viewModel: backup)
+                }
             }
             .scrollContentBackground(.hidden)
             .linenBackground()
@@ -25,7 +33,10 @@ struct SettingsScreen: View {
             .toolbar {
                 Button("Done") { dismiss() }.accessibilityIdentifier("settings.done")
             }
-            .onAppear { key.load(from: deps.secrets) }
+            .onAppear {
+                key.load(from: deps.secrets)
+                if backup == nil { backup = BackupViewModel(deps: deps, isSessionLive: isSessionLive) }
+            }
         }
     }
 }
@@ -34,6 +45,7 @@ struct SettingsScreen: View {
 private struct APIKeySection: View {
     @Bindable var key: APIKeyViewModel
     let secrets: any SecretStore
+    var onSaved: () -> Void = {}
 
     var body: some View {
         Section {
@@ -44,10 +56,10 @@ private struct APIKeySection: View {
                 .autocorrectionDisabled()
                 .textInputAutocapitalization(.never)
                 .submitLabel(.done)
-                .onSubmit { if key.canSave { key.save(into: secrets) } }
+                .onSubmit { if key.canSave { key.save(into: secrets); if key.isSaved { onSaved() } } }
                 .accessibilityIdentifier("settings.apiKey")
             HStack {
-                Button("Save key") { key.save(into: secrets) }
+                Button("Save key") { key.save(into: secrets); if key.isSaved { onSaved() } }
                     .buttonStyle(.borderless)
                     .disabled(!key.canSave)
                     .accessibilityIdentifier("settings.apiKeySave")

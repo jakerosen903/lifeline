@@ -10,11 +10,12 @@ let package = Package(
     ],
     dependencies: [
         .package(url: "https://github.com/groue/GRDB.swift.git", exact: "7.11.1"),
+        .package(url: "https://github.com/weichsel/ZIPFoundation.git", exact: "0.9.19"),
     ],
     targets: [
         .target(
             name: "LifelineKit",
-            dependencies: [.product(name: "GRDB", package: "GRDB.swift")],
+            dependencies: [.product(name: "GRDB", package: "GRDB.swift"), .product(name: "ZIPFoundation", package: "ZIPFoundation")],
             resources: [.copy("Extraction/Prompts"), .copy("Arc/FixedResponses")],
             swiftSettings: [.swiftLanguageMode(.v6)]
         ),

@@ -159,14 +159,18 @@ private func waitUntil(_ cond: @escaping () async -> Bool, timeoutMs: Int = 2_00
 @Test func stopReturnsBeforeExtractionFinishes() async throws {
     let db = try AppDatabase.inMemory(); let repo = SessionRepository(db); let voice = FakeVoiceSession()
     let finished = LogCollector()
+    // The hook's "sorting" waits on a gate the test holds; it cannot finish until the test opens it,
+    // so the order is what is asserted, never the clock.
+    let (gate, open) = AsyncStream<Void>.makeStream()
     let rec = SessionRecorder(voice: voice, sessions: repo, audioURL: { URL(fileURLWithPath: "/tmp/\($0.rawValue).m4a") },
-                              hooks: .init(onStopped: { Task { try? await Task.sleep(for: .seconds(1)); finished.append("sorted") } }))
+                              hooks: .init(onStopped: { Task { for await _ in gate { break }; finished.append("sorted") } }))
     let id = try await rec.start()
-    let clock = ContinuousClock()
-    let elapsed = await clock.measure { try? await rec.stop() }
-    #expect(elapsed < .milliseconds(500), "finishing never waits for sorting: \(elapsed)")
-    #expect(try repo.fetch(id)?.endedAt != nil)
+    try await rec.stop()
+    #expect(try repo.fetch(id)?.endedAt != nil, "stop returned and the session is ended")
     #expect(finished.all.isEmpty, "sorting is still going on in the background")
+    open.yield(()); open.finish()
+    for _ in 0..<100 where finished.all.isEmpty { try? await Task.sleep(for: .milliseconds(20)) }
+    #expect(finished.all == ["sorted"], "the background sorting finished once the gate opened")
 }
 
 @Test func recoverLeavesUnlandedSessionsWithSegmentsOpen() async throws {
