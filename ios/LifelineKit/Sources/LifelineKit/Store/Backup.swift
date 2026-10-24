@@ -99,6 +99,8 @@ public enum Backup {
         }
         try? fm.removeItem(at: destination)
         try fm.moveItem(at: partial, to: destination)
+        // The audio directory stays out of the phone's cloud backup on purpose; so does every copy of it.
+        try AudioLocation.applyBackupExclusion(to: destination)
         return manifest
     }
 

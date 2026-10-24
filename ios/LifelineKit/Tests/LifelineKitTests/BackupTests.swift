@@ -235,3 +235,17 @@ private func archives(in dir: URL) throws -> [URL] {
     #expect(try !Backup.applyPendingRestore(root: phone.url, safetyCopyDirectory: documents))
     #expect(try archives(in: documents).count == 2 && !FileManager.default.fileExists(atPath: phone.url.appending(path: "Lifeline-replaced").path))
 }
+
+@Test func copiesWrittenToDocumentsStayOutOfCloudBackup() throws {
+    let phone = try Root(sessions: 1, memories: 1)
+    let archive = phone.url.appending(path: "self.lifeline")
+    _ = try Backup.export(root: phone.url, appVersion: "1.0", to: archive, database: phone.db)
+    let documents = try docs()
+    let pending = try Backup.stage(archive, root: phone.url, appVersion: "1.0", database: phone.db, safetyCopyDirectory: documents)
+    #expect(try pending.safetyCopy.resourceValues(forKeys: [.isExcludedFromBackupKey]).isExcludedFromBackup == true, "the safety copy never rides the phone's cloud backup")
+    #expect(try Backup.applyPendingRestore(root: phone.url, safetyCopyDirectory: documents))
+    for copy in try archives(in: documents) {
+        #expect(try copy.resourceValues(forKeys: [.isExcludedFromBackupKey]).isExcludedFromBackup == true, Comment(rawValue: copy.lastPathComponent))
+    }
+    #expect(try archive.resourceValues(forKeys: [.isExcludedFromBackupKey]).isExcludedFromBackup == true, "every archive the app writes")
+}
