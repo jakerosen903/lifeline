@@ -2,6 +2,16 @@
 
 One entry per decision. Newest first. Status is Decided, Open, or Superseded.
 
+## 2026-10-24 · Copies of the archive stay out of the phone's cloud backup
+
+**Status:** Decided. Source: Claude review of #9 (Backup.swift).
+
+**Decision.** Every `.lifeline` file the app writes is excluded from the phone's cloud backup: an export, a safety copy before a restore, and the replaced archive zipped at launch. The audio folder is already excluded, so a copy must not send the same audio and transcripts out by another path.
+
+**Why.** Data posture (V1): content leaves the device only when the person shares it. A copy in Files is on the device. The person moves it off the phone by sharing the file, which is an explicit act.
+
+**Consequence.** A copy left in Files does not protect against a lost phone until the person shares it to iCloud Drive or another place. The export screen must say so.
+
 ## 2026-10-22 · Preserve first, organize later (review follow-up)
 
 **Status:** Decided. Source: external design review of the V1 spec, M1 to M4 plans, design canvases and Swift code; mock-ups R1 to R9 on the design canvas.
