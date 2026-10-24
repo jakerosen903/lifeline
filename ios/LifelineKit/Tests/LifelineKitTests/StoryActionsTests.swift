@@ -134,3 +134,23 @@ private struct Env {
     try env.actions.ungroupPair(made)
     #expect(try env.store.stories.story(id: made.story.id) == nil && (try env.store.stories.story(of: d.id)) == nil)
 }
+
+// MARK: - One transaction each (PR review)
+
+@Test func joinAndSplitAreOneTransaction() throws {
+    let env = try Env()
+    let a = try env.kept("one", title: "One")
+    let b = try env.kept("two", title: "Two")
+    let pair = DuplicatePair(id: .init(), aMemoryID: a.id, bMemoryID: b.id, score: 0.8, verdict: .sameStory, status: .open, decidedAt: nil)
+    try env.store.pairs.insert(pair)
+    let ghost = MemoryID(rawValue: "nobody")
+    #expect(throws: (any Error).self) {
+        try env.store.stories.join([a.id, ghost], story: nil, title: nil, chapterID: nil, markingPair: (pair.id, .grouped))
+    }
+    #expect(try env.store.stories.stories().isEmpty && (try env.store.stories.story(of: a.id)) == nil, "no story was made")
+    #expect(try env.store.pairs.pair(id: pair.id)?.status == .open, "the pair is still open")
+
+    let story = try env.actions.createStory(title: "Both", containing: [a.id, b.id])
+    #expect(throws: (any Error).self) { try env.store.stories.split(story.id, taking: [b.id, ghost]) }
+    #expect(try env.store.stories.members(of: story.id).map(\.id) == [a.id, b.id] && (try env.store.stories.stories()).count == 1)
+}

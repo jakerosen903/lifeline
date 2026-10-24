@@ -85,14 +85,26 @@ extension CandidateActions {
             guard let snapshot = try store.memories.snapshot(of: memory.id) else { throw Error.targetMissing }
             before.append(snapshot)
         }
-        for memory in later {
-            guard let target = try store.memories.fetch(oldest.id) else { throw Error.targetMissing }
-            try store.memories.fold(memory, into: target)
-        }
-        var merged = try mergeCandidate(candidate, into: oldest.id)
-        merged.receipt.before = before
-        merged.receipt.targetTitle = oldest.title
-        return merged
+        // Folds and the card's span in one transaction; the card's edges and its continuations' as one telling.
+        let span = MemorySpan(memoryID: oldest.id, segmentID: candidate.segmentID,
+                              startMs: words[out.segmentSpan.startWord].startMs, endMs: words[out.segmentSpan.endWord].endMs,
+                              order: 0, titleText: out.title, candidateID: candidate.id)
+        let continuations = try store.candidates.continuations(of: candidate.id)
+        var edges = try edges(of: out, for: oldest.id)
+        for row in continuations.compactMap(CandidatePayload.memory) { edges.merge(try self.edges(of: row, for: oldest.id)) }
+        let promotion = oldest.isFloating && later.isEmpty ? (title: out.title, summaryQuote: out.quote) : nil
+        try store.memories.mergeGroup(sources: later, into: oldest, span: span, continuations: try continuationSpans(of: out, for: oldest.id),
+                                      people: edges.people, places: edges.places, anchors: edges.anchors,
+                                      promotingStandIn: promotion, acceptingCandidate: candidate.id)
+        for row in continuations { try store.candidates.setStatusKeepingRejection(row.id, .accepted) }
+        let newMentions = try finishEdges(edges, segment: candidate.segmentID)
+        try reindex(oldest.id)
+        if let chapter = try store.memories.fetch(oldest.id)?.chapterID { try chapterRangeFromMembers(chapter) }
+        _ = try ResolverRunner(store: store).run()
+        guard let after = try store.memories.snapshot(of: oldest.id) else { throw Error.targetMissing }
+        return MergedCandidate(receipt: MergeReceipt(target: oldest.id, targetTitle: oldest.title, before: before, after: after,
+                                                     candidateID: candidate.id, mergedAt: .now),
+                               newMentions: newMentions)
     }
 
     /// When a memory was first told: the session start of its order-0 span.
@@ -131,7 +143,6 @@ extension CandidateActions {
         let segmentText = try store.sessions.fetchSegment(span.segmentID)?.text ?? ""
         let fresh = Memory(id: .init(), title: span.titleText ?? original.title, summaryQuote: out?.quote ?? segmentText, visibility: original.visibility,
                            chapterID: nil, createdFromCandidateID: span.candidateID, createdAt: .now, hiddenFromTimeline: original.hiddenFromTimeline)
-        try store.memories.separate(memory, order: order, into: fresh)
 
         // What this telling alone named goes with it; what another telling also named stays.
         let leaving = try tellingOutputs(of: span, card: card)
@@ -139,26 +150,21 @@ extension CandidateActions {
             .flatMap { try tellingOutputs(of: $0, card: try $0.candidateID.flatMap { try store.candidates.fetch($0) }) }
             + (original.createdFromCandidateID.flatMap { try? store.candidates.fetch($0) }.flatMap(CandidatePayload.memory).map { [$0] } ?? [])
         let leavingAnchors = leaving.flatMap(\.anchors), stayingAnchors = staying.flatMap(\.anchors)
-        for anchor in try store.memories.anchors(of: memory)
-        where leavingAnchors.contains(where: { $0.phrase == anchor.phrase && $0.relation == anchor.relation })
-            && !stayingAnchors.contains(where: { $0.phrase == anchor.phrase && $0.relation == anchor.relation }) {
-            try store.memories.move(anchor: anchor.id, to: fresh.id)
-        }
+        let anchors = try store.memories.anchors(of: memory).filter { anchor in
+            leavingAnchors.contains(where: { $0.phrase == anchor.phrase && $0.relation == anchor.relation })
+                && !stayingAnchors.contains(where: { $0.phrase == anchor.phrase && $0.relation == anchor.relation })
+        }.map(\.id)
         let leavingPeople = try people(named: leaving.flatMap(\.peopleRefs)), stayingPeople = try people(named: staying.flatMap(\.peopleRefs))
-        for person in leavingPeople.subtracting(stayingPeople) {
-            try store.memories.unlink(person, from: memory)
-            try store.memories.link(person, to: fresh.id, roleText: nil)
-        }
         let leavingPlaces = Set(leaving.compactMap(\.placeText).map { $0.lowercased() }), stayingPlaces = Set(staying.compactMap(\.placeText).map { $0.lowercased() })
-        for place in try store.memories.places(of: memory)
-        where leavingPlaces.contains(place.nameText.lowercased()) && !stayingPlaces.contains(place.nameText.lowercased()) {
-            try store.memories.unlinkPlace(place.id, from: memory)
-            try store.memories.insertPlace(MemoryPlace(memoryID: fresh.id, placeID: place.id))
-        }
+        let places = try store.memories.places(of: memory)
+            .filter { leavingPlaces.contains($0.nameText.lowercased()) && !stayingPlaces.contains($0.nameText.lowercased()) }.map(\.id)
         // A date the anchors gave (the resolver stamps "in 1998" as stated, phrase as evidence) goes
         // with the telling that said it; a date the person typed on "Tell me when" stays.
         let fromLeavingAnchor = leavingAnchors.contains { $0.phrase.caseInsensitiveCompare(original.range.evidenceText ?? "") == .orderedSame }
-        if !original.range.isSettled || fromLeavingAnchor { try store.memories.updateRange(memory, .unplaced) }
+        // The spans, the edges and the range in one transaction.
+        try store.memories.separate(memory, order: order, into: fresh,
+                                    moving: .init(anchors: anchors, people: Array(leavingPeople.subtracting(stayingPeople)), places: places),
+                                    clearRange: !original.range.isSettled || fromLeavingAnchor)
         try reindex(memory)
         try reindex(fresh.id)
         _ = try ResolverRunner(store: store).run()

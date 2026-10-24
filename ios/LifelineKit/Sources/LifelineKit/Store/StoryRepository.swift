@@ -74,6 +74,62 @@ public struct StoryRepository: Sendable {
         }
     }
 
+    /// Puts memories into a story (made when `story` is nil, with `newStoryID` when given), each
+    /// leaving any story it was in, emptied stories deleted, and a pair's status set, all in one
+    /// transaction (M5 review).
+    @discardableResult
+    public func join(_ memories: [MemoryID], story: StoryID?, title: String?, chapterID: ChapterID?, newStoryID: StoryID? = nil,
+                     markingPair pair: (id: DuplicatePairID, status: PairStatus)? = nil) throws -> Story {
+        try db.writer.write { db in
+            let target: Story
+            if let story, let existing = try Story.fetchOne(db, key: story.rawValue) {
+                target = existing
+            } else {
+                target = Story(id: story ?? newStoryID ?? StoryID(), title: Self.clean(title), chapterID: chapterID, createdAt: .now)
+                try target.insert(db)
+            }
+            for memory in memories {
+                try db.execute(sql: "delete from story_moment where memory_id = ?", arguments: [memory.rawValue])
+                let order = (try Int.fetchOne(db, sql: "select max(\"order\") from story_moment where story_id = ?", arguments: [target.id.rawValue]) ?? -1) + 1
+                try StoryMoment(storyID: target.id, memoryID: memory, order: order).insert(db)
+            }
+            try db.execute(sql: MemoryRepository.deleteEmptyStoriesSQL)
+            if let pair { try Self.setPair(pair.id, pair.status, in: db) }
+            return target
+        }
+    }
+
+    /// Takes memories out of their stories, deletes `deletingStory` and any emptied story, and
+    /// sets a pair's status, in one transaction.
+    public func leave(_ memories: [MemoryID], deletingStory: StoryID?, markingPair pair: (id: DuplicatePairID, status: PairStatus)? = nil) throws {
+        try db.writer.write { db in
+            for memory in memories { try db.execute(sql: "delete from story_moment where memory_id = ?", arguments: [memory.rawValue]) }
+            if let deletingStory { _ = try Story.deleteOne(db, key: deletingStory.rawValue) }
+            try db.execute(sql: MemoryRepository.deleteEmptyStoriesSQL)
+            if let pair { try Self.setPair(pair.id, pair.status, in: db) }
+        }
+    }
+
+    /// The taken members become a new, untitled story in the same chapter, in one transaction.
+    @discardableResult
+    public func split(_ story: StoryID, taking memories: [MemoryID]) throws -> Story {
+        try db.writer.write { db in
+            let chapter = try Story.fetchOne(db, key: story.rawValue)?.chapterID
+            let fresh = Story(id: StoryID(), title: nil, chapterID: chapter, createdAt: .now)
+            try fresh.insert(db)
+            for (i, memory) in memories.enumerated() {
+                try db.execute(sql: "delete from story_moment where memory_id = ? and story_id = ?", arguments: [memory.rawValue, story.rawValue])
+                try StoryMoment(storyID: fresh.id, memoryID: memory, order: i).insert(db)
+            }
+            return fresh
+        }
+    }
+
+    private static func setPair(_ id: DuplicatePairID, _ status: PairStatus, in db: Database) throws {
+        let decidedAt: Date? = status == .open ? nil : .now
+        try db.execute(sql: "update duplicate_pair set status = ?, decided_at = ? where id = ?", arguments: [status.rawValue, decidedAt, id.rawValue])
+    }
+
     public func derivedSpan(of story: StoryID) throws -> TimeRange {
         ChapterRepository.span(over: try members(of: story).map(\.range))
     }

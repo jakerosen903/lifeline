@@ -401,3 +401,35 @@ private func twoSegmentCard(_ env: Env, first: String, second: String, title: St
     #expect(throws: CandidateActions.Error.emptySpan) { try env.actions.mergeGroup(bad, into: [first.id, second.id]) }
     #expect(try env.store.memories.fetch(second.id) != nil && (try env.store.memories.spans(of: first.id)).count == 1, "nothing folded")
 }
+
+// MARK: - One transaction each (PR review)
+
+@Test func mergeGroupIsOneTransaction() throws {
+    let env = try Env()
+    let (_, a) = try env.kept("we lived in an orange house", title: "Orange house")
+    let (_, b) = try env.kept("the orange house had a canal", title: "Orange house canal")
+    let (_, c) = try env.kept("that orange house again", title: "Orange house again")
+    let (_, segment, card) = try env.card("grew up in an orange house", title: "Grew up")
+    let span = MemorySpan(memoryID: a.id, segmentID: segment.id, startMs: 0, endMs: 100, order: 3, titleText: "Grew up", candidateID: card.id)
+    // A person row that does not exist fails the last insert; nothing before it may stay.
+    let ghost = MemoryPerson(memoryID: a.id, personID: PersonID(rawValue: "nobody"), roleText: nil)
+    #expect(throws: (any Error).self) {
+        try env.store.memories.mergeGroup(sources: [b, c], into: a, span: span, continuations: [], people: [ghost], places: [], anchors: [],
+                                          promotingStandIn: nil, acceptingCandidate: card.id)
+    }
+    #expect(try env.store.memories.fetch(b.id) != nil && (try env.store.memories.fetch(c.id)) != nil)
+    #expect(try env.store.memories.spans(of: a.id).count == 1 && (try env.store.candidates.fetch(card.id))?.status == .pending)
+}
+
+@Test func separateIsOneTransaction() throws {
+    let env = try Env()
+    let (_, a) = try env.kept("we lived in an orange house", title: "Orange house")
+    let (_, _, b) = try env.card("the orange house in 1998", title: "In 1998", anchors: [AnchorOut(phrase: "in 1998", relation: .absolute, targetText: nil, value: "1998")])
+    _ = try env.actions.mergeCandidate(b, into: a.id)
+    let fresh = Memory(id: .init(), title: "In 1998", summaryQuote: "the orange house in 1998", visibility: .timeline, chapterID: nil, createdFromCandidateID: b.id, createdAt: .now)
+    #expect(throws: (any Error).self) {
+        try env.store.memories.separate(a.id, order: 1, into: fresh, moving: .init(anchors: [AnchorID(rawValue: "ghost")], people: [], places: []), clearRange: true)
+    }
+    #expect(try env.store.memories.spans(of: a.id).count == 2 && (try env.store.memories.fetch(fresh.id)) == nil)
+    #expect(try env.store.memories.fetch(a.id)?.range.isPlaced == true, "the range was not cleared either")
+}
