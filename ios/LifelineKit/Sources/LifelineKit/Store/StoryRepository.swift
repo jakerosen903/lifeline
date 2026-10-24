@@ -81,6 +81,15 @@ public struct StoryRepository: Sendable {
     public func join(_ memories: [MemoryID], story: StoryID?, title: String?, chapterID: ChapterID?, newStoryID: StoryID? = nil,
                      markingPair pair: (id: DuplicatePairID, status: PairStatus)? = nil) throws -> Story {
         try db.writer.write { db in
+            let target = try Self.join(memories, story: story, title: title, chapterID: chapterID, newStoryID: newStoryID, in: db)
+            if let pair { try Self.setPair(pair.id, pair.status, in: db) }
+            return target
+        }
+    }
+
+    /// The membership half of `join`, inside a caller's transaction: Keep writes the memory and
+    /// its story line as one.
+    static func join(_ memories: [MemoryID], story: StoryID?, title: String?, chapterID: ChapterID?, newStoryID: StoryID?, in db: Database) throws -> Story {
             let target: Story
             if let story, let existing = try Story.fetchOne(db, key: story.rawValue) {
                 target = existing
@@ -94,9 +103,7 @@ public struct StoryRepository: Sendable {
                 try StoryMoment(storyID: target.id, memoryID: memory, order: order).insert(db)
             }
             try db.execute(sql: MemoryRepository.deleteEmptyStoriesSQL)
-            if let pair { try Self.setPair(pair.id, pair.status, in: db) }
             return target
-        }
     }
 
     /// Takes memories out of their stories, deletes `deletingStory` and any emptied story, and

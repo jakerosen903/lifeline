@@ -78,12 +78,6 @@ extension CandidateActions {
 
     /// Keep with a `story_ref`: the ref is always a story id (the queue mints one for every new
     /// raw ref), so the memory joins the story when its row exists and makes the row otherwise.
-    func joinStory(_ memory: MemoryID, ref: String?) throws {
-        guard let ref, !ref.isEmpty else { return }
-        let id = StoryID(rawValue: ref)
-        try store.stories.join([memory], story: id, title: nil, chapterID: try store.memories.fetch(memory)?.chapterID, newStoryID: id)
-    }
-
     /// A story title hint, accepted: the member's story takes the title, or a story is made
     /// around the member. Titles are the person's words, at most 8 of them.
     func acceptStoryHint(_ phrase: String, for memory: MemoryID) throws -> Story {

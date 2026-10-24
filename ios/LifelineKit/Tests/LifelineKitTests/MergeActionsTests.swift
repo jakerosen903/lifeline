@@ -421,6 +421,32 @@ private func twoSegmentCard(_ env: Env, first: String, second: String, title: St
     #expect(try env.store.memories.spans(of: a.id).count == 1 && (try env.store.candidates.fetch(card.id))?.status == .pending)
 }
 
+@Test func keepIsOneTransactionWithContinuationsAndStory() throws {
+    let env = try Env()
+    let (_, segment, card) = try env.card("grew up in an orange house", title: "Grew up")
+    let (_, segs) = try StoreFixtures.session(in: env.store.sessions, segments: ["the house had a canal"])
+    var tail = StoreFixtures.candidate(segs[0].id, payload: card.payload)
+    tail.status = .superseded
+    tail.rejection = CandidateRepository.continuesReason(card.id)
+    try env.store.candidates.insert(tail)
+    let memory = Memory(id: .init(), title: "Grew up", summaryQuote: "grew up in an orange house", visibility: .timeline, chapterID: nil,
+                        createdFromCandidateID: card.id, createdAt: .now)
+    let span = MemorySpan(memoryID: memory.id, segmentID: segment.id, startMs: 0, endMs: 100, order: 0)
+    let story = StoryID()
+    // A story in a chapter that does not exist fails the last write; the memory and the card statuses must not stay.
+    #expect(throws: (any Error).self) {
+        try env.store.memories.insert(memory, spans: [span], people: [], places: [], anchors: [], acceptingCandidate: card.id,
+                                      acceptingContinuations: [tail.id], joiningStory: (id: story, chapterID: ChapterID(rawValue: "ghost")))
+    }
+    #expect(try env.store.memories.fetch(memory.id) == nil)
+    #expect(try env.store.candidates.fetch(card.id)?.status == .pending && (try env.store.candidates.fetch(tail.id))?.status == .superseded)
+    #expect(try env.store.stories.story(id: story) == nil)
+    // The same write with a real target lands all three together.
+    try env.store.memories.insert(memory, spans: [span], people: [], places: [], anchors: [], acceptingCandidate: card.id,
+                                  acceptingContinuations: [tail.id], joiningStory: (id: story, chapterID: nil))
+    #expect(try env.store.candidates.fetch(tail.id)?.status == .accepted && (try env.store.stories.story(of: memory.id))?.id == story)
+}
+
 @Test func separateIsOneTransaction() throws {
     let env = try Env()
     let (_, a) = try env.kept("we lived in an orange house", title: "Orange house")
