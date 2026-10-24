@@ -193,8 +193,8 @@ final class SessionViewModel: Identifiable {
         if let card = cards.undoMerge() { cardQueue.restore(card) }
     }
     /// "Same story": the card joins an earlier memory; its hints follow as if it were kept.
-    func sameStory(_ card: Card, into target: MemoryID) {
-        guard cards.sameStory(card, into: target) else { return }
+    func sameStory(_ card: Card, into targets: [MemoryID]) {
+        guard cards.sameStory(card, into: targets) else { return }
         cardQueue.remove(card.id)
         cardQueue.memoryAccepted(card.id)
     }

@@ -66,7 +66,7 @@ final class SessionDetailViewModel {
     func dismiss(_ card: Card) { if cards.dismiss(card) { refresh() } }
     func undo() { if cards.undo() != nil { refresh() } }
     func undoMerge() { if cards.undoMerge() != nil { refresh() } }
-    func sameStory(_ card: Card, into target: MemoryID) { if cards.sameStory(card, into: target) { refresh() } }
+    func sameStory(_ card: Card, into targets: [MemoryID]) { if cards.sameStory(card, into: targets) { refresh() } }
     func resolve(_ card: Card, _ choice: MentionChoice) { if cards.resolve(card, choice) { refresh() } }
 
     func isPlaying(_ segment: Segment) -> Bool { player.playingRange == segment.range && player.isPlaying }

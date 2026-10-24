@@ -25,11 +25,14 @@ public struct CandidateActions: Sendable {
         case stale
         case notStated
         case standIn
+        // M5 stories
+        case nothingToSplit
     }
 
     public enum HintResult: Equatable, Sendable {
         case collection(Collection)
         case chapter(Chapter)
+        case story(Story)
     }
 
     public struct AcceptedMemory: Sendable, Equatable {
@@ -99,7 +102,8 @@ public struct CandidateActions: Sendable {
         try store.sessions.deleteSession(session)
     }
 
-    public func acceptMemory(_ candidate: Candidate) throws -> AcceptedMemory {
+    /// `joinStory: false` is the card's "Not part of it": the memory lands with no story.
+    public func acceptMemory(_ candidate: Candidate, joinStory: Bool = true) throws -> AcceptedMemory {
         guard candidate.kind == .memory else { throw Error.wrongKind }
         try requirePending(candidate)
         guard let out = CandidatePayload.memory(candidate) else { throw Error.badPayload }
@@ -111,12 +115,18 @@ public struct CandidateActions: Sendable {
         let hidden = try store.sessions.fetchSegment(candidate.segmentID).flatMap { try store.sessions.fetch($0.sessionID) }?.hiddenFromTimeline ?? false
         let memory = Memory(id: .init(), title: out.title, summaryQuote: out.quote, visibility: .timeline, chapterID: nil,
                             createdFromCandidateID: candidate.id, createdAt: .now, hiddenFromTimeline: hidden)
-        let span = MemorySpan(memoryID: memory.id, segmentID: candidate.segmentID,
-                              startMs: words[out.segmentSpan.startWord].startMs, endMs: words[out.segmentSpan.endWord].endMs, order: 0)
+        var spans = [MemorySpan(memoryID: memory.id, segmentID: candidate.segmentID,
+                                startMs: words[out.segmentSpan.startWord].startMs, endMs: words[out.segmentSpan.endWord].endMs, order: 0)]
+        spans += try continuationSpans(of: out, for: memory.id)
 
-        let edges = try edges(of: out, for: memory.id)
-        try store.memories.insert(memory, spans: [span], people: edges.people, places: edges.places, anchors: edges.anchors, acceptingCandidate: candidate.id)
+        // The card's edges and every continuation's, as one telling (M5).
+        let continuations = try store.candidates.continuations(of: candidate.id)
+        var edges = try edges(of: out, for: memory.id)
+        for row in continuations.compactMap(CandidatePayload.memory) { edges.merge(try self.edges(of: row, for: memory.id)) }
+        try store.memories.insert(memory, spans: spans, people: edges.people, places: edges.places, anchors: edges.anchors, acceptingCandidate: candidate.id)
+        for row in continuations { try store.candidates.setStatusKeepingRejection(row.id, .accepted) }
         let newMentions = try finishEdges(edges, segment: candidate.segmentID)
+        if joinStory { try self.joinStory(memory.id, ref: out.storyRef) }
         try reindex(memory.id)
         // Place what the new anchors allow, and re-place anything that pointed at this title.
         _ = try ResolverRunner(store: store).run()
@@ -131,6 +141,29 @@ public struct CandidateActions: Sendable {
         var roleAliases: [(PersonID, String)] = []
         var places: [MemoryPlace] = []
         var anchors: [Anchor] = []
+
+        /// The union with another segment's edges, deduplicated as one segment's are.
+        mutating func merge(_ other: Edges) {
+            for person in other.people where !people.contains(where: { $0.personID == person.personID }) { people.append(person) }
+            for name in other.unknown where !unknown.contains(where: { CandidateActions.same($0, name) }) { unknown.append(name) }
+            roleAliases += other.roleAliases.filter { pair in !roleAliases.contains { $0.0 == pair.0 && $0.1 == pair.1 } }
+            for place in other.places where !places.contains(where: { $0.placeID == place.placeID }) { places.append(place) }
+            anchors += other.anchors.filter { a in !anchors.contains { $0.phrase == a.phrase && $0.relation == a.relation } }
+        }
+    }
+
+    /// One span per continuation segment, each carrying on the first telling (M5). Words are
+    /// looked up per segment; a span that no longer fits its segment is skipped, not guessed.
+    func continuationSpans(of out: MemoryOut, for memory: MemoryID) throws -> [MemorySpan] {
+        var spans: [MemorySpan] = []
+        for (i, extra) in out.extraSpans.enumerated() {
+            let segment = SegmentID(rawValue: extra.segmentID)
+            let words = try store.sessions.words(in: segment)
+            guard extra.startWord >= 0, extra.endWord < words.count, extra.startWord <= extra.endWord else { continue }
+            spans.append(MemorySpan(memoryID: memory, segmentID: segment, startMs: words[extra.startWord].startMs, endMs: words[extra.endWord].endMs,
+                                    order: i + 1, continuesOrder: 0))
+        }
+        return spans
     }
 
     func edges(of out: MemoryOut, for memory: MemoryID) throws -> Edges {
@@ -288,9 +321,8 @@ public struct CandidateActions: Sendable {
         try requirePending(candidate)
         guard let out = CandidatePayload.hint(candidate) else { throw Error.badPayload }
         // The card was kept as its own memory, or merged into one as a later telling (M4.1).
-        guard let memory = try store.memories.memories(fromSegment: candidate.segmentID)
-                .first(where: { $0.createdFromCandidateID?.rawValue == out.memoryCandidateID })
-                ?? store.memories.memory(withSpanFrom: CandidateID(rawValue: out.memoryCandidateID)) else { throw Error.memoryNotAccepted }
+        let cardID = CandidateID(rawValue: out.memoryCandidateID)
+        guard let memory = try store.memories.memory(createdFrom: cardID) ?? store.memories.memory(withSpanFrom: cardID) else { throw Error.memoryNotAccepted }
         let result: HintResult
         switch out.kind {
         case .collection:
@@ -302,6 +334,8 @@ public struct CandidateActions: Sendable {
             } else {
                 result = .chapter(try createChapter(title: out.phrase, containing: memory.id))
             }
+        case .story:
+            result = .story(try acceptStoryHint(out.phrase, for: memory.id))
         }
         try store.candidates.setStatus(candidate.id, .accepted)
         return result
@@ -350,10 +384,12 @@ public struct CandidateActions: Sendable {
     }
 
     /// True when the memory's candidate named this person.
+    /// Whether the memory's card, or any segment that carried it on (M5), named this person.
     private func names(_ memory: Memory, _ text: String) throws -> Bool {
         guard let candidateID = memory.createdFromCandidateID, let candidate = try store.candidates.fetch(candidateID),
               let out = CandidatePayload.memory(candidate) else { return false }
-        return out.peopleRefs.contains { Self.same($0, text) }
+        let refs = out.peopleRefs + (try store.candidates.continuations(of: candidateID)).compactMap(CandidatePayload.memory).flatMap(\.peopleRefs)
+        return refs.contains { Self.same($0, text) }
     }
 
     static func same(_ a: String, _ b: String) -> Bool {

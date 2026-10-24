@@ -32,7 +32,7 @@ private func mention(_ text: String, status: MentionStatus = .unresolved) -> Men
     let actions = CandidateActions(store: store)
     let (_, segments) = try StoreFixtures.session(in: store.sessions)
     let out = MemoryOut(ref: "m1", kind: .event, title: "The pomegranate tree", quote: "pomegranate tree", segmentSpan: WordSpan(startWord: 4, endWord: 5),
-                        peopleRefs: [], placeText: nil, anchors: [], sameAsMemoryID: nil, collectionHint: nil, chapterHint: nil, confidence: 0.9)
+                        peopleRefs: [], placeText: nil, anchors: [], collectionHint: nil, chapterHint: nil, confidence: 0.9)
     let candidate = StoreFixtures.candidate(segments[0].id, payload: try CandidatePayload.encode(out))
     try store.candidates.insert(candidate)
     let card = Card.memory(candidate, out)
@@ -64,7 +64,7 @@ private func mention(_ text: String, status: MentionStatus = .unresolved) -> Men
     let actions = CandidateActions(store: store)
     let (_, segments) = try StoreFixtures.session(in: store.sessions)
     let out = MemoryOut(ref: "m1", kind: .event, title: "The pomegranate tree", quote: "the garden had a pomegranate tree", segmentSpan: WordSpan(startWord: 0, endWord: 5),
-                        peopleRefs: [], placeText: nil, anchors: [], sameAsMemoryID: nil, collectionHint: nil, chapterHint: nil, confidence: 0.9)
+                        peopleRefs: [], placeText: nil, anchors: [], collectionHint: nil, chapterHint: nil, confidence: 0.9)
     let candidate = StoreFixtures.candidate(segments[0].id, payload: try CandidatePayload.encode(out))
     try store.candidates.insert(candidate)
     let memory = try actions.acceptMemory(candidate).memory
@@ -80,7 +80,7 @@ private func mention(_ text: String, status: MentionStatus = .unresolved) -> Men
     let actions = CandidateActions(store: store)
     let (_, segments) = try StoreFixtures.session(in: store.sessions)
     let out = MemoryOut(ref: "m1", kind: .event, title: "The pomegranate tree", quote: "pomegranate tree", segmentSpan: WordSpan(startWord: 4, endWord: 5),
-                        peopleRefs: [], placeText: nil, anchors: [], sameAsMemoryID: nil, collectionHint: nil, chapterHint: nil, confidence: 0.9)
+                        peopleRefs: [], placeText: nil, anchors: [], collectionHint: nil, chapterHint: nil, confidence: 0.9)
     let candidate = StoreFixtures.candidate(segments[0].id, payload: try CandidatePayload.encode(out))
     try store.candidates.insert(candidate)
     let memory = try actions.acceptMemory(candidate).memory

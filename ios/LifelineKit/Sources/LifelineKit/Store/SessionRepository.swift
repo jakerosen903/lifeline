@@ -128,7 +128,7 @@ extension SessionRepository {
                 """, arguments: [id.rawValue])
             for memory in touched {
                 let spans = try Row.fetchAll(db, sql: """
-                    select memory_span.rowid as rid, memory_span.candidate_id as cid from memory_span
+                    select memory_span.rowid as rid, memory_span.candidate_id as cid, memory_span."order" as old_order, memory_span.continues_order as cont from memory_span
                     join segment on segment.id = memory_span.segment_id
                     where memory_span.memory_id = ? order by segment."index", memory_span.start_ms
                     """, arguments: [memory])
@@ -136,9 +136,12 @@ extension SessionRepository {
                     _ = try Memory.deleteOne(db, key: memory)
                     continue
                 }
-                // Two passes so the (memory_id, order) key never collides mid-renumber.
+                // Two passes so the (memory_id, order) key never collides mid-renumber. A continuation
+                // follows its telling through the same old→new map; one whose telling left stands alone.
+                let newOrder = Dictionary(uniqueKeysWithValues: spans.enumerated().map { ($1["old_order"] as Int, $0) })
                 for (i, row) in spans.enumerated() {
-                    try db.execute(sql: "update memory_span set \"order\" = ? where rowid = ?", arguments: [-(i + 1), row["rid"] as Int64])
+                    let cont = (row["cont"] as Int?).flatMap { newOrder[$0] }
+                    try db.execute(sql: "update memory_span set \"order\" = ?, continues_order = ? where rowid = ?", arguments: [-(i + 1), cont, row["rid"] as Int64])
                 }
                 try db.execute(sql: "update memory_span set \"order\" = -\"order\" - 1 where memory_id = ?", arguments: [memory])
                 // The memory's own card may be leaving with the recording; its first surviving telling takes over.
@@ -151,6 +154,7 @@ extension SessionRepository {
                 }
             }
             _ = try Session.deleteOne(db, key: id.rawValue)
+            try db.execute(sql: MemoryRepository.deleteEmptyStoriesSQL)
         }
     }
 }

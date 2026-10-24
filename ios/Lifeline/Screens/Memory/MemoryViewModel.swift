@@ -10,9 +10,12 @@ final class MemoryViewModel {
     private(set) var people: [Person] = []
     private(set) var place: Place?
     private(set) var chapterTitle: String?
-    /// Every telling, first telling first (M4.1). `span` and `session` are the first.
+    /// Every telling, first telling first (M4.1). A telling told across a pause is one row: the
+    /// spans that carry it on play after it (M5). `span` and `session` are the first.
     private(set) var spans: [(span: MemorySpan, session: Session)] = []
+    private var continuations: [Int: [(span: MemorySpan, session: Session)]] = [:]
     private(set) var playingOrder: Int?
+    private var playThrough: Task<Void, Never>?
     var span: MemorySpan? { spans.first?.span }
     var session: Session? { spans.first?.session }
     private(set) var ageText: String?
@@ -46,10 +49,12 @@ final class MemoryViewModel {
             people = try store.memories.people(of: memory.id)
             place = try store.memories.places(of: memory.id).first
             chapterTitle = try memory.chapterID.flatMap { try store.chapters.chapter(id: $0) }?.title
-            spans = try store.memories.spans(of: memory.id).compactMap { span in
+            let all: [(span: MemorySpan, session: Session)] = try store.memories.spans(of: memory.id).compactMap { span in
                 guard let segment = try store.sessions.fetchSegment(span.segmentID), let session = try store.sessions.fetch(segment.sessionID) else { return nil }
                 return (span, session)
             }
+            spans = all.filter { $0.span.continuesOrder == nil }
+            continuations = Dictionary(grouping: all.filter { $0.span.continuesOrder != nil }, by: { $0.span.continuesOrder! })
             let placedByAge = try store.memories.anchors(of: memory.id).contains { $0.relation == .age && $0.resolved }
             if placedByAge, let birth = try store.profile.ownerBirthDate(), let year = memory.range.earliest?.year, isGuess, year - birth.year >= 0 {
                 ageText = "age ~\(year - birth.year)"
@@ -88,26 +93,48 @@ final class MemoryViewModel {
         togglePlayback(of: first.span)
     }
 
-    /// Plays one telling; a second tap on the same telling stops.
+    /// Plays one telling, then the spans that carry it on; a second tap on the same telling stops.
     func togglePlayback(of span: MemorySpan) {
+        playThrough?.cancel()
         if player.isPlaying, playingOrder == span.order { player.stop(); playingOrder = nil; return }
         guard let telling = spans.first(where: { $0.span.order == span.order }) else { return }
-        do {
-            try deps.activatePlayback()
-            try player.play(url: try deps.audioURL(for: telling.session), range: MsRange(start: span.startMs, end: span.endMs))
-            playingOrder = span.order
-            error = nil
-        } catch {
-            self.error = "Could not play this memory: \(error.localizedDescription)"
+        let queue = [telling] + (continuations[span.order] ?? [])
+        playingOrder = span.order
+        playThrough = Task { [weak self] in
+            for part in queue {
+                guard let self, !Task.isCancelled else { return }
+                guard play(part) else { return }
+                while player.isPlaying, !Task.isCancelled { try? await Task.sleep(for: .milliseconds(100)) }
+            }
+            self?.playingOrder = nil
         }
     }
 
-    func isPlaying(_ span: MemorySpan) -> Bool { player.isPlaying && playingOrder == span.order }
+    private func play(_ part: (span: MemorySpan, session: Session)) -> Bool {
+        do {
+            try deps.activatePlayback()
+            try player.play(url: try deps.audioURL(for: part.session), range: MsRange(start: part.span.startMs, end: part.span.endMs))
+            error = nil
+            return true
+        } catch {
+            self.error = "Could not play this memory: \(error.localizedDescription)"
+            return false
+        }
+    }
+
+    func isPlaying(_ span: MemorySpan) -> Bool { playingOrder == span.order && (player.isPlaying || playThrough != nil && !(playThrough?.isCancelled ?? true)) }
 
     func answer(_ choice: RelativeQuestion.Choice) {
         guard let question else { return }
         do { try deps.actions.answer(question, with: choice); refresh() }
         catch { self.error = "Could not save that: \(error.localizedDescription)" }
+    }
+
+    /// "Separate this telling": a later telling becomes its own memory again (M5).
+    func separate(order: Int) {
+        stop()
+        do { _ = try deps.actions.separateTelling(memory.id, order: order); error = nil; refresh() }
+        catch { self.error = "Could not separate that: \(error.localizedDescription)" }
     }
 
     /// "Tell me when": the person's own date, stored as said.
@@ -121,5 +148,5 @@ final class MemoryViewModel {
         return mentions.first { $0.id == id }
     }
 
-    func stop() { player.stop() }
+    func stop() { playThrough?.cancel(); player.stop(); playingOrder = nil }
 }

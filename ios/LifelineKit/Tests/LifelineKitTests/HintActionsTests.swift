@@ -13,7 +13,7 @@ private struct Env {
     }
     func memoryCandidate(ordinal: Int = 0, collection: String? = nil, chapter: String? = nil) throws -> Candidate {
         let out = MemoryOut(ref: "m1", kind: .event, title: "The station wagon", quote: "the station wagon", segmentSpan: WordSpan(startWord: 7, endWord: 8),
-                            peopleRefs: [], placeText: nil, anchors: [], sameAsMemoryID: nil, collectionHint: collection, chapterHint: chapter, confidence: 0.9)
+                            peopleRefs: [], placeText: nil, anchors: [], collectionHint: collection, chapterHint: chapter, confidence: 0.9)
         let c = StoreFixtures.candidate(segment.id, ordinal: ordinal, kind: .memory, payload: try CandidatePayload.encode(out))
         try store.candidates.insert(c)
         return c
@@ -98,7 +98,7 @@ private struct Env {
     let env = try Env()
     var out = ExtractorOutput(memories: [], mentions: [], flags: .none)
     out.memories = [MemoryOut(ref: "m1", kind: .event, title: "The station wagon", quote: "the station wagon", segmentSpan: WordSpan(startWord: 7, endWord: 8),
-                              peopleRefs: [], placeText: nil, anchors: [], sameAsMemoryID: nil, collectionHint: "every August", chapterHint: nil, confidence: 0.9)]
+                              peopleRefs: [], placeText: nil, anchors: [], collectionHint: "every August", chapterHint: nil, confidence: 0.9)]
     let service = FakeExtractionService([.success(out)])
     let queue = ExtractionQueue(session: env.session, service: service, store: env.store)
     await queue.enqueue(env.segment.id)
@@ -107,4 +107,18 @@ private struct Env {
     #expect(rows.map(\.kind) == [.memory, .hint])
     let hint = try #require(CandidatePayload.hint(rows[1]))
     #expect(hint.memoryCandidateID == rows[0].id.rawValue && hint.phrase == "every August" && hint.kind == .collection)
+}
+
+@Test func storyHintRenamesOrCreates() throws {
+    let env = try Env()
+    let memory = try env.memoryCandidate()
+    let kept = try env.actions.acceptMemory(memory).memory
+    let hint = try env.hintCandidate(for: memory, kind: .story, phrase: "The summer of the station wagon and more words here", ordinal: 1)
+    guard case .story(let created) = try env.actions.acceptHint(hint) else { Issue.record("expected a story"); return }
+    #expect(created.title == "The summer of the station wagon and more", "at most 8 words")
+    #expect(try env.store.stories.members(of: created.id).map(\.id) == [kept.id])
+    let again = try env.hintCandidate(for: memory, kind: .story, phrase: "Yosemite summers", ordinal: 2)
+    guard case .story(let renamed) = try env.actions.acceptHint(again) else { Issue.record("expected a story"); return }
+    #expect(renamed.id == created.id && renamed.title == "Yosemite summers", "the member's story is renamed, not doubled")
+    #expect(try env.store.stories.stories().count == 1)
 }

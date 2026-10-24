@@ -92,11 +92,13 @@ public struct MemorySpan: Codable, Sendable, Equatable {
     public var order: Int
     public var titleText: String?
     public var candidateID: CandidateID?
+    /// The order of the telling this span carries on after a pause (M5). Nil for a telling of its own.
+    public var continuesOrder: Int?
 
     public init(memoryID: MemoryID, segmentID: SegmentID, startMs: Milliseconds, endMs: Milliseconds, order: Int,
-                titleText: String? = nil, candidateID: CandidateID? = nil) {
+                titleText: String? = nil, candidateID: CandidateID? = nil, continuesOrder: Int? = nil) {
         self.memoryID = memoryID; self.segmentID = segmentID; self.startMs = startMs; self.endMs = endMs; self.order = order
-        self.titleText = titleText; self.candidateID = candidateID
+        self.titleText = titleText; self.candidateID = candidateID; self.continuesOrder = continuesOrder
     }
 }
 

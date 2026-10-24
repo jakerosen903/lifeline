@@ -9,7 +9,7 @@ private func fixture(_ name: String) throws -> URL {
 private func gardenOutput() -> ExtractorOutput {
     ExtractorOutput(memories: [MemoryOut(ref: "m1", title: "The pomegranate tree", quote: "the garden behind the house had a pomegranate tree",
                                          segmentSpan: WordSpan(startWord: 0, endWord: 8), peopleRefs: [], placeText: nil, anchors: [],
-                                         sameAsMemoryID: nil, collectionHint: nil, chapterHint: nil, confidence: 0.9)],
+                                         collectionHint: nil, chapterHint: nil, confidence: 0.9)],
                     mentions: [MentionOut(text: "the garden", kind: .place, likelyAliasOfPersonID: nil, confidence: 0.5)], flags: .none)
 }
 

@@ -18,7 +18,7 @@ private struct Env {
         for (i, segment) in segments.enumerated() {
             let out = MemoryOut(ref: "m\(i)", kind: .event, title: "Memory \(i)", quote: String(texts[i].split(separator: " ").prefix(2).joined(separator: " ")),
                                 segmentSpan: WordSpan(startWord: 0, endWord: 1), peopleRefs: [], placeText: nil, anchors: [],
-                                sameAsMemoryID: nil, collectionHint: nil, chapterHint: nil, confidence: 0.9)
+                                collectionHint: nil, chapterHint: nil, confidence: 0.9)
             let candidate = StoreFixtures.candidate(segment.id, ordinal: 0, kind: .memory, payload: try CandidatePayload.encode(out))
             try store.candidates.insert(candidate)
             try store.sessions.setStatus(.extracted, for: segment.id)   // as the queue does when it stores the rows
@@ -112,7 +112,7 @@ private func rowCounts(_ db: AppDatabase, doomed: SessionID, pending: Segment, s
     let target = memories[0]
     let (s2, segs2) = try StoreFixtures.session(in: env.store.sessions, segments: ["grew up in an orange house"])
     let out = MemoryOut(ref: "m1", kind: .event, title: "Grew up", quote: "grew up", segmentSpan: WordSpan(startWord: 0, endWord: 1), peopleRefs: [], placeText: nil,
-                        anchors: [], sameAsMemoryID: nil, collectionHint: nil, chapterHint: nil, confidence: 0.9)
+                        anchors: [], collectionHint: nil, chapterHint: nil, confidence: 0.9)
     let c = StoreFixtures.candidate(segs2[0].id, payload: try CandidatePayload.encode(out))
     try env.store.candidates.insert(c)
     try env.store.sessions.setStatus(.extracted, for: segs2[0].id)
@@ -133,7 +133,7 @@ private func rowCounts(_ db: AppDatabase, doomed: SessionID, pending: Segment, s
     for text in ["grew up in an orange house", "the orange house had a canal"] {
         let (s, segs) = try StoreFixtures.session(in: env.store.sessions, segments: [text])
         let out = MemoryOut(ref: "m1", kind: .event, title: text, quote: text, segmentSpan: WordSpan(startWord: 0, endWord: 1), peopleRefs: [], placeText: nil,
-                            anchors: [], sameAsMemoryID: nil, collectionHint: nil, chapterHint: nil, confidence: 0.9)
+                            anchors: [], collectionHint: nil, chapterHint: nil, confidence: 0.9)
         let c = StoreFixtures.candidate(segs[0].id, payload: try CandidatePayload.encode(out))
         try env.store.candidates.insert(c)
         _ = try env.actions.mergeCandidate(c, into: target.id)

@@ -63,6 +63,16 @@ struct MemoryScreen: View {
                                 .accessibilityIdentifier("memory.play")
                                 Spacer()
                                 Text("recorded " + telling.session.startedAt.formatted(.dateTime.month().day().year())).font(.caption).foregroundStyle(Theme.stone)
+                                if telling.span.order > 0 {
+                                    Menu {
+                                        Button("Separate this telling", systemImage: "arrow.triangle.branch") { viewModel.separate(order: telling.span.order); onChange() }
+                                            .accessibilityIdentifier("telling.separate")
+                                    } label: {
+                                        Image(systemName: "ellipsis.circle").foregroundStyle(Theme.stone)
+                                    }
+                                    .buttonStyle(.borderless)
+                                    .accessibilityIdentifier("telling.more")
+                                }
                             }
                             if telling.span.order == 0 {
                                 Text("“\(viewModel.memory.summaryQuote)”")

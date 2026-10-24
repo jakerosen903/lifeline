@@ -30,3 +30,42 @@ import Testing
     let first = try await service.extract(ExtractionRequest(segmentID: .init(), segmentText: text, words: words, packet: without)).output
     #expect(first.memories.first?.sameAsMemoryID == nil)
 }
+
+@Test func scriptedThirdSegmentContinuesMaya() async throws {
+    let service = ScriptedExtractionService(delayMs: 0)
+    let segment = Segment(id: .init(), sessionID: .init(), index: 2, startMs: 0, endMs: 1, text: "", status: .pending)
+    var packet = ContextPacketBuilder.build(segment: segment, previous: [], people: [], memories: [], profileFreeText: nil, stage: "open")
+    let text = "we moved away the year before she was born"
+    let words = text.split(separator: " ").map(String.init)
+    let alone = try await service.extract(ExtractionRequest(segmentID: .init(), segmentText: text, words: words, packet: packet)).output
+    #expect(alone.memories.isEmpty)
+    let maya = CandidateID()
+    packet.pending = [ContextPacket.PendingEntry(candidateID: maya.rawValue, title: "Maya climbed it", quote: "my sister Maya climbed it in 1998", storyRef: nil)]
+    let continued = try await service.extract(ExtractionRequest(segmentID: .init(), segmentText: text, words: words, packet: packet)).output
+    #expect(continued.memories.count == 1 && continued.memories.first?.continuesCandidateID == maya.rawValue)
+    #expect(continued.memories.first?.segmentSpan == WordSpan(startWord: 0, endWord: words.count - 1))
+}
+
+@Test func scriptedBlueDoorAndMayaShareAStory() async throws {
+    let service = ScriptedExtractionService(delayMs: 0)
+    let segment = Segment(id: .init(), sessionID: .init(), index: 0, startMs: 0, endMs: 1, text: "", status: .pending)
+    let packet = ContextPacketBuilder.build(segment: segment, previous: [], people: [], memories: [], profileFreeText: nil, stage: "open")
+    func run(_ text: String) async throws -> MemoryOut? {
+        try await service.extract(ExtractionRequest(segmentID: .init(), segmentText: text, words: text.split(separator: " ").map(String.init), packet: packet)).output.memories.first
+    }
+    let door = try await run("the house had a blue door when I was six before Maya climbed it")
+    let maya = try await run("my sister Maya climbed it in 1998 every summer")
+    #expect(door?.storyRef == "story-scripted" && maya?.storyRef == "story-scripted")
+    #expect(maya?.storyTitleHint == "The blue door summer" && door?.storyTitleHint == nil)
+}
+
+@Test func scriptedRetellingNamesEveryEarlierBlueDoor() async throws {
+    let service = ScriptedExtractionService(delayMs: 0)
+    let one = StoreFixtures.memory(from: CandidateID(), title: "The blue door")
+    let two = StoreFixtures.memory(from: CandidateID(), title: "The blue door")
+    let segment = Segment(id: .init(), sessionID: .init(), index: 0, startMs: 0, endMs: 1, text: "", status: .pending)
+    let packet = ContextPacketBuilder.build(segment: segment, previous: [], people: [], memories: [], profileFreeText: nil, stage: "open", related: [one, two])
+    let text = "the house had a blue door when I was six before Maya climbed it"
+    let out = try await service.extract(ExtractionRequest(segmentID: .init(), segmentText: text, words: text.split(separator: " ").map(String.init), packet: packet)).output
+    #expect(out.memories.first?.sameAsMemoryIDs == [one.id.rawValue, two.id.rawValue])
+}

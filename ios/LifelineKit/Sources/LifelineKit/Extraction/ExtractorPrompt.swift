@@ -14,4 +14,13 @@ public enum ExtractorPrompt {
         }
         return text
     }
+
+    /// The contents of `Prompts/reconciler.<version>.md` (M5).
+    public static func reconciler(version: String) throws -> String {
+        guard let url = Bundle.module.url(forResource: "reconciler.\(version)", withExtension: "md", subdirectory: "Prompts"),
+              let text = try? String(contentsOf: url, encoding: .utf8) else {
+            throw Error.missingPrompt("reconciler.\(version)")
+        }
+        return text
+    }
 }

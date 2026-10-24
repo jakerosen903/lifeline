@@ -1,7 +1,7 @@
 import Foundation
 
 public enum HintKind: String, Codable, Sendable {
-    case collection, chapter
+    case collection, chapter, story
 }
 
 /// "Sounds like it belongs here": a collection or chapter phrase the extractor heard in a memory.

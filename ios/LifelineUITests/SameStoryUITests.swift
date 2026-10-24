@@ -112,7 +112,12 @@ final class SameStoryUITests: XCTestCase {
     @MainActor
     func testChangeSheetMergesIntoAnotherMemory() {
         let app = launchToTimeline()
-        record(app, keep: 2)   // the blue door and Maya climbed it
+        record(app, keep: 2)   // the blue door and Maya climbed it, under one story row (M5)
+        let story = app.buttons["timeline.story"].firstMatch
+        XCTAssertTrue(app.reveal(story))
+        var tries = 0
+        while tries < 4 && story.frame.maxY > app.buttons["home.start"].frame.minY - 8 { app.swipeUp(); tries += 1 }
+        story.tap()
         open(app, row: "Maya climbed it")
         XCTAssertTrue(app.buttons["memory.change"].waitForExistence(timeout: 5))
         app.buttons["memory.change"].tap()

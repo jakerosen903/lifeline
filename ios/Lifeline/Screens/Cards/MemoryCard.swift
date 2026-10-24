@@ -7,12 +7,22 @@ import SwiftUI
 struct MemoryCard: View {
     let memory: MemoryOut
     let confidence: Double
-    /// The earlier memory this looks like a retelling of (M4.1). Keep stays the default.
-    var match: MemoryMatch? = nil
+    /// The earlier memories this looks like a retelling of (M4.1; several in M5). Keep stays the default.
+    var matches: [MemoryMatch] = []
+    /// "Part of: X" (M5), or nil.
+    var storyLine: String? = nil
     let onKeep: () -> Void
     let onChange: () -> Void
     let onDismiss: () -> Void
     var onSameStory: () -> Void = {}
+    var onNotPartOfIt: () -> Void = {}
+
+    private var match: MemoryMatch? { matches.first }
+    private var sameAsText: String {
+        guard let match else { return "" }
+        let more = matches.count > 1 ? " and \(matches.count - 1) more" : ""
+        return "Same as \(match.title)\(more)?" + (match.recordedAt.map { " · recorded " + $0.formatted(.dateTime.month(.abbreviated).day()) } ?? "")
+    }
 
     @State private var offset: CGFloat = 0
 
@@ -43,12 +53,23 @@ struct MemoryCard: View {
             if !memory.peopleRefs.isEmpty || memory.placeText != nil {
                 FlowChips(items: memory.peopleRefs + (memory.placeText.map { [$0] } ?? []))
             }
+            if !memory.extraSpans.isEmpty {
+                // Told across a pause: the card stands for every segment, the quote is the first's.
+                Text(memory.extraSpans.count == 1 ? "+ 1 segment" : "+ \(memory.extraSpans.count) segments")
+                    .font(.caption)
+                    .foregroundStyle(Theme.stone)
+                    .accessibilityIdentifier("card.segments")
+            }
             if let match {
-                (Text("Same as ").foregroundStyle(Theme.stone) + Text(match.title).bold().foregroundStyle(Theme.ink) + Text("?").foregroundStyle(Theme.stone)
+                (Text("Same as ").foregroundStyle(Theme.stone) + Text(match.title).bold().foregroundStyle(Theme.ink)
+                 + Text(matches.count > 1 ? " and \(matches.count - 1) more" : "").foregroundStyle(Theme.stone) + Text("?").foregroundStyle(Theme.stone)
                  + Text(match.recordedAt.map { " · recorded " + $0.formatted(.dateTime.month(.abbreviated).day()) } ?? "").foregroundStyle(Theme.stone))
                     .font(.subheadline)
-                    .accessibilityLabel("Same as \(match.title)?" + (match.recordedAt.map { " · recorded " + $0.formatted(.dateTime.month(.abbreviated).day()) } ?? ""))
+                    .accessibilityLabel(sameAsText)
                     .accessibilityIdentifier("card.sameAs")
+            }
+            if let storyLine {
+                StoryLine(text: storyLine, onNotPartOfIt: onNotPartOfIt)
             }
             HStack(spacing: 12) {
                 Button("Keep", action: onKeep)

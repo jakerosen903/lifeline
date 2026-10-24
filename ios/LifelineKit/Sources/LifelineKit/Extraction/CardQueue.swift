@@ -66,7 +66,9 @@ public struct CardQueue: Equatable, Sendable {
             if flags.isHeavy { suppressed = true }
         case .candidates(let candidates, _):
             for candidate in candidates {
-                guard let card = Card(candidate), !cards.contains(where: { $0.id == card.id }) else { continue }
+                guard let card = Card(candidate) else { continue }
+                // A card emitted again carries a changed payload (a continuation, M5): same place, new words.
+                if let i = cards.firstIndex(where: { $0.id == card.id }) { cards[i] = card; continue }
                 // A heavy moment suppresses every organizational prompt, who-is-this included.
                 if suppressed { continue }
                 if case .hint(_, let out) = card {
