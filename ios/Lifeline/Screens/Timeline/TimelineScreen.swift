@@ -106,11 +106,19 @@ struct TimelineScreen: View {
     private var timelineList: some View {
         List {
             summarySection
+            sortingRow
             waitingSection
             chapterSections
             collectionSections
             shelfAndQuestion
             footer
+        }
+    }
+
+    @ViewBuilder private var sortingRow: some View {
+        if viewModel.sortingLine != nil {
+            SortingLine(status: viewModel.sorting, onOpenSettings: { showSettings = true }, onTryAgain: { viewModel.tryAgain() })
+                .listRowBackground(Color.clear)
         }
     }
 

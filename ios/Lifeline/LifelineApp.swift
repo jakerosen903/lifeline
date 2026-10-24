@@ -4,10 +4,16 @@ import SwiftUI
 @main
 struct LifelineApp: App {
     @State private var model = AppModel()
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some Scene {
         WindowGroup {
             RootView(model: model)
+        }
+        .onChange(of: scenePhase) { _, phase in
+            // Back in the foreground with moments still waiting: sorting starts again (M6).
+            guard phase == .active, let deps = model.deps, !deps.sortingStatus().pending.isEmpty else { return }
+            deps.worker.requestStart()
         }
     }
 }

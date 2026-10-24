@@ -16,7 +16,8 @@ struct SettingsScreen: View {
                     dismiss()
                 })
 
-                APIKeySection(key: key, secrets: deps.secrets)
+                // A saved key starts sorting whatever waited for one (M6).
+                APIKeySection(key: key, secrets: deps.secrets, onSaved: { deps.worker.requestStart() })
             }
             .scrollContentBackground(.hidden)
             .linenBackground()
@@ -34,6 +35,7 @@ struct SettingsScreen: View {
 private struct APIKeySection: View {
     @Bindable var key: APIKeyViewModel
     let secrets: any SecretStore
+    var onSaved: () -> Void = {}
 
     var body: some View {
         Section {
@@ -44,10 +46,10 @@ private struct APIKeySection: View {
                 .autocorrectionDisabled()
                 .textInputAutocapitalization(.never)
                 .submitLabel(.done)
-                .onSubmit { if key.canSave { key.save(into: secrets) } }
+                .onSubmit { if key.canSave { key.save(into: secrets); if key.isSaved { onSaved() } } }
                 .accessibilityIdentifier("settings.apiKey")
             HStack {
-                Button("Save key") { key.save(into: secrets) }
+                Button("Save key") { key.save(into: secrets); if key.isSaved { onSaved() } }
                     .buttonStyle(.borderless)
                     .disabled(!key.canSave)
                     .accessibilityIdentifier("settings.apiKeySave")
