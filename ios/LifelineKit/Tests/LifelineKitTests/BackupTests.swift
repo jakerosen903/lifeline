@@ -217,3 +217,21 @@ private func archives(in dir: URL) throws -> [URL] {
     #expect(count >= 4 && count <= total + 1)
     #expect(try integrity(copy) == "ok")
 }
+
+@Test func applyOpensTheAppEvenWhenTheReplacedCopyCannotBeWritten() throws {
+    let phone = try Root(sessions: 1, memories: 1)
+    let other = try Root(sessions: 2, memories: 1)
+    let archive = other.url.appending(path: "other.lifeline")
+    _ = try Backup.export(root: other.url, appVersion: "1.0", to: archive, database: other.db)
+    let documents = try docs()
+    _ = try Backup.stage(archive, root: phone.url, appVersion: "1.0", database: phone.db, safetyCopyDirectory: documents)
+    // Documents cannot take the copy (a file sits where the directory should be): the restore still applies.
+    let blocked = FileManager.default.temporaryDirectory.appending(path: "blocked-\(UUID().uuidString)")
+    try Data("x".utf8).write(to: blocked)
+    #expect(try Backup.applyPendingRestore(root: phone.url, safetyCopyDirectory: blocked))
+    #expect(try ExtractionStore(try AppDatabase.open(at: phone.url.appending(path: "Lifeline/lifeline.sqlite"))).sessions.listSessions().count == 2)
+    #expect(FileManager.default.fileExists(atPath: phone.url.appending(path: "Lifeline-replaced/lifeline.sqlite").path), "the old archive waits for a launch that can save it")
+    // The next launch, with room: the old archive is saved and the folder goes.
+    #expect(try !Backup.applyPendingRestore(root: phone.url, safetyCopyDirectory: documents))
+    #expect(try archives(in: documents).count == 2 && !FileManager.default.fileExists(atPath: phone.url.appending(path: "Lifeline-replaced").path))
+}

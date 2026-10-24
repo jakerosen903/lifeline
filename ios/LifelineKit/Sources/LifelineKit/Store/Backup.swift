@@ -191,14 +191,20 @@ public enum Backup {
         return true
     }
 
-    /// Zips a moved-aside archive into Documents and removes the directory; a failure leaves it in place.
+    /// Zips a moved-aside archive into Documents and removes the directory. A failure (a full
+    /// phone, say) never throws: the directory stays where it is and the next launch tries
+    /// again, so a restore cannot lock the person out of the app.
     private static func preserve(_ directory: URL, safetyCopyDirectory: URL?) throws {
         let fm = FileManager.default
         guard fm.fileExists(atPath: directory.appending(path: databaseName).path) else { try? fm.removeItem(at: directory); return }
-        let copies = try safetyCopyDirectory ?? Self.safetyCopyDirectory()
-        let destination = freeName(in: copies, stem: "Lifeline-replaced-\(stamp(.now))")
-        try export(appDirectory: directory, appVersion: "replaced", to: destination, database: nil, progress: { _ in })
-        try fm.removeItem(at: directory)
+        do {
+            let copies = try safetyCopyDirectory ?? Self.safetyCopyDirectory()
+            let destination = freeName(in: copies, stem: "Lifeline-replaced-\(stamp(.now))")
+            try export(appDirectory: directory, appVersion: "replaced", to: destination, database: nil, progress: { _ in })
+            try fm.removeItem(at: directory)
+        } catch {
+            print("[backup] could not save the replaced archive yet: \(error)")
+        }
     }
 
     /// Tests: an archive with its manifest changed.

@@ -70,19 +70,23 @@ final class BackupViewModel {
         if share { shareURL = url }
     }
 
-    /// The person picked a file (or the test named one): read what is inside and ask.
+    /// The person picked a file (or the test named one): copy it and read what is inside off
+    /// the main actor (an archive can hold hours of audio), then ask.
     func chose(_ url: URL) {
         guard !isSessionLive() else { error = Self.liveSessionText; return }
-        do {
-            let scoped = url.startAccessingSecurityScopedResource()
-            defer { if scoped { url.stopAccessingSecurityScopedResource() } }
-            let local = FileManager.default.temporaryDirectory.appending(path: "restore-\(UUID().uuidString).lifeline")
-            try? FileManager.default.removeItem(at: local)
-            try FileManager.default.copyItem(at: url, to: local)
-            confirming = (local, try Backup.inspect(local))
-            error = nil
-        } catch {
-            self.error = "That is not a Lifeline copy: \(error.localizedDescription)"
+        progressText = "Reading the copy…"
+        Task.detached(priority: .userInitiated) { [weak self] in
+            do {
+                let scoped = url.startAccessingSecurityScopedResource()
+                defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+                let local = FileManager.default.temporaryDirectory.appending(path: "restore-\(UUID().uuidString).lifeline")
+                try? FileManager.default.removeItem(at: local)
+                try FileManager.default.copyItem(at: url, to: local)
+                let manifest = try Backup.inspect(local)
+                await MainActor.run { self?.progressText = nil; self?.confirming = (local, manifest); self?.error = nil }
+            } catch {
+                await MainActor.run { self?.progressText = nil; self?.error = "That is not a Lifeline copy: \(error.localizedDescription)" }
+            }
         }
     }
 
@@ -96,6 +100,7 @@ final class BackupViewModel {
         progressText = "Saving a copy of what is on the phone…"
         let root = deps.audioRoot, database = deps.database
         Task.detached(priority: .userInitiated) { [weak self] in
+            defer { try? FileManager.default.removeItem(at: confirming.url) }
             do {
                 _ = try Backup.stage(confirming.url, root: root, appVersion: Dependencies.appVersion, database: database)
                 await MainActor.run {
@@ -111,5 +116,8 @@ final class BackupViewModel {
         }
     }
 
-    func cancelRestore() { confirming = nil }
+    func cancelRestore() {
+        if let url = confirming?.url { try? FileManager.default.removeItem(at: url) }
+        confirming = nil
+    }
 }
