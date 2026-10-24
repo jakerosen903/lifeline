@@ -27,6 +27,7 @@ public actor ExtractionQueue {
     private let log: @Sendable (String) -> Void
     private let actions: CandidateActions
     private let matcher: MemoryMatcher?
+    private let reporter: SortingReporter?
 
     private var waiting: [SegmentID] = []
     private var running = false
@@ -40,10 +41,10 @@ public actor ExtractionQueue {
     public static let withheldReason = "withheld: serious disclosure"
 
     public init(session: SessionID, service: any ExtractionService, store: ExtractionStore, stage: String = "open",
-                drainDeadline: Duration = ExtractionQueue.defaultDrainDeadline, matcher: MemoryMatcher? = nil,
+                drainDeadline: Duration = ExtractionQueue.defaultDrainDeadline, matcher: MemoryMatcher? = nil, reporter: SortingReporter? = nil,
                 log: @escaping @Sendable (String) -> Void = { _ in }) {
         self.session = session; self.service = service; self.store = store; self.stage = stage
-        self.drainDeadline = drainDeadline; self.log = log; self.matcher = matcher
+        self.drainDeadline = drainDeadline; self.log = log; self.matcher = matcher; self.reporter = reporter
         actions = CandidateActions(store: store)
         (events, emit) = AsyncStream.makeStream(bufferingPolicy: .unbounded)
     }
@@ -84,10 +85,12 @@ public actor ExtractionQueue {
     }
 
     private func work() async {
+        reporter?.activityChanged(active: true)
         while !waiting.isEmpty {
             let segment = waiting.removeFirst()
             await process(segment)
         }
+        reporter?.activityChanged(active: false)
         running = false
         let waiters = idleWaiters
         idleWaiters = []
@@ -129,6 +132,7 @@ public actor ExtractionQueue {
             try mintStoryRefs(&validated)
             let shown = try storeCandidates(validated, segment: segmentID, version: response.version)
             lastFailure[segmentID] = nil
+            reporter?.cleared()
             log("segment \(segment.index): \(shown.count) shown, \(validated.rejected.count) rejected, model \(response.model), "
                 + "\(response.usage.inputTokens) in / \(response.usage.outputTokens) out, cache read \(response.usage.cacheReadInputTokens)")
             for rejected in validated.rejected { log("  rejected: \(rejected.reason)") }
@@ -138,6 +142,7 @@ public actor ExtractionQueue {
         } catch let error as ExtractionError {
             if error == .noKey { keyMissing = true }
             lastFailure[segmentID] = error
+            reporter?.failed(error)
             log("segment \(segmentID) failed: \(error)")
             emit.yield(.failed(segment: segmentID, error))
         } catch {

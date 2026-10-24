@@ -9,17 +9,23 @@ public actor DuplicatePass {
     private let reconcile: any ReconcileService
     private let actions: CandidateActions
     private let config: PairConfig
+    private let reporter: SortingReporter?
     private let log: @Sendable (String) -> Void
     private var scheduled: Task<Void, Never>?
     private var running = false
+    private var onStarted: (@Sendable () -> Void)?
     private var onFinished: (@Sendable (Int) -> Void)?
 
     public static let debounce: Duration = .seconds(2)
 
     public init(store: ExtractionStore, matcher: MemoryMatcher, reconcile: any ReconcileService, actions: CandidateActions,
-                config: PairConfig = .default, log: @escaping @Sendable (String) -> Void = { _ in }) {
-        self.store = store; self.matcher = matcher; self.reconcile = reconcile; self.actions = actions; self.config = config; self.log = log
+                config: PairConfig = .default, reporter: SortingReporter? = nil, log: @escaping @Sendable (String) -> Void = { _ in }) {
+        self.store = store; self.matcher = matcher; self.reconcile = reconcile; self.actions = actions; self.config = config
+        self.reporter = reporter; self.log = log
     }
+
+    /// Called when a run begins, so a screen can say "Checking for repeats…".
+    public func setOnStarted(_ handler: @escaping @Sendable () -> Void) { onStarted = handler }
 
     /// Called after every run with how many pairs it wrote, so a screen can show new cards.
     public func setOnFinished(_ handler: @escaping @Sendable (Int) -> Void) { onFinished = handler }
@@ -30,8 +36,11 @@ public actor DuplicatePass {
     public func run() async -> Int {
         guard !running else { return 0 }
         running = true
+        reporter?.passChanged(running: true)
+        onStarted?()
         let written = await judgeOnce()
         running = false
+        reporter?.passChanged(running: false)
         onFinished?(written)
         return written
     }

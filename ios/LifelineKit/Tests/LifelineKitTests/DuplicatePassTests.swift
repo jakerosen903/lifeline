@@ -63,3 +63,19 @@ import Testing
     let open = try store.pairs.open(limit: 3)
     #expect(open.count == 1 && open.first?.verdict == .sameMoment)
 }
+
+@Test func duplicatePassReportsStartAndFinish() async throws {
+    var env = try PairEnv()
+    _ = try env.memory("The blue door", vector: [1, 0])
+    _ = try env.memory("The blue door", vector: [1, 0])
+    let matcher = env.matcher()
+    try env.indexAll(matcher)
+    let reporter = SortingReporter()
+    let seen = LogCollector()
+    let pass = DuplicatePass(store: env.store, matcher: matcher, reconcile: ScriptedReconcileService(), actions: CandidateActions(store: env.store), reporter: reporter)
+    await pass.setOnStarted { seen.append("started") }
+    await pass.setOnFinished { seen.append("finished \($0)") }
+    _ = await pass.run()
+    #expect(seen.all == ["started", "finished 1"])
+    #expect(!reporter.snapshot().checkingRepeats, "idle again after the run")
+}
