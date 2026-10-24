@@ -4,8 +4,11 @@ import SwiftUI
 /// Settings: the About you form in edit mode, and the key that lets the app sort what you say.
 struct SettingsScreen: View {
     let deps: Dependencies
+    /// True while a session is live or unlanded; export and restore wait for it (M6).
+    var isSessionLive: () -> Bool = { false }
     @Environment(\.dismiss) private var dismiss
     @State private var key = APIKeyViewModel()
+    @State private var backup: BackupViewModel?
 
     var body: some View {
         NavigationStack {
@@ -18,6 +21,10 @@ struct SettingsScreen: View {
 
                 // A saved key starts sorting whatever waited for one (M6).
                 APIKeySection(key: key, secrets: deps.secrets, onSaved: { deps.worker.requestStart() })
+
+                if let backup {
+                    YourCopySection(viewModel: backup)
+                }
             }
             .scrollContentBackground(.hidden)
             .linenBackground()
@@ -26,7 +33,10 @@ struct SettingsScreen: View {
             .toolbar {
                 Button("Done") { dismiss() }.accessibilityIdentifier("settings.done")
             }
-            .onAppear { key.load(from: deps.secrets) }
+            .onAppear {
+                key.load(from: deps.secrets)
+                if backup == nil { backup = BackupViewModel(deps: deps, isSessionLive: isSessionLive) }
+            }
         }
     }
 }

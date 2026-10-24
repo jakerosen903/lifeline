@@ -37,10 +37,24 @@ targets:
         NSSpeechRecognitionUsageDescription: "Lifeline transcribes your sessions on this device."
         UILaunchScreen: {}
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
+        UTExportedTypeDeclarations:
+          - UTTypeIdentifier: com.jakerosen.lifeline.archive
+            UTTypeDescription: Lifeline copy
+            UTTypeConformsTo: [public.zip-archive]
+            UTTypeTagSpecification:
+              public.filename-extension: [lifeline]
+        CFBundleDocumentTypes:
+          - CFBundleTypeName: Lifeline copy
+            LSHandlerRank: Owner
+            LSItemContentTypes: [com.jakerosen.lifeline.archive]
   LifelineUITests:
     type: bundle.ui-testing
     platform: iOS
-    sources: [LifelineUITests]
+    sources:
+      - LifelineUITests
+      - path: LifelineUITests/Fixtures
+        type: folder
+        buildPhase: resources
     dependencies:
       - target: Lifeline
     settings:

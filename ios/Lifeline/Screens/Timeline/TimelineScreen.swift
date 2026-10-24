@@ -63,7 +63,7 @@ struct TimelineScreen: View {
                     .accessibilityIdentifier("home.settings")
             }
             .sheet(isPresented: $showSettings, onDismiss: { viewModel.refresh() }) {
-                SettingsScreen(deps: viewModel.deps)
+                SettingsScreen(deps: viewModel.deps, isSessionLive: { viewModel.home.presented != nil })
             }
             .sheet(item: Binding(get: { viewModel.changing }, set: { viewModel.changing = $0 })) { memory in
                 ChangeSheet(memory: memory, deps: viewModel.deps, includeHidden: viewModel.showHidden) { viewModel.refresh() }

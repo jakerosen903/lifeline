@@ -30,6 +30,18 @@ struct Dependencies {
     let duplicates: DuplicatePass
     /// What is still sorting, for the status line (M6).
     let reporter: SortingReporter
+    /// Under `-uiTesting-restoreFrom <path>`: Restore stages this file without the picker.
+    var restoreFromPath: String? = nil
+    /// Under `-uiTesting`: Export keeps the file in Documents and shows no share sheet, which a UI test cannot drive.
+    var exportWithoutShareSheet = false
+
+    /// "1.0 (12)": the marketing version and the build, for the backup manifest.
+    static var appVersion: String {
+        let info = Bundle.main.infoDictionary ?? [:]
+        let short = info["CFBundleShortVersionString"] as? String ?? "0"
+        let build = info["CFBundleVersion"] as? String ?? "0"
+        return "\(short) (\(build))"
+    }
 
     var hasKey: Bool { ((try? secrets.read(.anthropicAPIKey)) ?? nil) != nil }
 
@@ -67,6 +79,8 @@ struct Dependencies {
 
     static func live() throws -> Dependencies {
         let root = try AudioLocation.defaultRoot()
+        // A restore the person staged is applied now, before anything opens the database (M6).
+        if try Backup.applyPendingRestore(root: root) { print("[backup] restored a copy at launch") }
         let db = try AppDatabase.open(at: root.appending(path: "Lifeline/lifeline.sqlite"))
         let sessions = SessionRepository(db)
         let pauseLog = PauseLog(url: root.appending(path: "Lifeline/pauses.log"))
@@ -119,6 +133,7 @@ struct Dependencies {
         } else {
             root = FileManager.default.temporaryDirectory.appending(path: "lifeline-ui-\(UUID().uuidString)")
         }
+        if try Backup.applyPendingRestore(root: root) { print("[backup] restored a copy at launch") }
         let db = try AppDatabase.open(at: root.appending(path: "Lifeline/lifeline.sqlite"))
         let store = ExtractionStore(db)
         // `-uiTesting-slowExtract`: seconds per segment, for tests that watch sorting go on; `-uiTesting-noKey`:
@@ -132,7 +147,7 @@ struct Dependencies {
         let actions = CandidateActions(store: store, matcher: matcher)
         let reconcile = ScriptedReconcileService()
         let reporter = SortingReporter()
-        return Dependencies(
+        var deps = Dependencies(
             sessions: SessionRepository(db),
             profile: ProfileRepository(db),
             audioRoot: root,
@@ -164,6 +179,9 @@ struct Dependencies {
                 }
             }),
             reporter: reporter)
+        if let i = args.firstIndex(of: "-uiTesting-restoreFrom"), i + 1 < args.count { deps.restoreFromPath = args[i + 1] }
+        deps.exportWithoutShareSheet = true
+        return deps
     }
 }
 
