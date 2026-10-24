@@ -16,6 +16,7 @@ struct ChangeSheet: View {
     @State private var showWhen = false
     @State private var tellingWhen = false
     @State private var pickingSameAs = false
+    @State private var trimming = false
 
     var body: some View {
         NavigationStack {
@@ -113,10 +114,23 @@ struct ChangeSheet: View {
                 }
 
                 Section {
-                    laterRow("Which part of the recording")
+                    if let trimmed = viewModel.trimmedNotice {
+                        HStack {
+                            Text(trimmed).foregroundStyle(Theme.ink).accessibilityIdentifier("change.trimmed")
+                            Spacer()
+                            Button("Undo") { viewModel.undoTrim() }
+                                .buttonStyle(.bordered).tint(Theme.olive)
+                                .accessibilityIdentifier("change.undoTrim")
+                        }
+                    }
+                    Button("Which part of the recording", systemImage: "waveform.path") { trimming = true }
+                        .buttonStyle(.borderless)
+                        .tint(Theme.olive)
+                        .disabled(viewModel.parts.isEmpty)
+                        .accessibilityIdentifier("change.whichPart")
                     laterRow("Just tell me")
                 } footer: {
-                    Text("These come later, with the interviewer.")
+                    Text("Move where this telling starts and ends; the words and audio stay. \"Just tell me\" comes later, with the interviewer.")
                 }
 
                 if let error = viewModel.error {
@@ -135,6 +149,11 @@ struct ChangeSheet: View {
         .onDisappear { onDone() }
         .sheet(isPresented: $tellingWhen) {
             TellMeWhenSheet(title: viewModel.memory.title, birthDate: viewModel.when.birthDate) { viewModel.setStated($0) }
+        }
+        .sheet(isPresented: $trimming) {
+            TrimSheet(parts: viewModel.parts, deps: viewModel.deps, title: viewModel.memory.title) { order, start, end in
+                viewModel.trim(order: order, startWord: start, endWord: end)
+            }
         }
         .sheet(isPresented: $pickingSameAs) {
             SameAsPicker(matches: viewModel.pickerMatches(), title: "Same as which memory?") { chosen in

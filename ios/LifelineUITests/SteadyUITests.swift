@@ -152,3 +152,42 @@ extension SteadyUITests {
         XCTAssertTrue(again.staticTexts["memory.error"].waitForExistence(timeout: 5), "a missing recording is said, not crashed on")
     }
 }
+
+// MARK: - Which part of the recording
+
+extension SteadyUITests {
+    @MainActor
+    func testTrimMovesTheTellingToTheChosenWords() {
+        let app = launchToTimeline()
+        app.startSession()
+        XCTAssertTrue(app.buttons["card.add"].firstMatch.waitForExistence(timeout: 15))
+        app.buttons["card.add"].firstMatch.tap()   // the blue door
+        app.finishSession()
+        let row = app.buttons.matching(identifier: "timeline.memory").matching(NSPredicate(format: "label CONTAINS %@", "The blue door")).firstMatch
+        XCTAssertTrue(app.reveal(row))
+        var tries = 0
+        while tries < 4 && row.frame.maxY > app.buttons["home.start"].frame.minY - 8 { app.swipeUp(); tries += 1 }
+        row.coordinate(withNormalizedOffset: CGVector(dx: 0.15, dy: 0.35)).tap()
+        XCTAssertTrue(app.buttons["memory.change"].waitForExistence(timeout: 5))
+        app.buttons["memory.change"].tap()
+        XCTAssertTrue(app.buttons["change.whichPart"].waitForExistence(timeout: 5))
+        app.buttons["change.whichPart"].tap()
+        let door = app.buttons.matching(identifier: "trim.word").matching(NSPredicate(format: "label == %@", "door")).firstMatch
+        XCTAssertTrue(door.waitForExistence(timeout: 5), "the segment's words are laid out")
+        door.tap()
+        app.buttons["trim.setEnd"].tap()
+        let range = app.staticTexts["trim.range"]
+        XCTAssertTrue(range.waitForExistence(timeout: 3))
+        XCTAssertTrue(range.label.hasSuffix("to “door”"), range.label)
+        app.buttons["trim.save"].tap()
+        XCTAssertTrue(app.staticTexts["change.trimmed"].waitForExistence(timeout: 5), "the sheet says what it did and offers Undo")
+        XCTAssertTrue(app.buttons["change.undoTrim"].exists)
+        // Reopen: the highlight ends at "door".
+        app.buttons["change.whichPart"].tap()
+        XCTAssertTrue(app.staticTexts["trim.range"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["trim.range"].label.hasSuffix("to “door”"), app.staticTexts["trim.range"].label)
+        app.buttons["trim.cancel"].tap()
+        app.buttons["change.done"].tap()
+        XCTAssertTrue(app.buttons["memory.play"].firstMatch.waitForExistence(timeout: 5))
+    }
+}
