@@ -7,19 +7,13 @@ extension CandidateActions {
     @discardableResult
     public func createStory(title: String?, containing memories: [MemoryID]) throws -> Story {
         let chapter = try memories.first.flatMap { try store.memories.fetch($0)?.chapterID }
-        let story = try store.stories.insert(title: title, chapterID: chapter)
-        for memory in memories { try addToStory(memory, story: story.id) }
-        return try store.stories.story(id: story.id) ?? story
+        return try store.stories.join(memories, story: nil, title: title, chapterID: chapter)
     }
 
     /// Appends the memory to the story. A memory already in another story is moved.
     public func addToStory(_ memory: MemoryID, story: StoryID) throws {
-        if let current = try store.stories.story(of: memory) {
-            if current.id == story { return }
-            try store.stories.remove(memory: memory)
-            try store.stories.deleteEmpty()
-        }
-        try store.stories.add(memory: memory, to: story)
+        if try store.stories.story(of: memory)?.id == story { return }
+        try store.stories.join([memory], story: story, title: nil, chapterID: nil)
     }
 
     public func moveToStory(_ memory: MemoryID, story: StoryID) throws {
@@ -28,8 +22,7 @@ extension CandidateActions {
 
     /// Takes the memory out; a story with nobody left in it is deleted.
     public func takeOutOfStory(_ memory: MemoryID) throws {
-        try store.stories.remove(memory: memory)
-        try store.stories.deleteEmpty()
+        try store.stories.leave([memory], deletingStory: nil)
     }
 
     public func renameStory(_ story: StoryID, title: String) throws {
@@ -44,12 +37,7 @@ extension CandidateActions {
         let members = try store.stories.members(of: story).map(\.id)
         let taken = members.filter { memories.contains($0) }
         guard !taken.isEmpty, taken.count < members.count else { throw Error.nothingToSplit }
-        let fresh = try store.stories.insert(title: nil, chapterID: try store.stories.story(id: story)?.chapterID)
-        for memory in taken {
-            try store.stories.remove(memory: memory)
-            try store.stories.add(memory: memory, to: fresh.id)
-        }
-        return fresh
+        return try store.stories.split(story, taking: taken)
     }
 
     /// What "One story" on a pair did, so undo can reverse exactly that.
@@ -68,30 +56,24 @@ extension CandidateActions {
     public func groupPair(_ pair: DuplicatePair) throws -> GroupedPair {
         guard let current = try store.pairs.pair(id: pair.id), current.status == .open,
               let a = try store.memories.fetch(current.aMemoryID), let b = try store.memories.fetch(current.bMemoryID) else { throw Error.stale }
-        let result: GroupedPair
+        let mark = (id: pair.id, status: PairStatus.grouped)
         if let existing = try store.stories.story(of: a.id) {
-            try addToStory(b.id, story: existing.id)
-            result = GroupedPair(pair: current, story: existing, added: [b.id], created: false)
-        } else if let existing = try store.stories.story(of: b.id) {
-            try addToStory(a.id, story: existing.id)
-            result = GroupedPair(pair: current, story: existing, added: [a.id], created: false)
-        } else {
-            let story = try createStory(title: nil, containing: [a.id, b.id])
-            result = GroupedPair(pair: current, story: story, added: [a.id, b.id], created: true)
+            let story = try store.stories.join([b.id], story: existing.id, title: nil, chapterID: nil, markingPair: mark)
+            return GroupedPair(pair: current, story: story, added: [b.id], created: false)
         }
-        try store.pairs.setStatus(pair.id, .grouped)
-        return result
+        if let existing = try store.stories.story(of: b.id) {
+            let story = try store.stories.join([a.id], story: existing.id, title: nil, chapterID: nil, markingPair: mark)
+            return GroupedPair(pair: current, story: story, added: [a.id], created: false)
+        }
+        let story = try store.stories.join([a.id, b.id], story: nil, title: nil, chapterID: a.chapterID, markingPair: mark)
+        return GroupedPair(pair: current, story: story, added: [a.id, b.id], created: true)
     }
 
     /// Undo of "One story": the memories that joined leave again (a story made for the pair
     /// goes with them) and the pair is open once more.
     public func ungroupPair(_ grouped: GroupedPair) throws {
-        for memory in grouped.added where try store.stories.story(of: memory)?.id == grouped.story.id {
-            try store.stories.remove(memory: memory)
-        }
-        if grouped.created { try store.stories.delete(grouped.story.id) }
-        try store.stories.deleteEmpty()
-        if try store.pairs.pair(id: grouped.pair.id) != nil { try store.pairs.setStatus(grouped.pair.id, .open) }
+        let still = try grouped.added.filter { try store.stories.story(of: $0)?.id == grouped.story.id }
+        try store.stories.leave(still, deletingStory: grouped.created ? grouped.story.id : nil, markingPair: (grouped.pair.id, .open))
     }
 
     /// Keep with a `story_ref`: the ref is always a story id (the queue mints one for every new
@@ -99,10 +81,7 @@ extension CandidateActions {
     func joinStory(_ memory: MemoryID, ref: String?) throws {
         guard let ref, !ref.isEmpty else { return }
         let id = StoryID(rawValue: ref)
-        if try store.stories.story(id: id) == nil {
-            try store.stories.insert(id: id, title: nil, chapterID: try store.memories.fetch(memory)?.chapterID)
-        }
-        try addToStory(memory, story: id)
+        try store.stories.join([memory], story: id, title: nil, chapterID: try store.memories.fetch(memory)?.chapterID, newStoryID: id)
     }
 
     /// A story title hint, accepted: the member's story takes the title, or a story is made
