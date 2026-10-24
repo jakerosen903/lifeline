@@ -20,13 +20,48 @@ public struct CandidateRepository: Sendable {
         }
     }
 
-    /// Writes every candidate of one extraction and marks the segment extracted in one
-    /// transaction, so a kill cannot leave half the rows behind a pending segment.
-    public func insertAll(_ candidates: [Candidate], markingExtracted segment: SegmentID, in sessions: SessionRepository) throws {
+    /// A row of this extraction that carries on an earlier, pending card (M5).
+    public struct Continuation: Sendable, Equatable {
+        public var earlierID: CandidateID
+        /// The superseded row stored for it in this extraction.
+        public var rowID: CandidateID
+        public var span: ExtraSpan
+        public init(earlierID: CandidateID, rowID: CandidateID, span: ExtraSpan) { self.earlierID = earlierID; self.rowID = rowID; self.span = span }
+    }
+
+    /// Writes every candidate of one extraction, marks the segment extracted, and grows each
+    /// continued card by its new span, in one transaction: a kill cannot leave half the rows
+    /// behind a pending segment, or an extracted segment whose span no card carries. A card that
+    /// stopped being pending in the meantime (Keep landed first) is not grown; its continuation
+    /// row becomes an ordinary pending card that names the kept memory instead.
+    /// Returns the ids of the cards that were grown.
+    @discardableResult
+    public func insertAll(_ candidates: [Candidate], markingExtracted segment: SegmentID, in sessions: SessionRepository,
+                          extending continuations: [Continuation] = []) throws -> Set<CandidateID> {
         do {
-            try db.writer.write { db in
+            return try db.writer.write { db in
                 for candidate in candidates { try candidate.insert(db) }
                 try db.execute(sql: "update segment set status = ? where id = ?", arguments: [SegmentStatus.extracted.rawValue, segment.rawValue])
+                var grown: Set<CandidateID> = []
+                for continuation in continuations {
+                    if let earlier = try Candidate.fetchOne(db, key: continuation.earlierID.rawValue), earlier.status == .pending,
+                       var out = CandidatePayload.memory(earlier) {
+                        out.extraSpans.append(continuation.span)
+                        try db.execute(sql: "update candidate set payload = ? where id = ? and status = ?",
+                                       arguments: [try CandidatePayload.encode(out), earlier.id.rawValue, CandidateStatus.pending.rawValue])
+                        grown.insert(earlier.id)
+                    } else if let row = try Candidate.fetchOne(db, key: continuation.rowID.rawValue), var out = CandidatePayload.memory(row) {
+                        let kept = try String.fetchOne(db, sql: """
+                            select id from memory where created_from_candidate_id = ?
+                            union select memory_id from memory_span where candidate_id = ? limit 1
+                            """, arguments: [continuation.earlierID.rawValue, continuation.earlierID.rawValue])
+                        if let kept { out.sameAsMemoryIDs = [kept] + out.sameAsMemoryIDs.filter { $0 != kept } }
+                        out.continuesCandidateID = nil
+                        try db.execute(sql: "update candidate set payload = ?, status = ?, rejection = null where id = ?",
+                                       arguments: [try CandidatePayload.encode(out), CandidateStatus.pending.rawValue, row.id.rawValue])
+                    }
+                }
+                return grown
             }
         } catch let error as DatabaseError where error.resultCode == .SQLITE_CONSTRAINT {
             throw Error.duplicate
