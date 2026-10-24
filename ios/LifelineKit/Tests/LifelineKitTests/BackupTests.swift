@@ -261,6 +261,26 @@ private func archives(in dir: URL) throws -> [URL] {
     #expect(try archives(in: documents).count == 4, "two safety copies from staging, two replaced archives")
 }
 
+@Test func aFailedSecondStageLeavesNoRestorePending() throws {
+    let phone = try Root(sessions: 1, memories: 1)
+    let documents = try docs()
+    let first = try Root(sessions: 2, memories: 1), second = try Root(sessions: 3, memories: 1)
+    let a = first.url.appending(path: "a.lifeline"), b = second.url.appending(path: "b.lifeline")
+    _ = try Backup.export(root: first.url, appVersion: "1.0", to: a, database: first.db)
+    _ = try Backup.export(root: second.url, appVersion: "1.0", to: b, database: second.db)
+    _ = try Backup.stage(a, root: phone.url, appVersion: "1.0", database: phone.db, safetyCopyDirectory: documents)
+    // The person picks another copy before relaunching, and that stage fails after the unzip.
+    let blocked = FileManager.default.temporaryDirectory.appending(path: "blocked-\(UUID().uuidString)")
+    try Data("x".utf8).write(to: blocked)
+    #expect(throws: (any Error).self) {
+        try Backup.stage(b, root: phone.url, appVersion: "1.0", database: phone.db, safetyCopyDirectory: blocked)
+    }
+    let fm = FileManager.default
+    #expect(!fm.fileExists(atPath: phone.url.appending(path: "Lifeline-restore-pending.json").path), "no marker points at the failed copy")
+    #expect(try !Backup.applyPendingRestore(root: phone.url, safetyCopyDirectory: documents), "the next launch applies nothing")
+    #expect(try phone.store.sessions.listSessions().count == 1, "the phone keeps its own archive")
+}
+
 @Test func copiesWrittenToDocumentsStayOutOfCloudBackup() throws {
     let phone = try Root(sessions: 1, memories: 1)
     let archive = phone.url.appending(path: "self.lifeline")

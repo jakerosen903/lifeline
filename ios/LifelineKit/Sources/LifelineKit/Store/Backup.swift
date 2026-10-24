@@ -136,20 +136,30 @@ public enum Backup {
         let manifest = try inspect(archive)
         guard !Migrations.isNewer(manifest.schemaVersion, than: Migrations.currentSchemaVersion) else { throw Error.newerSchema(manifest.schemaVersion) }
         let staging = root.appending(path: stagingName, directoryHint: .isDirectory)
-        try? fm.removeItem(at: staging)
-        try fm.createDirectory(at: staging, withIntermediateDirectories: true)
-        try fm.unzipItem(at: archive, to: staging)
-        guard fm.fileExists(atPath: staging.appending(path: databaseName).path) else { try? fm.removeItem(at: staging); throw Error.incomplete }
-        // The copy must open before the phone's archive is touched.
-        _ = try DatabaseQueue(path: staging.appending(path: databaseName).path).read { try String.fetchOne($0, sql: "pragma schema_version") }
-        try? fm.removeItem(at: staging.appending(path: manifestName))
-
-        // Dated to the second and never overwritten: a second restore the same day keeps the first copy.
-        let copies = try safetyCopyDirectory ?? Self.safetyCopyDirectory()
-        let safety = freeName(in: copies, stem: "Lifeline-before-restore-\(stamp(.now))")
-        try export(root: root, appVersion: appVersion, to: safety, database: database)
-
         let marker = root.appending(path: markerName)
+        // An earlier staged copy is replaced: its marker goes first, so a stage that fails below
+        // can never leave a marker that points at a partial or unchecked copy.
+        try? fm.removeItem(at: marker)
+        try? fm.removeItem(at: staging)
+        let safety: URL
+        do {
+            try fm.createDirectory(at: staging, withIntermediateDirectories: true)
+            try fm.unzipItem(at: archive, to: staging)
+            guard fm.fileExists(atPath: staging.appending(path: databaseName).path) else { throw Error.incomplete }
+            // The copy must open before the phone's archive is touched.
+            _ = try DatabaseQueue(path: staging.appending(path: databaseName).path).read { try String.fetchOne($0, sql: "pragma schema_version") }
+            try? fm.removeItem(at: staging.appending(path: manifestName))
+
+            // Dated to the second and never overwritten: a second restore the same day keeps the first copy.
+            let copies = try safetyCopyDirectory ?? Self.safetyCopyDirectory()
+            safety = freeName(in: copies, stem: "Lifeline-before-restore-\(stamp(.now))")
+            try export(root: root, appVersion: appVersion, to: safety, database: database)
+        } catch {
+            try? fm.removeItem(at: staging)
+            throw error
+        }
+
+        // The marker is written last: it exists only when the stage is complete and checked.
         try JSONEncoder.manifest.encode(manifest).write(to: marker, options: .atomic)
         return PendingRestore(manifest: manifest, safetyCopy: safety)
     }
