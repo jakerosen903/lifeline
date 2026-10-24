@@ -47,7 +47,7 @@ struct YourCopySection: View {
         } header: {
             Text("Your copy")
         } footer: {
-            Text("One file with every recording, memory and date. Nothing leaves the phone unless you share the file.")
+            Text("One file with every recording, memory and date. Nothing leaves the phone unless you share the file. A copy in Files stays on this phone until you share it to iCloud Drive or another place.")
         }
         .fileImporter(isPresented: $picking, allowedContentTypes: [UTType(filenameExtension: "lifeline") ?? .zip, .zip]) { result in
             if case .success(let url) = result { viewModel.chose(url) }
