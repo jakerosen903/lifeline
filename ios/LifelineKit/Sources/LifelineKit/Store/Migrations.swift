@@ -223,6 +223,33 @@ enum Migrations {
                 t.add(column: "candidate_id", .text)
             }
         }
+        m.registerMigration("v8") { db in
+            try db.create(table: "story") { t in
+                t.primaryKey("id", .text)
+                t.column("title", .text)
+                t.column("chapter_id", .text).references("chapter", onDelete: .setNull)
+                t.column("created_at", .datetime).notNull()
+            }
+            try db.create(table: "story_moment") { t in
+                t.column("story_id", .text).notNull().references("story", onDelete: .cascade)
+                t.column("memory_id", .text).notNull().references("memory", onDelete: .cascade).unique()
+                t.column("order", .integer).notNull()
+                t.primaryKey(["story_id", "memory_id"])
+            }
+            try db.create(table: "duplicate_pair") { t in
+                t.primaryKey("id", .text)
+                t.column("a_memory_id", .text).notNull().references("memory", onDelete: .cascade)
+                t.column("b_memory_id", .text).notNull().references("memory", onDelete: .cascade)
+                t.column("score", .double).notNull()
+                t.column("verdict", .text).notNull()
+                t.column("status", .text).notNull()
+                t.column("decided_at", .datetime)
+                t.uniqueKey(["a_memory_id", "b_memory_id"])
+            }
+            try db.alter(table: "memory_span") { t in
+                t.add(column: "continues_order", .integer)
+            }
+        }
         return m
     }
 }

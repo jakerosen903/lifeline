@@ -68,10 +68,24 @@ final class TimelineUITests: XCTestCase {
         XCTAssertTrue(app.otherElements["timeline.axis"].exists, "a placed memory brings the year axis")
     }
 
+
+    /// M5 folds the two scripted moments under one story row; open it so the member rows show.
+    @MainActor
+    private func openStory(_ app: XCUIApplication) {
+        let story = app.buttons["timeline.story"].firstMatch
+        XCTAssertTrue(app.reveal(story), "the scripted moments sit under a story row")
+        var tries = 0
+        while tries < 4 && story.frame.maxY > app.buttons["home.start"].frame.minY - 8 { app.swipeUp(); tries += 1 }
+        story.tap()
+        XCTAssertTrue(app.buttons["timeline.memory"].firstMatch.waitForExistence(timeout: 3))
+    }
+
     @MainActor
     func testAnsweringTheRelativeQuestionConfirmsTheRange() {
         let app = launchToTimeline()
         record(app, accept: 2)   // the blue door (before Maya climbed it) and Maya climbed it (in 1998)
+        openStory(app)
+        app.swipeDown(); app.swipeDown()
         let question = app.otherElements["timeline.question"]
         XCTAssertTrue(reveal(question, in: app), "the timeline asks the one question it can")
         XCTAssertTrue(app.staticTexts["Was this the same year as Maya climbed it?"].exists)
@@ -87,6 +101,7 @@ final class TimelineUITests: XCTestCase {
     func testMemoryScreenPlaysAndShowsEvidence() {
         let app = launchToTimeline()
         record(app, accept: 2)
+        openStory(app)
         let maya = app.buttons.matching(identifier: "timeline.memory").matching(NSPredicate(format: "label CONTAINS %@", "Maya climbed it")).firstMatch
         XCTAssertTrue(reveal(maya, in: app))
         // The Check-this tag shows its words, not an icon beside a blank row (bug seen on device 2026-10-23).

@@ -15,7 +15,7 @@ private struct Env {
 
     func memoryCandidate(people: [String] = ["my mother"], place: String? = nil, anchors: [AnchorOut] = [], span: WordSpan = WordSpan(startWord: 1, endWord: 3), ordinal: Int = 0) throws -> Candidate {
         let out = MemoryOut(ref: "m1", title: "The pomegranate tree", quote: "garden had a", segmentSpan: span, peopleRefs: people, placeText: place,
-                            anchors: anchors, sameAsMemoryID: nil, collectionHint: nil, chapterHint: nil, confidence: 0.9)
+                            anchors: anchors, collectionHint: nil, chapterHint: nil, confidence: 0.9)
         let c = StoreFixtures.candidate(segment.id, ordinal: ordinal, kind: .memory, payload: try CandidatePayload.encode(out))
         try store.candidates.insert(c)
         return c

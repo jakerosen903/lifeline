@@ -118,7 +118,7 @@ private func client(_ transport: FakeHTTPTransport, key: String? = "sk-ant-api03
     let segment = Segment(id: .init(), sessionID: .init(), index: 0, startMs: 0, endMs: 1, text: "the garden had a pomegranate tree", status: .pending)
     let packet = ContextPacketBuilder.build(segment: segment, previous: [], people: [], memories: [], profileFreeText: "I grew up in Fresno", stage: "open")
     let response = try await service.extract(ExtractionRequest(segmentID: segment.id, segmentText: segment.text, words: segment.text.split(separator: " ").map(String.init), packet: packet))
-    #expect(response.version == "v4")
+    #expect(response.version == "v5")
     let system = try #require(try transport.body(of: 0)["system"] as? [[String: Any]])
     #expect(system.count == 2)
     #expect((system[0]["text"] as? String)?.contains("Extract only what is said") == true)

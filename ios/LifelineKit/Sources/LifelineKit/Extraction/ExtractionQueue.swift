@@ -33,6 +33,8 @@ public actor ExtractionQueue {
     private var keyMissing = false
     private var lastFailure: [SegmentID: ExtractionError] = [:]
     private var idleWaiters: [CheckedContinuation<Void, Never>] = []
+    /// Raw story refs the model made up, and the ids minted for them, for this session (M5).
+    private var mintedStoryRefs: [String: StoryID] = [:]
 
     public static let defaultDrainDeadline: Duration = .seconds(20)
     public static let withheldReason = "withheld: serious disclosure"
@@ -123,7 +125,8 @@ public actor ExtractionQueue {
                 response = try await service.extract(request)
                 if Self.isBlank(response.output) { throw ExtractionError.badOutput("blank answer") }
             }
-            let validated = OutputValidator.validate(response.output, segmentText: segment.text, words: words)
+            var validated = OutputValidator.validate(response.output, segmentText: segment.text, words: words)
+            try mintStoryRefs(&validated)
             let shown = try storeCandidates(validated, segment: segmentID, version: response.version)
             lastFailure[segmentID] = nil
             log("segment \(segment.index): \(shown.count) shown, \(validated.rejected.count) rejected, model \(response.model), "
@@ -151,15 +154,34 @@ public actor ExtractionQueue {
 
     private func packet(for segment: Segment) throws -> ContextPacket {
         let previous = try store.sessions.segments(in: session)
-        let people = try store.people.people().map { ($0, (try? store.people.aliases(of: $0.id)) ?? []) }
         let memories = try store.memories.memories(in: session)
         let freeText = try store.profile.fetch()?.freeText
         // Earlier memories that read like this segment, so a retelling can be named (M4.1).
         let related = try matcher?.related(to: segment.text, excluding: Set(memories.map(\.id))) ?? []
+        // People named in this or the previous segments first, then by most recent link (M5).
+        let recentText = ([segment] + previous.filter { $0.index < segment.index }.suffix(2)).map(\.text).joined(separator: " ")
+        let people = try store.people.peopleByRecentLink()
+            .map { ($0, (try? store.people.aliases(of: $0.id)) ?? []) }
+            .sorted { Self.isNamed($0, in: recentText) && !Self.isNamed($1, in: recentText) }
+        // This session's cards still waiting, except this segment's own, so a continuation can name one (M5).
+        let pending = try store.candidates.pending(in: session).filter { $0.kind == .memory && $0.segmentID != segment.id }
+        var storyIDs: [StoryID] = []
+        var stories: [(Story, [Memory])] = []
+        for memory in related + memories {
+            guard let story = try store.stories.story(of: memory.id), !storyIDs.contains(story.id) else { continue }
+            storyIDs.append(story.id)
+            stories.append((story, try store.stories.members(of: story.id)))
+        }
         return ContextPacketBuilder.build(segment: segment, previous: previous, people: people, memories: memories,
                                           profileFreeText: freeText, stage: stage,
                                           chapters: try store.chapters.chapters(), curiosity: try store.curiosity.open(),
-                                          excludedMemoryIDs: try store.memories.excludedIDs(), related: related)
+                                          excludedMemoryIDs: try store.memories.excludedIDs(), related: related,
+                                          pending: pending, stories: stories)
+    }
+
+    private static func isNamed(_ entry: (Person, [Alias]), in text: String) -> Bool {
+        let lower = text.lowercased()
+        return ([entry.0.displayName] + entry.1.map(\.text)).contains { !$0.isEmpty && lower.contains($0.lowercased()) }
     }
 
     /// Writes one row per candidate in output order, plus a flag row when any flag is set, and
@@ -180,13 +202,32 @@ public actor ExtractionQueue {
             return Candidate(id: .init(), segmentID: segment, extractorVersion: version, ordinal: ordinal, kind: kind, payload: payload,
                              confidence: confidence, status: status, rejection: rejection, createdAt: .now)
         }
+        var extended: [CandidateRepository.Continuation] = []
         for candidate in validated.accepted {
             let r = try Self.describe(candidate)
             if case .memory = candidate, validated.flags.seriousDisclosure {
                 rows.append(row(r.kind, r.payload, r.confidence, Self.withheldReason))
                 continue
             }
-            let c = row(r.kind, r.payload, r.confidence, nil)
+            // A telling carried on after a pause: the earlier card grows a span and shows again;
+            // this row is kept, superseded, so Keep can take its people, places and anchors (M5).
+            if case .memory(let memory) = candidate, let earlier = try pendingCard(named: memory.continuesCandidateID) {
+                var c = row(r.kind, r.payload, r.confidence, CandidateRepository.continuesReason(earlier.id))
+                c.status = .superseded
+                rows.append(c)
+                extended.append(.init(earlierID: earlier.id, rowID: c.id,
+                                      span: ExtraSpan(segmentID: segment.rawValue, startWord: memory.segmentSpan.startWord, endWord: memory.segmentSpan.endWord)))
+                rows += try hintRows(for: memory, keyedTo: earlier.id, row: row)
+                continue
+            }
+            var r2 = r
+            // The telling it carries on was already kept: an ordinary card that names that memory (spec, Goal 3).
+            if case .memory(var memory) = candidate, let kept = try keptMemory(continuing: memory.continuesCandidateID) {
+                memory.sameAsMemoryIDs = [kept.id.rawValue] + memory.sameAsMemoryIDs.filter { $0 != kept.id.rawValue }
+                memory.continuesCandidateID = nil
+                r2 = try Self.describe(.memory(memory))
+            }
+            let c = row(r2.kind, r2.payload, r2.confidence, nil)
             rows.append(c)
             if case .mention(let mention) = candidate, mention.kind == .person, try store.people.findPerson(matching: mention.text) != nil {
                 knownMentions.append((c, mention))
@@ -194,12 +235,7 @@ public actor ExtractionQueue {
                 shown.append(c)
             }
             if case .memory(let memory) = candidate {
-                for (kind, phrase) in [(HintKind.collection, memory.collectionHint), (.chapter, memory.chapterHint)] {
-                    guard let phrase = phrase?.trimmingCharacters(in: .whitespacesAndNewlines), !phrase.isEmpty else { continue }
-                    let hint = row(.hint, try CandidatePayload.encode(HintOut(kind: kind, phrase: phrase, memoryCandidateID: c.id.rawValue)), memory.confidence, nil)
-                    rows.append(hint)
-                    shown.append(hint)
-                }
+                rows += try hintRows(for: memory, keyedTo: c.id, row: row)
             }
         }
         for rejected in validated.rejected {
@@ -209,12 +245,61 @@ public actor ExtractionQueue {
         if validated.flags.isAnySet {
             rows.append(row(.flag, try CandidatePayload.encode(validated.flags), 1, nil))
         }
-        try store.candidates.insertAll(rows, markingExtracted: segment, in: store.sessions)
+        // Superseded rows are records with nothing to tap; only pending hint rows from this pass show.
+        shown += rows.filter { $0.kind == .hint && $0.status == .pending && !shown.contains($0) }
+        // The rows, the segment's status and the grown cards land together.
+        let grown = try store.candidates.insertAll(rows, markingExtracted: segment, in: store.sessions, extending: extended)
         for (candidate, _) in knownMentions {
             let mention = try actions.acceptMention(candidate)
             try actions.resolveIfKnown(mention)
         }
+        for continuation in extended {
+            // The grown card shows again; a card kept in the meantime leaves its continuation as an ordinary card.
+            let id = grown.contains(continuation.earlierID) ? continuation.earlierID : continuation.rowID
+            if let card = try store.candidates.fetch(id) { shown.insert(card, at: 0) }
+        }
         return shown
+    }
+
+    /// A stored `story_ref` is always a story id: a ref that names no story and no pending
+    /// card's ref gets a fresh id, shared by every memory of this session with the same raw ref.
+    private func mintStoryRefs(_ validated: inout OutputValidator.Validated) throws {
+        let pendingRefs = Set(try store.candidates.pending(in: session).compactMap { CandidatePayload.memory($0)?.storyRef })
+        for i in validated.accepted.indices {
+            guard case .memory(var memory) = validated.accepted[i], let raw = memory.storyRef?.trimmingCharacters(in: .whitespacesAndNewlines), !raw.isEmpty else { continue }
+            if pendingRefs.contains(raw) { continue }
+            if try store.stories.story(id: StoryID(rawValue: raw)) != nil { continue }
+            let minted = mintedStoryRefs[raw] ?? StoryID()
+            mintedStoryRefs[raw] = minted
+            memory.storyRef = minted.rawValue
+            validated.accepted[i] = .memory(memory)
+        }
+    }
+
+    /// The pending memory card of this session a continuation names, or nil: a kept, dismissed
+    /// or unknown card is never extended, so the new telling stands as its own card.
+    private func pendingCard(named id: String?) throws -> Candidate? {
+        guard let id, let card = try store.candidates.fetch(CandidateID(rawValue: id)),
+              card.kind == .memory, card.status == .pending,
+              let segment = try store.sessions.fetchSegment(card.segmentID), segment.sessionID == session else { return nil }
+        return card
+    }
+
+    /// The memory an accepted card made or joined, when a continuation names a card that was kept.
+    private func keptMemory(continuing id: String?) throws -> Memory? {
+        guard let id, let card = try store.candidates.fetch(CandidateID(rawValue: id)), card.kind == .memory, card.status == .accepted else { return nil }
+        return try store.memories.memory(createdFrom: card.id) ?? store.memories.memory(withSpanFrom: card.id)
+    }
+
+    /// Hint rows for a memory's collection and chapter phrases, waiting on the card `keyedTo`.
+    private func hintRows(for memory: MemoryOut, keyedTo card: CandidateID,
+                          row: (CandidateKind, String, Double, String?) -> Candidate) throws -> [Candidate] {
+        var out: [Candidate] = []
+        for (kind, phrase) in [(HintKind.collection, memory.collectionHint), (.chapter, memory.chapterHint), (.story, memory.storyTitleHint)] {
+            guard let phrase = phrase?.trimmingCharacters(in: .whitespacesAndNewlines), !phrase.isEmpty else { continue }
+            out.append(row(.hint, try CandidatePayload.encode(HintOut(kind: kind, phrase: phrase, memoryCandidateID: card.rawValue)), memory.confidence, nil))
+        }
+        return out
     }
 
     private static func describe(_ candidate: OutputValidator.ValidatedCandidate) throws -> (kind: CandidateKind, payload: String, confidence: Double) {

@@ -6,7 +6,7 @@ import Testing
 
 private func gardenMemoryOut() -> MemoryOut {
     MemoryOut(ref: "m1", kind: .event, title: "The pomegranate tree", quote: "pomegranate tree", segmentSpan: WordSpan(startWord: 4, endWord: 5),
-              peopleRefs: [], placeText: nil, anchors: [], sameAsMemoryID: nil, collectionHint: nil, chapterHint: nil, confidence: 0.9)
+              peopleRefs: [], placeText: nil, anchors: [], collectionHint: nil, chapterHint: nil, confidence: 0.9)
 }
 
 // I-1: the Finish entry survives stop(); landed and crash are logged.

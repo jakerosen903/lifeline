@@ -21,7 +21,7 @@ private struct Env {
     @discardableResult
     func accept(_ title: String, anchors: [AnchorOut], ordinal: Int) throws -> Memory {
         let out = MemoryOut(ref: "m", kind: .event, title: title, quote: "the blue door", segmentSpan: WordSpan(startWord: 0, endWord: 2), peopleRefs: [],
-                            placeText: nil, anchors: anchors, sameAsMemoryID: nil, collectionHint: nil, chapterHint: nil, confidence: 0.9)
+                            placeText: nil, anchors: anchors, collectionHint: nil, chapterHint: nil, confidence: 0.9)
         let c = StoreFixtures.candidate(segment.id, ordinal: ordinal, kind: .memory, payload: try CandidatePayload.encode(out))
         try store.candidates.insert(c)
         return try actions.acceptMemory(c).memory

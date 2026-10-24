@@ -27,6 +27,27 @@ public struct ContextPacket: Codable, Sendable, Equatable {
         public var rangeText: String?
     }
 
+    /// A card of this session still waiting on the person, so a continuation can name it (M5).
+    public struct PendingEntry: Codable, Sendable, Equatable {
+        public var candidateID: String
+        public var title: String
+        public var quote: String
+        public var storyRef: String?
+
+        public init(candidateID: String, title: String, quote: String, storyRef: String?) {
+            self.candidateID = candidateID; self.title = title; self.quote = quote; self.storyRef = storyRef
+        }
+    }
+
+    /// A story the packet's memories belong to (M5).
+    public struct StoryEntry: Codable, Sendable, Equatable {
+        public var id: String
+        public var title: String?
+        public var momentTitles: [String]
+
+        public init(id: String, title: String?, momentTitles: [String]) { self.id = id; self.title = title; self.momentTitles = momentTitles }
+    }
+
     public var previousSegments: [String]
     public var people: [PersonEntry]
     public var chapters: [ChapterEntry]
@@ -34,6 +55,8 @@ public struct ContextPacket: Codable, Sendable, Equatable {
     public var curiosity: [String]
     public var stage: String
     public var profileFreeText: String?
+    public var pending: [PendingEntry] = []
+    public var stories: [StoryEntry] = []
 
     /// Sorted keys, so the same packet always renders to the same bytes.
     public func encodedJSON() throws -> Data {
@@ -53,12 +76,18 @@ public struct ContextPacketLimits: Sendable, Equatable {
     }
 }
 
-/// Pure. Chapters and curiosity items are empty until M3 builds them.
+/// Pure. Fills the packet in relevance order and trims it to a token ceiling (M5): previous
+/// segments, pending cards, related and session memories, people (pass them already ordered),
+/// stories, chapters, curiosity. Whole entries go, least relevant section first, and every
+/// section keeps its first entry. Profile free text is never dropped.
 public enum ContextPacketBuilder {
+    public static let defaultBudgetTokens = 6000
+
     public static func build(segment: Segment, previous: [Segment], people: [(Person, [Alias])], memories: [Memory],
                              profileFreeText: String?, stage: String, limits: ContextPacketLimits = ContextPacketLimits(),
                              chapters: [Chapter] = [], curiosity: [CuriosityItem] = [], excludedMemoryIDs: Set<MemoryID> = [],
-                             related: [Memory] = []) -> ContextPacket {
+                             related: [Memory] = [], pending: [Candidate] = [], stories: [(Story, [Memory])] = [],
+                             budgetTokens: Int = ContextPacketBuilder.defaultBudgetTokens) -> ContextPacket {
         let earlier = previous.filter { $0.index < segment.index }.sorted { $0.index < $1.index }
         let window = earlier.suffix(limits.previousSegments).map(\.text)
         let entries = people
@@ -84,8 +113,41 @@ public enum ContextPacketBuilder {
         let questions = curiosity
             .filter { item in ![item.sourceMemoryID, item.targetMemoryID].compactMap { $0 }.contains { excludedMemoryIDs.contains($0) } }
             .prefix(limits.curiosity).map(\.text)
-        return ContextPacket(previousSegments: Array(window), people: Array(entries), chapters: chapterEntries, memories: memoryEntries,
-                             curiosity: Array(questions), stage: stage, profileFreeText: profileFreeText)
+        let pendingEntries: [ContextPacket.PendingEntry] = pending.compactMap { candidate in
+            guard candidate.kind == .memory, candidate.status == .pending, let out = CandidatePayload.memory(candidate) else { return nil }
+            return .init(candidateID: candidate.id.rawValue, title: out.title, quote: out.quote, storyRef: out.storyRef)
+        }
+        let storyEntries = stories.map { story, members in
+            ContextPacket.StoryEntry(id: story.id.rawValue, title: story.title, momentTitles: members.filter { !$0.excludedFromAI }.map(\.title))
+        }
+        var packet = ContextPacket(previousSegments: Array(window), people: Array(entries), chapters: chapterEntries, memories: memoryEntries,
+                                   curiosity: Array(questions), stage: stage, profileFreeText: profileFreeText,
+                                   pending: pendingEntries, stories: storyEntries)
+        trim(&packet, to: budgetTokens)
+        return packet
+    }
+
+    /// Tokens as characters ÷ 4, never less than one.
+    public static func estimate(_ text: String) -> Int { max(1, text.count / 4) }
+
+    /// Drops whole entries from the least relevant section first until the packet fits. The
+    /// profile text and each section's first entry stay, so the packet may still exceed the
+    /// ceiling by those.
+    static func trim(_ packet: inout ContextPacket, to budget: Int) {
+        func size() -> Int { estimate(String(decoding: (try? packet.encodedJSON()) ?? Data(), as: UTF8.self)) }
+        // Least relevant first; each closure drops one entry and says whether it could.
+        let droppers: [(inout ContextPacket) -> Bool] = [
+            { $0.curiosity.count > 1 ? ($0.curiosity.removeLast(), true).1 : false },
+            { $0.chapters.count > 1 ? ($0.chapters.removeLast(), true).1 : false },
+            { $0.stories.count > 1 ? ($0.stories.removeLast(), true).1 : false },
+            { $0.people.count > 1 ? ($0.people.removeLast(), true).1 : false },
+            { $0.memories.count > 1 ? ($0.memories.removeLast(), true).1 : false },
+            { $0.pending.count > 1 ? ($0.pending.removeLast(), true).1 : false },
+            { $0.previousSegments.count > 1 ? ($0.previousSegments.removeFirst(), true).1 : false },
+        ]
+        while size() > budget {
+            guard droppers.contains(where: { $0(&packet) }) else { return }
+        }
     }
 }
 

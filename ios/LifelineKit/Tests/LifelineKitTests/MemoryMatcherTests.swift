@@ -6,6 +6,7 @@ import Testing
 struct FakeEmbedder: SentenceEmbedder {
     let model = "fake"
     var table: [String: [Float]]
+    var suggestsOnItsOwn = true
     func vector(for text: String) -> [Float]? { table[text] }
 }
 
@@ -40,7 +41,7 @@ private struct MatchEnv {
 
 private func card(_ title: String, quote: String) -> MemoryOut {
     MemoryOut(ref: "m1", kind: .event, title: title, quote: quote, segmentSpan: WordSpan(startWord: 0, endWord: 0),
-              peopleRefs: [], placeText: nil, anchors: [], sameAsMemoryID: nil, collectionHint: nil, chapterHint: nil, confidence: 0.9)
+              peopleRefs: [], placeText: nil, anchors: [], collectionHint: nil, chapterHint: nil, confidence: 0.9)
 }
 
 @Test func cosineOfIdenticalIsOneAndOrthogonalIsZero() {
@@ -188,4 +189,23 @@ private func card(_ title: String, quote: String) -> MemoryOut {
     let strong = try #require(try matcher.picker(for: MemoryMatcher.text(title: retold.title, quote: retold.quote), excluding: [], includeHidden: false).first)
     #expect(!matcher.isStrong(strong))
     #expect(env.matcher(FakeEmbedder(table: env.table)).isStrong(strong), "the calibrated model trusts the same score")
+}
+
+@Test func suggestionsListEveryNamedMemoryInOrder() throws {
+    var env = try MatchEnv()
+    let a = try env.memory("orange house", quote: "we lived in an orange house", vector: [1, 0, 0])
+    let b = try env.memory("canal", quote: "right on the canal", vector: [0.7, 0.7, 0])
+    let c = try env.memory("disney", quote: "we drove to disney", vector: [0, 0, 1])
+    let hidden = try env.memory("hidden", quote: "hidden house", vector: [1, 0, 0], hidden: true)
+    let retold = card("The orange house", quote: "grew up in an orange house")
+    env.table[MemoryMatcher.text(title: retold.title, quote: retold.quote)] = [1, 0, 0]
+    let matcher = env.matcher(FakeEmbedder(table: env.table))
+    for m in env.memories.values { try matcher.index(m) }
+
+    let named = try matcher.suggestions(for: retold, extractorSameAs: [c.id, hidden.id, MemoryID(rawValue: "nope"), b.id])
+    #expect(named.map(\.memoryID) == [c.id, b.id, a.id], "packet order for the named ones, then the strong vector match not already listed")
+    #expect(named.map(\.source) == [.extractor, .extractor, .embedding])
+    #expect(try matcher.suggestions(for: retold, extractorSameAs: [a.id]).map(\.memoryID) == [a.id], "no duplicate when the vector match was named")
+    #expect(try matcher.suggestion(for: retold, extractorSameAs: [b.id].first)?.memoryID == b.id, "the one-match API is the first of the list")
+    #expect(try matcher.suggestions(for: retold, extractorSameAs: []).map(\.memoryID) == [a.id])
 }

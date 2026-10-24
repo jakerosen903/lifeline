@@ -70,6 +70,20 @@ import Testing
 
 @Test func configDefaultsMatchTheSpec() {
     let c = ExtractorConfig.default
-    #expect(c.model == "claude-opus-5-5" && c.effort == "low" && c.maxTokens == 4096 && c.version == "v4")
+    #expect(c.model == "claude-opus-5-5" && c.effort == "low" && c.maxTokens == 4096 && c.version == "v5")
     #expect(c.betas.contains("server-side-fallback-2026-07-01"))
+}
+
+@Test func v5SchemaNamesTheNewFields() {
+    let schema = ExtractorSchema.json
+    let memory = (((schema["properties"] as? [String: Any])?["memories"] as? [String: Any])?["items"] as? [String: Any]) ?? [:]
+    let props = (memory["properties"] as? [String: Any]) ?? [:]
+    #expect((props["same_as_memory_ids"] as? [String: Any])?["type"] as? String == "array")
+    #expect(props["same_as_memory_id"] == nil)
+    for key in ["continues_candidate_id", "story_ref", "story_title_hint"] {
+        #expect((props[key] as? [String: Any])?["type"] as? [String] == ["string", "null"], Comment(rawValue: key))
+    }
+    #expect(props["extra_spans"] == nil, "app-written, never asked of the model")
+    let required = Set((memory["required"] as? [String]) ?? [])
+    #expect(required.isSuperset(of: ["same_as_memory_ids", "continues_candidate_id", "story_ref", "story_title_hint"]))
 }

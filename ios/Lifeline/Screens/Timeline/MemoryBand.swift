@@ -56,6 +56,9 @@ struct MemoryRowActions {
     let hide: (MemoryRow) -> Void
     let setExcluded: (MemoryRow, Bool) -> Void
     let delete: (MemoryRow) -> Void
+    /// Stories (M5): offered on every row; "Take out" only when the row is in one.
+    var moveToStory: (MemoryRow) -> Void = { _ in }
+    var takeOutOfStory: (MemoryRow) -> Void = { _ in }
 }
 
 /// A memory row: the band (tap opens it), its Check-this tags, and the visible "…" menu that
@@ -110,6 +113,12 @@ struct MemoryRowView: View {
     private var menuItems: some View {
         Button("New chapter from here", systemImage: "book") { actions.newChapter(row) }
         Button("Add to a collection…", systemImage: "square.stack") { actions.addToCollection(row) }
+        Button("Move to another story…", systemImage: "text.book.closed") { actions.moveToStory(row) }
+            .accessibilityIdentifier("row.moveToStory")
+        if row.storyID != nil {
+            Button("Take out of its story", systemImage: "rectangle.portrait.and.arrow.right") { actions.takeOutOfStory(row) }
+                .accessibilityIdentifier("row.takeOut")
+        }
         Divider()
         Button("Hide from timeline", systemImage: "eye.slash") { actions.hide(row) }
             .accessibilityIdentifier("row.hide")

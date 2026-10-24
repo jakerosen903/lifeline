@@ -46,6 +46,8 @@ final class AppModel {
                     print("[matching] backfill failed: \(error)")
                 }
                 await deps.worker.start()
+                // Then the duplicate pass: pairs the reconciler calls the same wait as cards.
+                await deps.duplicates.run()
             }
         } catch {
             loadError = "Lifeline could not open its storage: \(error.localizedDescription)"

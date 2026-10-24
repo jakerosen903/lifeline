@@ -31,4 +31,17 @@ enum StoreFixtures {
         Memory(id: .init(), title: title, summaryQuote: "the garden had a pomegranate tree", visibility: .timeline, chapterID: nil,
                createdFromCandidateID: candidate, createdAt: .now)
     }
+
+    /// A kept memory with one span over the whole segment, from a candidate the test does not care about.
+    @discardableResult
+    static func memory(in repo: MemoryRepository, candidates: CandidateRepository, segment: SegmentID,
+                       title: String = "The pomegranate tree", createdAt: Date = .now) throws -> Memory {
+        let candidate = Self.candidate(segment)
+        try candidates.insert(candidate)
+        var memory = Self.memory(from: candidate.id, title: title)
+        memory.createdAt = createdAt
+        try repo.insert(memory, spans: [MemorySpan(memoryID: memory.id, segmentID: segment, startMs: 0, endMs: 1000, order: 0)],
+                        people: [], places: [], anchors: [])
+        return memory
+    }
 }

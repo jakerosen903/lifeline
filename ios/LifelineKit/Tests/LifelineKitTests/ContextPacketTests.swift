@@ -89,3 +89,49 @@ private func person(_ name: String, owner: Bool = false, aliases: [String] = [])
     let marked = ContextPacketBuilder.build(segment: seg(0, "x"), previous: [], people: [], memories: [], profileFreeText: nil, stage: "open", related: [a])
     #expect(String(decoding: try marked.encodedJSON(), as: UTF8.self).contains("\"related\" : true"))
 }
+
+// MARK: - M5: pending cards, stories, the budget
+
+private func pendingCandidate(_ segment: SegmentID, title: String, quote: String, storyRef: String?) throws -> Candidate {
+    let out = MemoryOut(ref: "m", kind: .event, title: title, quote: quote, segmentSpan: WordSpan(startWord: 0, endWord: 1), peopleRefs: [], placeText: nil,
+                        anchors: [], storyRef: storyRef, collectionHint: nil, chapterHint: nil, confidence: 0.9)
+    return StoreFixtures.candidate(segment, payload: try CandidatePayload.encode(out))
+}
+
+@Test func pendingCandidatesAndStoriesRideInThePacket() throws {
+    let card = try pendingCandidate(SegmentID(), title: "Maya climbed it", quote: "my sister Maya climbed it", storyRef: "s-ref")
+    let story = Story(id: .init(), title: "The door summer", chapterID: nil, createdAt: .now)
+    let a = StoreFixtures.memory(from: CandidateID(), title: "The blue door")
+    let b = StoreFixtures.memory(from: CandidateID(), title: "The red gate")
+    let packet = ContextPacketBuilder.build(segment: seg(2, "x"), previous: [], people: [], memories: [a], profileFreeText: nil, stage: "open",
+                                            pending: [card], stories: [(story, [a, b])])
+    #expect(packet.pending == [ContextPacket.PendingEntry(candidateID: card.id.rawValue, title: "Maya climbed it", quote: "my sister Maya climbed it", storyRef: "s-ref")])
+    #expect(packet.stories == [ContextPacket.StoryEntry(id: story.id.rawValue, title: "The door summer", momentTitles: ["The blue door", "The red gate"])])
+}
+
+@Test func budgetTruncatesWholeEntriesFromTheLeastRelevantSectionFirst() throws {
+    let people = (0..<40).map { person("Person number \($0)", aliases: ["alias \($0)"]) }
+    let questions = (0..<40).map { CuriosityItem(id: .init(), kind: .unresolvedAnchor, text: "when did the long thing number \($0) happen", payoffCount: 1, status: .open, sourceMemoryID: nil, targetMemoryID: nil) }
+    let limits = ContextPacketLimits(previousSegments: 2, people: 50, curiosity: 50)
+    let build = { ContextPacketBuilder.build(segment: seg(0, "x"), previous: [], people: people, memories: [], profileFreeText: nil, stage: "open",
+                                             limits: limits, curiosity: questions, budgetTokens: 800) }
+    let packet = build()
+    #expect(packet.curiosity.count == 1, "curiosity is the least relevant: it keeps only its first entry")
+    #expect(packet.people.count > 1 && packet.people.count < 40, "people are trimmed to the ceiling, whole entries at a time")
+    #expect(ContextPacketBuilder.estimate(String(decoding: try packet.encodedJSON(), as: UTF8.self)) <= 800 + 60)
+    #expect(try build().encodedJSON() == packet.encodedJSON())
+}
+
+@Test func budgetKeepsFirstEntriesAndProfile() throws {
+    let memories = (0..<3).map { StoreFixtures.memory(from: CandidateID(), title: "Memory \($0)") }
+    let people = (0..<3).map { person("Person \($0)") }
+    let profile = String(repeating: "I grew up in a small town by a canal. ", count: 50)
+    let packet = ContextPacketBuilder.build(segment: seg(1, "x"), previous: [seg(0, "earlier")], people: people, memories: memories, profileFreeText: profile, stage: "open",
+                                            chapters: [Chapter(id: .init(), title: "Boston", range: .unplaced, order: 0)], budgetTokens: 50)
+    #expect(packet.memories.count == 1 && packet.people.count == 1 && packet.chapters.count == 1 && packet.previousSegments.count == 1)
+    #expect(packet.profileFreeText == profile, "profile free text is never dropped")
+}
+
+@Test func estimateIsCharactersOverFour() {
+    #expect(ContextPacketBuilder.estimate("") == 1 && ContextPacketBuilder.estimate(String(repeating: "a", count: 400)) == 100)
+}

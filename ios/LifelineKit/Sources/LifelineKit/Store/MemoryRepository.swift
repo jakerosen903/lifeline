@@ -13,9 +13,13 @@ public struct MemoryRepository: Sendable {
     public init(_ db: AppDatabase) { self.db = db }
 
     /// `acceptingCandidate` marks that candidate accepted in the same transaction, so a kill
-    /// can never leave an accepted memory behind a card that is still pending.
+    /// can never leave an accepted memory behind a card that is still pending. The card's
+    /// continuations are marked with it, and the memory joins its story, in that same
+    /// transaction (M5): a kill never leaves a kept memory with its continuation cards still
+    /// pending or its "Part of" line lost.
     public func insert(_ memory: Memory, spans: [MemorySpan], people: [MemoryPerson], places: [MemoryPlace], anchors: [Anchor],
-                       acceptingCandidate candidate: CandidateID? = nil) throws {
+                       acceptingCandidate candidate: CandidateID? = nil, acceptingContinuations continuations: [CandidateID] = [],
+                       joiningStory story: (id: StoryID, chapterID: ChapterID?)? = nil) throws {
         guard !spans.isEmpty else { throw Error.noSpan }
         try db.writer.write { db in
             try memory.insert(db)
@@ -26,13 +30,30 @@ public struct MemoryRepository: Sendable {
             if let candidate {
                 try db.execute(sql: "update candidate set status = ? where id = ?", arguments: [CandidateStatus.accepted.rawValue, candidate.rawValue])
             }
+            try Self.accept(continuations, in: db)
+            if let story {
+                _ = try StoryRepository.join([memory.id], story: story.id, title: nil, chapterID: story.chapterID, newStoryID: story.id, in: db)
+            }
+        }
+    }
+
+    /// The cards that carried a telling on, marked accepted with it.
+    static func accept(_ continuations: [CandidateID], in db: Database) throws {
+        for id in continuations {
+            try db.execute(sql: "update candidate set status = ? where id = ?", arguments: [CandidateStatus.accepted.rawValue, id.rawValue])
         }
     }
 
     /// Removes a memory and, by cascade, its spans, people, places and anchors.
+    /// The memory and everything hanging off it (cascade). A story left with no member goes too.
     public func delete(_ id: MemoryID) throws {
-        _ = try db.writer.write { try Memory.deleteOne($0, key: id.rawValue) }
+        try db.writer.write { db in
+            _ = try Memory.deleteOne(db, key: id.rawValue)
+            try db.execute(sql: Self.deleteEmptyStoriesSQL)
+        }
     }
+
+    static let deleteEmptyStoriesSQL = "delete from story where not exists (select 1 from story_moment where story_moment.story_id = story.id)"
 
     public func fetch(_ id: MemoryID) throws -> Memory? {
         try db.writer.read { try Memory.fetchOne($0, key: id.rawValue) }
@@ -105,7 +126,8 @@ public struct MemoryRepository: Sendable {
         try db.writer.read { db in
             let rows = try Row.fetchAll(db, sql: """
                 select memory.*, memory_span.memory_id as s_memory_id, memory_span.segment_id as s_segment_id, memory_span.start_ms as s_start_ms,
-                       memory_span.end_ms as s_end_ms, memory_span."order" as s_order, memory_span.title_text as s_title_text, memory_span.candidate_id as s_candidate_id
+                       memory_span.end_ms as s_end_ms, memory_span."order" as s_order, memory_span.title_text as s_title_text, memory_span.candidate_id as s_candidate_id,
+                       memory_span.continues_order as s_continues_order
                 from memory_span
                 join memory on memory.id = memory_span.memory_id
                 join segment on segment.id = memory_span.segment_id
@@ -116,10 +138,17 @@ public struct MemoryRepository: Sendable {
                 let memory = try Memory(row: row)
                 let span = MemorySpan(memoryID: MemoryID(rawValue: row["s_memory_id"]), segmentID: SegmentID(rawValue: row["s_segment_id"]),
                                       startMs: row["s_start_ms"], endMs: row["s_end_ms"], order: row["s_order"],
-                                      titleText: row["s_title_text"], candidateID: (row["s_candidate_id"] as String?).map(CandidateID.init(rawValue:)))
+                                      titleText: row["s_title_text"], candidateID: (row["s_candidate_id"] as String?).map(CandidateID.init(rawValue:)),
+                                      continuesOrder: row["s_continues_order"])
                 return (memory, span)
             }
         }
+    }
+
+    /// The memory a card made, if it was kept as its own (M5: no segment join, so a hint stored
+    /// in a continuation's segment still finds it).
+    public func memory(createdFrom candidate: CandidateID) throws -> Memory? {
+        try db.writer.read { try Memory.filter(Column("created_from_candidate_id") == candidate.rawValue).fetchOne($0) }
     }
 
     /// The memory a card was merged into as a later telling, if any.
@@ -148,6 +177,10 @@ public struct MemoryRepository: Sendable {
         public var places: [MemoryPlace]
         public var anchors: [Anchor]
         public var collectionIDs: [CollectionID]
+        /// Pair decisions and story membership go with a memory on cascade; undo brings them back (M5).
+        public var pairs: [DuplicatePair] = []
+        public var story: StoryMoment? = nil
+        public var storyTitle: String? = nil
         public var takenAt: Date
     }
 
@@ -161,6 +194,9 @@ public struct MemoryRepository: Sendable {
                 places: try MemoryPlace.filter(Column("memory_id") == id.rawValue).fetchAll(db),
                 anchors: try Anchor.filter(Column("memory_id") == id.rawValue).fetchAll(db),
                 collectionIDs: try String.fetchAll(db, sql: "select collection_id from collection_memory where memory_id = ?", arguments: [id.rawValue]).map(CollectionID.init(rawValue:)),
+                pairs: try DuplicatePair.filter(Column("a_memory_id") == id.rawValue || Column("b_memory_id") == id.rawValue).fetchAll(db),
+                story: try StoryMoment.filter(Column("memory_id") == id.rawValue).fetchOne(db),
+                storyTitle: try String?.fetchOne(db, sql: "select story.title from story join story_moment sm on sm.story_id = story.id where sm.memory_id = ?", arguments: [id.rawValue]) ?? nil,
                 takenAt: .now)
         }
     }
@@ -170,13 +206,23 @@ public struct MemoryRepository: Sendable {
         try restore([snapshot], settingCandidate: nil)
     }
 
-    /// Several memories back at once, and a card's status with them, in one transaction: an undo
-    /// that is cut short leaves nothing half done.
-    public func restore(_ snapshots: [Snapshot], settingCandidate candidate: (id: CandidateID, status: CandidateStatus)?) throws {
+    /// Several memories back at once, a card's status with them, and a pair row reopened, in
+    /// one transaction: an undo that is cut short leaves nothing half done.
+    public func restore(_ snapshots: [Snapshot], settingCandidate candidate: (id: CandidateID, status: CandidateStatus)?,
+                        reopeningPair pair: DuplicatePair? = nil) throws {
         try db.writer.write { db in
+            // Every memory row first, so a pair between two restored memories finds both.
+            for snapshot in snapshots { try snapshot.memory.save(db) }
             for snapshot in snapshots { try Self.restore(snapshot, in: db) }
             if let candidate {
                 try db.execute(sql: "update candidate set status = ? where id = ?", arguments: [candidate.status.rawValue, candidate.id.rawValue])
+            }
+            if let pair {
+                // The merge took the row with the folded memory; a snapshot may already have put it back.
+                try db.execute(sql: """
+                    insert or ignore into duplicate_pair (id, a_memory_id, b_memory_id, score, verdict, status, decided_at) values (?, ?, ?, ?, ?, ?, ?)
+                    """, arguments: [pair.id.rawValue, pair.aMemoryID.rawValue, pair.bMemoryID.rawValue, pair.score, pair.verdict.rawValue, PairStatus.open.rawValue, nil])
+                try db.execute(sql: "update duplicate_pair set status = ?, decided_at = null where id = ?", arguments: [PairStatus.open.rawValue, pair.id.rawValue])
             }
         }
     }
@@ -194,15 +240,38 @@ public struct MemoryRepository: Sendable {
             for collection in snapshot.collectionIDs {
                 try db.execute(sql: "insert or ignore into collection_memory (collection_id, memory_id) values (?, ?)", arguments: [collection.rawValue, id])
             }
+            for pair in snapshot.pairs
+            where try Memory.exists(db, key: pair.aMemoryID.rawValue) && Memory.exists(db, key: pair.bMemoryID.rawValue) {
+                try db.execute(sql: """
+                    insert or ignore into duplicate_pair (id, a_memory_id, b_memory_id, score, verdict, status, decided_at) values (?, ?, ?, ?, ?, ?, ?)
+                    """, arguments: [pair.id.rawValue, pair.aMemoryID.rawValue, pair.bMemoryID.rawValue, pair.score, pair.verdict.rawValue, pair.status.rawValue, pair.decidedAt])
+            }
+            if let moment = snapshot.story {
+                // The story may have gone when this was its last member; it comes back untitled.
+                if try !Story.exists(db, key: moment.storyID.rawValue) {
+                    try Story(id: moment.storyID, title: snapshot.storyTitle, chapterID: nil, createdAt: .now).insert(db)
+                }
+                try db.execute(sql: "delete from story_moment where memory_id = ?", arguments: [id])
+                try moment.insert(db)
+            }
     }
 
     /// "Same story" on a card, in one transaction: the span, its edges, the card marked accepted.
     /// `promotingStandIn` carries the card's title, quote and candidate when the target is a
     /// resolver stand-in: its borrowed span goes, this telling becomes order 0 and the memory
     /// becomes real. A failure anywhere leaves the card pending and the target untouched.
-    public func mergeSpan(_ span: MemorySpan, people: [MemoryPerson], places: [MemoryPlace], anchors: [Anchor],
-                          promotingStandIn: (title: String, summaryQuote: String)?, acceptingCandidate candidate: CandidateID) throws {
+    public func mergeSpan(_ span: MemorySpan, continuations: [MemorySpan] = [], people: [MemoryPerson], places: [MemoryPlace], anchors: [Anchor],
+                          promotingStandIn: (title: String, summaryQuote: String)?, acceptingCandidate candidate: CandidateID,
+                          acceptingContinuations continuationCards: [CandidateID] = []) throws {
         try db.writer.write { db in
+            try Self.mergeSpan(span, continuations: continuations, people: people, places: places, anchors: anchors,
+                               promotingStandIn: promotingStandIn, acceptingCandidate: candidate, acceptingContinuations: continuationCards, in: db)
+        }
+    }
+
+    static func mergeSpan(_ span: MemorySpan, continuations: [MemorySpan], people: [MemoryPerson], places: [MemoryPlace], anchors: [Anchor],
+                          promotingStandIn: (title: String, summaryQuote: String)?, acceptingCandidate candidate: CandidateID,
+                          acceptingContinuations continuationCards: [CandidateID] = [], in db: Database) throws {
             var span = span
             if let promoted = promotingStandIn {
                 try db.execute(sql: "delete from memory_span where memory_id = ?", arguments: [span.memoryID.rawValue])
@@ -211,6 +280,13 @@ public struct MemoryRepository: Sendable {
                                arguments: [promoted.title, promoted.summaryQuote, candidate.rawValue, span.memoryID.rawValue])
             }
             try span.insert(db)
+            // The card's other segments follow as spans that carry on this telling (M5).
+            for (i, var extra) in continuations.enumerated() {
+                extra.memoryID = span.memoryID
+                extra.order = span.order + 1 + i
+                extra.continuesOrder = span.order
+                try extra.insert(db)
+            }
             for person in people {
                 try db.execute(sql: "insert or ignore into memory_person (memory_id, person_id, role_text) values (?, ?, ?)",
                                arguments: [person.memoryID.rawValue, person.personID.rawValue, person.roleText])
@@ -220,7 +296,87 @@ public struct MemoryRepository: Sendable {
             }
             for anchor in anchors { try anchor.insert(db) }
             try db.execute(sql: "update candidate set status = ? where id = ?", arguments: [CandidateStatus.accepted.rawValue, candidate.rawValue])
+            try Self.accept(continuationCards, in: db)
+    }
+
+    /// A group (M5): every source folds into the target, oldest first as given, then the card
+    /// joins as the last telling. One transaction: a failure anywhere leaves every memory as it was.
+    public func mergeGroup(sources: [Memory], into target: Memory, span: MemorySpan, continuations: [MemorySpan], people: [MemoryPerson],
+                           places: [MemoryPlace], anchors: [Anchor], promotingStandIn: (title: String, summaryQuote: String)?,
+                           acceptingCandidate candidate: CandidateID, acceptingContinuations continuationCards: [CandidateID] = []) throws {
+        try db.writer.write { db in
+            for source in sources {
+                guard let current = try Memory.fetchOne(db, key: target.id.rawValue) else { throw Error.noSpan }
+                try Self.fold(source, into: current, in: db)
+            }
+            var last = span
+            last.order = (try Int.fetchOne(db, sql: "select max(\"order\") from memory_span where memory_id = ?", arguments: [target.id.rawValue]) ?? -1) + 1
+            try Self.mergeSpan(last, continuations: continuations, people: people, places: places, anchors: anchors,
+                               promotingStandIn: promotingStandIn, acceptingCandidate: candidate, acceptingContinuations: continuationCards, in: db)
         }
+    }
+
+    /// "Separate this telling" (M5): the span with `order`, and every span that carries it on,
+    /// move to `new` as orders 0…; the rest of the memory is renumbered, continuation links
+    /// following through the same map. One transaction. Edges move in `MergeActions`.
+    /// The edges that leave with a separated telling.
+    public struct MovingEdges: Sendable, Equatable {
+        public var anchors: [AnchorID]
+        public var people: [PersonID]
+        public var places: [PlaceID]
+        public init(anchors: [AnchorID], people: [PersonID], places: [PlaceID]) { self.anchors = anchors; self.people = people; self.places = places }
+    }
+
+    public func separate(_ memory: MemoryID, order: Int, into new: Memory, moving: MovingEdges, clearRange: Bool) throws {
+        try db.writer.write { db in
+            let spans = try MemorySpan.filter(Column("memory_id") == memory.rawValue).order(Column("order")).fetchAll(db)
+            guard spans.contains(where: { $0.order == order }) else { throw Error.noSpan }
+            try new.insert(db)
+            let movingSpans = spans.filter { $0.order == order || $0.continuesOrder == order }
+            let staying = spans.filter { span in !movingSpans.contains(where: { $0.order == span.order }) }
+            try db.execute(sql: "delete from memory_span where memory_id = ?", arguments: [memory.rawValue])
+            for (i, var span) in movingSpans.enumerated() {
+                span.memoryID = new.id
+                span.order = i
+                span.continuesOrder = i == 0 ? nil : 0
+                try span.insert(db)
+            }
+            let renumbered = Dictionary(uniqueKeysWithValues: staying.enumerated().map { ($1.order, $0) })
+            for (i, var span) in staying.enumerated() {
+                span.order = i
+                span.continuesOrder = span.continuesOrder.flatMap { renumbered[$0] }
+                try span.insert(db)
+            }
+            for anchor in moving.anchors {
+                guard try Anchor.exists(db, key: anchor.rawValue) else { throw Error.noSpan }
+                try db.execute(sql: "update anchor set memory_id = ? where id = ?", arguments: [new.id.rawValue, anchor.rawValue])
+            }
+            for person in moving.people {
+                // The link moves with its role text ("my sister"); a role the person typed is theirs to keep.
+                try db.execute(sql: """
+                    insert or ignore into memory_person (memory_id, person_id, role_text)
+                    select ?, person_id, role_text from memory_person where memory_id = ? and person_id = ?
+                    """, arguments: [new.id.rawValue, memory.rawValue, person.rawValue])
+                try db.execute(sql: "delete from memory_person where memory_id = ? and person_id = ?", arguments: [memory.rawValue, person.rawValue])
+            }
+            for place in moving.places {
+                try db.execute(sql: "delete from memory_place where memory_id = ? and place_id = ?", arguments: [memory.rawValue, place.rawValue])
+                try db.execute(sql: "insert or ignore into memory_place (memory_id, place_id) values (?, ?)", arguments: [new.id.rawValue, place.rawValue])
+            }
+            if clearRange {
+                try db.execute(sql: "update memory set earliest = null, latest = null, likely_start = null, likely_end = null, granularity = null, origin = null, evidence_text = null where id = ?",
+                               arguments: [memory.rawValue])
+            }
+        }
+    }
+
+    /// Moves an anchor to another memory.
+    public func move(anchor: AnchorID, to memory: MemoryID) throws {
+        try db.writer.write { try $0.execute(sql: "update anchor set memory_id = ? where id = ?", arguments: [memory.rawValue, anchor.rawValue]) }
+    }
+
+    public func unlinkPlace(_ place: PlaceID, from memory: MemoryID) throws {
+        try db.writer.write { try $0.execute(sql: "delete from memory_place where memory_id = ? and place_id = ?", arguments: [memory.rawValue, place.rawValue]) }
     }
 
     /// Re-points every edge of `source` at `target` and appends its spans after the target's.
@@ -229,7 +385,10 @@ public struct MemoryRepository: Sendable {
     /// source's first telling, title, quote and candidate become the target's. One transaction;
     /// the source row is deleted at the end.
     public func fold(_ source: Memory, into target: Memory) throws {
-        try db.writer.write { db in
+        try db.writer.write { db in try Self.fold(source, into: target, in: db) }
+    }
+
+    static func fold(_ source: Memory, into target: Memory, in db: Database) throws {
             var next = (try Int.fetchOne(db, sql: "select max(\"order\") from memory_span where memory_id = ?", arguments: [target.id.rawValue]) ?? -1) + 1
             if target.isFloating {
                 try db.execute(sql: "delete from memory_span where memory_id = ?", arguments: [target.id.rawValue])
@@ -241,6 +400,7 @@ public struct MemoryRepository: Sendable {
             for (i, var span) in spans.enumerated() {
                 span.memoryID = target.id
                 span.order = next + i
+                span.continuesOrder = span.continuesOrder.map { $0 + next }
                 if i == 0, !target.isFloating { span.titleText = span.titleText ?? source.title; span.candidateID = span.candidateID ?? source.createdFromCandidateID }
                 try span.insert(db)
             }
@@ -260,7 +420,7 @@ public struct MemoryRepository: Sendable {
                 try db.execute(sql: "update memory set chapter_id = (select chapter_id from memory where id = ?) where id = ?", arguments: [source.id.rawValue, target.id.rawValue])
             }
             _ = try Memory.deleteOne(db, key: source.id.rawValue)
-        }
+            try db.execute(sql: Self.deleteEmptyStoriesSQL)
     }
 
     public func anchors(of memory: MemoryID) throws -> [Anchor] {

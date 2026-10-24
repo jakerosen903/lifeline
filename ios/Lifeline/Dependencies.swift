@@ -24,6 +24,10 @@ struct Dependencies {
     let worker: SortingWorker
     /// "Same as X?": retrieval by on-device embeddings; the extractor decides, the person confirms.
     let matcher: MemoryMatcher
+    /// "Are these the same?": the reconciler judges pairs in a batch; the pass runs after the
+    /// backfill at launch and a little after every Keep (M5).
+    let reconcile: any ReconcileService
+    let duplicates: DuplicatePass
 
     /// A fresh question for the next session: an open thread first, then the bank without repeats.
     func opening() -> Opening {
@@ -62,6 +66,8 @@ struct Dependencies {
         let store = ExtractionStore(db)
         let extraction = AnthropicExtractionService(apiKey: { try? secrets.read(.anthropicAPIKey) })
         let matcher = MemoryMatcher(store: store, embedder: NLSentenceEmbedder())
+        let actions = CandidateActions(store: store, matcher: matcher)
+        let reconcile = AnthropicReconcileService(apiKey: { try? secrets.read(.anthropicAPIKey) })
         return Dependencies(
             sessions: sessions,
             profile: ProfileRepository(db),
@@ -83,11 +89,13 @@ struct Dependencies {
             secrets: secrets,
             extraction: extraction,
             extractionStore: store,
-            actions: CandidateActions(store: store, matcher: matcher),
+            actions: actions,
             promptLog: PromptLogRepository(db),
             arcConfig: .default,
             worker: SortingWorker(store: store, service: extraction, matcher: matcher, log: { print("[sorting] \($0)") }),
-            matcher: matcher)
+            matcher: matcher,
+            reconcile: reconcile,
+            duplicates: DuplicatePass(store: store, matcher: matcher, reconcile: reconcile, actions: actions, log: { print($0) }))
     }
 
     /// Fresh temp database, scripted voice and extraction, in-memory secrets with a fake key.
@@ -107,6 +115,8 @@ struct Dependencies {
         // Word-overlap vectors under test: deterministic, and enough for the scripted retelling
         // to be retrieved into the packet so the scripted extractor can name it.
         let matcher = MemoryMatcher(store: store, embedder: HashingEmbedder())
+        let actions = CandidateActions(store: store, matcher: matcher)
+        let reconcile = ScriptedReconcileService()
         return Dependencies(
             sessions: SessionRepository(db),
             profile: ProfileRepository(db),
@@ -123,10 +133,20 @@ struct Dependencies {
             secrets: InMemorySecretStore([.anthropicAPIKey: "sk-ant-api03-" + String(repeating: "x", count: 40)]),
             extraction: extraction,
             extractionStore: store,
-            actions: CandidateActions(store: store, matcher: matcher),
+            actions: actions,
             promptLog: PromptLogRepository(db),
             arcConfig: .uiTesting,
             worker: SortingWorker(store: store, service: extraction, matcher: matcher),
-            matcher: matcher)
+            matcher: matcher,
+            reconcile: reconcile,
+            duplicates: DuplicatePass(store: store, matcher: matcher, reconcile: reconcile, actions: actions, log: { line in
+                print(line)
+                // UI tests cannot see the app's console; the pass leaves its lines next to the test database.
+                let url = root.appending(path: "duplicates.log")
+                if let data = (line + "\n").data(using: .utf8) {
+                    if let handle = try? FileHandle(forWritingTo: url) { handle.seekToEndOfFile(); handle.write(data); try? handle.close() }
+                    else { try? data.write(to: url) }
+                }
+            }))
     }
 }
