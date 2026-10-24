@@ -14,6 +14,8 @@ private struct MatchEnv {
     let store: ExtractionStore
     var memories: [String: Memory] = [:]
     var table: [String: [Float]] = [:]
+    /// Each memory is created a minute after the last, so "newest first" is defined.
+    private var clock = Date(timeIntervalSince1970: 1_000_000)
 
     init() throws {
         store = ExtractionStore(try AppDatabase.inMemory())
@@ -25,6 +27,8 @@ private struct MatchEnv {
         let c = StoreFixtures.candidate(segs[0].id)
         try store.candidates.insert(c)
         var m = StoreFixtures.memory(from: c.id, title: title)
+        clock.addTimeInterval(60)
+        m.createdAt = clock
         m.summaryQuote = quote
         m.excludedFromAI = excluded
         m.hiddenFromTimeline = hidden
