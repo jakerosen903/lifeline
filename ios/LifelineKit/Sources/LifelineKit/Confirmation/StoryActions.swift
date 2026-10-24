@@ -52,24 +52,46 @@ extension CandidateActions {
         return fresh
     }
 
+    /// What "One story" on a pair did, so undo can reverse exactly that.
+    public struct GroupedPair: Sendable, Equatable {
+        public var pair: DuplicatePair
+        public var story: Story
+        /// The memories that joined; the one already in the story is not listed.
+        public var added: [MemoryID]
+        /// True when the story was made for this pair.
+        public var created: Bool
+    }
+
     /// "Sounds like one story" on a pair: both memories in one story, a's if it has one, else
     /// b's, else a new one. Refused as stale when the pair was answered or a side is gone.
     @discardableResult
-    public func groupPair(_ pair: DuplicatePair) throws -> Story {
+    public func groupPair(_ pair: DuplicatePair) throws -> GroupedPair {
         guard let current = try store.pairs.pair(id: pair.id), current.status == .open,
               let a = try store.memories.fetch(current.aMemoryID), let b = try store.memories.fetch(current.bMemoryID) else { throw Error.stale }
-        let story: Story
+        let result: GroupedPair
         if let existing = try store.stories.story(of: a.id) {
-            story = existing
             try addToStory(b.id, story: existing.id)
+            result = GroupedPair(pair: current, story: existing, added: [b.id], created: false)
         } else if let existing = try store.stories.story(of: b.id) {
-            story = existing
             try addToStory(a.id, story: existing.id)
+            result = GroupedPair(pair: current, story: existing, added: [a.id], created: false)
         } else {
-            story = try createStory(title: nil, containing: [a.id, b.id])
+            let story = try createStory(title: nil, containing: [a.id, b.id])
+            result = GroupedPair(pair: current, story: story, added: [a.id, b.id], created: true)
         }
         try store.pairs.setStatus(pair.id, .grouped)
-        return story
+        return result
+    }
+
+    /// Undo of "One story": the memories that joined leave again (a story made for the pair
+    /// goes with them) and the pair is open once more.
+    public func ungroupPair(_ grouped: GroupedPair) throws {
+        for memory in grouped.added where try store.stories.story(of: memory)?.id == grouped.story.id {
+            try store.stories.remove(memory: memory)
+        }
+        if grouped.created { try store.stories.delete(grouped.story.id) }
+        try store.stories.deleteEmpty()
+        if try store.pairs.pair(id: grouped.pair.id) != nil { try store.pairs.setStatus(grouped.pair.id, .open) }
     }
 
     /// Keep with a `story_ref`: the ref is always a story id (the queue mints one for every new

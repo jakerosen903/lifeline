@@ -20,9 +20,12 @@ final class CardHandler {
     private var suggestionCache: [String: [MemoryMatch]] = [:]
     /// Cards whose "Not part of it" was tapped: Keep lands them with no story (M5).
     private var optedOutOfStory: Set<String> = []
+    /// Cards whose story line was rendered: Keep joins a story only when the card showed it.
+    /// Written while a card renders, so it must not be observed or the render would loop.
+    @ObservationIgnored private var storyLineShown: Set<String> = []
     /// "Are these the same?" answered moments ago, while Undo is still offered (M5).
     private(set) var pairNotice: String?
-    private var recentPair: (pair: DuplicatePair, receipt: MergeReceipt?)?
+    private var recentPair: (pair: DuplicatePair, receipt: MergeReceipt?, grouped: CandidateActions.GroupedPair?)?
     private var pairTimer: Task<Void, Never>?
     /// Plays one side of a pair card.
     let pairPlayer = SegmentPlayer()
@@ -49,7 +52,7 @@ final class CardHandler {
     func keep(_ card: Card) -> Memory? {
         guard case .memory(let candidate, _) = card else { return nil }
         var memory: Memory?
-        let join = !optedOutOfStory.contains(card.id)
+        let join = storyLineShown.contains(card.id) && !optedOutOfStory.contains(card.id)
         _ = attempt("Could not keep that") { memory = try deps.actions.acceptMemory(candidate, joinStory: join).memory }
         if memory != nil { Task { await deps.duplicates.requestRun() } }
         return memory
@@ -62,15 +65,18 @@ final class CardHandler {
     func storyLine(for card: Card, among cards: [Card]) -> String? {
         guard case .memory(_, let out) = card, let ref = out.storyRef, !optedOutOfStory.contains(card.id) else { return nil }
         let stories = deps.extractionStore.stories
+        var line: String?
         if let story = try? stories.story(id: StoryID(rawValue: ref)), let members = try? stories.members(of: story.id), !members.isEmpty {
-            return "Part of: " + (story.title ?? members[0].title)
+            line = "Part of: " + (story.title ?? members[0].title)
+        } else {
+            let other = cards.first { other in
+                guard other.id != card.id, !optedOutOfStory.contains(other.id), case .memory(_, let o) = other else { return false }
+                return o.storyRef == ref
+            }
+            if case .memory(_, let o)? = other { line = "Part of a new story with: " + o.title }
         }
-        let other = cards.first { other in
-            guard other.id != card.id, !optedOutOfStory.contains(other.id), case .memory(_, let o) = other else { return false }
-            return o.storyRef == ref
-        }
-        if case .memory(_, let o)? = other { return "Part of a new story with: " + o.title }
-        return nil
+        if line != nil { storyLineShown.insert(card.id) } else { storyLineShown.remove(card.id) }
+        return line
     }
 
     func notPartOfStory(_ card: Card) { optedOutOfStory.insert(card.id) }
@@ -180,21 +186,22 @@ final class CardHandler {
     func samePair(_ pair: DuplicatePair) -> Bool {
         var receipt: MergeReceipt?
         let done = attempt("Could not merge those") { receipt = try deps.actions.samePair(pair) }
-        if done { notePair(pair, receipt: receipt, text: "Merged.") }
+        if done { notePair(pair, receipt: receipt, grouped: nil, text: "Merged.") }
         return done
     }
 
     /// Keep separate: remembered, never asked again. "Kept separate." with Undo.
     func separatePair(_ pair: DuplicatePair) -> Bool {
         let done = attempt("Could not save that") { try deps.actions.separatePair(pair) }
-        if done { notePair(pair, receipt: nil, text: "Kept separate.") }
+        if done { notePair(pair, receipt: nil, grouped: nil, text: "Kept separate.") }
         return done
     }
 
     /// "Sounds like one story": both memories in one story.
     func groupPair(_ pair: DuplicatePair) -> Bool {
-        let done = attempt("Could not group those") { _ = try deps.actions.groupPair(pair) }
-        if done { notePair(pair, receipt: nil, text: "Grouped as one story.") }
+        var grouped: CandidateActions.GroupedPair?
+        let done = attempt("Could not group those") { grouped = try deps.actions.groupPair(pair) }
+        if done { notePair(pair, receipt: nil, grouped: grouped, text: "Grouped as one story.") }
         return done
     }
 
@@ -207,19 +214,16 @@ final class CardHandler {
         return attempt("That can't be undone any more") {
             if let receipt = recent.receipt {
                 try deps.actions.undoPair(receipt, pair: recent.pair)
+            } else if let grouped = recent.grouped {
+                try deps.actions.ungroupPair(grouped)
             } else {
-                if recent.pair.status == .open, let story = try deps.extractionStore.stories.story(of: recent.pair.bMemoryID),
-                   (try? deps.extractionStore.pairs.pair(id: recent.pair.id))?.status == .grouped {
-                    try deps.actions.takeOutOfStory(recent.pair.bMemoryID)
-                    _ = story
-                }
                 try deps.extractionStore.pairs.setStatus(recent.pair.id, .open)
             }
         }
     }
 
-    private func notePair(_ pair: DuplicatePair, receipt: MergeReceipt?, text: String) {
-        recentPair = (pair, receipt)
+    private func notePair(_ pair: DuplicatePair, receipt: MergeReceipt?, grouped: CandidateActions.GroupedPair?, text: String) {
+        recentPair = (pair, receipt, grouped)
         pairNotice = text
         pairTimer?.cancel()
         pairTimer = Task { [weak self] in

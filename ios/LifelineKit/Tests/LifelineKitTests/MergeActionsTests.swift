@@ -370,3 +370,34 @@ private func twoSegmentCard(_ env: Env, first: String, second: String, title: St
     #expect(throws: CandidateActions.Error.targetMissing) { try env.actions.separateTelling(MemoryID(rawValue: "nope"), order: 1) }
     #expect(try env.store.memories.allMemories().count == 1)
 }
+
+// MARK: - Review fixes
+
+@Test func undoRestoresPairDecisionsAndStoryMembership() throws {
+    let env = try Env()
+    let (_, a) = try env.kept("we lived in an orange house", title: "Orange house")
+    let (_, b) = try env.kept("the orange house again", title: "Orange house again")
+    let (_, c) = try env.kept("the canal behind the house", title: "The canal")
+    let decided = DuplicatePair(id: .init(), aMemoryID: b.id, bMemoryID: c.id, score: 0.7, verdict: .sameMoment, status: .separate, decidedAt: .now)
+    try env.store.pairs.insert(decided)
+    let story = try env.actions.createStory(title: "Home", containing: [b.id])
+    let receipt = try env.actions.merge(b.id, into: a.id)
+    #expect(try env.store.pairs.decided().isEmpty && (try env.store.stories.story(id: story.id)) == nil, "the cascade took them with b")
+    try env.actions.unmerge(receipt)
+    #expect(try env.store.pairs.decided().contains(PairKey(b.id, c.id)), "a declined pair never returns, undo included")
+    #expect(try env.store.stories.story(of: b.id)?.id == story.id, "b is back in its story")
+    #expect(try env.store.stories.story(id: story.id)?.title == "Home")
+}
+
+@Test func mergeGroupWithABadCardChangesNothing() throws {
+    let env = try Env()
+    let (_, first) = try env.kept("we lived in an orange house", title: "Orange house")
+    let (_, second) = try env.kept("the orange house had a canal", title: "Orange house canal")
+    let (_, segs) = try StoreFixtures.session(in: env.store.sessions, segments: ["grew up there"])
+    let out = MemoryOut(ref: "m1", kind: .event, title: "Grew up", quote: "grew up there", segmentSpan: WordSpan(startWord: 0, endWord: 40), peopleRefs: [], placeText: nil,
+                        anchors: [], collectionHint: nil, chapterHint: nil, confidence: 0.9)
+    let bad = StoreFixtures.candidate(segs[0].id, payload: try CandidatePayload.encode(out))
+    try env.store.candidates.insert(bad)
+    #expect(throws: CandidateActions.Error.emptySpan) { try env.actions.mergeGroup(bad, into: [first.id, second.id]) }
+    #expect(try env.store.memories.fetch(second.id) != nil && (try env.store.memories.spans(of: first.id)).count == 1, "nothing folded")
+}

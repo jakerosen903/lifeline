@@ -397,3 +397,51 @@ private func storied(_ refs: [(title: String, ref: String?, hint: String?)], quo
     guard case .candidates(let later, _)? = await collect(events, count: 1).first else { Issue.record("no event"); return }
     #expect(later.compactMap(CandidatePayload.memory).map(\.storyRef) == [refs[0], refs[0]])
 }
+
+// MARK: - Review fixes
+
+@Test func continuationHintCanBeAcceptedAfterKeep() async throws {
+    let env = try Env(texts: ["the garden had a pomegranate tree", "my sister Maya climbed it in 1998"], script: [.success(gardenOutput())])
+    let queue = env.queue()
+    let events = await queue.events
+    await queue.enqueue(env.segments[0].id)
+    let a = try #require(firstCard(await collect(events, count: 1)))
+    env.service.push(.success(continuation(of: a.id, collectionHint: "every summer")))
+    await queue.enqueue(env.segments[1].id)
+    guard case .candidates(let emitted, _)? = await collect(events, count: 1).first else { Issue.record("no event"); return }
+    let actions = CandidateActions(store: env.store)
+    let kept = try actions.acceptMemory(try #require(emitted.first { $0.id == a.id })).memory
+    let hint = try #require(emitted.first { $0.kind == .hint })
+    guard case .collection(let collection) = try actions.acceptHint(hint) else { Issue.record("expected a collection"); return }
+    #expect(try env.store.chapters.members(of: collection.id).map(\.id) == [kept.id])
+}
+
+@Test func continuationAfterKeepIsASameAsCard() async throws {
+    let env = try Env(texts: ["the garden had a pomegranate tree", "my sister Maya climbed it in 1998"], script: [.success(gardenOutput())])
+    let queue = env.queue()
+    let events = await queue.events
+    await queue.enqueue(env.segments[0].id)
+    let a = try #require(firstCard(await collect(events, count: 1)))
+    let kept = try CandidateActions(store: env.store).acceptMemory(a).memory
+    env.service.push(.success(continuation(of: a.id)))
+    await queue.enqueue(env.segments[1].id)
+    let b = try #require(firstCard(await collect(events, count: 1)))
+    #expect(b.id != a.id && b.status == .pending)
+    #expect(CandidatePayload.memory(b)?.sameAsMemoryIDs == [kept.id.rawValue], "the telling's memory is named, so the card offers Same story")
+}
+
+@Test func aPersonNamedOnlyInAContinuationIsLinkedWhenResolved() async throws {
+    let env = try Env(texts: ["the garden had a pomegranate tree", "my sister Maya climbed it in 1998 with Marcel"], script: [.success(gardenOutput())])
+    let queue = env.queue()
+    let events = await queue.events
+    await queue.enqueue(env.segments[0].id)
+    let a = try #require(firstCard(await collect(events, count: 1)))
+    env.service.push(.success(continuation(of: a.id, people: ["Marcel"])))
+    await queue.enqueue(env.segments[1].id)
+    let again = try #require(firstCard(await collect(events, count: 1)))
+    let actions = CandidateActions(store: env.store)
+    let kept = try actions.acceptMemory(again)
+    let mention = try #require(kept.newMentions.first { $0.text == "Marcel" })
+    _ = try actions.resolveMention(mention.id, to: .new(displayName: "Marcel"))
+    #expect(try env.store.memories.people(of: kept.memory.id).map(\.displayName) == ["Marcel"])
+}

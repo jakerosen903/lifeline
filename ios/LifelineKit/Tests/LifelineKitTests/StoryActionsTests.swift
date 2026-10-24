@@ -97,8 +97,10 @@ private struct Env {
     let c = try env.kept("we moved away", title: "We moved away")
     let pair = DuplicatePair(id: .init(), aMemoryID: a.id, bMemoryID: b.id, score: 0.8, verdict: .sameStory, status: .open, decidedAt: nil)
     try env.store.pairs.insert(pair)
-    let story = try env.actions.groupPair(pair)
+    let grouped = try env.actions.groupPair(pair)
+    let story = grouped.story
     #expect(try env.store.stories.members(of: story.id).map(\.id) == [a.id, b.id])
+    #expect(grouped.created && grouped.added == [a.id, b.id])
     #expect(try env.store.pairs.pair(id: pair.id)?.status == .grouped)
     #expect(throws: CandidateActions.Error.stale) { try env.actions.groupPair(pair) }
     // A second pair joins the existing story rather than making another.
@@ -106,5 +108,29 @@ private struct Env {
     try env.store.pairs.insert(second)
     let same = try env.actions.groupPair(second)
     let all = try env.store.stories.members(of: story.id).map(\.id)
-    #expect(same.id == story.id && all == [a.id, b.id, c.id])
+    #expect(same.story.id == story.id && all == [a.id, b.id, c.id] && !same.created && same.added == [c.id])
+}
+
+@Test func ungroupPairReversesExactlyWhatGroupingDid() throws {
+    let env = try Env()
+    let a = try env.kept("the house had a blue door", title: "The blue door")
+    let b = try env.kept("Maya climbed it", title: "Maya climbed it")
+    let c = try env.kept("we moved away", title: "We moved away")
+    let existing = try env.actions.createStory(title: "Maya", containing: [b.id, c.id])
+    let pair = DuplicatePair(id: .init(), aMemoryID: a.id, bMemoryID: b.id, score: 0.8, verdict: .sameStory, status: .open, decidedAt: nil)
+    try env.store.pairs.insert(pair)
+    let grouped = try env.actions.groupPair(pair)
+    #expect(grouped.story.id == existing.id && grouped.added == [a.id] && !grouped.created)
+    try env.actions.ungroupPair(grouped)
+    #expect(try env.store.stories.story(of: a.id) == nil, "a, the one that joined, is out again")
+    #expect(try env.store.stories.members(of: existing.id).map(\.id) == [b.id, c.id], "b stays where it was")
+    #expect(try env.store.pairs.pair(id: pair.id)?.status == .open)
+    // Neither in a story: grouping made one; ungrouping deletes it.
+    let d = try env.kept("another day", title: "Another day")
+    let e = try env.kept("one more day", title: "One more day")
+    let fresh = DuplicatePair(id: .init(), aMemoryID: d.id, bMemoryID: e.id, score: 0.8, verdict: .sameStory, status: .open, decidedAt: nil)
+    try env.store.pairs.insert(fresh)
+    let made = try env.actions.groupPair(fresh)
+    try env.actions.ungroupPair(made)
+    #expect(try env.store.stories.story(id: made.story.id) == nil && (try env.store.stories.story(of: d.id)) == nil)
 }

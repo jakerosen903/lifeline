@@ -40,6 +40,13 @@ public struct CandidateRepository: Sendable {
         }
     }
 
+    /// Status only: a continuation row keeps its "continues <id>" marker when its card is kept (M5).
+    public func setStatusKeepingRejection(_ id: CandidateID, _ status: CandidateStatus) throws {
+        try db.writer.write { db in
+            try db.execute(sql: "update candidate set status = ? where id = ?", arguments: [status.rawValue, id.rawValue])
+        }
+    }
+
     /// A card's payload changed in place: a continuation added a span (M5). The row's identity,
     /// kind and status stay, so the stack and the timeline keep showing one card.
     public func updatePayload(_ id: CandidateID, _ payload: String) throws {

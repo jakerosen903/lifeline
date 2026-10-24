@@ -219,7 +219,14 @@ public actor ExtractionQueue {
                 rows += try hintRows(for: memory, keyedTo: earlier.id, row: row)
                 continue
             }
-            let c = row(r.kind, r.payload, r.confidence, nil)
+            var r2 = r
+            // The telling it carries on was already kept: an ordinary card that names that memory (spec, Goal 3).
+            if case .memory(var memory) = candidate, let kept = try keptMemory(continuing: memory.continuesCandidateID) {
+                memory.sameAsMemoryIDs = [kept.id.rawValue] + memory.sameAsMemoryIDs.filter { $0 != kept.id.rawValue }
+                memory.continuesCandidateID = nil
+                r2 = try Self.describe(.memory(memory))
+            }
+            let c = row(r2.kind, r2.payload, r2.confidence, nil)
             rows.append(c)
             if case .mention(let mention) = candidate, mention.kind == .person, try store.people.findPerson(matching: mention.text) != nil {
                 knownMentions.append((c, mention))
@@ -275,6 +282,12 @@ public actor ExtractionQueue {
               card.kind == .memory, card.status == .pending,
               let segment = try store.sessions.fetchSegment(card.segmentID), segment.sessionID == session else { return nil }
         return card
+    }
+
+    /// The memory an accepted card made or joined, when a continuation names a card that was kept.
+    private func keptMemory(continuing id: String?) throws -> Memory? {
+        guard let id, let card = try store.candidates.fetch(CandidateID(rawValue: id)), card.kind == .memory, card.status == .accepted else { return nil }
+        return try store.memories.memory(createdFrom: card.id) ?? store.memories.memory(withSpanFrom: card.id)
     }
 
     /// Hint rows for a memory's collection and chapter phrases, waiting on the card `keyedTo`.

@@ -124,7 +124,7 @@ public struct CandidateActions: Sendable {
         var edges = try edges(of: out, for: memory.id)
         for row in continuations.compactMap(CandidatePayload.memory) { edges.merge(try self.edges(of: row, for: memory.id)) }
         try store.memories.insert(memory, spans: spans, people: edges.people, places: edges.places, anchors: edges.anchors, acceptingCandidate: candidate.id)
-        for row in continuations { try store.candidates.setStatus(row.id, .accepted) }
+        for row in continuations { try store.candidates.setStatusKeepingRejection(row.id, .accepted) }
         let newMentions = try finishEdges(edges, segment: candidate.segmentID)
         if joinStory { try self.joinStory(memory.id, ref: out.storyRef) }
         try reindex(memory.id)
@@ -321,9 +321,8 @@ public struct CandidateActions: Sendable {
         try requirePending(candidate)
         guard let out = CandidatePayload.hint(candidate) else { throw Error.badPayload }
         // The card was kept as its own memory, or merged into one as a later telling (M4.1).
-        guard let memory = try store.memories.memories(fromSegment: candidate.segmentID)
-                .first(where: { $0.createdFromCandidateID?.rawValue == out.memoryCandidateID })
-                ?? store.memories.memory(withSpanFrom: CandidateID(rawValue: out.memoryCandidateID)) else { throw Error.memoryNotAccepted }
+        let cardID = CandidateID(rawValue: out.memoryCandidateID)
+        guard let memory = try store.memories.memory(createdFrom: cardID) ?? store.memories.memory(withSpanFrom: cardID) else { throw Error.memoryNotAccepted }
         let result: HintResult
         switch out.kind {
         case .collection:
@@ -385,10 +384,12 @@ public struct CandidateActions: Sendable {
     }
 
     /// True when the memory's candidate named this person.
+    /// Whether the memory's card, or any segment that carried it on (M5), named this person.
     private func names(_ memory: Memory, _ text: String) throws -> Bool {
         guard let candidateID = memory.createdFromCandidateID, let candidate = try store.candidates.fetch(candidateID),
               let out = CandidatePayload.memory(candidate) else { return false }
-        return out.peopleRefs.contains { Self.same($0, text) }
+        let refs = out.peopleRefs + (try store.candidates.continuations(of: candidateID)).compactMap(CandidatePayload.memory).flatMap(\.peopleRefs)
+        return refs.contains { Self.same($0, text) }
     }
 
     static func same(_ a: String, _ b: String) -> Bool {

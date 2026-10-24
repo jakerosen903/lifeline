@@ -120,11 +120,12 @@ final class TimelineViewModel {
                 return members.isEmpty ? nil : CollectionRow(collection: collection, span: try store.chapters.derivedSpan(of: collection.id), members: members)
             }
             // A story renders once, in its chapter or on the timeline, members folded under it; a
-            // story with one visible member is not a group and its member stays a plain row.
+            // story with one visible member is not a group and its member stays a plain row. A
+            // moment can sit in its story and in a collection (builder call 6).
             allStories = try store.stories.stories()
             var inStory = Set<MemoryID>()
             let storyRows: [StoryRow] = try allStories.compactMap { story in
-                let members = try store.stories.members(of: story.id).compactMap { rows[$0.id] }.filter { !inCollection.contains($0.id) }
+                let members = try store.stories.members(of: story.id).compactMap { rows[$0.id] }
                 guard members.count >= 2 else { return nil }
                 members.forEach { inStory.insert($0.id) }
                 return StoryRow(story: story, members: members, span: ChapterRepository.span(over: members.map(\.memory.range)))

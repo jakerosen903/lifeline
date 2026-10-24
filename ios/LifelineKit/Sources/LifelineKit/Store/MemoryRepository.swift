@@ -130,6 +130,12 @@ public struct MemoryRepository: Sendable {
         }
     }
 
+    /// The memory a card made, if it was kept as its own (M5: no segment join, so a hint stored
+    /// in a continuation's segment still finds it).
+    public func memory(createdFrom candidate: CandidateID) throws -> Memory? {
+        try db.writer.read { try Memory.filter(Column("created_from_candidate_id") == candidate.rawValue).fetchOne($0) }
+    }
+
     /// The memory a card was merged into as a later telling, if any.
     public func memory(withSpanFrom candidate: CandidateID) throws -> Memory? {
         try db.writer.read { db in
@@ -156,6 +162,10 @@ public struct MemoryRepository: Sendable {
         public var places: [MemoryPlace]
         public var anchors: [Anchor]
         public var collectionIDs: [CollectionID]
+        /// Pair decisions and story membership go with a memory on cascade; undo brings them back (M5).
+        public var pairs: [DuplicatePair] = []
+        public var story: StoryMoment? = nil
+        public var storyTitle: String? = nil
         public var takenAt: Date
     }
 
@@ -169,6 +179,9 @@ public struct MemoryRepository: Sendable {
                 places: try MemoryPlace.filter(Column("memory_id") == id.rawValue).fetchAll(db),
                 anchors: try Anchor.filter(Column("memory_id") == id.rawValue).fetchAll(db),
                 collectionIDs: try String.fetchAll(db, sql: "select collection_id from collection_memory where memory_id = ?", arguments: [id.rawValue]).map(CollectionID.init(rawValue:)),
+                pairs: try DuplicatePair.filter(Column("a_memory_id") == id.rawValue || Column("b_memory_id") == id.rawValue).fetchAll(db),
+                story: try StoryMoment.filter(Column("memory_id") == id.rawValue).fetchOne(db),
+                storyTitle: try String?.fetchOne(db, sql: "select story.title from story join story_moment sm on sm.story_id = story.id where sm.memory_id = ?", arguments: [id.rawValue]) ?? nil,
                 takenAt: .now)
         }
     }
@@ -182,6 +195,8 @@ public struct MemoryRepository: Sendable {
     /// that is cut short leaves nothing half done.
     public func restore(_ snapshots: [Snapshot], settingCandidate candidate: (id: CandidateID, status: CandidateStatus)?) throws {
         try db.writer.write { db in
+            // Every memory row first, so a pair between two restored memories finds both.
+            for snapshot in snapshots { try snapshot.memory.save(db) }
             for snapshot in snapshots { try Self.restore(snapshot, in: db) }
             if let candidate {
                 try db.execute(sql: "update candidate set status = ? where id = ?", arguments: [candidate.status.rawValue, candidate.id.rawValue])
@@ -201,6 +216,20 @@ public struct MemoryRepository: Sendable {
             for anchor in snapshot.anchors { try anchor.insert(db) }
             for collection in snapshot.collectionIDs {
                 try db.execute(sql: "insert or ignore into collection_memory (collection_id, memory_id) values (?, ?)", arguments: [collection.rawValue, id])
+            }
+            for pair in snapshot.pairs
+            where try Memory.exists(db, key: pair.aMemoryID.rawValue) && Memory.exists(db, key: pair.bMemoryID.rawValue) {
+                try db.execute(sql: """
+                    insert or ignore into duplicate_pair (id, a_memory_id, b_memory_id, score, verdict, status, decided_at) values (?, ?, ?, ?, ?, ?, ?)
+                    """, arguments: [pair.id.rawValue, pair.aMemoryID.rawValue, pair.bMemoryID.rawValue, pair.score, pair.verdict.rawValue, pair.status.rawValue, pair.decidedAt])
+            }
+            if let moment = snapshot.story {
+                // The story may have gone when this was its last member; it comes back untitled.
+                if try !Story.exists(db, key: moment.storyID.rawValue) {
+                    try Story(id: moment.storyID, title: snapshot.storyTitle, chapterID: nil, createdAt: .now).insert(db)
+                }
+                try db.execute(sql: "delete from story_moment where memory_id = ?", arguments: [id])
+                try moment.insert(db)
             }
     }
 

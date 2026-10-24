@@ -44,7 +44,7 @@ extension CandidateActions {
         let promotion = targetMemory.isFloating ? (title: out.title, summaryQuote: out.quote) : nil
         try store.memories.mergeSpan(span, continuations: try continuationSpans(of: out, for: target), people: edges.people, places: edges.places,
                                      anchors: edges.anchors, promotingStandIn: promotion, acceptingCandidate: candidate.id)
-        for row in continuations { try store.candidates.setStatus(row.id, .accepted) }
+        for row in continuations { try store.candidates.setStatusKeepingRejection(row.id, .accepted) }
         let newMentions = try finishEdges(edges, segment: candidate.segmentID)
         try reindex(target)
         _ = try ResolverRunner(store: store).run()
@@ -61,6 +61,11 @@ extension CandidateActions {
         guard candidate.kind == .memory else { throw Error.wrongKind }
         try requirePending(candidate)
         guard Set(memories).count == memories.count else { throw Error.sameMemory }
+        // The card is checked before anything folds, so a refused card leaves every memory alone.
+        guard let out = CandidatePayload.memory(candidate) else { throw Error.badPayload }
+        let words = try store.sessions.words(in: candidate.segmentID)
+        guard !words.isEmpty, out.segmentSpan.startWord >= 0, out.segmentSpan.endWord < words.count,
+              out.segmentSpan.startWord <= out.segmentSpan.endWord else { throw Error.emptySpan }
         var rows: [(memory: Memory, firstTold: Date)] = []
         for id in memories {
             guard let memory = try store.memories.fetch(id) else { throw Error.targetMissing }
