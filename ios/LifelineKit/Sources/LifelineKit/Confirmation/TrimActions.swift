@@ -23,7 +23,7 @@ extension CandidateActions {
         var after = span
         after.startMs = words[startWord].startMs
         after.endMs = words[endWord].endMs
-        let rewrite = try cardRewrite(for: span, memory: memory, startWord: startWord, endWord: endWord)
+        let rewrite = try cardRewrite(for: span, memory: memory, words: words, startWord: startWord, endWord: endWord)
         try store.memories.retime(memory, order: order, startMs: after.startMs, endMs: after.endMs, rewritingCard: rewrite.map { ($0.id, $0.after) })
         return TrimReceipt(memory: memory, order: order, before: span, after: after, candidateID: rewrite?.id, payloadBefore: rewrite?.before, payloadAfter: rewrite?.after)
     }
@@ -42,14 +42,21 @@ extension CandidateActions {
     /// The card behind a span, and its payload before and after the trim: the memory's own card
     /// for its first telling, the span's card for a later telling, and the telling's card for a
     /// continuation part (its `extra_spans` entry). Nothing is written here.
-    private func cardRewrite(for span: MemorySpan, memory: MemoryID, startWord: Int, endWord: Int) throws -> (id: CandidateID, before: String, after: String)? {
+    private func cardRewrite(for span: MemorySpan, memory: MemoryID, words: [Word], startWord: Int, endWord: Int) throws -> (id: CandidateID, before: String, after: String)? {
         let spans = try store.memories.spans(of: memory)
         let telling = span.continuesOrder.flatMap { order in spans.first { $0.order == order } } ?? span
         let cardID = telling.order == 0 ? try store.memories.fetch(memory)?.createdFromCandidateID : telling.candidateID
         guard let cardID, let card = try store.candidates.fetch(cardID), var out = CandidatePayload.memory(card) else { return nil }
         if span.continuesOrder == nil {
             out.segmentSpan = WordSpan(startWord: startWord, endWord: endWord)
-        } else if let i = out.extraSpans.firstIndex(where: { $0.segmentID == span.segmentID.rawValue }) {
+        } else {
+            // The part's entry is the one in its segment that covers the words the span covers
+            // now: two parts in one segment differ by their words. No entry means the card and
+            // the span already disagree, so the trim is refused rather than moving only one.
+            guard let oldStart = words.firstIndex(where: { $0.startMs == span.startMs }),
+                  let oldEnd = words.lastIndex(where: { $0.endMs == span.endMs }),
+                  let i = out.extraSpans.firstIndex(where: { $0.segmentID == span.segmentID.rawValue && $0.startWord == oldStart && $0.endWord == oldEnd })
+            else { throw Error.stale }
             out.extraSpans[i].startWord = startWord
             out.extraSpans[i].endWord = endWord
         }

@@ -53,6 +53,37 @@ private struct Env {
     #expect(out.extraSpans == [ExtraSpan(segmentID: segs[1].id.rawValue, startWord: 1, endWord: 2)] && out.segmentSpan == WordSpan(startWord: 1, endWord: 3))
 }
 
+@Test func trimOfTheSecondPartInOneSegmentRewritesThatPartOnly() throws {
+    let env = try Env()
+    let (_, segs) = try StoreFixtures.session(in: env.store.sessions, segments: ["one two three four five six seven eight nine ten", "alpha beta gamma delta epsilon zeta eta theta"])
+    // A telling carried on twice within the second segment: two parts there, words 0…1 and 4…6.
+    let parts = [ExtraSpan(segmentID: segs[1].id.rawValue, startWord: 0, endWord: 1), ExtraSpan(segmentID: segs[1].id.rawValue, startWord: 4, endWord: 6)]
+    let out = MemoryOut(ref: "m1", kind: .event, title: "Three words", quote: "two three four", segmentSpan: WordSpan(startWord: 1, endWord: 3), peopleRefs: [], placeText: nil,
+                        anchors: [], collectionHint: nil, chapterHint: nil, confidence: 0.9, extraSpans: parts)
+    let card = StoreFixtures.candidate(segs[0].id, payload: try CandidatePayload.encode(out))
+    try env.store.candidates.insert(card)
+    let memory = try env.actions.acceptMemory(card).memory
+    #expect(try env.store.memories.spans(of: memory.id).count == 3)
+    _ = try env.actions.trimTelling(memory.id, order: 2, startWord: 5, endWord: 6)
+    let row = try #require(try env.store.candidates.fetch(card.id))
+    let rewritten = try #require(CandidatePayload.memory(row))
+    #expect(rewritten.extraSpans == [parts[0], ExtraSpan(segmentID: segs[1].id.rawValue, startWord: 5, endWord: 6)], "the second part moved; the first did not")
+}
+
+@Test func trimIsRefusedWhenTheCardHasNoEntryForThePart() throws {
+    let env = try Env()
+    let (memory, card, segs) = try env.kept(extra: "alpha beta gamma delta")
+    // The card lost its entry for the part (an older payload): moving only the span would split them.
+    let row = try #require(try env.store.candidates.fetch(card.id))
+    var out = try #require(CandidatePayload.memory(row))
+    out.extraSpans = []
+    try env.store.candidates.updatePayload(card.id, try CandidatePayload.encode(out))
+    let before = try env.store.memories.spans(of: memory.id)
+    #expect(throws: CandidateActions.Error.stale) { try env.actions.trimTelling(memory.id, order: 1, startWord: 1, endWord: 2) }
+    #expect(try env.store.memories.spans(of: memory.id) == before, "the span did not move either")
+    _ = segs
+}
+
 @Test func retimeRefusesEmptyAndOutOfSegment() throws {
     let env = try Env()
     let (memory, _, _) = try env.kept()
