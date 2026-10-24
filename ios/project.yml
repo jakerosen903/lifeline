@@ -43,10 +43,6 @@ targets:
             UTTypeConformsTo: [public.zip-archive]
             UTTypeTagSpecification:
               public.filename-extension: [lifeline]
-        CFBundleDocumentTypes:
-          - CFBundleTypeName: Lifeline copy
-            LSHandlerRank: Owner
-            LSItemContentTypes: [com.jakerosen.lifeline.archive]
   LifelineUITests:
     type: bundle.ui-testing
     platform: iOS

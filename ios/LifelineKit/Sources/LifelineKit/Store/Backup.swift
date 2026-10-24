@@ -53,8 +53,14 @@ public enum Backup {
     @discardableResult
     public static func export(root: URL, appVersion: String, to destination: URL, database: AppDatabase? = nil,
                               progress: @Sendable (String) -> Void = { _ in }) throws -> BackupManifest {
+        try export(appDirectory: AudioLocation.rootDirectory(under: root), appVersion: appVersion, to: destination, database: database, progress: progress)
+    }
+
+    /// The archive is written beside `destination` under a temporary name and moved into place
+    /// when complete, so a half-written file never looks like a copy.
+    static func export(appDirectory appDir: URL, appVersion: String, to destination: URL, database: AppDatabase?,
+                       progress: @Sendable (String) -> Void) throws -> BackupManifest {
         let fm = FileManager.default
-        let appDir = AudioLocation.rootDirectory(under: root)
         let work = fm.temporaryDirectory.appending(path: "lifeline-export-\(UUID().uuidString)", directoryHint: .isDirectory)
         try fm.createDirectory(at: work, withIntermediateDirectories: true)
         defer { try? fm.removeItem(at: work) }
@@ -77,9 +83,10 @@ public enum Backup {
                                       sessions: sessions, memories: memories, audioFiles: audioFiles, audioBytes: audioBytes)
 
         progress(audioFiles == 1 ? "Packing 1 recording…" : "Packing \(audioFiles) recordings…")
-        try? fm.removeItem(at: destination)
         try fm.createDirectory(at: destination.deletingLastPathComponent(), withIntermediateDirectories: true)
-        let archive = try Archive(url: destination, accessMode: .create)
+        let partial = destination.deletingLastPathComponent().appending(path: ".\(destination.lastPathComponent).partial")
+        try? fm.removeItem(at: partial)
+        let archive = try Archive(url: partial, accessMode: .create)
         try archive.addEntry(with: databaseName, fileURL: dbCopy, compressionMethod: .deflate)
         for name in audio {
             try archive.addEntry(with: "\(audioDirectory)/\(name)", fileURL: audioDir.appending(path: name), compressionMethod: .none)
@@ -90,7 +97,18 @@ public enum Backup {
         try archive.addEntry(with: manifestName, type: .file, uncompressedSize: Int64(manifestData.count), compressionMethod: .deflate) { position, size in
             manifestData.subdata(in: Int(position)..<Int(position) + size)
         }
+        try? fm.removeItem(at: destination)
+        try fm.moveItem(at: partial, to: destination)
         return manifest
+    }
+
+    /// A name in `directory` that is not taken: `<stem>.lifeline`, then `<stem>-2.lifeline`, …
+    static func freeName(in directory: URL, stem: String) -> URL {
+        let fm = FileManager.default
+        var candidate = directory.appending(path: "\(stem).lifeline")
+        var n = 2
+        while fm.fileExists(atPath: candidate.path) { candidate = directory.appending(path: "\(stem)-\(n).lifeline"); n += 1 }
+        return candidate
     }
 
     /// The manifest, without unpacking anything else.
@@ -111,7 +129,7 @@ public enum Backup {
 
     /// Unpacks to a staging directory, checks the schema, writes the safety copy, leaves the marker.
     @discardableResult
-    public static func stage(_ archive: URL, root: URL, appVersion: String, safetyCopyDirectory: URL? = nil) throws -> PendingRestore {
+    public static func stage(_ archive: URL, root: URL, appVersion: String, database: AppDatabase? = nil, safetyCopyDirectory: URL? = nil) throws -> PendingRestore {
         let fm = FileManager.default
         let manifest = try inspect(archive)
         guard !Migrations.isNewer(manifest.schemaVersion, than: Migrations.currentSchemaVersion) else { throw Error.newerSchema(manifest.schemaVersion) }
@@ -124,39 +142,63 @@ public enum Backup {
         _ = try DatabaseQueue(path: staging.appending(path: databaseName).path).read { try String.fetchOne($0, sql: "pragma schema_version") }
         try? fm.removeItem(at: staging.appending(path: manifestName))
 
+        // Dated to the second and never overwritten: a second restore the same day keeps the first copy.
         let copies = try safetyCopyDirectory ?? Self.safetyCopyDirectory()
-        let safety = copies.appending(path: "Lifeline-before-restore-\(day(.now)).lifeline")
-        try export(root: root, appVersion: appVersion, to: safety)
+        let safety = freeName(in: copies, stem: "Lifeline-before-restore-\(stamp(.now))")
+        try export(root: root, appVersion: appVersion, to: safety, database: database)
 
         let marker = root.appending(path: markerName)
         try JSONEncoder.manifest.encode(manifest).write(to: marker, options: .atomic)
         return PendingRestore(manifest: manifest, safetyCopy: safety)
     }
 
-    /// At launch, before the database opens: swaps the staged copy in, once. An incomplete stage
-    /// is discarded. Returns whether a restore was applied.
+    /// At launch, before the database opens: swaps the staged copy in, once. Whatever the phone
+    /// held at that moment (including anything done after "Replace") is zipped into Documents
+    /// before its directory goes, so a restore is never the move that loses a recording. A crash
+    /// between the steps is picked up on the next launch: a moved-aside archive is saved, a
+    /// finished swap is only tidied. Returns whether a restore was applied.
     @discardableResult
-    public static func applyPendingRestore(root: URL) throws -> Bool {
+    public static func applyPendingRestore(root: URL, safetyCopyDirectory: URL? = nil) throws -> Bool {
         let fm = FileManager.default
         let marker = root.appending(path: markerName)
         let staging = root.appending(path: stagingName, directoryHint: .isDirectory)
-        guard fm.fileExists(atPath: marker.path) else { try? fm.removeItem(at: staging); return false }
-        guard fm.fileExists(atPath: staging.appending(path: databaseName).path) else {
-            try? fm.removeItem(at: staging)
-            try? fm.removeItem(at: marker)
-            return false
-        }
         let current = AudioLocation.rootDirectory(under: root)
         let replaced = root.appending(path: replacedName, directoryHint: .isDirectory)
-        try? fm.removeItem(at: replaced)
-        if fm.fileExists(atPath: current.path) { try fm.moveItem(at: current, to: replaced) }
+        let stageReady = fm.fileExists(atPath: staging.appending(path: databaseName).path)
+        guard fm.fileExists(atPath: marker.path) else {
+            // No restore pending: a leftover stage is noise; a leftover moved-aside archive is data.
+            try? fm.removeItem(at: staging)
+            try preserve(replaced, safetyCopyDirectory: safetyCopyDirectory)
+            return false
+        }
+        guard stageReady else {
+            try? fm.removeItem(at: staging)
+            try? fm.removeItem(at: marker)
+            try preserve(replaced, safetyCopyDirectory: safetyCopyDirectory)
+            return false
+        }
+        if fm.fileExists(atPath: current.path) {
+            // A previous attempt that crashed after moving the old archive aside left it here: keep it first.
+            try preserve(replaced, safetyCopyDirectory: safetyCopyDirectory)
+            try fm.moveItem(at: current, to: replaced)
+        }
         try fm.moveItem(at: staging, to: current)
         let audio = current.appending(path: audioDirectory, directoryHint: .isDirectory)
         try fm.createDirectory(at: audio, withIntermediateDirectories: true)
         try AudioLocation.applyBackupExclusion(to: audio)
-        try? fm.removeItem(at: replaced)
         try? fm.removeItem(at: marker)
+        try preserve(replaced, safetyCopyDirectory: safetyCopyDirectory)
         return true
+    }
+
+    /// Zips a moved-aside archive into Documents and removes the directory; a failure leaves it in place.
+    private static func preserve(_ directory: URL, safetyCopyDirectory: URL?) throws {
+        let fm = FileManager.default
+        guard fm.fileExists(atPath: directory.appending(path: databaseName).path) else { try? fm.removeItem(at: directory); return }
+        let copies = try safetyCopyDirectory ?? Self.safetyCopyDirectory()
+        let destination = freeName(in: copies, stem: "Lifeline-replaced-\(stamp(.now))")
+        try export(appDirectory: directory, appVersion: "replaced", to: destination, database: nil, progress: { _ in })
+        try fm.removeItem(at: directory)
     }
 
     /// Tests: an archive with its manifest changed.
@@ -196,6 +238,14 @@ public enum Backup {
         let queue = try DatabaseQueue(path: database.path)
         let applied = try queue.read { try String.fetchAll($0, sql: "select identifier from grdb_migrations") }
         return Migrations.versions.last { applied.contains($0) } ?? "v0"
+    }
+
+    /// "2026-10-24-093015": the day, then the time to the second.
+    static func stamp(_ date: Date) -> String {
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = .current
+        let c = cal.dateComponents([.year, .month, .day, .hour, .minute, .second], from: date)
+        return String(format: "%04d-%02d-%02d-%02d%02d%02d", c.year ?? 0, c.month ?? 0, c.day ?? 0, c.hour ?? 0, c.minute ?? 0, c.second ?? 0)
     }
 
     static func day(_ date: Date) -> String {

@@ -15,6 +15,8 @@ struct Dependencies {
     let requestMicrophone: @Sendable () async -> Bool
     let secrets: any SecretStore
     let extraction: any ExtractionService
+    /// The open database, for a consistent backup copy (M6).
+    let database: AppDatabase
     let extractionStore: ExtractionStore
     let actions: CandidateActions
     let promptLog: PromptLogRepository
@@ -111,6 +113,7 @@ struct Dependencies {
             requestMicrophone: { await AudioSessionConfigurator.requestMicrophoneAccess() },
             secrets: secrets,
             extraction: extraction,
+            database: db,
             extractionStore: store,
             actions: actions,
             promptLog: PromptLogRepository(db),
@@ -162,6 +165,7 @@ struct Dependencies {
             requestMicrophone: { true },
             secrets: secrets,
             extraction: extraction,
+            database: db,
             extractionStore: store,
             actions: actions,
             promptLog: PromptLogRepository(db),

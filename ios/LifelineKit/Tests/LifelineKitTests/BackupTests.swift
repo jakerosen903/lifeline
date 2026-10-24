@@ -129,3 +129,91 @@ private func integrity(_ db: AppDatabase) throws -> String? {
     #expect(Set(entries.filter { !$0.hasPrefix("audio/") }) == ["lifeline.sqlite", "pauses.log", "manifest.json"])
     #expect(audio.count == 1 && audio.allSatisfy { $0.hasSuffix(".m4a") })
 }
+
+// MARK: - Review fixes
+
+private func docs() throws -> URL {
+    let url = FileManager.default.temporaryDirectory.appending(path: "lifeline-docs-\(UUID().uuidString)")
+    try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+    return url
+}
+
+private func archives(in dir: URL) throws -> [URL] {
+    try FileManager.default.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil).filter { $0.pathExtension == "lifeline" }.sorted { $0.lastPathComponent < $1.lastPathComponent }
+}
+
+@Test func applyKeepsWhatWasWrittenAfterStaging() throws {
+    let phone = try Root(sessions: 1, memories: 1)
+    let other = try Root(sessions: 2, memories: 2)
+    let archive = other.url.appending(path: "other.lifeline")
+    _ = try Backup.export(root: other.url, appVersion: "1.0", to: archive, database: other.db)
+    let documents = try docs()
+    _ = try Backup.stage(archive, root: phone.url, appVersion: "1.0", database: phone.db, safetyCopyDirectory: documents)
+    // The person keeps using the app before closing it: one more recording.
+    _ = try StoreFixtures.session(in: phone.store.sessions, segments: ["told after Replace was tapped"])
+    #expect(try Backup.applyPendingRestore(root: phone.url, safetyCopyDirectory: documents))
+    let copies = try archives(in: documents)
+    #expect(copies.count == 2, "the stage-time copy and the launch-time copy of what the phone held: \(copies.map(\.lastPathComponent))")
+    let late = try copies.map { try Backup.inspect($0) }.max { $0.sessions < $1.sessions }
+    #expect(late?.sessions == 2, "the recording made after Replace is in the launch-time copy")
+    let restored = ExtractionStore(try AppDatabase.open(at: phone.url.appending(path: "Lifeline/lifeline.sqlite")))
+    #expect(try restored.sessions.listSessions().count == 2 && (try restored.memories.allMemories()).count == 2)
+    #expect(!FileManager.default.fileExists(atPath: phone.url.appending(path: "Lifeline-replaced").path), "the replaced archive is zipped into Documents, then gone")
+}
+
+@Test func safetyCopiesNeverOverwrite() throws {
+    let phone = try Root(sessions: 1, memories: 1)
+    let archive = phone.url.appending(path: "self.lifeline")
+    _ = try Backup.export(root: phone.url, appVersion: "1.0", to: archive, database: phone.db)
+    let documents = try docs()
+    let first = try Backup.stage(archive, root: phone.url, appVersion: "1.0", database: phone.db, safetyCopyDirectory: documents)
+    let second = try Backup.stage(archive, root: phone.url, appVersion: "1.0", database: phone.db, safetyCopyDirectory: documents)
+    let made = try archives(in: documents)
+    #expect(first.safetyCopy != second.safetyCopy && made.count == 2)
+    #expect(first.safetyCopy.lastPathComponent.hasPrefix("Lifeline-before-restore-"))
+}
+
+@Test func applyRecoversFromAHalfSwap() throws {
+    let phone = try Root(sessions: 1, memories: 1)
+    let other = try Root(sessions: 3, memories: 1)
+    let archive = other.url.appending(path: "other.lifeline")
+    _ = try Backup.export(root: other.url, appVersion: "1.0", to: archive, database: other.db)
+    let documents = try docs()
+    _ = try Backup.stage(archive, root: phone.url, appVersion: "1.0", database: phone.db, safetyCopyDirectory: documents)
+    // A crash after the old archive was moved aside and before the stage moved in.
+    let fm = FileManager.default
+    try fm.moveItem(at: phone.url.appending(path: "Lifeline"), to: phone.url.appending(path: "Lifeline-replaced"))
+    #expect(try Backup.applyPendingRestore(root: phone.url, safetyCopyDirectory: documents))
+    let restored = ExtractionStore(try AppDatabase.open(at: phone.url.appending(path: "Lifeline/lifeline.sqlite")))
+    #expect(try restored.sessions.listSessions().count == 3)
+    #expect(try archives(in: documents).count == 2, "the moved-aside archive was still saved to Documents")
+    #expect(!fm.fileExists(atPath: phone.url.appending(path: "Lifeline-replaced").path))
+    // A crash after the stage moved in and before the marker went: the next launch only tidies.
+    try Data("{}".utf8).write(to: phone.url.appending(path: "Lifeline-restore-pending.json"))
+    #expect(try !Backup.applyPendingRestore(root: phone.url, safetyCopyDirectory: documents))
+    #expect(try ExtractionStore(try AppDatabase.open(at: phone.url.appending(path: "Lifeline/lifeline.sqlite"))).sessions.listSessions().count == 3)
+}
+
+@Test func exportThroughASecondConnectionIsConsistentWhileTheAppWrites() async throws {
+    let source = try Root(sessions: 1, memories: 1)
+    let started = LogCollector(), stop = LogCollector()
+    let writer = Task.detached { [sessions = source.store.sessions] in
+        var n = 0
+        while stop.all.isEmpty && n < 2_000 { _ = try? StoreFixtures.session(in: sessions, segments: ["more"]); n += 1; if n == 3 { started.append("go") } }
+        return n
+    }
+    while started.all.isEmpty { try await Task.sleep(for: .milliseconds(5)) }
+    let archive = source.url.appending(path: "during.lifeline")
+    _ = try Backup.export(root: source.url, appVersion: "1.0", to: archive, database: nil)   // the app's own path: no shared connection
+    #expect(stop.all.isEmpty && !writer.isCancelled, "the writer was still going when the export finished")
+    stop.append("stop")
+    let total = await writer.value
+    let staging = FileManager.default.temporaryDirectory.appending(path: "lifeline-check-\(UUID().uuidString)")
+    _ = try AppDatabase.open(at: staging.appending(path: "Lifeline/lifeline.sqlite"))
+    _ = try Backup.stage(archive, root: staging, appVersion: "1.0", safetyCopyDirectory: try docs())
+    #expect(try Backup.applyPendingRestore(root: staging, safetyCopyDirectory: try docs()))
+    let copy = try AppDatabase.open(at: staging.appending(path: "Lifeline/lifeline.sqlite"))
+    let count = try SessionRepository(copy).listSessions().count
+    #expect(count >= 4 && count <= total + 1)
+    #expect(try integrity(copy) == "ok")
+}

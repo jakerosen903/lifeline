@@ -34,7 +34,8 @@ public actor SortingWorker {
         defer { running = false; reporter?.activityChanged(active: false) }
         var sorted = 0
         let sessions = (try? store.sessions.sessionsWithPendingSegments()) ?? []
-        for session in sessions where !cancelled.contains(session.id) {
+        // A session still recording has a live queue of its own; the worker never sends its segments twice.
+        for session in sessions where !cancelled.contains(session.id) && session.endedAt != nil {
             let before = pendingCount(session.id)
             guard before > 0 else { continue }
             let queue = ExtractionQueue(session: session.id, service: service, store: store, stage: "landed",

@@ -11,8 +11,9 @@ struct LifelineApp: App {
             RootView(model: model)
         }
         .onChange(of: scenePhase) { _, phase in
-            // Back in the foreground with moments still waiting: sorting starts again (M6).
-            guard phase == .active, let deps = model.deps, !deps.sortingStatus().pending.isEmpty else { return }
+            // Back in the foreground with moments still waiting: sorting starts again (M6). Not while a
+            // session is live or landing: its own queue is sorting those segments.
+            guard phase == .active, let deps = model.deps, model.timeline?.home.presented == nil, !deps.sortingStatus().pending.isEmpty else { return }
             deps.worker.requestStart()
         }
     }

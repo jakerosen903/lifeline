@@ -45,13 +45,13 @@ final class BackupViewModel {
         guard !isSessionLive() else { error = Self.liveSessionText; return }
         error = nil
         progressText = "Copying your memories…"
-        let root = deps.audioRoot
+        let root = deps.audioRoot, database = deps.database
         let folder = deps.exportWithoutShareSheet ? ((try? Backup.safetyCopyDirectory()) ?? FileManager.default.temporaryDirectory) : FileManager.default.temporaryDirectory
         let destination = folder.appending(path: Backup.defaultFileName())
         let share = !deps.exportWithoutShareSheet
         Task.detached(priority: .userInitiated) { [weak self] in
             do {
-                let manifest = try Backup.export(root: root, appVersion: Dependencies.appVersion, to: destination, database: nil) { line in
+                let manifest = try Backup.export(root: root, appVersion: Dependencies.appVersion, to: destination, database: database) { line in
                     Task { @MainActor in self?.progressText = line }
                 }
                 let bytes = Int64((try? FileManager.default.attributesOfItem(atPath: destination.path)[.size] as? Int) ?? 0)
@@ -89,17 +89,25 @@ final class BackupViewModel {
     /// Under `-uiTesting-restoreFrom`, Restore skips the picker.
     var testRestorePath: String? { deps.restoreFromPath }
 
+    /// Unpacks and writes the safety copy off the main actor; the screen says what is happening.
     func confirmRestore() {
         guard let confirming else { return }
         self.confirming = nil
-        do {
-            _ = try Backup.stage(confirming.url, root: deps.audioRoot, appVersion: Dependencies.appVersion)
-            relaunchText = "Your copy is ready. Close Lifeline and open it again to finish."
-            error = nil
-        } catch Backup.Error.newerSchema {
-            error = "This copy was made by a newer version of Lifeline."
-        } catch {
-            self.error = "Could not restore: \(error.localizedDescription)"
+        progressText = "Saving a copy of what is on the phone…"
+        let root = deps.audioRoot, database = deps.database
+        Task.detached(priority: .userInitiated) { [weak self] in
+            do {
+                _ = try Backup.stage(confirming.url, root: root, appVersion: Dependencies.appVersion, database: database)
+                await MainActor.run {
+                    self?.progressText = nil
+                    self?.relaunchText = "Your copy is ready. Close Lifeline and open it again to finish."
+                    self?.error = nil
+                }
+            } catch Backup.Error.newerSchema {
+                await MainActor.run { self?.progressText = nil; self?.error = "This copy was made by a newer version of Lifeline." }
+            } catch {
+                await MainActor.run { self?.progressText = nil; self?.error = "Could not restore: \(error.localizedDescription)" }
+            }
         }
     }
 
