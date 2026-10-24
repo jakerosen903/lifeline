@@ -207,7 +207,7 @@ public actor ExtractionQueue {
             return Candidate(id: .init(), segmentID: segment, extractorVersion: version, ordinal: ordinal, kind: kind, payload: payload,
                              confidence: confidence, status: status, rejection: rejection, createdAt: .now)
         }
-        var extended: [(CandidateID, ExtraSpan)] = []
+        var extended: [CandidateRepository.Continuation] = []
         for candidate in validated.accepted {
             let r = try Self.describe(candidate)
             if case .memory = candidate, validated.flags.seriousDisclosure {
@@ -220,7 +220,8 @@ public actor ExtractionQueue {
                 var c = row(r.kind, r.payload, r.confidence, CandidateRepository.continuesReason(earlier.id))
                 c.status = .superseded
                 rows.append(c)
-                extended.append((earlier.id, ExtraSpan(segmentID: segment.rawValue, startWord: memory.segmentSpan.startWord, endWord: memory.segmentSpan.endWord)))
+                extended.append(.init(earlierID: earlier.id, rowID: c.id,
+                                      span: ExtraSpan(segmentID: segment.rawValue, startWord: memory.segmentSpan.startWord, endWord: memory.segmentSpan.endWord)))
                 rows += try hintRows(for: memory, keyedTo: earlier.id, row: row)
                 continue
             }
@@ -251,16 +252,16 @@ public actor ExtractionQueue {
         }
         // Superseded rows are records with nothing to tap; only pending hint rows from this pass show.
         shown += rows.filter { $0.kind == .hint && $0.status == .pending && !shown.contains($0) }
-        try store.candidates.insertAll(rows, markingExtracted: segment, in: store.sessions)
+        // The rows, the segment's status and the grown cards land together.
+        let grown = try store.candidates.insertAll(rows, markingExtracted: segment, in: store.sessions, extending: extended)
         for (candidate, _) in knownMentions {
             let mention = try actions.acceptMention(candidate)
             try actions.resolveIfKnown(mention)
         }
-        for (earlierID, span) in extended {
-            guard let earlier = try store.candidates.fetch(earlierID), var out = CandidatePayload.memory(earlier) else { continue }
-            out.extraSpans.append(span)
-            try store.candidates.updatePayload(earlierID, try CandidatePayload.encode(out))
-            if let updated = try store.candidates.fetch(earlierID) { shown.insert(updated, at: 0) }
+        for continuation in extended {
+            // The grown card shows again; a card kept in the meantime leaves its continuation as an ordinary card.
+            let id = grown.contains(continuation.earlierID) ? continuation.earlierID : continuation.rowID
+            if let card = try store.candidates.fetch(id) { shown.insert(card, at: 0) }
         }
         return shown
     }

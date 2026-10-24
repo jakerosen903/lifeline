@@ -48,6 +48,8 @@ extension CandidateActions {
         public var added: [MemoryID]
         /// True when the story was made for this pair.
         public var created: Bool
+        /// Where each added memory was before, so undo puts it back there (review of #8).
+        public var left: [StoryRepository.Membership] = []
     }
 
     /// "Sounds like one story" on a pair: both memories in one story, a's if it has one, else
@@ -58,8 +60,10 @@ extension CandidateActions {
               let a = try store.memories.fetch(current.aMemoryID), let b = try store.memories.fetch(current.bMemoryID) else { throw Error.stale }
         let mark = (id: pair.id, status: PairStatus.grouped)
         if let existing = try store.stories.story(of: a.id) {
+            // b may be in a story of its own; it leaves that one, and undo must put it back.
+            let left = try store.stories.membership(of: b.id).map { [$0] } ?? []
             let story = try store.stories.join([b.id], story: existing.id, title: nil, chapterID: nil, markingPair: mark)
-            return GroupedPair(pair: current, story: story, added: [b.id], created: false)
+            return GroupedPair(pair: current, story: story, added: [b.id], created: false, left: left)
         }
         if let existing = try store.stories.story(of: b.id) {
             let story = try store.stories.join([a.id], story: existing.id, title: nil, chapterID: nil, markingPair: mark)
@@ -70,20 +74,16 @@ extension CandidateActions {
     }
 
     /// Undo of "One story": the memories that joined leave again (a story made for the pair
-    /// goes with them) and the pair is open once more.
+    /// goes with them), a memory that left a story of its own goes back to it, and the pair is
+    /// open once more. One transaction.
     public func ungroupPair(_ grouped: GroupedPair) throws {
         let still = try grouped.added.filter { try store.stories.story(of: $0)?.id == grouped.story.id }
-        try store.stories.leave(still, deletingStory: grouped.created ? grouped.story.id : nil, markingPair: (grouped.pair.id, .open))
+        let back = grouped.left.filter { still.contains($0.moment.memoryID) }
+        try store.stories.leave(still, deletingStory: grouped.created ? grouped.story.id : nil, restoring: back, markingPair: (grouped.pair.id, .open))
     }
 
     /// Keep with a `story_ref`: the ref is always a story id (the queue mints one for every new
     /// raw ref), so the memory joins the story when its row exists and makes the row otherwise.
-    func joinStory(_ memory: MemoryID, ref: String?) throws {
-        guard let ref, !ref.isEmpty else { return }
-        let id = StoryID(rawValue: ref)
-        try store.stories.join([memory], story: id, title: nil, chapterID: try store.memories.fetch(memory)?.chapterID, newStoryID: id)
-    }
-
     /// A story title hint, accepted: the member's story takes the title, or a story is made
     /// around the member. Titles are the person's words, at most 8 of them.
     func acceptStoryHint(_ phrase: String, for memory: MemoryID) throws -> Story {

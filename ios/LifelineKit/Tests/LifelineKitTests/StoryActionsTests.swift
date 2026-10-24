@@ -135,6 +135,36 @@ private struct Env {
     #expect(try env.store.stories.story(id: made.story.id) == nil && (try env.store.stories.story(of: d.id)) == nil)
 }
 
+@Test func ungroupPairPutsAMemoryBackInTheStoryItLeft() throws {
+    let env = try Env()
+    let a = try env.kept("the house had a blue door", title: "The blue door")
+    let b = try env.kept("Maya climbed it", title: "Maya climbed it")
+    let c = try env.kept("we moved away", title: "We moved away")
+    let d = try env.kept("the canal", title: "The canal")
+    let aStory = try env.actions.createStory(title: "Home", containing: [a.id, d.id])
+    // b alone in "Maya": joining a's story empties and deletes it.
+    let bStory = try env.actions.createStory(title: "Maya", containing: [b.id])
+    let pair = DuplicatePair(id: .init(), aMemoryID: a.id, bMemoryID: b.id, score: 0.8, verdict: .sameStory, status: .open, decidedAt: nil)
+    try env.store.pairs.insert(pair)
+    let grouped = try env.actions.groupPair(pair)
+    #expect(grouped.story.id == aStory.id && grouped.left.map(\.moment.storyID) == [bStory.id])
+    #expect(try env.store.stories.story(id: bStory.id) == nil, "b was its last member")
+    try env.actions.ungroupPair(grouped)
+    #expect(try env.store.stories.story(of: b.id)?.id == bStory.id, "b is back in the story it left")
+    #expect(try env.store.stories.story(id: bStory.id)?.title == "Maya", "with its title")
+    #expect(try env.store.stories.members(of: aStory.id).map(\.id) == [a.id, d.id])
+    #expect(try env.store.pairs.pair(id: pair.id)?.status == .open)
+    // c in a story that keeps other members: c goes back at its old position.
+    let cStory = try env.actions.createStory(title: "Away", containing: [d.id, c.id])
+    _ = try env.actions.takeOutOfStory(d.id)
+    try env.actions.addToStory(d.id, story: cStory.id)
+    let second = DuplicatePair(id: .init(), aMemoryID: a.id, bMemoryID: c.id, score: 0.8, verdict: .sameStory, status: .open, decidedAt: nil)
+    try env.store.pairs.insert(second)
+    let groupedC = try env.actions.groupPair(second)
+    try env.actions.ungroupPair(groupedC)
+    #expect(try env.store.stories.members(of: cStory.id).map(\.id) == [c.id, d.id], "c is back in front of d")
+}
+
 // MARK: - One transaction each (PR review)
 
 @Test func joinAndSplitAreOneTransaction() throws {

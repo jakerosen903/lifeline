@@ -17,14 +17,11 @@ extension CandidateActions {
         try store.pairs.setStatus(pair.id, .separate)
     }
 
-    /// Undo of Same story on a pair: the merge comes apart and the pair is open again, its
-    /// row written back since the merge took it with the folded memory.
+    /// Undo of Same story on a pair: the merge comes apart and the pair is open again, in one
+    /// transaction. The merge took the row with the folded memory; without it the pair is not on
+    /// file and `PairFinder` could ask again.
     public func undoPair(_ receipt: MergeReceipt, pair: DuplicatePair) throws {
-        try unmerge(receipt)
-        var reopened = pair
-        reopened.status = .open
-        reopened.decidedAt = nil
-        if try store.pairs.pair(id: pair.id) == nil { try store.pairs.insert(reopened) } else { try store.pairs.setStatus(pair.id, .open) }
+        try unmerge(receipt, reopeningPair: pair)
     }
 
     private func openSides(of pair: DuplicatePair) throws -> (Memory, Memory) {

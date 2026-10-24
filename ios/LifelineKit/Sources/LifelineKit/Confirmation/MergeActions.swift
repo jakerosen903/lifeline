@@ -43,8 +43,8 @@ extension CandidateActions {
         // The owner named this moment before telling it; now they have told it.
         let promotion = targetMemory.isFloating ? (title: out.title, summaryQuote: out.quote) : nil
         try store.memories.mergeSpan(span, continuations: try continuationSpans(of: out, for: target), people: edges.people, places: edges.places,
-                                     anchors: edges.anchors, promotingStandIn: promotion, acceptingCandidate: candidate.id)
-        for row in continuations { try store.candidates.setStatusKeepingRejection(row.id, .accepted) }
+                                     anchors: edges.anchors, promotingStandIn: promotion, acceptingCandidate: candidate.id,
+                                     acceptingContinuations: continuations.map(\.id))
         let newMentions = try finishEdges(edges, segment: candidate.segmentID)
         try reindex(target)
         _ = try ResolverRunner(store: store).run()
@@ -95,8 +95,7 @@ extension CandidateActions {
         let promotion = oldest.isFloating && later.isEmpty ? (title: out.title, summaryQuote: out.quote) : nil
         try store.memories.mergeGroup(sources: later, into: oldest, span: span, continuations: try continuationSpans(of: out, for: oldest.id),
                                       people: edges.people, places: edges.places, anchors: edges.anchors,
-                                      promotingStandIn: promotion, acceptingCandidate: candidate.id)
-        for row in continuations { try store.candidates.setStatusKeepingRejection(row.id, .accepted) }
+                                      promotingStandIn: promotion, acceptingCandidate: candidate.id, acceptingContinuations: continuations.map(\.id))
         let newMentions = try finishEdges(edges, segment: candidate.segmentID)
         try reindex(oldest.id)
         if let chapter = try store.memories.fetch(oldest.id)?.chapterID { try chapterRangeFromMembers(chapter) }
@@ -185,9 +184,15 @@ extension CandidateActions {
     /// rename, a date, a person, a hide, another telling), so a stale receipt never overwrites
     /// later work.
     public func unmerge(_ receipt: MergeReceipt) throws {
+        try unmerge(receipt, reopeningPair: nil)
+    }
+
+    /// `reopeningPair` is written back open in the same transaction (undo of Same story on a pair).
+    func unmerge(_ receipt: MergeReceipt, reopeningPair pair: DuplicatePair?) throws {
         guard let current = try store.memories.snapshot(of: receipt.target), Self.same(current, receipt.after) else { throw Error.stale }
-        // One transaction: a kill mid-undo must never leave the source gone from both memories.
-        try store.memories.restore(receipt.before, settingCandidate: receipt.candidateID.map { ($0, .pending) })
+        // One transaction: a kill mid-undo must never leave the source gone from both memories,
+        // or the memories back with the pair's answer lost.
+        try store.memories.restore(receipt.before, settingCandidate: receipt.candidateID.map { ($0, .pending) }, reopeningPair: pair)
         for snapshot in receipt.before { try reindex(snapshot.memory.id) }
         _ = try ResolverRunner(store: store).run()
     }

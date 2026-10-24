@@ -24,6 +24,23 @@ private func openPair(_ env: PairEnv, _ a: Memory, _ b: Memory) throws -> Duplic
     #expect(try env.store.pairs.pair(id: pair.id)?.status == .open)
 }
 
+@Test func undoPairIsOneTransaction() throws {
+    var env = try PairEnv()
+    let older = try env.memory("The blue door", vector: [1, 0])
+    let newer = try env.memory("Blue door again", vector: [1, 0])
+    let pair = try openPair(env, older, newer)
+    let actions = CandidateActions(store: env.store)
+    let receipt = try actions.samePair(pair)
+    // A pair whose other side does not exist fails the foreign key on the last write: the memories must not come back without it.
+    let ghost = DuplicatePair(id: .init(), aMemoryID: older.id, bMemoryID: MemoryID(rawValue: "ghost"), score: 0.9, verdict: .sameMoment, status: .open, decidedAt: nil)
+    #expect(throws: (any Error).self) { try actions.undoPair(receipt, pair: ghost) }
+    #expect(try env.store.memories.fetch(newer.id) == nil && (try env.store.memories.spans(of: older.id)).count == 2, "the merge stands: nothing partial landed")
+    #expect(try env.store.pairs.pair(id: ghost.id) == nil)
+    // The real undo still works afterwards.
+    try actions.undoPair(receipt, pair: pair)
+    #expect(try env.store.memories.fetch(newer.id) != nil && (try env.store.pairs.pair(id: pair.id))?.status == .open)
+}
+
 @Test func separatePairIsRememberedAndNeverReturns() throws {
     var env = try PairEnv()
     let a = try env.memory("The blue door", vector: [1, 0])

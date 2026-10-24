@@ -123,10 +123,12 @@ public struct CandidateActions: Sendable {
         let continuations = try store.candidates.continuations(of: candidate.id)
         var edges = try edges(of: out, for: memory.id)
         for row in continuations.compactMap(CandidatePayload.memory) { edges.merge(try self.edges(of: row, for: memory.id)) }
-        try store.memories.insert(memory, spans: spans, people: edges.people, places: edges.places, anchors: edges.anchors, acceptingCandidate: candidate.id)
-        for row in continuations { try store.candidates.setStatusKeepingRejection(row.id, .accepted) }
+        // The memory, its continuation cards' status and its story line land together (M5).
+        let storyRef = joinStory ? out.storyRef.flatMap { $0.isEmpty ? nil : StoryID(rawValue: $0) } : nil
+        try store.memories.insert(memory, spans: spans, people: edges.people, places: edges.places, anchors: edges.anchors,
+                                  acceptingCandidate: candidate.id, acceptingContinuations: continuations.map(\.id),
+                                  joiningStory: storyRef.map { (id: $0, chapterID: memory.chapterID) })
         let newMentions = try finishEdges(edges, segment: candidate.segmentID)
-        if joinStory { try self.joinStory(memory.id, ref: out.storyRef) }
         try reindex(memory.id)
         // Place what the new anchors allow, and re-place anything that pointed at this title.
         _ = try ResolverRunner(store: store).run()
