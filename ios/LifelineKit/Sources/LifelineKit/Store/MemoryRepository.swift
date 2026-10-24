@@ -352,8 +352,12 @@ public struct MemoryRepository: Sendable {
                 try db.execute(sql: "update anchor set memory_id = ? where id = ?", arguments: [new.id.rawValue, anchor.rawValue])
             }
             for person in moving.people {
+                // The link moves with its role text ("my sister"); a role the person typed is theirs to keep.
+                try db.execute(sql: """
+                    insert or ignore into memory_person (memory_id, person_id, role_text)
+                    select ?, person_id, role_text from memory_person where memory_id = ? and person_id = ?
+                    """, arguments: [new.id.rawValue, memory.rawValue, person.rawValue])
                 try db.execute(sql: "delete from memory_person where memory_id = ? and person_id = ?", arguments: [memory.rawValue, person.rawValue])
-                try db.execute(sql: "insert or ignore into memory_person (memory_id, person_id, role_text) values (?, ?, null)", arguments: [new.id.rawValue, person.rawValue])
             }
             for place in moving.places {
                 try db.execute(sql: "delete from memory_place where memory_id = ? and place_id = ?", arguments: [memory.rawValue, place.rawValue])

@@ -24,6 +24,21 @@ public struct StoryRepository: Sendable {
         try db.writer.read { try Story.order(Column("created_at")).fetchAll($0) }
     }
 
+    /// A memory's place in its story, with enough of the story to put it back if the story goes.
+    public struct Membership: Sendable, Equatable {
+        public var moment: StoryMoment
+        public var title: String?
+        public var chapterID: ChapterID?
+    }
+
+    public func membership(of memory: MemoryID) throws -> Membership? {
+        try db.writer.read { db in
+            guard let moment = try StoryMoment.filter(Column("memory_id") == memory.rawValue).fetchOne(db),
+                  let story = try Story.fetchOne(db, key: moment.storyID.rawValue) else { return nil }
+            return Membership(moment: moment, title: story.title, chapterID: story.chapterID)
+        }
+    }
+
     public func story(of memory: MemoryID) throws -> Story? {
         try db.writer.read { db in
             try Story.fetchOne(db, sql: "select story.* from story join story_moment sm on sm.story_id = story.id where sm.memory_id = ?",
@@ -106,12 +121,21 @@ public struct StoryRepository: Sendable {
             return target
     }
 
-    /// Takes memories out of their stories, deletes `deletingStory` and any emptied story, and
-    /// sets a pair's status, in one transaction.
-    public func leave(_ memories: [MemoryID], deletingStory: StoryID?, markingPair pair: (id: DuplicatePairID, status: PairStatus)? = nil) throws {
+    /// Takes memories out of their stories, deletes `deletingStory` and any emptied story, puts
+    /// back the memberships in `restoring` (re-creating a story that went when the memory left
+    /// it), and sets a pair's status, in one transaction.
+    public func leave(_ memories: [MemoryID], deletingStory: StoryID?, restoring: [Membership] = [],
+                      markingPair pair: (id: DuplicatePairID, status: PairStatus)? = nil) throws {
         try db.writer.write { db in
             for memory in memories { try db.execute(sql: "delete from story_moment where memory_id = ?", arguments: [memory.rawValue]) }
             if let deletingStory { _ = try Story.deleteOne(db, key: deletingStory.rawValue) }
+            for membership in restoring {
+                if try !Story.exists(db, key: membership.moment.storyID.rawValue) {
+                    try Story(id: membership.moment.storyID, title: membership.title, chapterID: membership.chapterID, createdAt: .now).insert(db)
+                }
+                try db.execute(sql: "delete from story_moment where memory_id = ?", arguments: [membership.moment.memoryID.rawValue])
+                try membership.moment.insert(db)
+            }
             try db.execute(sql: MemoryRepository.deleteEmptyStoriesSQL)
             if let pair { try Self.setPair(pair.id, pair.status, in: db) }
         }
