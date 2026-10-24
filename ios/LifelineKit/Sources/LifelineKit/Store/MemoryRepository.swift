@@ -342,11 +342,14 @@ public struct MemoryRepository: Sendable {
 
     /// "Which part of the recording" (M6): one span's bounds move within its segment. The span's
     /// segment, order and continuation link never change. Refused when the span is missing.
-    public func retime(_ memory: MemoryID, order: Int, startMs: Milliseconds, endMs: Milliseconds) throws {
+    public func retime(_ memory: MemoryID, order: Int, startMs: Milliseconds, endMs: Milliseconds,
+                       rewritingCard card: (id: CandidateID, payload: String)? = nil) throws {
         try db.writer.write { db in
             guard try MemorySpan.filter(Column("memory_id") == memory.rawValue && Column("order") == order).fetchOne(db) != nil else { throw Error.noSpan }
             try db.execute(sql: "update memory_span set start_ms = ?, end_ms = ? where memory_id = ? and \"order\" = ?",
                            arguments: [startMs, endMs, memory.rawValue, order])
+            // The card that made the telling follows in the same write, so the two never disagree.
+            if let card { try db.execute(sql: "update candidate set payload = ? where id = ?", arguments: [card.payload, card.id.rawValue]) }
         }
     }
 

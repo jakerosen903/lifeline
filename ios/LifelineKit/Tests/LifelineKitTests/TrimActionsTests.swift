@@ -70,3 +70,21 @@ private struct Env {
     _ = try env.actions.trimTelling(memory.id, order: 0, startWord: 2, endWord: 4)
     #expect(throws: CandidateActions.Error.stale) { try env.actions.undoTrim(first) }
 }
+
+@Test func trimWritesTheCardAndTheSpanTogether() throws {
+    let env = try Env()
+    let (memory, card, _) = try env.kept()
+    let before = try env.store.memories.spans(of: memory.id)
+    let payloadBefore = try #require(try env.store.candidates.fetch(card.id)).payload
+    // The span is gone (another device's restore, a delete racing the sheet): nothing may change.
+    try env.store.memories.deleteSpans(of: memory.id)
+    #expect(throws: (any Error).self) {
+        try env.store.memories.retime(memory.id, order: 0, startMs: 0, endMs: 10, rewritingCard: (card.id, "{\"changed\":true}"))
+    }
+    #expect(try env.store.candidates.fetch(card.id)?.payload == payloadBefore, "the card kept its words")
+    // Undo checks the card as well as the span.
+    for span in before { try env.store.memories.insertSpan(span) }
+    let receipt = try env.actions.trimTelling(memory.id, order: 0, startWord: 0, endWord: 5)
+    try env.store.candidates.updatePayload(card.id, payloadBefore)   // someone else changed the card meanwhile
+    #expect(throws: CandidateActions.Error.stale) { try env.actions.undoTrim(receipt) }
+}

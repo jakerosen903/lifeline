@@ -6,9 +6,10 @@ public struct TrimReceipt: Sendable, Equatable {
     public var order: Int
     public var before: MemorySpan
     public var after: MemorySpan
-    /// The card whose span was rewritten with the trim, and its payload before.
+    /// The card whose span was rewritten with the trim, and its payload before and after.
     public var candidateID: CandidateID?
     public var payloadBefore: String?
+    public var payloadAfter: String?
 }
 
 /// "Which part of the recording": the telling's span moves to the words the person chose, within
@@ -22,33 +23,36 @@ extension CandidateActions {
         var after = span
         after.startMs = words[startWord].startMs
         after.endMs = words[endWord].endMs
-        let (card, payloadBefore) = try rewriteCard(for: span, memory: memory, startWord: startWord, endWord: endWord)
-        try store.memories.retime(memory, order: order, startMs: after.startMs, endMs: after.endMs)
-        return TrimReceipt(memory: memory, order: order, before: span, after: after, candidateID: card, payloadBefore: payloadBefore)
+        let rewrite = try cardRewrite(for: span, memory: memory, startWord: startWord, endWord: endWord)
+        try store.memories.retime(memory, order: order, startMs: after.startMs, endMs: after.endMs, rewritingCard: rewrite.map { ($0.id, $0.after) })
+        return TrimReceipt(memory: memory, order: order, before: span, after: after, candidateID: rewrite?.id, payloadBefore: rewrite?.before, payloadAfter: rewrite?.after)
     }
 
-    /// Refused as stale when the span no longer looks like the trim left it.
+    /// Refused as stale when the span, or the card, no longer looks like the trim left it.
     public func undoTrim(_ receipt: TrimReceipt) throws {
         guard let current = try store.memories.spans(of: receipt.memory).first(where: { $0.order == receipt.order }), current == receipt.after else { throw Error.stale }
-        if let card = receipt.candidateID, let payload = receipt.payloadBefore { try store.candidates.updatePayload(card, payload) }
-        try store.memories.retime(receipt.memory, order: receipt.order, startMs: receipt.before.startMs, endMs: receipt.before.endMs)
+        var rewrite: (id: CandidateID, payload: String)?
+        if let card = receipt.candidateID, let before = receipt.payloadBefore {
+            guard try store.candidates.fetch(card)?.payload == receipt.payloadAfter else { throw Error.stale }
+            rewrite = (card, before)
+        }
+        try store.memories.retime(receipt.memory, order: receipt.order, startMs: receipt.before.startMs, endMs: receipt.before.endMs, rewritingCard: rewrite)
     }
 
-    /// The card behind a span: the memory's own card for its first telling, the span's card for a
-    /// later telling, and the telling's card for a continuation part (its `extra_spans` entry).
-    private func rewriteCard(for span: MemorySpan, memory: MemoryID, startWord: Int, endWord: Int) throws -> (CandidateID?, String?) {
+    /// The card behind a span, and its payload before and after the trim: the memory's own card
+    /// for its first telling, the span's card for a later telling, and the telling's card for a
+    /// continuation part (its `extra_spans` entry). Nothing is written here.
+    private func cardRewrite(for span: MemorySpan, memory: MemoryID, startWord: Int, endWord: Int) throws -> (id: CandidateID, before: String, after: String)? {
         let spans = try store.memories.spans(of: memory)
         let telling = span.continuesOrder.flatMap { order in spans.first { $0.order == order } } ?? span
         let cardID = telling.order == 0 ? try store.memories.fetch(memory)?.createdFromCandidateID : telling.candidateID
-        guard let cardID, let card = try store.candidates.fetch(cardID), var out = CandidatePayload.memory(card) else { return (nil, nil) }
-        let before = card.payload
+        guard let cardID, let card = try store.candidates.fetch(cardID), var out = CandidatePayload.memory(card) else { return nil }
         if span.continuesOrder == nil {
             out.segmentSpan = WordSpan(startWord: startWord, endWord: endWord)
         } else if let i = out.extraSpans.firstIndex(where: { $0.segmentID == span.segmentID.rawValue }) {
             out.extraSpans[i].startWord = startWord
             out.extraSpans[i].endWord = endWord
         }
-        try store.candidates.updatePayload(cardID, try CandidatePayload.encode(out))
-        return (cardID, before)
+        return (cardID, card.payload, try CandidatePayload.encode(out))
     }
 }
