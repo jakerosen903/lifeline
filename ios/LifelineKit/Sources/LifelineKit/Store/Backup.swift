@@ -170,33 +170,46 @@ public enum Backup {
         guard fm.fileExists(atPath: marker.path) else {
             // No restore pending: a leftover stage is noise; a leftover moved-aside archive is data.
             try? fm.removeItem(at: staging)
-            try preserve(replaced, safetyCopyDirectory: safetyCopyDirectory)
+            preserveAll(under: root, safetyCopyDirectory: safetyCopyDirectory)
             return false
         }
         guard stageReady else {
             try? fm.removeItem(at: staging)
             try? fm.removeItem(at: marker)
-            try preserve(replaced, safetyCopyDirectory: safetyCopyDirectory)
+            preserveAll(under: root, safetyCopyDirectory: safetyCopyDirectory)
             return false
         }
         if fm.fileExists(atPath: current.path) {
             // A previous attempt that crashed after moving the old archive aside left it here: keep it first.
-            try preserve(replaced, safetyCopyDirectory: safetyCopyDirectory)
-            try fm.moveItem(at: current, to: replaced)
+            preserveAll(under: root, safetyCopyDirectory: safetyCopyDirectory)
+            // An earlier launch that could not save its moved-aside archive (a full phone) left it
+            // in place: this one goes beside it under its own name, so the swap never meets "file exists".
+            let aside = fm.fileExists(atPath: replaced.path)
+                ? root.appending(path: "\(replacedName)-\(UUID().uuidString)", directoryHint: .isDirectory) : replaced
+            try fm.moveItem(at: current, to: aside)
         }
         try fm.moveItem(at: staging, to: current)
         let audio = current.appending(path: audioDirectory, directoryHint: .isDirectory)
         try fm.createDirectory(at: audio, withIntermediateDirectories: true)
         try AudioLocation.applyBackupExclusion(to: audio)
         try? fm.removeItem(at: marker)
-        try preserve(replaced, safetyCopyDirectory: safetyCopyDirectory)
+        preserveAll(under: root, safetyCopyDirectory: safetyCopyDirectory)
         return true
+    }
+
+    /// Every moved-aside archive under `root` (`Lifeline-replaced`, and `Lifeline-replaced-<id>`
+    /// when an earlier one could not be saved yet), each saved or left for the next launch.
+    private static func preserveAll(under root: URL, safetyCopyDirectory: URL?) {
+        let names = (try? FileManager.default.contentsOfDirectory(atPath: root.path)) ?? []
+        for name in names.sorted() where name == replacedName || name.hasPrefix(replacedName + "-") {
+            preserve(root.appending(path: name, directoryHint: .isDirectory), safetyCopyDirectory: safetyCopyDirectory)
+        }
     }
 
     /// Zips a moved-aside archive into Documents and removes the directory. A failure (a full
     /// phone, say) never throws: the directory stays where it is and the next launch tries
     /// again, so a restore cannot lock the person out of the app.
-    private static func preserve(_ directory: URL, safetyCopyDirectory: URL?) throws {
+    private static func preserve(_ directory: URL, safetyCopyDirectory: URL?) {
         let fm = FileManager.default
         guard fm.fileExists(atPath: directory.appending(path: databaseName).path) else { try? fm.removeItem(at: directory); return }
         do {

@@ -236,6 +236,31 @@ private func archives(in dir: URL) throws -> [URL] {
     #expect(try archives(in: documents).count == 2 && !FileManager.default.fileExists(atPath: phone.url.appending(path: "Lifeline-replaced").path))
 }
 
+@Test func aSecondRestoreOpensTheAppWhenTheFirstReplacedCopyIsStillWaiting() throws {
+    let phone = try Root(sessions: 1, memories: 1)
+    let documents = try docs()
+    let blocked = FileManager.default.temporaryDirectory.appending(path: "blocked-\(UUID().uuidString)")
+    try Data("x".utf8).write(to: blocked)
+    // Two restores in a row on a phone too full to save the replaced archive.
+    for sessions in [2, 3] {
+        let other = try Root(sessions: sessions, memories: 1)
+        let archive = other.url.appending(path: "other.lifeline")
+        _ = try Backup.export(root: other.url, appVersion: "1.0", to: archive, database: other.db)
+        let current = try AppDatabase.open(at: phone.url.appending(path: "Lifeline/lifeline.sqlite"))
+        _ = try Backup.stage(archive, root: phone.url, appVersion: "1.0", database: current, safetyCopyDirectory: documents)
+        #expect(try Backup.applyPendingRestore(root: phone.url, safetyCopyDirectory: blocked), "the app opens, restore \(sessions)")
+    }
+    #expect(try ExtractionStore(try AppDatabase.open(at: phone.url.appending(path: "Lifeline/lifeline.sqlite"))).sessions.listSessions().count == 3)
+    let fm = FileManager.default
+    let aside = try fm.contentsOfDirectory(atPath: phone.url.path).filter { $0.hasPrefix("Lifeline-replaced") }
+    #expect(aside.count == 2, "both replaced archives wait on the phone")
+    #expect(!fm.fileExists(atPath: phone.url.appending(path: "Lifeline-restore-pending.json").path))
+    // The next launch with room saves both and removes both folders.
+    #expect(try !Backup.applyPendingRestore(root: phone.url, safetyCopyDirectory: documents))
+    #expect(try fm.contentsOfDirectory(atPath: phone.url.path).filter { $0.hasPrefix("Lifeline-replaced") }.isEmpty)
+    #expect(try archives(in: documents).count == 4, "two safety copies from staging, two replaced archives")
+}
+
 @Test func copiesWrittenToDocumentsStayOutOfCloudBackup() throws {
     let phone = try Root(sessions: 1, memories: 1)
     let archive = phone.url.appending(path: "self.lifeline")
