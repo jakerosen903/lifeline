@@ -2,6 +2,17 @@ import GRDB
 
 /// Schema history. Add a new registered migration for every change; never edit a shipped one.
 enum Migrations {
+    /// Every migration identifier in order; the last is the schema the app writes.
+    static var versions: [String] { migrator.migrations }
+    public static var currentSchemaVersion: String { versions.last ?? "" }
+
+    /// By position in the migration list; a version this app has never heard of is from the future.
+    public static func isNewer(_ a: String, than b: String) -> Bool {
+        guard let ia = versions.firstIndex(of: a) else { return true }
+        guard let ib = versions.firstIndex(of: b) else { return false }
+        return ia > ib
+    }
+
     static var migrator: DatabaseMigrator {
         var m = DatabaseMigrator()
         m.registerMigration("v1") { db in

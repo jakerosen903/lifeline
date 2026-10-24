@@ -79,6 +79,14 @@ final class TimelineViewModel {
     private(set) var error: String?
     /// The Hidden filter: show memories hidden from the timeline too.
     var showHidden = false { didSet { refresh() } }
+    /// What is still sorting (M6); polled every second only while there is something to say.
+    /// The view reads `sorting`, which changes only when the words or the buttons do, so the
+    /// row is not rebuilt every time the worker's activity flips.
+    struct SortingPresentation: Equatable { var line: String?; var needsKey: Bool; var canRetry: Bool }
+    private(set) var sorting = SortingPresentation(line: nil, needsKey: false, canRetry: false)
+    @ObservationIgnored private var sortingStatus: SortingStatus = .empty
+    @ObservationIgnored private var sortingPoll: Task<Void, Never>?
+    var sortingLine: String? { sorting.line }
     private var skippedQuestions: Set<MemoryID> = []
 
     let home: HomeViewModel
@@ -97,7 +105,32 @@ final class TimelineViewModel {
                 Task { @MainActor in self?.refresh() }
             }
         }
+        deps.reporter.onChange = { [weak self] in Task { @MainActor in self?.refreshSorting() } }
     }
+
+    /// Re-reads the status line; while something is sorting, keeps re-reading every second.
+    func refreshSorting() {
+        let status = deps.sortingStatus()
+        sortingStatus = status
+        let presentation = SortingPresentation(line: status.line(), needsKey: status.needsKey, canRetry: status.canRetry)
+        if presentation != sorting { sorting = presentation }
+        if status.isEmpty || status.canRetry || status.needsKey {
+            sortingPoll?.cancel(); sortingPoll = nil
+            return
+        }
+        guard sortingPoll == nil else { return }
+        sortingPoll = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(1))
+                guard !Task.isCancelled else { return }
+                self?.refreshSorting()
+                if self?.sortingStatus.isEmpty ?? true { self?.refresh() }
+            }
+        }
+    }
+
+    /// "Try again" on "Not sorting right now".
+    func tryAgain() { deps.worker.requestStart(); refreshSorting() }
 
     var memoryCount: Int {
         chapters.reduce(0) { $0 + $1.memories.count + $1.stories.reduce(0) { $0 + $1.members.count } } + collections.reduce(0) { $0 + $1.members.count }
@@ -147,6 +180,7 @@ final class TimelineViewModel {
 
             waiting = try waitingCards()
             pairs = try openPairs()
+            refreshSorting()
             (question, questionRow) = try firstQuestion(rows: rows, birth: birth)
             summary = Self.summaryText(memories: all.count, chapters: chapters.count, firstYear: years.min())
             error = nil

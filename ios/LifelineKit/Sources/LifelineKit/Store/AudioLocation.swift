@@ -23,4 +23,15 @@ public enum AudioLocation {
     }
 
     public static func fileName(for session: SessionID) -> String { "\(session.rawValue).m4a" }
+
+    /// Everything the app stores: `<root>/Lifeline` (M6 backup copies this whole directory).
+    public static func rootDirectory(under root: URL) -> URL { root.appending(path: "Lifeline", directoryHint: .isDirectory) }
+
+    /// Re-marks an audio directory excluded from backup, as after a restore.
+    public static func applyBackupExclusion(to directory: URL) throws {
+        var dir = directory
+        var values = URLResourceValues()
+        values.isExcludedFromBackup = true
+        try dir.setResourceValues(values)
+    }
 }

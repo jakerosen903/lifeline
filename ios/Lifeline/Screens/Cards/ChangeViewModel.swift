@@ -18,8 +18,24 @@ final class ChangeViewModel {
     private var mergeReceipt: MergeReceipt?
     /// Set when this memory no longer exists (merged away): the sheet's owner closes.
     private(set) var isGone = false
+    /// "Which part of the recording" (M6): each telling's spans with their segments' words.
+    struct Part: Identifiable, Equatable {
+        let span: MemorySpan
+        let words: [Word]
+        var id: Int { span.order }
+        /// The words the span covers now, as indexes into `words`.
+        var covered: ClosedRange<Int>? {
+            guard let first = words.firstIndex(where: { $0.endMs > span.startMs }), let last = words.lastIndex(where: { $0.startMs < span.endMs }), first <= last else { return nil }
+            return first...last
+        }
+        var title: String { span.continuesOrder == nil ? (span.order == 0 ? "First telling" : "Telling \(span.order + 1)") : "Continued" }
+    }
+    private(set) var parts: [Part] = []
+    /// After a trim, while the sheet is open: what it did, with Undo.
+    private(set) var trimmedNotice: String?
+    private var trimReceipt: TrimReceipt?
     private let includeHidden: Bool
-    private let deps: Dependencies
+    let deps: Dependencies
 
     init(memory: Memory, deps: Dependencies, includeHidden: Bool = false) {
         self.memory = memory
@@ -64,6 +80,33 @@ final class ChangeViewModel {
         }
     }
 
+    // MARK: - Which part of the recording (M6)
+
+    func trim(order: Int, startWord: Int, endWord: Int) {
+        do {
+            trimReceipt = try deps.actions.trimTelling(memory.id, order: order, startWord: startWord, endWord: endWord)
+            let n = endWord - startWord + 1
+            trimmedNotice = "Now \(n == 1 ? "1 word" : "\(n) words") of the recording."
+            error = nil
+            refresh()
+        } catch {
+            self.error = "Could not change that: \(error.localizedDescription)"
+        }
+    }
+
+    func undoTrim() {
+        guard let receipt = trimReceipt else { return }
+        do {
+            try deps.actions.undoTrim(receipt)
+            trimReceipt = nil
+            trimmedNotice = nil
+            error = nil
+            refresh()
+        } catch {
+            self.error = "That can't be undone any more: \(error.localizedDescription)"
+        }
+    }
+
     /// "Tell me when" from the sheet.
     func setStated(_ range: TimeRange) {
         attempt("Could not save that") { try deps.actions.setStatedRange(memory.id, range) }
@@ -82,6 +125,7 @@ final class ChangeViewModel {
             people = try store.memories.people(of: memory.id)
             let linked = Set(people.map(\.id))
             choices = try store.people.people().filter { !$0.isOwner && !linked.contains($0.id) }
+            parts = try store.memories.spans(of: memory.id).map { Part(span: $0, words: try store.sessions.words(in: $0.segmentID)) }
             when.refresh()
         } catch {
             self.error = error.localizedDescription

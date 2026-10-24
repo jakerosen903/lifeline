@@ -109,3 +109,9 @@ import GRDB
     }
     #expect(try queue.read { try Int.fetchOne($0, sql: "select count(*) from duplicate_pair") } == 0, "the pair goes with its memory")
 }
+
+@Test func schemaVersionsOrderByMigrationPosition() {
+    #expect(Migrations.currentSchemaVersion == "v8")
+    #expect(Migrations.isNewer("v8", than: "v7") && !Migrations.isNewer("v7", than: "v8") && !Migrations.isNewer("v8", than: "v8"))
+    #expect(Migrations.isNewer("v99", than: "v8"), "an unknown version is from the future")
+}

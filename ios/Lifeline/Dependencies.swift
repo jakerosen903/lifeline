@@ -15,6 +15,8 @@ struct Dependencies {
     let requestMicrophone: @Sendable () async -> Bool
     let secrets: any SecretStore
     let extraction: any ExtractionService
+    /// The open database, for a consistent backup copy (M6).
+    let database: AppDatabase
     let extractionStore: ExtractionStore
     let actions: CandidateActions
     let promptLog: PromptLogRepository
@@ -28,6 +30,26 @@ struct Dependencies {
     /// backfill at launch and a little after every Keep (M5).
     let reconcile: any ReconcileService
     let duplicates: DuplicatePass
+    /// What is still sorting, for the status line (M6).
+    let reporter: SortingReporter
+    /// Under `-uiTesting-restoreFrom <path>`: Restore stages this file without the picker.
+    var restoreFromPath: String? = nil
+    /// Under `-uiTesting`: Export keeps the file in Documents and shows no share sheet, which a UI test cannot drive.
+    var exportWithoutShareSheet = false
+
+    /// "1.0 (12)": the marketing version and the build, for the backup manifest.
+    static var appVersion: String {
+        let info = Bundle.main.infoDictionary ?? [:]
+        let short = info["CFBundleShortVersionString"] as? String ?? "0"
+        let build = info["CFBundleVersion"] as? String ?? "0"
+        return "\(short) (\(build))"
+    }
+
+    var hasKey: Bool { ((try? secrets.read(.anthropicAPIKey)) ?? nil) != nil }
+
+    func sortingStatus() -> SortingStatus {
+        (try? SortingStatus.current(store: extractionStore, reporter: reporter, hasKey: hasKey)) ?? .empty
+    }
 
     /// A fresh question for the next session: an open thread first, then the bank without repeats.
     func opening() -> Opening {
@@ -46,7 +68,7 @@ struct Dependencies {
     }
 
     func makeExtractionQueue(for session: SessionID) -> ExtractionQueue {
-        ExtractionQueue(session: session, service: extraction, store: extractionStore, matcher: matcher, log: { print("[extract] \($0)") })
+        ExtractionQueue(session: session, service: extraction, store: extractionStore, matcher: matcher, reporter: reporter, log: { print("[extract] \($0)") })
     }
 
     /// A recorder whose stored segments feed `queue`. Finish returns at once; the queue keeps
@@ -59,6 +81,8 @@ struct Dependencies {
 
     static func live() throws -> Dependencies {
         let root = try AudioLocation.defaultRoot()
+        // A restore the person staged is applied now, before anything opens the database (M6).
+        if try Backup.applyPendingRestore(root: root) { print("[backup] restored a copy at launch") }
         let db = try AppDatabase.open(at: root.appending(path: "Lifeline/lifeline.sqlite"))
         let sessions = SessionRepository(db)
         let pauseLog = PauseLog(url: root.appending(path: "Lifeline/pauses.log"))
@@ -68,6 +92,7 @@ struct Dependencies {
         let matcher = MemoryMatcher(store: store, embedder: NLSentenceEmbedder())
         let actions = CandidateActions(store: store, matcher: matcher)
         let reconcile = AnthropicReconcileService(apiKey: { try? secrets.read(.anthropicAPIKey) })
+        let reporter = SortingReporter()
         return Dependencies(
             sessions: sessions,
             profile: ProfileRepository(db),
@@ -88,14 +113,16 @@ struct Dependencies {
             requestMicrophone: { await AudioSessionConfigurator.requestMicrophoneAccess() },
             secrets: secrets,
             extraction: extraction,
+            database: db,
             extractionStore: store,
             actions: actions,
             promptLog: PromptLogRepository(db),
             arcConfig: .default,
-            worker: SortingWorker(store: store, service: extraction, matcher: matcher, log: { print("[sorting] \($0)") }),
+            worker: SortingWorker(store: store, service: extraction, matcher: matcher, reporter: reporter, log: { print("[sorting] \($0)") }),
             matcher: matcher,
             reconcile: reconcile,
-            duplicates: DuplicatePass(store: store, matcher: matcher, reconcile: reconcile, actions: actions, log: { print($0) }))
+            duplicates: DuplicatePass(store: store, matcher: matcher, reconcile: reconcile, actions: actions, reporter: reporter, log: { print($0) }),
+            reporter: reporter)
     }
 
     /// Fresh temp database, scripted voice and extraction, in-memory secrets with a fake key.
@@ -109,15 +136,21 @@ struct Dependencies {
         } else {
             root = FileManager.default.temporaryDirectory.appending(path: "lifeline-ui-\(UUID().uuidString)")
         }
+        if try Backup.applyPendingRestore(root: root) { print("[backup] restored a copy at launch") }
         let db = try AppDatabase.open(at: root.appending(path: "Lifeline/lifeline.sqlite"))
         let store = ExtractionStore(db)
-        let extraction = ScriptedExtractionService(delayMs: 200, heavy: args.contains("-uiTesting-heavy"))
+        // `-uiTesting-slowExtract`: seconds per segment, for tests that watch sorting go on; `-uiTesting-noKey`:
+        // an empty key store, and a scripted service that refuses to sort without one, as the live one does.
+        let secrets = InMemorySecretStore(args.contains("-uiTesting-noKey") ? [:] : [.anthropicAPIKey: "sk-ant-api03-" + String(repeating: "x", count: 40)])
+        let scripted = ScriptedExtractionService(delayMs: args.contains("-uiTesting-slowExtract") ? 4_000 : 200, heavy: args.contains("-uiTesting-heavy"))
+        let extraction = KeyGatedExtractionService(inner: scripted, hasKey: { ((try? secrets.read(.anthropicAPIKey)) ?? nil) != nil })
         // Word-overlap vectors under test: deterministic, and enough for the scripted retelling
         // to be retrieved into the packet so the scripted extractor can name it.
         let matcher = MemoryMatcher(store: store, embedder: HashingEmbedder())
         let actions = CandidateActions(store: store, matcher: matcher)
         let reconcile = ScriptedReconcileService()
-        return Dependencies(
+        let reporter = SortingReporter()
+        var deps = Dependencies(
             sessions: SessionRepository(db),
             profile: ProfileRepository(db),
             audioRoot: root,
@@ -130,16 +163,17 @@ struct Dependencies {
             activatePlayback: {},
             deactivateAudio: {},
             requestMicrophone: { true },
-            secrets: InMemorySecretStore([.anthropicAPIKey: "sk-ant-api03-" + String(repeating: "x", count: 40)]),
+            secrets: secrets,
             extraction: extraction,
+            database: db,
             extractionStore: store,
             actions: actions,
             promptLog: PromptLogRepository(db),
             arcConfig: .uiTesting,
-            worker: SortingWorker(store: store, service: extraction, matcher: matcher),
+            worker: SortingWorker(store: store, service: extraction, matcher: matcher, reporter: reporter),
             matcher: matcher,
             reconcile: reconcile,
-            duplicates: DuplicatePass(store: store, matcher: matcher, reconcile: reconcile, actions: actions, log: { line in
+            duplicates: DuplicatePass(store: store, matcher: matcher, reconcile: reconcile, actions: actions, reporter: reporter, log: { line in
                 print(line)
                 // UI tests cannot see the app's console; the pass leaves its lines next to the test database.
                 let url = root.appending(path: "duplicates.log")
@@ -147,6 +181,22 @@ struct Dependencies {
                     if let handle = try? FileHandle(forWritingTo: url) { handle.seekToEndOfFile(); handle.write(data); try? handle.close() }
                     else { try? data.write(to: url) }
                 }
-            }))
+            }),
+            reporter: reporter)
+        if let i = args.firstIndex(of: "-uiTesting-restoreFrom"), i + 1 < args.count { deps.restoreFromPath = args[i + 1] }
+        deps.exportWithoutShareSheet = true
+        return deps
+    }
+}
+
+/// Under UI testing: the scripted service, but it refuses to sort without a key, as the live one does.
+struct KeyGatedExtractionService: ExtractionService {
+    let inner: ScriptedExtractionService
+    let hasKey: @Sendable () -> Bool
+    var version: String { inner.version }
+
+    func extract(_ request: ExtractionRequest) async throws(ExtractionError) -> ExtractionResponse {
+        guard hasKey() else { throw .noKey }
+        return try await inner.extract(request)
     }
 }

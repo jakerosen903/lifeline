@@ -8,6 +8,8 @@ final class HomeViewModel {
         let session: Session
         let segmentCount: Int
         let durationText: String
+        /// Segments of this recording still to be sorted (M6).
+        var pendingCount = 0
         var id: SessionID { session.id }
     }
 
@@ -41,7 +43,8 @@ final class HomeViewModel {
         do {
             rows = try deps.sessions.listSessions().map { session in
                 let segments = try deps.sessions.segments(in: session.id)
-                return Row(session: session, segmentCount: segments.count, durationText: Self.durationText(session, segments))
+                return Row(session: session, segmentCount: segments.count, durationText: Self.durationText(session, segments),
+                           pendingCount: segments.filter { $0.status == .pending }.count)
             }
         } catch {
             self.error = "Could not load sessions: \(error.localizedDescription)"

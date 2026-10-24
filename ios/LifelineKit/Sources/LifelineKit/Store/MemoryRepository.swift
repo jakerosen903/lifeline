@@ -340,6 +340,16 @@ public struct MemoryRepository: Sendable {
         }
     }
 
+    /// "Which part of the recording" (M6): one span's bounds move within its segment. The span's
+    /// segment, order and continuation link never change. Refused when the span is missing.
+    public func retime(_ memory: MemoryID, order: Int, startMs: Milliseconds, endMs: Milliseconds) throws {
+        try db.writer.write { db in
+            guard try MemorySpan.filter(Column("memory_id") == memory.rawValue && Column("order") == order).fetchOne(db) != nil else { throw Error.noSpan }
+            try db.execute(sql: "update memory_span set start_ms = ?, end_ms = ? where memory_id = ? and \"order\" = ?",
+                           arguments: [startMs, endMs, memory.rawValue, order])
+        }
+    }
+
     /// Moves an anchor to another memory.
     public func move(anchor: AnchorID, to memory: MemoryID) throws {
         try db.writer.write { try $0.execute(sql: "update anchor set memory_id = ? where id = ?", arguments: [memory.rawValue, anchor.rawValue]) }
