@@ -67,7 +67,18 @@ final class BackupViewModel {
         lastExport = (.now, bytes)
         UserDefaults.standard.set(Date.now, forKey: Self.lastExportKey)
         UserDefaults.standard.set(Int(bytes), forKey: Self.lastExportKey + ".bytes")
-        if share { shareURL = url }
+        if share { shareURL = url; sharedFile = url }
+    }
+
+    /// The file handed to the share sheet; removed when the sheet closes.
+    private var sharedFile: URL?
+
+    /// The share sheet closed: the file in the temporary folder is a full copy of everything,
+    /// and whatever the person did with it is done, so it goes now.
+    func shareClosed() {
+        guard let url = sharedFile else { return }
+        sharedFile = nil
+        Task.detached(priority: .utility) { try? FileManager.default.removeItem(at: url) }
     }
 
     /// The person picked a file (or the test named one): copy it and read what is inside off

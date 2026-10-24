@@ -83,6 +83,8 @@ struct Dependencies {
         let root = try AudioLocation.defaultRoot()
         // A restore the person staged is applied now, before anything opens the database (M6).
         if try Backup.applyPendingRestore(root: root) { print("[backup] restored a copy at launch") }
+        // An export the share sheet left behind is a full copy of everything; it does not outlive the launch.
+        Backup.removeTemporaryExports()
         let db = try AppDatabase.open(at: root.appending(path: "Lifeline/lifeline.sqlite"))
         let sessions = SessionRepository(db)
         let pauseLog = PauseLog(url: root.appending(path: "Lifeline/pauses.log"))

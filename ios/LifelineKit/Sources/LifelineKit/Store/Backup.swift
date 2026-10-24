@@ -41,6 +41,20 @@ public enum Backup {
         "Lifeline-\(Self.day(now)).lifeline"
     }
 
+    /// Export files left in the temporary folder (a share sheet the app never saw close, a kill
+    /// mid-share): each is a full copy of every transcript and recording, so launch removes them.
+    /// Returns how many went.
+    @discardableResult
+    public static func removeTemporaryExports(in directory: URL = FileManager.default.temporaryDirectory) -> Int {
+        let fm = FileManager.default
+        let names = (try? fm.contentsOfDirectory(atPath: directory.path)) ?? []
+        var removed = 0
+        for name in names where name.hasPrefix("Lifeline-") && name.hasSuffix(".lifeline") {
+            if (try? fm.removeItem(at: directory.appending(path: name))) != nil { removed += 1 }
+        }
+        return removed
+    }
+
     /// Where safety copies go: Documents, visible in Files.
     public static func safetyCopyDirectory(fileManager: FileManager = .default) throws -> URL {
         try fileManager.url(for: .documentDirectory, in: .userDomainMask, appropriateFor: nil, create: true)

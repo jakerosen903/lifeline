@@ -52,7 +52,7 @@ struct YourCopySection: View {
         .fileImporter(isPresented: $picking, allowedContentTypes: [UTType(filenameExtension: "lifeline") ?? .zip, .zip]) { result in
             if case .success(let url) = result { viewModel.chose(url) }
         }
-        .sheet(item: $viewModel.shareURL) { url in
+        .sheet(item: $viewModel.shareURL, onDismiss: viewModel.shareClosed) { url in
             ShareSheet(items: [url])
         }
     }

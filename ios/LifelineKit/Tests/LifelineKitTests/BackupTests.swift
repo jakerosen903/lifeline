@@ -281,6 +281,15 @@ private func archives(in dir: URL) throws -> [URL] {
     #expect(try phone.store.sessions.listSessions().count == 1, "the phone keeps its own archive")
 }
 
+@Test func launchRemovesExportsLeftInTheTemporaryFolder() throws {
+    let tmp = try docs()
+    for name in ["Lifeline-2026-10-24.lifeline", "Lifeline-2026-10-23.lifeline", "restore-1.lifeline", "notes.txt"] {
+        try Data("x".utf8).write(to: tmp.appending(path: name))
+    }
+    #expect(Backup.removeTemporaryExports(in: tmp) == 2)
+    #expect(try FileManager.default.contentsOfDirectory(atPath: tmp.path).sorted() == ["notes.txt", "restore-1.lifeline"], "only the app's export files go")
+}
+
 @Test func copiesWrittenToDocumentsStayOutOfCloudBackup() throws {
     let phone = try Root(sessions: 1, memories: 1)
     let archive = phone.url.appending(path: "self.lifeline")
