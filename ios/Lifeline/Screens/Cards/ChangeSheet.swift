@@ -154,6 +154,21 @@ struct ChangeSheet: View {
                         }
                     }
                     .accessibilityIdentifier("change.kind")
+                    if !viewModel.memory.isMoment {
+                        Menu {
+                            Button("Nothing in particular (About)") { viewModel.moveDetail(to: nil) }
+                            ForEach(viewModel.aboutChoices, id: \.entity.id) { choice in
+                                Button(choice.label) { viewModel.moveDetail(to: choice.entity.id) }
+                            }
+                        } label: {
+                            HStack {
+                                Text("About whom or what?").foregroundStyle(Theme.stone)
+                                Spacer()
+                                Text(viewModel.aboutLabel).foregroundStyle(Theme.ink)
+                            }
+                        }
+                        .accessibilityIdentifier("change.about")
+                    }
                 }
 
                 if let error = viewModel.error {

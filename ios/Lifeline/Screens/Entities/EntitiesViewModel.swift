@@ -17,6 +17,8 @@ final class EntitiesViewModel {
     var tagFilter: String? { didSet { refresh() } }
     private(set) var rows: [Row] = []
     private(set) var allTags: [String] = []
+    /// The owner's own page: "About you" (M7), in the People segment.
+    private(set) var aboutYou: Entity?
     private(set) var error: String?
     let deps: Dependencies
 
@@ -32,6 +34,7 @@ final class EntitiesViewModel {
             allTags = try store.tags.all()
             let tagged = try tagFilter.map { try store.tags.elements(.entity, tagged: $0) }
             let owner = try store.profile.owner()?.entityID
+            aboutYou = try owner.flatMap { try store.entities.entity(id: $0) }
             rows = try store.entities.entities(type: type)
                 .filter { $0.id != owner && (tagged?.contains($0.id.rawValue) ?? true) }
                 .map { entity in

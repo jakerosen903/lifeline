@@ -421,6 +421,16 @@ public struct CandidateActions: Sendable {
         guard current.kind != kind else { return }
         try store.memories.setKind(memory, kind)
         if let chapter = current.chapterID { try chapterRangeFromMembers(chapter) }
+        if kind.isMoment {
+            // A moment names what it was about; it is no longer a standing statement (M7).
+            for link in try store.entities.links(of: memory).map(\.link) where link.relation == .detail {
+                try store.entities.unlink(memory, link.entityID, relation: .detail)
+                try store.entities.link(memory, link.entityID, relation: .mention)
+            }
+        } else {
+            // Stories are for scenes.
+            try store.stories.leave([memory], deletingStory: nil)
+        }
         _ = try ResolverRunner(store: store).run()
     }
 

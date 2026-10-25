@@ -112,7 +112,9 @@ public struct StoryRepository: Sendable {
                 target = Story(id: story ?? newStoryID ?? StoryID(), title: Self.clean(title), chapterID: chapterID, createdAt: .now)
                 try target.insert(db)
             }
-            for memory in memories {
+            // Stories are for scenes: a fact, feeling or goal never joins one (M7).
+            for memory in memories where try String.fetchOne(db, sql: "select kind from memory where id = ?", arguments: [memory.rawValue])
+                .map({ MemoryKind(rawValue: $0)?.isMoment ?? true }) ?? true {
                 try db.execute(sql: "delete from story_moment where memory_id = ?", arguments: [memory.rawValue])
                 let order = (try Int.fetchOne(db, sql: "select max(\"order\") from story_moment where story_id = ?", arguments: [target.id.rawValue]) ?? -1) + 1
                 try StoryMoment(storyID: target.id, memoryID: memory, order: order).insert(db)

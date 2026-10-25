@@ -114,6 +114,16 @@ final class ChangeViewModel {
 
     var shownKind: MemoryKind { memory.kind == .other ? .event : memory.kind }
 
+    /// "About whom or what?" (M7): where a fact, feeling or goal sits. The owner reads "About you".
+    private(set) var aboutChoices: [(entity: Entity, label: String)] = []
+    private(set) var aboutEntity: EntityID?
+
+    func moveDetail(to entity: EntityID?) {
+        attempt("Could not move that") { try deps.actions.moveDetail(memory.id, to: entity) }
+    }
+
+    var aboutLabel: String { aboutChoices.first { $0.entity.id == aboutEntity }?.label ?? "Nothing in particular (About)" }
+
     func setKind(_ kind: MemoryKind) {
         guard kind != shownKind else { return }
         attempt("Could not change that") { try deps.actions.setKind(memory.id, kind) }
@@ -137,6 +147,12 @@ final class ChangeViewModel {
             people = try store.memories.people(of: memory.id)
             let linked = Set(people.map(\.id))
             choices = try store.people.people().filter { !$0.isOwner && !linked.contains($0.id) }
+            let owner = try store.profile.owner()?.entityID
+            aboutEntity = try store.entities.links(of: memory.id).first { $0.link.relation == .detail }?.entity.id
+            aboutChoices = try (owner.flatMap { try store.entities.entity(id: $0) }.map { [(entity: $0, label: "About you")] } ?? [])
+                + [EntityType.person, .place, .thing, .idea].flatMap { type in
+                    try store.entities.entities(type: type).filter { $0.id != owner }.map { (entity: $0, label: "\($0.title) · \(type.singular.lowercased())") }
+                }
             parts = try store.memories.spans(of: memory.id).map { Part(span: $0, words: try store.sessions.words(in: $0.segmentID)) }
             when.refresh()
         } catch {

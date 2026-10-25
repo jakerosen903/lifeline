@@ -15,6 +15,16 @@ struct EntitiesScreen: View {
                 .accessibilityIdentifier("entities.type")
                 .listRowBackground(Color.clear)
             }
+            if viewModel.type == .person, let you = viewModel.aboutYou {
+                Section {
+                    NavigationLink {
+                        EntityScreen(viewModel: EntityViewModel(entity: you, deps: viewModel.deps)) { viewModel.refresh() }
+                    } label: {
+                        Text("About you").font(.system(.headline, design: .serif)).foregroundStyle(Theme.ink)
+                    }
+                    .accessibilityIdentifier("entities.aboutYou")
+                }
+            }
             Section {
                 if viewModel.rows.isEmpty {
                     Text(viewModel.tagFilter == nil ? "Nothing yet. They appear as you tell stories." : "Nothing tagged “\(viewModel.tagFilter!)”.")
