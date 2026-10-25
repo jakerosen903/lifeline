@@ -32,3 +32,4 @@ public struct CollectionID: TypedID { public let rawValue: String; public init(r
 public struct StoryID: TypedID { public let rawValue: String; public init(rawValue: String) { self.rawValue = rawValue } }
 public struct DuplicatePairID: TypedID { public let rawValue: String; public init(rawValue: String) { self.rawValue = rawValue } }
 public struct CuriosityItemID: TypedID { public let rawValue: String; public init(rawValue: String) { self.rawValue = rawValue } }
+public struct EntityID: TypedID { public let rawValue: String; public init(rawValue: String) { self.rawValue = rawValue } }
