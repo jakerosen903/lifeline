@@ -16,6 +16,16 @@ public enum EntityType: String, Codable, Sendable, CaseIterable {
         }
     }
 
+    /// One of them, as a page's label.
+    public var singular: String {
+        switch self {
+        case .person: "Person"
+        case .place: "Place"
+        case .thing: "Thing"
+        case .idea: "Idea"
+        }
+    }
+
     /// The heading of the card that proposes one. A person keeps the Who's-this card.
     public var cardHeading: String {
         switch self {

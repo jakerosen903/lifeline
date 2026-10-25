@@ -9,6 +9,8 @@ final class MemoryViewModel {
     private(set) var memory: Memory
     private(set) var people: [Person] = []
     private(set) var place: Place?
+    /// Every person, place, thing and idea it names or is about; a chip opens its page (M7).
+    private(set) var entities: [Entity] = []
     private(set) var chapterTitle: String?
     /// Every telling, first telling first (M4.1). A telling told across a pause is one row: the
     /// spans that carry it on play after it (M5). `span` and `session` are the first.
@@ -27,7 +29,7 @@ final class MemoryViewModel {
     private(set) var isGone = false
     private(set) var birthDate: CivilDate?
     let player = SegmentPlayer()
-    private let deps: Dependencies
+    let deps: Dependencies
 
     init(memory: Memory, deps: Dependencies) {
         self.memory = memory
@@ -48,6 +50,7 @@ final class MemoryViewModel {
             birthDate = try store.profile.ownerBirthDate()
             people = try store.memories.people(of: memory.id)
             place = try store.memories.places(of: memory.id).first
+            entities = try store.entities.links(of: memory.id).map(\.entity)
             chapterTitle = try memory.chapterID.flatMap { try store.chapters.chapter(id: $0) }?.title
             let all: [(span: MemorySpan, session: Session)] = try store.memories.spans(of: memory.id).compactMap { span in
                 guard let segment = try store.sessions.fetchSegment(span.segmentID), let session = try store.sessions.fetch(segment.sessionID) else { return nil }

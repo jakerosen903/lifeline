@@ -100,10 +100,21 @@ struct MemoryScreen: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background(RoundedRectangle(cornerRadius: 18).fill(Theme.sand))
 
-                if !viewModel.people.isEmpty || viewModel.place != nil {
+                if !viewModel.entities.isEmpty {
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("In this memory").font(.caption.weight(.semibold)).foregroundStyle(Theme.olive)
-                        FlowChips(items: viewModel.people.map(\.displayName) + (viewModel.place.map { [$0.nameText] } ?? []))
+                        Text(viewModel.memory.isMoment ? "In this memory" : "About").font(.caption.weight(.semibold)).foregroundStyle(Theme.olive)
+                        FlowLayout(spacing: 6) {
+                            ForEach(viewModel.entities) { entity in
+                                NavigationLink {
+                                    EntityScreen(viewModel: EntityViewModel(entity: entity, deps: deps)) { viewModel.refresh(); onChange() }
+                                } label: {
+                                    Text(entity.title).font(.caption).padding(.horizontal, 10).padding(.vertical, 5)
+                                        .background(Capsule().fill(Theme.linen)).foregroundStyle(Theme.ink)
+                                }
+                                .buttonStyle(.plain)
+                                .accessibilityIdentifier("memory.entity")
+                            }
+                        }
                     }
                 }
 

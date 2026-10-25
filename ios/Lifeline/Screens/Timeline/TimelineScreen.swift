@@ -48,6 +48,9 @@ struct TimelineScreen: View {
             .linenBackground()
             .navigationTitle("Your story so far")
             .storyDialogs(rename: $renameTarget, title: $storyTitle, split: $splitTarget, move: $moveTarget, viewModel: viewModel)
+            .navigationDestination(item: Binding(get: { viewModel.openedEntity }, set: { viewModel.openedEntity = $0 })) { entity in
+                EntityScreen(viewModel: EntityViewModel(entity: entity, deps: viewModel.deps)) { viewModel.refresh() }
+            }
             .navigationDestination(item: $openMemory) { row in
                 MemoryScreen(viewModel: MemoryViewModel(memory: row.memory, deps: viewModel.deps), deps: viewModel.deps) { viewModel.refresh() }
             }
@@ -69,6 +72,9 @@ struct TimelineScreen: View {
                 }
                 NavigationLink { SessionsScreen(viewModel: viewModel.home) } label: { Image(systemName: "waveform") }
                     .accessibilityIdentifier("timeline.sessions")
+                NavigationLink { EntitiesScreen(viewModel: EntitiesViewModel(deps: viewModel.deps)) } label: { Image(systemName: "square.grid.2x2") }
+                    .accessibilityLabel("People, places, things and ideas")
+                    .accessibilityIdentifier("timeline.entities")
                 NavigationLink { PeopleScreen(viewModel: PeopleViewModel(deps: viewModel.deps)) } label: { Image(systemName: "person.2") }
                     .accessibilityIdentifier("home.people")
                 Button { showSettings = true } label: { Image(systemName: "gearshape") }
