@@ -181,7 +181,8 @@ public actor ExtractionQueue {
                                           profileFreeText: freeText, stage: stage,
                                           chapters: try store.chapters.chapters(), curiosity: try store.curiosity.open(),
                                           excludedMemoryIDs: try store.memories.excludedIDs(), related: related,
-                                          pending: pending, stories: stories)
+                                          pending: pending, stories: stories,
+                                          entities: try store.entities.allEntities().filter { $0.type != .person }.map { ($0, try store.entities.details(of: $0.id).first?.summaryQuote) })
     }
 
     private static func isNamed(_ entry: (Person, [Alias]), in text: String) -> Bool {
@@ -232,7 +233,15 @@ public actor ExtractionQueue {
                 memory.continuesCandidateID = nil
                 r2 = try Self.describe(.memory(memory))
             }
-            let c = row(r2.kind, r2.payload, r2.confidence, nil)
+            var c = row(r2.kind, r2.payload, r2.confidence, nil)
+            // A place, thing or idea a memory on the card carries, or one already on file, is a
+            // record: Keep links it. Only one nothing carries becomes a card of its own (M7).
+            if case .mention(let mention) = candidate, mention.kind != .person,
+               try Self.carried(mention, by: validated.accepted) || entityOnFile(mention) != nil {
+                c.status = .accepted
+                rows.append(c)
+                continue
+            }
             rows.append(c)
             if case .mention(let mention) = candidate, mention.kind == .person, try store.people.findPerson(matching: mention.text) != nil {
                 knownMentions.append((c, mention))
@@ -297,10 +306,25 @@ public actor ExtractionQueue {
     }
 
     /// Hint rows for a memory's collection and chapter phrases, waiting on the card `keyedTo`.
+    /// A memory in this output names the mention in its entity refs or is about it.
+    static func carried(_ mention: MentionOut, by accepted: [OutputValidator.ValidatedCandidate]) -> Bool {
+        accepted.contains { candidate in
+            guard case .memory(let memory) = candidate else { return false }
+            if let ref = mention.ref, memory.aboutRef == ref { return true }
+            return memory.allEntityRefs.contains { $0.kind == mention.kind && PeopleRepository.normalize($0.text) == PeopleRepository.normalize(mention.text) }
+        }
+    }
+
+    private func entityOnFile(_ mention: MentionOut) throws -> Entity? {
+        if let id = mention.likelyEntityID, let entity = try store.entities.entity(id: EntityID(rawValue: id)), entity.type == mention.kind.entityType { return entity }
+        return mention.kind == .idea ? nil : try store.entities.find(type: mention.kind.entityType, title: mention.text)
+    }
+
     private func hintRows(for memory: MemoryOut, keyedTo card: CandidateID,
                           row: (CandidateKind, String, Double, String?) -> Candidate) throws -> [Candidate] {
         var out: [Candidate] = []
-        for (kind, phrase) in [(HintKind.collection, memory.collectionHint), (.chapter, memory.chapterHint), (.story, memory.storyTitleHint)] {
+        for (kind, phrase) in [(HintKind.collection, memory.collectionHint), (.chapter, memory.chapterHint), (.story, memory.storyTitleHint),
+                               (.domain, memory.domainHint)] {
             guard let phrase = phrase?.trimmingCharacters(in: .whitespacesAndNewlines), !phrase.isEmpty else { continue }
             out.append(row(.hint, try CandidatePayload.encode(HintOut(kind: kind, phrase: phrase, memoryCandidateID: card.rawValue)), memory.confidence, nil))
         }
@@ -310,7 +334,7 @@ public actor ExtractionQueue {
     private static func describe(_ candidate: OutputValidator.ValidatedCandidate) throws -> (kind: CandidateKind, payload: String, confidence: Double) {
         switch candidate {
         case .memory(let m): return (.memory, try CandidatePayload.encode(m), m.confidence)
-        case .mention(let m): return (m.kind == .person ? .person : .place, try CandidatePayload.encode(m), m.confidence)
+        case .mention(let m): return (m.kind == .person ? .person : .entity, try CandidatePayload.encode(m), m.confidence)
         }
     }
 }

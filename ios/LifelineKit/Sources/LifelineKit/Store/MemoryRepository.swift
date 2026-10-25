@@ -17,7 +17,7 @@ public struct MemoryRepository: Sendable {
     /// continuations are marked with it, and the memory joins its story, in that same
     /// transaction (M5): a kill never leaves a kept memory with its continuation cards still
     /// pending or its "Part of" line lost.
-    public func insert(_ memory: Memory, spans: [MemorySpan], people: [MemoryPerson], places: [MemoryPlace], anchors: [Anchor],
+    public func insert(_ memory: Memory, spans: [MemorySpan], people: [MemoryPerson], places: [MemoryPlace], links: [MomentEntity] = [], anchors: [Anchor],
                        acceptingCandidate candidate: CandidateID? = nil, acceptingContinuations continuations: [CandidateID] = [],
                        joiningStory story: (id: StoryID, chapterID: ChapterID?)? = nil) throws {
         guard !spans.isEmpty else { throw Error.noSpan }
@@ -26,6 +26,7 @@ public struct MemoryRepository: Sendable {
             for span in spans { try span.insert(db) }
             for person in people { try person.link.insertIgnoringDuplicate(db) }
             for place in places { try place.link.insertIgnoringDuplicate(db) }
+            for link in links { try link.insertIgnoringDuplicate(db) }
             for anchor in anchors { try anchor.insert(db) }
             if let candidate {
                 try db.execute(sql: "update candidate set status = ? where id = ?", arguments: [CandidateStatus.accepted.rawValue, candidate.rawValue])
@@ -258,16 +259,16 @@ public struct MemoryRepository: Sendable {
     /// `promotingStandIn` carries the card's title, quote and candidate when the target is a
     /// resolver stand-in: its borrowed span goes, this telling becomes order 0 and the memory
     /// becomes real. A failure anywhere leaves the card pending and the target untouched.
-    public func mergeSpan(_ span: MemorySpan, continuations: [MemorySpan] = [], people: [MemoryPerson], places: [MemoryPlace], anchors: [Anchor],
+    public func mergeSpan(_ span: MemorySpan, continuations: [MemorySpan] = [], people: [MemoryPerson], places: [MemoryPlace], links: [MomentEntity] = [], anchors: [Anchor],
                           promotingStandIn: (title: String, summaryQuote: String)?, acceptingCandidate candidate: CandidateID,
                           acceptingContinuations continuationCards: [CandidateID] = []) throws {
         try db.writer.write { db in
-            try Self.mergeSpan(span, continuations: continuations, people: people, places: places, anchors: anchors,
+            try Self.mergeSpan(span, continuations: continuations, people: people, places: places, links: links, anchors: anchors,
                                promotingStandIn: promotingStandIn, acceptingCandidate: candidate, acceptingContinuations: continuationCards, in: db)
         }
     }
 
-    static func mergeSpan(_ span: MemorySpan, continuations: [MemorySpan], people: [MemoryPerson], places: [MemoryPlace], anchors: [Anchor],
+    static func mergeSpan(_ span: MemorySpan, continuations: [MemorySpan], people: [MemoryPerson], places: [MemoryPlace], links: [MomentEntity] = [], anchors: [Anchor],
                           promotingStandIn: (title: String, summaryQuote: String)?, acceptingCandidate candidate: CandidateID,
                           acceptingContinuations continuationCards: [CandidateID] = [], in db: Database) throws {
             var span = span
@@ -287,6 +288,7 @@ public struct MemoryRepository: Sendable {
             }
             for person in people { try person.link.insertIgnoringDuplicate(db) }
             for place in places { try place.link.insertIgnoringDuplicate(db) }
+            for link in links { try link.insertIgnoringDuplicate(db) }
             for anchor in anchors { try anchor.insert(db) }
             try db.execute(sql: "update candidate set status = ? where id = ?", arguments: [CandidateStatus.accepted.rawValue, candidate.rawValue])
             try Self.accept(continuationCards, in: db)
@@ -295,7 +297,7 @@ public struct MemoryRepository: Sendable {
     /// A group (M5): every source folds into the target, oldest first as given, then the card
     /// joins as the last telling. One transaction: a failure anywhere leaves every memory as it was.
     public func mergeGroup(sources: [Memory], into target: Memory, span: MemorySpan, continuations: [MemorySpan], people: [MemoryPerson],
-                           places: [MemoryPlace], anchors: [Anchor], promotingStandIn: (title: String, summaryQuote: String)?,
+                           places: [MemoryPlace], links: [MomentEntity] = [], anchors: [Anchor], promotingStandIn: (title: String, summaryQuote: String)?,
                            acceptingCandidate candidate: CandidateID, acceptingContinuations continuationCards: [CandidateID] = []) throws {
         try db.writer.write { db in
             for source in sources {
@@ -304,7 +306,7 @@ public struct MemoryRepository: Sendable {
             }
             var last = span
             last.order = (try Int.fetchOne(db, sql: "select max(\"order\") from memory_span where memory_id = ?", arguments: [target.id.rawValue]) ?? -1) + 1
-            try Self.mergeSpan(last, continuations: continuations, people: people, places: places, anchors: anchors,
+            try Self.mergeSpan(last, continuations: continuations, people: people, places: places, links: links, anchors: anchors,
                                promotingStandIn: promotingStandIn, acceptingCandidate: candidate, acceptingContinuations: continuationCards, in: db)
         }
     }

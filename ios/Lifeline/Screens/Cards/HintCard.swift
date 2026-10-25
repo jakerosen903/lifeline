@@ -9,7 +9,7 @@ struct HintCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text(hint.kind == .story ? "Sounds like a story" : "Sounds like it belongs here")
+            Text(hint.kind == .story ? "Sounds like a story" : hint.kind == .domain ? "Sounds like it belongs to:" : "Sounds like it belongs here")
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(Theme.olive)
             Text(hint.kind == .collection ? "A collection: “\(hint.phrase)”" : hint.kind == .chapter ? "A chapter: “\(hint.phrase)”" : "“\(hint.phrase)”")

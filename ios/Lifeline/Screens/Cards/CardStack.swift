@@ -21,6 +21,8 @@ struct CardStack: View {
     var pairs: [PairRow] = []
     var onPair: (PairRow, Bool) -> Void = { _, _ in }
     var onUndoPair: () -> Void = {}
+    /// Keep on an entity card, as what it heard (nil) or the type chosen under Not quite (M7).
+    var onKeepEntity: (Card, EntityType?) -> Void = { _, _ in }
 
     @State private var picking: Card?
 
@@ -72,6 +74,8 @@ struct CardStack: View {
                 .onAppear { handler.shown(card) }
         case .hint(_, let hint):
             HintCard(hint: hint, onAccept: { onAccept(card) }, onDismiss: { onDismiss(card) })
+        case .entity(_, let mention):
+            EntityCard(mention: mention, onKeep: { type in onKeepEntity(card, type) }, onNotAny: { onDismiss(card) })
         }
     }
 

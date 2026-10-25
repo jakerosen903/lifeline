@@ -49,6 +49,15 @@ public struct ScriptedExtractionService: ExtractionService {
                                       peopleRefs: [], placeText: nil, anchors: [], continuesCandidateID: maya.candidateID,
                                       collectionHint: nil, chapterHint: nil, confidence: 0.8))
         }
+        // Fact mode (M7): the blue door is a detail of the thing "the house", at home.
+        if facts, text.localizedCaseInsensitiveContains("blue door"), let i = memories.firstIndex(where: { $0.ref == "m1" }) {
+            let known = request.packet.entities.first { $0.type == EntityType.thing.rawValue && PeopleRepository.normalize($0.title) == "the house" }
+            memories[i].aboutRef = known?.id ?? "t1"
+            memories[i].domainHint = "home"
+            if known == nil {
+                mentions.append(MentionOut(text: "the house", kind: .thing, likelyAliasOfPersonID: nil, confidence: 0.8, ref: "t1", domainHint: "home"))
+            }
+        }
         if words.contains(where: { $0.caseInsensitiveCompare("Maya") == .orderedSame }) {
             mentions.append(MentionOut(text: "Maya", kind: .person, likelyAliasOfPersonID: nil, confidence: 0.8, relationText: "my sister"))
         }

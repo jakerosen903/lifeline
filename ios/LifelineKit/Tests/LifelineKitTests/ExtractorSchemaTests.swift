@@ -70,7 +70,7 @@ import Testing
 
 @Test func configDefaultsMatchTheSpec() {
     let c = ExtractorConfig.default
-    #expect(c.model == "claude-opus-5-5" && c.effort == "low" && c.maxTokens == 4096 && c.version == "v5")
+    #expect(c.model == "claude-opus-5-5" && c.effort == "low" && c.maxTokens == 4096 && c.version == "v6")
     #expect(c.betas.contains("server-side-fallback-2026-07-01"))
 }
 

@@ -324,6 +324,11 @@ final class TimelineViewModel {
     func accept(_ card: Card) { if cards.accept(card) { refresh() } }
     func change(_ card: Card) { if let memory = cards.keep(card) { refresh(); changing = memory } }
     func dismiss(_ card: Card) { if cards.dismiss(card) { refresh() } }
+    /// Keep on an entity card (M7): the page opens with what was just kept.
+    var openedEntity: Entity?
+    func keepEntity(_ card: Card, as type: EntityType?) {
+        if let entity = cards.acceptEntity(card, as: type) { refresh(); openedEntity = entity }
+    }
     func undo() { if cards.undo() != nil { refresh() } }
     func undoMerge() { if cards.undoMerge() != nil { refresh() } }
     func sameStory(_ card: Card, into targets: [MemoryID]) { if cards.sameStory(card, into: targets) { refresh() } }

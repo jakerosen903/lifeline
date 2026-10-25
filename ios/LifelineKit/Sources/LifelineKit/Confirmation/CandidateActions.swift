@@ -33,6 +33,8 @@ public struct CandidateActions: Sendable {
         case collection(Collection)
         case chapter(Chapter)
         case story(Story)
+        /// A free-text domain on the memory (M7).
+        case domain(String)
     }
 
     public struct AcceptedMemory: Sendable, Equatable {
@@ -122,11 +124,11 @@ public struct CandidateActions: Sendable {
 
         // The card's edges and every continuation's, as one telling (M5).
         let continuations = try store.candidates.continuations(of: candidate.id)
-        var edges = try edges(of: out, for: memory.id)
-        for row in continuations.compactMap(CandidatePayload.memory) { edges.merge(try self.edges(of: row, for: memory.id)) }
+        var edges = try edges(of: out, for: memory.id, segment: candidate.segmentID)
+        for row in continuations { if let o = CandidatePayload.memory(row) { edges.merge(try self.edges(of: o, for: memory.id, segment: row.segmentID)) } }
         // The memory, its continuation cards' status and its story line land together (M5).
         let storyRef = joinStory ? out.storyRef.flatMap { $0.isEmpty ? nil : StoryID(rawValue: $0) } : nil
-        try store.memories.insert(memory, spans: spans, people: edges.people, places: edges.places, anchors: edges.anchors,
+        try store.memories.insert(memory, spans: spans, people: edges.people, places: edges.places, links: edges.links, anchors: edges.anchors,
                                   acceptingCandidate: candidate.id, acceptingContinuations: continuations.map(\.id),
                                   joiningStory: storyRef.map { (id: $0, chapterID: memory.chapterID) })
         let newMentions = try finishEdges(edges, segment: candidate.segmentID)
@@ -144,6 +146,8 @@ public struct CandidateActions: Sendable {
         var roleAliases: [(PersonID, String)] = []
         var places: [MemoryPlace] = []
         var anchors: [Anchor] = []
+        /// Things and ideas named (mention) and what a fact, feeling or goal is about (detail) (M7).
+        var links: [MomentEntity] = []
 
         /// The union with another segment's edges, deduplicated as one segment's are.
         mutating func merge(_ other: Edges) {
@@ -152,6 +156,7 @@ public struct CandidateActions: Sendable {
             roleAliases += other.roleAliases.filter { pair in !roleAliases.contains { $0.0 == pair.0 && $0.1 == pair.1 } }
             for place in other.places where !places.contains(where: { $0.placeID == place.placeID }) { places.append(place) }
             anchors += other.anchors.filter { a in !anchors.contains { $0.phrase == a.phrase && $0.relation == a.relation } }
+            for link in other.links where !links.contains(where: { $0.entityID == link.entityID && $0.relation == link.relation }) { links.append(link) }
         }
     }
 
@@ -169,7 +174,8 @@ public struct CandidateActions: Sendable {
         return spans
     }
 
-    func edges(of out: MemoryOut, for memory: MemoryID) throws -> Edges {
+    func edges(of out: MemoryOut, for memory: MemoryID, segment: SegmentID? = nil) throws -> Edges {
+        let currentSegment = segment
         var e = Edges()
         for ref in out.peopleRefs {
             if let person = try store.people.findPerson(matching: ref) {
@@ -183,14 +189,62 @@ public struct CandidateActions: Sendable {
                 e.unknown.append(ref)
             }
         }
-        if let text = out.placeText?.trimmingCharacters(in: .whitespacesAndNewlines), !text.isEmpty {
-            e.places.append(MemoryPlace(memoryID: memory, placeID: try store.people.insertPlace(nameText: text).id))
+        // Places, things and ideas the card names (its chips) link on Keep without a card of their own (M7).
+        for ref in out.allEntityRefs where ref.kind != .person {
+            let entity = try entity(for: ref)
+            if ref.kind == .place {
+                if !e.places.contains(where: { $0.placeID.rawValue == entity.id.rawValue }) {
+                    e.places.append(MemoryPlace(memoryID: memory, placeID: PlaceID(rawValue: entity.id.rawValue)))
+                }
+            } else if !e.links.contains(where: { $0.entityID == entity.id && $0.relation == .mention }) {
+                e.links.append(MomentEntity(memoryID: memory, entityID: entity.id, relation: .mention, roleText: ref.text))
+            }
+        }
+        // A fact, feeling or goal is a detail of what it is about; a moment never is (M7).
+        if let kind = out.kind, !kind.isMoment, let about = try aboutEntity(out.aboutRef, segment: currentSegment) {
+            e.links.append(MomentEntity(memoryID: memory, entityID: about, relation: .detail))
         }
         e.anchors = out.anchors.map {
             Anchor(id: .init(), memoryID: memory, phrase: $0.phrase, relation: $0.relation, targetKind: .none, targetID: nil,
                    targetText: $0.targetText, value: $0.value, resolved: false)
         }
         return e
+    }
+
+    /// The entity a ref names: the one the packet pointed at when it is that type, else one of the
+    /// same type and title, else a new one.
+    private func entity(for ref: EntityRefOut) throws -> Entity {
+        if let id = ref.likelyEntityID, let known = try store.entities.entity(id: EntityID(rawValue: id)), known.type == ref.kind.entityType { return known }
+        return try store.entities.insert(type: ref.kind.entityType, title: ref.text)
+    }
+
+    /// `about_ref` resolved: `self` is the owner; an id on file is that entity; a mention's `ref`
+    /// in the same segment becomes its entity. Nil when it names nothing the app can find.
+    private func aboutEntity(_ ref: String?, segment currentSegment: SegmentID?) throws -> EntityID? {
+        guard let ref = ref?.trimmingCharacters(in: .whitespacesAndNewlines), !ref.isEmpty else { return nil }
+        if ref == "self" { return try store.profile.owner()?.entityID }
+        if let known = try store.entities.entity(id: EntityID(rawValue: ref)) { return known.id }
+        guard let segment = currentSegment,
+              let row = try store.candidates.candidates(for: segment).first(where: { ($0.kind == .entity || $0.kind == .place) && CandidatePayload.mention($0)?.ref == ref }),
+              let mention = CandidatePayload.mention(row), mention.kind != .person else { return nil }
+        return try createEntity(from: mention, candidate: row).id
+    }
+
+    /// An entity from a mention: an idea's title is the person's words or the dated default.
+    func createEntity(from mention: MentionOut, candidate: Candidate, as type: EntityType? = nil) throws -> Entity {
+        let type = type ?? mention.kind.entityType
+        if let id = mention.likelyEntityID, let known = try store.entities.entity(id: EntityID(rawValue: id)), known.type == type { return known }
+        let title: String
+        if type == .idea {
+            let text = try store.sessions.fetchSegment(candidate.segmentID)?.text ?? ""
+            let told = try store.sessions.fetchSegment(candidate.segmentID).flatMap { try store.sessions.fetch($0.sessionID) }?.startedAt ?? candidate.createdAt
+            title = IdeaTitle.title(proposed: mention.title, segmentText: text, toldOn: told)
+        } else {
+            title = mention.text
+        }
+        let entity = try store.entities.insert(type: type, title: title, candidate: candidate.id)
+        if let hint = mention.domainHint { try store.tags.tag(.entity, entity.id.rawValue, hint) }
+        return entity
     }
 
     /// Aliases and the "Who's this?" mentions that follow the edges. Returns the new mentions.
@@ -339,6 +393,9 @@ public struct CandidateActions: Sendable {
             }
         case .story:
             result = .story(try acceptStoryHint(out.phrase, for: memory.id))
+        case .domain:
+            try store.tags.tag(.memory, memory.id.rawValue, out.phrase)
+            result = .domain(out.phrase)
         }
         try store.candidates.setStatus(candidate.id, .accepted)
         return result

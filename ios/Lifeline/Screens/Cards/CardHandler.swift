@@ -88,16 +88,27 @@ final class CardHandler {
             return keep(card) != nil
         case .hint(let candidate, _):
             return attempt("Could not file that") { _ = try deps.actions.acceptHint(candidate) }
+        case .entity:
+            return acceptEntity(card, as: nil) != nil
         case .whoIsThis:
             return false
         }
+    }
+
+    /// Keep on an entity card, as what it heard or as the type the person chose (M7).
+    /// Returns the entity so the caller can open its page.
+    func acceptEntity(_ card: Card, as type: EntityType?) -> Entity? {
+        guard case .entity(let candidate, _) = card else { return nil }
+        var kept: Entity?
+        _ = attempt("Could not keep that") { kept = try deps.actions.acceptEntity(candidate, as: type) }
+        return kept
     }
 
     /// Dismiss never touches the recording; for a few seconds it can be undone.
     func dismiss(_ card: Card) -> Bool {
         let done = attempt("Could not dismiss that") {
             switch card {
-            case .memory(let candidate, _), .hint(let candidate, _):
+            case .memory(let candidate, _), .hint(let candidate, _), .entity(let candidate, _):
                 try deps.actions.dismiss(candidate)
             case .whoIsThis:
                 try deps.actions.resolveMention(try mention(for: card).id, to: .notAPerson)
@@ -123,7 +134,7 @@ final class CardHandler {
         undoCard = nil
         let done = attempt("Could not bring that back") {
             switch card {
-            case .memory(let candidate, _), .hint(let candidate, _):
+            case .memory(let candidate, _), .hint(let candidate, _), .entity(let candidate, _):
                 try deps.actions.restore(candidate)
             case .whoIsThis:
                 try deps.actions.restoreMention(try mention(for: card).id)

@@ -39,6 +39,13 @@ public enum ExtractorSchema {
             "collection_hint": nullableString,
             "chapter_hint": nullableString,
             "confidence": number,
+            "entity_refs": array(object([
+                "text": string,
+                "kind": ["type": "string", "enum": [MentionKind.place, .thing, .idea].map(\.rawValue)],
+                "likely_entity_id": nullableString,
+            ])),
+            "about_ref": nullableString,
+            "domain_hint": nullableString,
         ])
     }
 
@@ -49,6 +56,10 @@ public enum ExtractorSchema {
             "likely_alias_of_person_id": nullableString,
             "confidence": number,
             "relation_text": nullableString,
+            "ref": nullableString,
+            "likely_entity_id": nullableString,
+            "title": nullableString,
+            "domain_hint": nullableString,
         ])
     }
 
