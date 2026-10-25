@@ -107,6 +107,18 @@ final class ChangeViewModel {
         }
     }
 
+    /// "What is this?" (M7): the four choices, in the sheet's order. `other` reads as a moment.
+    static let kindChoices: [(kind: MemoryKind, label: String)] = [
+        (.event, "A moment"), (.fact, "Something about your life"), (.feeling, "A feeling"), (.goal, "Something you wanted"),
+    ]
+
+    var shownKind: MemoryKind { memory.kind == .other ? .event : memory.kind }
+
+    func setKind(_ kind: MemoryKind) {
+        guard kind != shownKind else { return }
+        attempt("Could not change that") { try deps.actions.setKind(memory.id, kind) }
+    }
+
     /// "Tell me when" from the sheet.
     func setStated(_ range: TimeRange) {
         attempt("Could not save that") { try deps.actions.setStatedRange(memory.id, range) }

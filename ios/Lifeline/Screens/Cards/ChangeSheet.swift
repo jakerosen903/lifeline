@@ -66,6 +66,22 @@ struct ChangeSheet: View {
                     }
                 }
 
+                Section("What is this?") {
+                    ForEach(ChangeViewModel.kindChoices, id: \.kind) { choice in
+                        Button { viewModel.setKind(choice.kind) } label: {
+                            HStack {
+                                Text(choice.label).foregroundStyle(Theme.ink)
+                                Spacer()
+                                if viewModel.shownKind == choice.kind { Image(systemName: "checkmark").foregroundStyle(Theme.olive) }
+                            }
+                        }
+                        .buttonStyle(.borderless)
+                        .accessibilityIdentifier("change.kind.\(choice.kind.rawValue)")
+                        .accessibilityAddTraits(viewModel.shownKind == choice.kind ? .isSelected : [])
+                    }
+                }
+
+                if viewModel.memory.isMoment {
                 Section("When it was") {
                     Button {
                         showWhen.toggle()
@@ -89,6 +105,7 @@ struct ChangeSheet: View {
                         .buttonStyle(.borderless)
                         .tint(Theme.olive)
                         .accessibilityIdentifier("change.tellMeWhen")
+                }
                 }
 
                 Section {
