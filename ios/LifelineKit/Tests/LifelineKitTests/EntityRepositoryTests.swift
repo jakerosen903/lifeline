@@ -83,7 +83,7 @@ func populatedV9aQueue() throws -> DatabaseQueue {
 
     let derived = try store.entities.derivedSpan(of: house.id)
     #expect(derived.earliest?.year == 1993 && derived.latest?.year == 1998, "a fact's hidden range counts toward the span")
-    #expect(derived.origin == .derived || derived.origin == .inferred)
+    #expect(derived.origin == .inferred, "guesses stay guesses")
 
     let stated = TimeRange(earliest: d("1990-01-01"), latest: d("2001-12-31"), likelyStart: nil, likelyEnd: nil, granularity: .year, origin: .stated, evidenceText: "1990–2001")
     try store.entities.setStatedSpan(house.id, stated)

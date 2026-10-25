@@ -3,7 +3,12 @@ import SwiftUI
 
 /// People, Places, Things, Ideas (M7): a segmented control, not four tabs.
 struct EntitiesScreen: View {
-    @Bindable var viewModel: EntitiesViewModel
+    /// Created once per presentation: a parent re-render must not reset the segment or the filter.
+    @State private var viewModel: EntitiesViewModel
+
+    init(deps: Dependencies) {
+        _viewModel = State(initialValue: EntitiesViewModel(deps: deps))
+    }
 
     var body: some View {
         List {

@@ -72,7 +72,7 @@ struct TimelineScreen: View {
                 }
                 NavigationLink { SessionsScreen(viewModel: viewModel.home) } label: { Image(systemName: "waveform") }
                     .accessibilityIdentifier("timeline.sessions")
-                NavigationLink { EntitiesScreen(viewModel: EntitiesViewModel(deps: viewModel.deps)) } label: { Image(systemName: "square.grid.2x2") }
+                NavigationLink { EntitiesScreen(deps: viewModel.deps) } label: { Image(systemName: "square.grid.2x2") }
                     .accessibilityLabel("People, places, things and ideas")
                     .accessibilityIdentifier("timeline.entities")
                 NavigationLink { PeopleScreen(viewModel: PeopleViewModel(deps: viewModel.deps)) } label: { Image(systemName: "person.2") }

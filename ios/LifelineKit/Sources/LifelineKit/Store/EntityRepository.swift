@@ -135,7 +135,11 @@ public struct EntityRepository: Sendable {
             try Memory.fetchAll(db, sql: "select distinct memory.* from memory join moment_entity me on me.memory_id = memory.id where me.entity_id = ?",
                                 arguments: [entity.rawValue])
         }
-        return ChapterRepository.span(over: linked.map(\.range))
+        var span = ChapterRepository.span(over: linked.map(\.range))
+        // Its uncertainty is the weakest of its members': said only when every member was said.
+        let placed = linked.map(\.range).filter(\.isPlaced)
+        if span.isPlaced { span.origin = placed.allSatisfy { $0.origin == .stated || $0.origin == .confirmed } ? .stated : .inferred }
+        return span
     }
 
     /// What the page shows: the span the person stated, else the derived one.

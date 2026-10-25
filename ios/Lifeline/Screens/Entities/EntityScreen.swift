@@ -5,8 +5,14 @@ import SwiftUI
 /// telling, then the moments it appears in, then the people, places and things beside it.
 /// Nothing here asks for a date; "Add dates" waits for the person.
 struct EntityScreen: View {
-    let viewModel: EntityViewModel
+    /// Created once per presentation, so playback and sheets survive a parent re-render.
+    @State private var viewModel: EntityViewModel
     let onChange: () -> Void
+
+    init(viewModel: EntityViewModel, onChange: @escaping () -> Void) {
+        _viewModel = State(initialValue: viewModel)
+        self.onChange = onChange
+    }
     @State private var renaming = false
     @State private var draftTitle = ""
     @State private var addingDates = false
@@ -39,7 +45,6 @@ struct EntityScreen: View {
                     ForEach(viewModel.ideaLines) { memory in line(memory) }
                     if viewModel.ideaLines.isEmpty { Text("Nothing told about it yet.").foregroundStyle(Theme.stone) }
                 }
-                .accessibilityIdentifier("entity.ideaLines")
             } else {
                 // Details first, moments below (owner's decision 6).
                 Section("What you said about it") {

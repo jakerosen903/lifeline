@@ -75,6 +75,21 @@ public actor ScriptedVoiceSession: VoiceSession {
                           words: words("we moved away the year before she was born", from: 10_500, to: 13_000)),
     ]
 
+    /// Entities (M7): a fact about a thing, a dated moment with it, an idea told twice years
+    /// apart, and a thing nothing else carries.
+    public static let entityScript: [SegmentTranscript] = [
+        SegmentTranscript(range: MsRange(start: 0, end: 2_500), text: "the house had a blue door",
+                          words: words("the house had a blue door", from: 0, to: 2_500)),
+        SegmentTranscript(range: MsRange(start: 3_500, end: 6_000), text: "we painted the house in 1995",
+                          words: words("we painted the house in 1995", from: 3_500, to: 6_000)),
+        SegmentTranscript(range: MsRange(start: 7_000, end: 10_000), text: "in 1990 I thought hard work was everything",
+                          words: words("in 1990 I thought hard work was everything", from: 7_000, to: 10_000)),
+        SegmentTranscript(range: MsRange(start: 11_000, end: 14_000), text: "in 2020 I saw hard work differently",
+                          words: words("in 2020 I saw hard work differently", from: 11_000, to: 14_000)),
+        SegmentTranscript(range: MsRange(start: 15_000, end: 17_000), text: "the old shed out back",
+                          words: words("the old shed out back", from: 15_000, to: 17_000)),
+    ]
+
     private static func words(_ text: String, from start: Int, to end: Int) -> [TranscribedWord] {
         let tokens = text.split(separator: " ").map(String.init)
         let step = (end - start) / tokens.count
