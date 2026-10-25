@@ -9,11 +9,13 @@ public struct ScriptedExtractionService: ExtractionService {
     public var delayMs: Int
     /// UI tests of the heavy path: the Maya segment is flagged as narration of past harm.
     public var heavy: Bool
+    /// UI tests of kinds (M7): the blue-door segment is a fact, "The house had a blue door".
+    public var facts: Bool
 
     /// The one story the script tells: both scenes carry this ref, the Maya scene carries the title hint.
     public static let storyRef = "story-scripted"
 
-    public init(delayMs: Int = 300, heavy: Bool = false) { self.delayMs = delayMs; self.heavy = heavy }
+    public init(delayMs: Int = 300, heavy: Bool = false, facts: Bool = false) { self.delayMs = delayMs; self.heavy = heavy; self.facts = facts }
 
     public func extract(_ request: ExtractionRequest) async throws(ExtractionError) -> ExtractionResponse {
         try? await Task.sleep(for: .milliseconds(delayMs))
@@ -24,7 +26,7 @@ public struct ScriptedExtractionService: ExtractionService {
         if text.localizedCaseInsensitiveContains("blue door") {
             // A second telling names the earlier memory when the packet carries one (M4.1 "Same as X?").
             let earlier = request.packet.memories.filter { $0.title == "The blue door" }.map(\.id)
-            memories.append(MemoryOut(ref: "m1", kind: .event, title: "The blue door", quote: text,
+            memories.append(MemoryOut(ref: "m1", kind: facts ? .fact : .event, title: facts ? "The house had a blue door" : "The blue door", quote: text,
                                       segmentSpan: WordSpan(startWord: 0, endWord: max(0, words.count - 1)),
                                       peopleRefs: [], placeText: nil,
                                       anchors: [AnchorOut(phrase: "when I was six", relation: .age, targetText: nil, value: nil),

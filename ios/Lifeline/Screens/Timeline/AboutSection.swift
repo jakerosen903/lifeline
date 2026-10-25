@@ -18,10 +18,10 @@ struct AboutSection: View {
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.vertical, 6)
+                        .accessibilityElement(children: .ignore)
+                        .accessibilityLabel(row.memory.title)
                     }
                     .buttonStyle(.plain)
-                    .accessibilityElement(children: .ignore)
-                    .accessibilityLabel(row.memory.title)
                     .accessibilityIdentifier("about.row")
                     Menu {
                         Button("Hide from timeline", systemImage: "eye.slash") { actions.hide(row) }

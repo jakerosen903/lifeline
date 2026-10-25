@@ -69,3 +69,14 @@ import Testing
     let out = try await service.extract(ExtractionRequest(segmentID: .init(), segmentText: text, words: text.split(separator: " ").map(String.init), packet: packet)).output
     #expect(out.memories.first?.sameAsMemoryIDs == [one.id.rawValue, two.id.rawValue])
 }
+
+@Test func factModeMarksTheBlueDoorAFact() async throws {
+    let segment = Segment(id: .init(), sessionID: .init(), index: 0, startMs: 0, endMs: 1, text: "", status: .pending)
+    let packet = ContextPacketBuilder.build(segment: segment, previous: [], people: [], memories: [], profileFreeText: nil, stage: "open")
+    let text = "the house had a blue door when I was six before Maya climbed it"
+    let request = ExtractionRequest(segmentID: .init(), segmentText: text, words: text.split(separator: " ").map(String.init), packet: packet)
+    let fact = try await ScriptedExtractionService(delayMs: 0, facts: true).extract(request).output.memories.first
+    #expect(fact?.kind == .fact && fact?.title == "The house had a blue door")
+    let event = try await ScriptedExtractionService(delayMs: 0).extract(request).output.memories.first
+    #expect(event?.kind == .event && event?.title == "The blue door")
+}
