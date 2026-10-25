@@ -201,8 +201,9 @@ extension CandidateActions {
     /// Equal in everything the person can change; `takenAt` and the resolver's own anchor
     /// bookkeeping (`resolved`) are not changes the person made.
     static func same(_ a: MemoryRepository.Snapshot, _ b: MemoryRepository.Snapshot) -> Bool {
-        a.memory == b.memory && a.spans == b.spans && Set(a.people.map(\.personID)) == Set(b.people.map(\.personID))
-            && Set(a.places.map(\.placeID)) == Set(b.places.map(\.placeID)) && Set(a.collectionIDs) == Set(b.collectionIDs)
+        a.memory == b.memory && a.spans == b.spans
+            && Set(a.links.map { "\($0.entityID.rawValue)|\($0.relation.rawValue)" }) == Set(b.links.map { "\($0.entityID.rawValue)|\($0.relation.rawValue)" })
+            && Set(a.collectionIDs) == Set(b.collectionIDs)
             && a.anchors.map(\.id) == b.anchors.map(\.id)
     }
 }

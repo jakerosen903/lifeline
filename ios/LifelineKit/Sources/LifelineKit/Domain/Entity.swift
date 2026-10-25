@@ -56,7 +56,7 @@ public enum EntityRelation: String, Codable, Sendable {
 }
 
 /// The one link table (M7): every person, place, thing and idea a memory names or describes.
-public struct MomentEntity: Sendable, Equatable {
+public struct MomentEntity: Sendable, Equatable, Hashable {
     public var memoryID: MemoryID
     public var entityID: EntityID
     public var relation: EntityRelation

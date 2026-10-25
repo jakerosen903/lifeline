@@ -24,8 +24,8 @@ public struct MemoryRepository: Sendable {
         try db.writer.write { db in
             try memory.insert(db)
             for span in spans { try span.insert(db) }
-            for person in people { try person.insert(db) }
-            for place in places { try place.insert(db) }
+            for person in people { try person.link.insertIgnoringDuplicate(db) }
+            for place in places { try place.link.insertIgnoringDuplicate(db) }
             for anchor in anchors { try anchor.insert(db) }
             if let candidate {
                 try db.execute(sql: "update candidate set status = ? where id = ?", arguments: [CandidateStatus.accepted.rawValue, candidate.rawValue])
@@ -88,11 +88,10 @@ public struct MemoryRepository: Sendable {
 
     public func people(of memory: MemoryID) throws -> [Person] {
         try db.writer.read { db in
-            try Person.fetchAll(db, sql: """
-                select person.* from person
-                join memory_person on memory_person.person_id = person.id
-                where memory_person.memory_id = ?
-                order by person.display_name
+            try Person.fetchAll(db, sql: Person.selectSQL + """
+                join moment_entity me on me.entity_id = person.entity_id
+                where me.memory_id = ? and me.relation = 'mention'
+                order by entity.title
                 """, arguments: [memory.rawValue])
         }
     }
@@ -173,8 +172,8 @@ public struct MemoryRepository: Sendable {
     public struct Snapshot: Sendable, Equatable {
         public var memory: Memory
         public var spans: [MemorySpan]
-        public var people: [MemoryPerson]
-        public var places: [MemoryPlace]
+        /// Every person, place, thing and idea it names or describes (M7: one link table).
+        public var links: [MomentEntity]
         public var anchors: [Anchor]
         public var collectionIDs: [CollectionID]
         /// Pair decisions and story membership go with a memory on cascade; undo brings them back (M5).
@@ -190,8 +189,7 @@ public struct MemoryRepository: Sendable {
             return Snapshot(
                 memory: memory,
                 spans: try MemorySpan.filter(Column("memory_id") == id.rawValue).order(Column("order")).fetchAll(db),
-                people: try MemoryPerson.filter(Column("memory_id") == id.rawValue).fetchAll(db),
-                places: try MemoryPlace.filter(Column("memory_id") == id.rawValue).fetchAll(db),
+                links: try MomentEntity.filter(Column("memory_id") == id.rawValue).fetchAll(db),
                 anchors: try Anchor.filter(Column("memory_id") == id.rawValue).fetchAll(db),
                 collectionIDs: try String.fetchAll(db, sql: "select collection_id from collection_memory where memory_id = ?", arguments: [id.rawValue]).map(CollectionID.init(rawValue:)),
                 pairs: try DuplicatePair.filter(Column("a_memory_id") == id.rawValue || Column("b_memory_id") == id.rawValue).fetchAll(db),
@@ -230,12 +228,12 @@ public struct MemoryRepository: Sendable {
     private static func restore(_ snapshot: Snapshot, in db: Database) throws {
             let id = snapshot.memory.id.rawValue
             try snapshot.memory.save(db)
-            for table in ["memory_span", "memory_person", "memory_place", "anchor", "collection_memory"] {
+            for table in ["memory_span", "moment_entity", "anchor", "collection_memory"] {
                 try db.execute(sql: "delete from \(table) where memory_id = ?", arguments: [id])
             }
             for span in snapshot.spans { try span.insert(db) }
-            for person in snapshot.people { try person.insert(db) }
-            for place in snapshot.places { try place.insert(db) }
+            // An entity deleted since the snapshot stays deleted; its link does not come back.
+            for link in snapshot.links where try Entity.exists(db, key: link.entityID.rawValue) { try link.insertIgnoringDuplicate(db) }
             for anchor in snapshot.anchors { try anchor.insert(db) }
             for collection in snapshot.collectionIDs {
                 try db.execute(sql: "insert or ignore into collection_memory (collection_id, memory_id) values (?, ?)", arguments: [collection.rawValue, id])
@@ -287,13 +285,8 @@ public struct MemoryRepository: Sendable {
                 extra.continuesOrder = span.order
                 try extra.insert(db)
             }
-            for person in people {
-                try db.execute(sql: "insert or ignore into memory_person (memory_id, person_id, role_text) values (?, ?, ?)",
-                               arguments: [person.memoryID.rawValue, person.personID.rawValue, person.roleText])
-            }
-            for place in places {
-                try db.execute(sql: "insert or ignore into memory_place (memory_id, place_id) values (?, ?)", arguments: [place.memoryID.rawValue, place.placeID.rawValue])
-            }
+            for person in people { try person.link.insertIgnoringDuplicate(db) }
+            for place in places { try place.link.insertIgnoringDuplicate(db) }
             for anchor in anchors { try anchor.insert(db) }
             try db.execute(sql: "update candidate set status = ? where id = ?", arguments: [CandidateStatus.accepted.rawValue, candidate.rawValue])
             try Self.accept(continuationCards, in: db)
@@ -351,17 +344,13 @@ public struct MemoryRepository: Sendable {
                 guard try Anchor.exists(db, key: anchor.rawValue) else { throw Error.noSpan }
                 try db.execute(sql: "update anchor set memory_id = ? where id = ?", arguments: [new.id.rawValue, anchor.rawValue])
             }
-            for person in moving.people {
-                // The link moves with its role text ("my sister"); a role the person typed is theirs to keep.
+            // A link moves with its role text ("my sister"); a role the person typed is theirs to keep.
+            for entity in moving.people.map(\.rawValue) + moving.places.map(\.rawValue) {
                 try db.execute(sql: """
-                    insert or ignore into memory_person (memory_id, person_id, role_text)
-                    select ?, person_id, role_text from memory_person where memory_id = ? and person_id = ?
-                    """, arguments: [new.id.rawValue, memory.rawValue, person.rawValue])
-                try db.execute(sql: "delete from memory_person where memory_id = ? and person_id = ?", arguments: [memory.rawValue, person.rawValue])
-            }
-            for place in moving.places {
-                try db.execute(sql: "delete from memory_place where memory_id = ? and place_id = ?", arguments: [memory.rawValue, place.rawValue])
-                try db.execute(sql: "insert or ignore into memory_place (memory_id, place_id) values (?, ?)", arguments: [new.id.rawValue, place.rawValue])
+                    insert or ignore into moment_entity (memory_id, entity_id, relation, role_text)
+                    select ?, entity_id, relation, role_text from moment_entity where memory_id = ? and entity_id = ?
+                    """, arguments: [new.id.rawValue, memory.rawValue, entity])
+                try db.execute(sql: "delete from moment_entity where memory_id = ? and entity_id = ?", arguments: [memory.rawValue, entity])
             }
             if clearRange {
                 try db.execute(sql: "update memory set earliest = null, latest = null, likely_start = null, likely_end = null, granularity = null, origin = null, evidence_text = null where id = ?",
@@ -389,7 +378,9 @@ public struct MemoryRepository: Sendable {
     }
 
     public func unlinkPlace(_ place: PlaceID, from memory: MemoryID) throws {
-        try db.writer.write { try $0.execute(sql: "delete from memory_place where memory_id = ? and place_id = ?", arguments: [memory.rawValue, place.rawValue]) }
+        try db.writer.write { db in
+            try db.execute(sql: "delete from moment_entity where memory_id = ? and entity_id = ? and relation = 'mention'", arguments: [memory.rawValue, place.rawValue])
+        }
     }
 
     /// Re-points every edge of `source` at `target` and appends its spans after the target's.
@@ -422,8 +413,10 @@ public struct MemoryRepository: Sendable {
                 moved.range = source.range
                 try moved.update(db, columns: ["earliest", "latest", "likely_start", "likely_end", "granularity", "origin", "evidence_text"])
             }
-            try db.execute(sql: "insert or ignore into memory_person (memory_id, person_id, role_text) select ?, person_id, role_text from memory_person where memory_id = ?", arguments: [target.id.rawValue, source.id.rawValue])
-            try db.execute(sql: "insert or ignore into memory_place (memory_id, place_id) select ?, place_id from memory_place where memory_id = ?", arguments: [target.id.rawValue, source.id.rawValue])
+            try db.execute(sql: """
+                insert or ignore into moment_entity (memory_id, entity_id, relation, role_text)
+                select ?, entity_id, relation, role_text from moment_entity where memory_id = ?
+                """, arguments: [target.id.rawValue, source.id.rawValue])
             try db.execute(sql: "update anchor set memory_id = ? where memory_id = ?", arguments: [target.id.rawValue, source.id.rawValue])
             let targetCollections = try Int.fetchOne(db, sql: "select count(*) from collection_memory where memory_id = ?", arguments: [target.id.rawValue]) ?? 0
             if targetCollections == 0 {
@@ -449,9 +442,7 @@ public struct MemoryRepository: Sendable {
     }
 
     public func insertPlace(_ place: MemoryPlace) throws {
-        try db.writer.write { db in
-            try db.execute(sql: "insert or ignore into memory_place (memory_id, place_id) values (?, ?)", arguments: [place.memoryID.rawValue, place.placeID.rawValue])
-        }
+        try db.writer.write { try place.link.insertIgnoringDuplicate($0) }
     }
 
     public func update(_ anchor: Anchor) throws {
@@ -460,10 +451,10 @@ public struct MemoryRepository: Sendable {
 
     public func places(of memory: MemoryID) throws -> [Place] {
         try db.writer.read { db in
-            try Place.fetchAll(db, sql: """
-                select place.* from place join memory_place on memory_place.place_id = place.id
-                where memory_place.memory_id = ? order by place.name_text
-                """, arguments: [memory.rawValue])
+            try Entity.fetchAll(db, sql: """
+                select entity.* from entity join moment_entity me on me.entity_id = entity.id
+                where me.memory_id = ? and me.relation = 'mention' and entity.type = 'place' order by entity.title
+                """, arguments: [memory.rawValue]).map(Place.init)
         }
     }
 
@@ -539,15 +530,14 @@ public struct MemoryRepository: Sendable {
 
     public func unlink(_ person: PersonID, from memory: MemoryID) throws {
         try db.writer.write { db in
-            try db.execute(sql: "delete from memory_person where memory_id = ? and person_id = ?", arguments: [memory.rawValue, person.rawValue])
+            try db.execute(sql: "delete from moment_entity where memory_id = ? and entity_id = ? and relation = 'mention'", arguments: [memory.rawValue, person.rawValue])
         }
     }
 
     /// Links a person to a memory; a second link to the same person is a no-op.
     public func link(_ person: PersonID, to memory: MemoryID, roleText: String?) throws {
         try db.writer.write { db in
-            try db.execute(sql: "insert or ignore into memory_person (memory_id, person_id, role_text) values (?, ?, ?)",
-                           arguments: [memory.rawValue, person.rawValue, roleText])
+            try MemoryPerson(memoryID: memory, personID: person, roleText: roleText).link.insertIgnoringDuplicate(db)
         }
     }
 }

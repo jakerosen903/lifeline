@@ -30,6 +30,8 @@ public struct Person: Codable, Sendable, Equatable, Identifiable {
     public var isOwner: Bool
     public var birthDate: Date?
     public var birthDateOrigin: BirthDateOrigin?
+    /// A person is an entity (M7); they share one id.
+    public var entityID: EntityID { EntityID(rawValue: id.rawValue) }
 
     public init(id: PersonID, displayName: String, notes: String?, isOwner: Bool, birthDate: Date?, birthDateOrigin: BirthDateOrigin?) {
         self.id = id
