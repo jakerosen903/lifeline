@@ -65,6 +65,8 @@ final class TimelineViewModel {
     private(set) var collections: [CollectionRow] = []
     private(set) var unchaptered: [MemoryRow] = []
     private(set) var shelf: [MemoryRow] = []
+    /// Facts, feelings and goals: not moments, so never on the shelf or in a chapter (M7).
+    private(set) var about: [MemoryRow] = []
     /// Stories outside any chapter with a dated member, and stories with none (M5).
     private(set) var unchapteredStories: [StoryRow] = []
     private(set) var shelfStories: [StoryRow] = []
@@ -134,7 +136,7 @@ final class TimelineViewModel {
 
     var memoryCount: Int {
         chapters.reduce(0) { $0 + $1.memories.count + $1.stories.reduce(0) { $0 + $1.members.count } } + collections.reduce(0) { $0 + $1.members.count }
-            + unchaptered.count + shelf.count + (unchapteredStories + shelfStories).reduce(0) { $0 + $1.members.count }
+            + unchaptered.count + shelf.count + about.count + (unchapteredStories + shelfStories).reduce(0) { $0 + $1.members.count }
     }
 
     // MARK: - Loading
@@ -142,9 +144,12 @@ final class TimelineViewModel {
     func refresh() {
         do {
             let store = deps.extractionStore
-            let all = try (showHidden ? store.memories.allMemories() : store.memories.visibleMemories()).filter { !$0.isFloating }
+            let kept = try (showHidden ? store.memories.allMemories() : store.memories.visibleMemories()).filter { !$0.isFloating }
+            // Only moments are on the timeline; the rest sit under About, their stored ranges unshown (M7).
+            let all = kept.filter(\.isMoment)
             let birth = try store.profile.ownerBirthDate()
             let rows = Dictionary(uniqueKeysWithValues: try all.map { ($0.id, try row(for: $0, birth: birth)) })
+            about = try kept.filter { !$0.isMoment }.map { try row(for: $0, birth: birth) }
             let allCollections = try store.chapters.collections()
             var inCollection = Set<MemoryID>()
             collections = try allCollections.compactMap { collection in
@@ -182,7 +187,7 @@ final class TimelineViewModel {
             pairs = try openPairs()
             refreshSorting()
             (question, questionRow) = try firstQuestion(rows: rows, birth: birth)
-            summary = Self.summaryText(memories: all.count, chapters: chapters.count, firstYear: years.min())
+            summary = Self.summaryText(memories: all.count, chapters: chapters.count, firstYear: years.min(), about: about.count)
             error = nil
         } catch {
             self.error = "Could not load your story: \(error.localizedDescription)"
@@ -191,7 +196,7 @@ final class TimelineViewModel {
 
     private func row(for memory: Memory, birth: CivilDate?) throws -> MemoryRow {
         let store = deps.extractionStore
-        let kind = memory.createdFromCandidateID.flatMap { try? store.candidates.fetch($0) }.flatMap { CandidatePayload.memory($0) }?.kindOrDefault ?? .other
+        let kind = memory.kind
         let span = try store.memories.spans(of: memory.id).first
         var age: String?
         // Only when an age anchor is what placed it; a relative guess says nothing about age.
@@ -204,7 +209,7 @@ final class TimelineViewModel {
                          people: try store.memories.people(of: memory.id).map(\.displayName),
                          place: try store.memories.places(of: memory.id).first?.nameText,
                          durationText: span.map { Format.duration(ms: $0.endMs - $0.startMs) } ?? "",
-                         checkThis: CheckThisTags.tags(range: memory.range, mentions: try span.map { try store.people.mentions(in: $0.segmentID) } ?? []),
+                         checkThis: CheckThisTags.tags(range: memory.isMoment ? memory.range : .unplaced, mentions: try span.map { try store.people.mentions(in: $0.segmentID) } ?? []),
                          storyID: try store.stories.story(of: memory.id)?.id)
     }
 
@@ -218,10 +223,11 @@ final class TimelineViewModel {
         }
     }
 
-    private static func summaryText(memories: Int, chapters: Int, firstYear: Int?) -> String {
+    static func summaryText(memories: Int, chapters: Int, firstYear: Int?, about: Int = 0) -> String {
         var parts = ["\(memories) \(memories == 1 ? "memory" : "memories")"]
         if chapters > 0 { parts.append("\(chapters) \(chapters == 1 ? "chapter" : "chapters")") }
         if let firstYear { parts.append("\(firstYear) → now") }
+        if about > 0 { parts.append("and \(about) \(about == 1 ? "thing" : "things") about your life") }
         return parts.joined(separator: " · ")
     }
 
@@ -292,7 +298,7 @@ final class TimelineViewModel {
     private func ref(_ memory: Memory) throws -> MemoryRef {
         let span = try deps.extractionStore.memories.spans(of: memory.id).first
         return MemoryRef(id: memory.id, title: memory.title, range: memory.range,
-                         primarySpan: MemoryRef.Span(segmentID: span?.segmentID ?? SegmentID(rawValue: ""), startMs: span?.startMs ?? 0, endMs: span?.endMs ?? 0))
+                         primarySpan: MemoryRef.Span(segmentID: span?.segmentID ?? SegmentID(rawValue: ""), startMs: span?.startMs ?? 0, endMs: span?.endMs ?? 0), kind: memory.kind)
     }
 
     func answer(_ choice: RelativeQuestion.Choice) {

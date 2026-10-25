@@ -63,7 +63,8 @@ final class MemoryViewModel {
             }
             question = try firstQuestion()
             mentions = try span.map { try store.people.mentions(in: $0.segmentID) } ?? []
-            checkThis = CheckThisTags.tags(range: memory.range, mentions: mentions)
+            // A non-moment's stored range is hidden, so it is never a thing to check (M7).
+            checkThis = CheckThisTags.tags(range: memory.isMoment ? memory.range : .unplaced, mentions: mentions)
         } catch {
             self.error = error.localizedDescription
         }
@@ -76,7 +77,7 @@ final class MemoryViewModel {
         func ref(_ m: Memory) throws -> MemoryRef {
             let s = try store.memories.spans(of: m.id).first
             return MemoryRef(id: m.id, title: m.title, range: m.range,
-                             primarySpan: MemoryRef.Span(segmentID: s?.segmentID ?? SegmentID(rawValue: ""), startMs: s?.startMs ?? 0, endMs: s?.endMs ?? 0))
+                             primarySpan: MemoryRef.Span(segmentID: s?.segmentID ?? SegmentID(rawValue: ""), startMs: s?.startMs ?? 0, endMs: s?.endMs ?? 0), kind: m.kind)
         }
         let refs = try all.map(ref)
         var ids = Set<MemoryID>()

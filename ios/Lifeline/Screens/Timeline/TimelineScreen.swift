@@ -111,6 +111,7 @@ struct TimelineScreen: View {
             chapterSections
             collectionSections
             shelfAndQuestion
+            if !viewModel.about.isEmpty { AboutSection(rows: viewModel.about, actions: rowActions) }
             footer
         }
     }

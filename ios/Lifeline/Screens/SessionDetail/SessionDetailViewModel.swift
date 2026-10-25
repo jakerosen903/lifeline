@@ -37,7 +37,7 @@ final class SessionDetailViewModel {
             var seen = Set<MemoryID>()
             memories = try deps.extractionStore.memories.spans(in: session.id).map(\.0).filter { seen.insert($0.id).inserted }.map { memory in
                 MemoryRow(memory: memory,
-                          kind: memory.createdFromCandidateID.flatMap { try? deps.extractionStore.candidates.fetch($0) }.flatMap { CandidatePayload.memory($0) }?.kindOrDefault ?? .other,
+                          kind: memory.kind,
                           people: try deps.extractionStore.memories.people(of: memory.id).map(\.displayName),
                           anchors: try deps.extractionStore.memories.anchors(of: memory.id).map(\.phrase))
             }
