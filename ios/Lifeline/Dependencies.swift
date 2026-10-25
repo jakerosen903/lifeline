@@ -82,7 +82,7 @@ struct Dependencies {
     static func live() throws -> Dependencies {
         let root = try AudioLocation.defaultRoot()
         // A restore the person staged is applied now, before anything opens the database (M6).
-        if try Backup.applyPendingRestore(root: root) { print("[backup] restored a copy at launch") }
+        if try Backup.applyPendingRestore(root: root, safetyCopyDirectory: try Backup.safetyCopyDirectory()) { print("[backup] restored a copy at launch") }
         // An export the share sheet left behind is a full copy of everything; it does not outlive the launch.
         Backup.removeTemporaryExports()
         let db = try AppDatabase.open(at: root.appending(path: "Lifeline/lifeline.sqlite"))
@@ -138,7 +138,7 @@ struct Dependencies {
         } else {
             root = FileManager.default.temporaryDirectory.appending(path: "lifeline-ui-\(UUID().uuidString)")
         }
-        if try Backup.applyPendingRestore(root: root) { print("[backup] restored a copy at launch") }
+        if try Backup.applyPendingRestore(root: root, safetyCopyDirectory: try Backup.safetyCopyDirectory()) { print("[backup] restored a copy at launch") }
         let db = try AppDatabase.open(at: root.appending(path: "Lifeline/lifeline.sqlite"))
         let store = ExtractionStore(db)
         // `-uiTesting-slowExtract`: seconds per segment, for tests that watch sorting go on; `-uiTesting-noKey`:
