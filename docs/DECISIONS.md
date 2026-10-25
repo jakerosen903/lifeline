@@ -2,6 +2,16 @@
 
 One entry per decision. Newest first. Status is Decided, Open, or Superseded.
 
+## 2026-10-25 · Memory kinds and domains: moments on the timeline, everything else by what it is about (M7)
+
+**Status:** Decided. Closes "Open · Memory kinds and domains". Source: the owner's answers to the M7 spec, `docs/specs/2026-10-24-m7-elements.md`.
+
+**Decision.** A memory has a kind: `event` and `other` are moments; `fact`, `feeling` and `goal` are not. Non-moments leave the timeline's shelf and chapters and are never asked "when?". The resolver still stores their ranges and the timeline hides them. The archive gains four entity kinds with pages: People, Places, Things, Ideas. Possessions, buildings, vehicles and objects are Things. Non-moments become details of an entity, or of the person ("About you"). People become entities with one link table for every kind; no parallel path for people. An entity page shows its details first and its moments below. The app never asks for a date on a Thing or a Place; the person can add one. An idea's title is the person's own words or "An idea you mentioned on {date}". Curiosity about entities asks for a scene, never for a date or an evaluation. Domains are free-text tags with no fixed list.
+
+**Why.** Much of what a person says is not a moment. Forcing it onto the timeline fills the shelf with things that never get a date and makes the app ask the wrong question (Principle 2). A composed idea title or "Do you still think that?" interprets and evaluates a life (Principle 1).
+
+**Consequences.** M7 ships as two PRs: PR A (kind column, migration v9a, About section, "What is this?") first, then PR B (entities, migration v9b, prompt v6). The person split is the largest task of PR B. `place`, `memory_place` and `memory_person` stay one release and are read nowhere; v10 drops them.
+
 ## 2026-10-24 · Copies of the archive stay out of the phone's cloud backup
 
 **Status:** Decided. Source: Claude review of #9 (Backup.swift).
@@ -229,7 +239,7 @@ Why: the design was written imagining long oral-history sittings; real use is li
 
 The owner's picture of the product (2026-10-23): a few minutes a day, one story at a time, with the timeline growing over weeks rather than being filled in one long sitting. Not a milestone of its own yet. It shapes what follows: each session opens with one fresh question (M3, done); the summary ends with one line for next time (M4); the spoken interviewer, when it comes, asks for one scene and stops. No streaks, counters or reminders that turn it into a chore; the principles rule out pressure. Open: whether a gentle daily nudge belongs in V1 at all.
 
-## Open · Memory kinds and domains
+## Open · Memory kinds and domains (closed 2026-10-25, see M7 above)
 
 A later version will sub-divide memories by kind (fact, feeling, goal or intention, event, other) and by domain (relationships, health, education, travel, work, more). V1 ships one memory type and keeps the seam open: the candidate payload is JSON so a new extractor version can back-fill, no V1 code or copy assumes a memory is an event, and collection and chapter hints stay free text. Design after V1 has real sessions.
 
