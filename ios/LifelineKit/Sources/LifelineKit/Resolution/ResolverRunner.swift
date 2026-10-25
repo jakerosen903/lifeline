@@ -81,6 +81,10 @@ public struct ResolverRunner: Sendable {
                           targetMemoryID: draft.targetMemoryID ?? draft.targetPhrase.flatMap { phrase in memories.first { Resolver.matches($0.title, phrase) }?.id })
         }
         try store.curiosity.replaceOpenAnchorItems(items)
+        // Entity questions are made and retired in the same step (M7).
+        let byID = Dictionary(uniqueKeysWithValues: memories.map { ($0.id, $0) })
+        try store.curiosity.replaceOpenEntityItems(EntityCuriosity.drafts(entities: try store.entities.allEntities(), links: try store.entities.allLinks(),
+                                                                          memories: byID, owner: try store.profile.owner()?.entityID))
 
         // Chapters follow their members wherever the members just moved.
         if !changes.isEmpty {

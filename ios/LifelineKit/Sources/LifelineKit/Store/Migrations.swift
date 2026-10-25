@@ -339,6 +339,9 @@ enum Migrations {
             try db.drop(table: "person")
             try db.rename(table: "person_v9", to: "person")
             try db.create(indexOn: "person", columns: ["is_owner"])
+            try db.alter(table: "curiosity_item") { t in
+                t.add(column: "entity_id", .text).references("entity", onDelete: .cascade)
+            }
         }
         return m
     }

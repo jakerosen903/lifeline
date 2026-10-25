@@ -165,6 +165,7 @@ extension CuriosityItem: FetchableRecord, PersistableRecord {
     public static let databaseTableName = "curiosity_item"
     enum CodingKeys: String, CodingKey {
         case id, kind, text, payoffCount = "payoff_count", status, sourceMemoryID = "source_memory_id", targetMemoryID = "target_memory_id"
+        case entityID = "entity_id"
     }
 }
 
