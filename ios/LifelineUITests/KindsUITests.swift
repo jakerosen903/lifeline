@@ -26,10 +26,17 @@ final class KindsUITests: XCTestCase {
         XCTAssertTrue(app.any("memory.kind").waitForExistence(timeout: 5), "the memory screen shows the kind, not a date")
         XCTAssertFalse(app.buttons["memory.range"].exists)
         app.buttons["memory.change"].tap()
+        XCTAssertTrue(app.buttons["change.done"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["change.tellMeWhen"].exists, "no Tell me when on a fact")
+        let kind = app.buttons["change.kind"]
+        XCTAssertTrue(app.reveal(kind), "What is this? sits at the bottom of the sheet")
+        kind.tap()
         let moment = app.buttons["change.kind.event"]
         XCTAssertTrue(moment.waitForExistence(timeout: 5))
-        XCTAssertFalse(app.buttons["change.tellMeWhen"].exists, "no Tell me when on a fact")
         moment.tap()
+        app.buttons["change.done"].tap()
+        XCTAssertTrue(app.buttons["memory.range"].waitForExistence(timeout: 5), "a moment shows its when again")
+        app.buttons["memory.change"].tap()
         XCTAssertTrue(app.buttons["change.tellMeWhen"].waitForExistence(timeout: 5), "a moment can be dated")
         app.buttons["change.done"].tap()
         app.navigationBars.buttons.firstMatch.tap()

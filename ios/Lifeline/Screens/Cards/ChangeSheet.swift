@@ -66,21 +66,6 @@ struct ChangeSheet: View {
                     }
                 }
 
-                Section("What is this?") {
-                    ForEach(ChangeViewModel.kindChoices, id: \.kind) { choice in
-                        Button { viewModel.setKind(choice.kind) } label: {
-                            HStack {
-                                Text(choice.label).foregroundStyle(Theme.ink)
-                                Spacer()
-                                if viewModel.shownKind == choice.kind { Image(systemName: "checkmark").foregroundStyle(Theme.olive) }
-                            }
-                        }
-                        .buttonStyle(.borderless)
-                        .accessibilityIdentifier("change.kind.\(choice.kind.rawValue)")
-                        .accessibilityAddTraits(viewModel.shownKind == choice.kind ? .isSelected : [])
-                    }
-                }
-
                 if viewModel.memory.isMoment {
                 Section("When it was") {
                     Button {
@@ -148,6 +133,27 @@ struct ChangeSheet: View {
                     laterRow("Just tell me")
                 } footer: {
                     Text("Move where this telling starts and ends; the words and audio stay. \"Just tell me\" comes later, with the interviewer.")
+                }
+
+                // At the bottom, one row: the sheet's other rows keep their places (M7).
+                Section("What is this?") {
+                    Menu {
+                        ForEach(ChangeViewModel.kindChoices, id: \.kind) { choice in
+                            Button {
+                                viewModel.setKind(choice.kind)
+                            } label: {
+                                if viewModel.shownKind == choice.kind { Label(choice.label, systemImage: "checkmark") } else { Text(choice.label) }
+                            }
+                            .accessibilityIdentifier("change.kind.\(choice.kind.rawValue)")
+                        }
+                    } label: {
+                        HStack {
+                            Text(ChangeViewModel.kindChoices.first { $0.kind == viewModel.shownKind }?.label ?? "A moment").foregroundStyle(Theme.ink)
+                            Spacer()
+                            Image(systemName: "chevron.up.chevron.down").foregroundStyle(Theme.stone)
+                        }
+                    }
+                    .accessibilityIdentifier("change.kind")
                 }
 
                 if let error = viewModel.error {
