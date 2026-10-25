@@ -21,23 +21,27 @@ public struct Memory: Codable, Sendable, Equatable, Identifiable {
     public var hiddenFromTimeline: Bool
     /// Never enters a context packet again.
     public var excludedFromAI: Bool
+    /// What the card said this is (M7). Only a moment shows on the timeline.
+    public var kind: MemoryKind
 
     public init(id: MemoryID, title: String, summaryQuote: String, visibility: Visibility, chapterID: ChapterID?,
                 createdFromCandidateID: CandidateID?, createdAt: Date, range: TimeRange = .unplaced,
-                hiddenFromTimeline: Bool = false, excludedFromAI: Bool = false) {
+                hiddenFromTimeline: Bool = false, excludedFromAI: Bool = false, kind: MemoryKind = .event) {
         self.id = id; self.title = title; self.summaryQuote = summaryQuote; self.visibility = visibility; self.chapterID = chapterID
         self.createdFromCandidateID = createdFromCandidateID; self.createdAt = createdAt; self.range = range
         self.hiddenFromTimeline = hiddenFromTimeline; self.excludedFromAI = excludedFromAI
+        self.kind = kind
     }
 
     public var isUnplaced: Bool { !range.isPlaced }
     public var isFloating: Bool { createdFromCandidateID == nil }
+    public var isMoment: Bool { kind.isMoment }
 
     // The range is flattened onto the row's columns.
     enum CodingKeys: String, CodingKey {
         case id, title, summaryQuote = "summary_quote", visibility, chapterID = "chapter_id"
         case createdFromCandidateID = "created_from_candidate_id", createdAt = "created_at"
-        case hiddenFromTimeline = "hidden_from_timeline", excludedFromAI = "excluded_from_ai"
+        case hiddenFromTimeline = "hidden_from_timeline", excludedFromAI = "excluded_from_ai", kind
         case earliest, latest, likelyStart = "likely_start", likelyEnd = "likely_end", granularity, origin, evidenceText = "evidence_text"
     }
 
@@ -52,6 +56,7 @@ public struct Memory: Codable, Sendable, Equatable, Identifiable {
         createdAt = try c.decode(Date.self, forKey: .createdAt)
         hiddenFromTimeline = try c.decodeIfPresent(Bool.self, forKey: .hiddenFromTimeline) ?? false
         excludedFromAI = try c.decodeIfPresent(Bool.self, forKey: .excludedFromAI) ?? false
+        kind = try c.decodeIfPresent(MemoryKind.self, forKey: .kind) ?? .event
         range = TimeRange(earliest: try c.decodeIfPresent(CivilDate.self, forKey: .earliest),
                           latest: try c.decodeIfPresent(CivilDate.self, forKey: .latest),
                           likelyStart: try c.decodeIfPresent(CivilDate.self, forKey: .likelyStart),
@@ -72,6 +77,7 @@ public struct Memory: Codable, Sendable, Equatable, Identifiable {
         try c.encode(createdAt, forKey: .createdAt)
         try c.encode(hiddenFromTimeline, forKey: .hiddenFromTimeline)
         try c.encode(excludedFromAI, forKey: .excludedFromAI)
+        try c.encode(kind, forKey: .kind)
         try c.encode(range.earliest, forKey: .earliest)
         try c.encode(range.latest, forKey: .latest)
         try c.encode(range.likelyStart, forKey: .likelyStart)

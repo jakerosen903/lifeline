@@ -500,6 +500,21 @@ public struct MemoryRepository: Sendable {
         try db.writer.read { try Memory.filter(Column("chapter_id") == chapter.rawValue).order(Column("created_at")).fetchAll($0) }
     }
 
+    /// The moments of a chapter: what its rows show and its range spans. A fact, feeling or goal
+    /// keeps its `chapter_id` but leaves both (M7).
+    public func moments(inChapter chapter: ChapterID) throws -> [Memory] {
+        try memories(inChapter: chapter).filter(\.isMoment)
+    }
+
+    /// The About section: facts, feelings and goals, oldest first. Stand-ins are never here.
+    public func aboutMemories(includingHidden: Bool) throws -> [Memory] {
+        try (includingHidden ? allMemories() : visibleMemories()).filter { !$0.isMoment && !$0.isFloating }
+    }
+
+    public func setKind(_ id: MemoryID, _ kind: MemoryKind) throws {
+        try db.writer.write { try $0.execute(sql: "update memory set kind = ? where id = ?", arguments: [kind.rawValue, id.rawValue]) }
+    }
+
     /// Memories with no range at all.
     public func unplacedMemories() throws -> [Memory] {
         try db.writer.read {

@@ -114,7 +114,8 @@ public struct CandidateActions: Sendable {
         // A session hidden from the timeline hides what is kept from it later, too.
         let hidden = try store.sessions.fetchSegment(candidate.segmentID).flatMap { try store.sessions.fetch($0.sessionID) }?.hiddenFromTimeline ?? false
         let memory = Memory(id: .init(), title: out.title, summaryQuote: out.quote, visibility: .timeline, chapterID: nil,
-                            createdFromCandidateID: candidate.id, createdAt: .now, hiddenFromTimeline: hidden)
+                            createdFromCandidateID: candidate.id, createdAt: .now, hiddenFromTimeline: hidden,
+                            kind: out.kind ?? .event)
         var spans = [MemorySpan(memoryID: memory.id, segmentID: candidate.segmentID,
                                 startMs: words[out.segmentSpan.startWord].startMs, endMs: words[out.segmentSpan.endWord].endMs, order: 0)]
         spans += try continuationSpans(of: out, for: memory.id)
@@ -296,7 +297,7 @@ public struct CandidateActions: Sendable {
         guard let memory = try store.memories.fetch(question.memoryID) else { return }
         let span = try store.memories.spans(of: memory.id).first
         let ref = MemoryRef(id: memory.id, title: memory.title, range: memory.range,
-                            primarySpan: MemoryRef.Span(segmentID: span?.segmentID ?? SegmentID(rawValue: ""), startMs: span?.startMs ?? 0, endMs: span?.endMs ?? 0))
+                            primarySpan: MemoryRef.Span(segmentID: span?.segmentID ?? SegmentID(rawValue: ""), startMs: span?.startMs ?? 0, endMs: span?.endMs ?? 0), kind: memory.kind)
         try store.memories.updateRange(memory.id, RelativeQuestions.apply(choice, to: ref))
         if let anchorID = question.anchorID, var anchor = try store.memories.anchors(of: memory.id).first(where: { $0.id == anchorID }) {
             anchor.resolved = true
@@ -356,6 +357,16 @@ public struct CandidateActions: Sendable {
         for id in [previous, chapter].compactMap({ $0 }) { try chapterRangeFromMembers(id) }
     }
 
+    /// "What is this?" on the Change sheet (M7): the only way a memory changes kind. A moment
+    /// turned fact leaves its chapter's range and its questions; a fact turned moment comes back.
+    public func setKind(_ memory: MemoryID, _ kind: MemoryKind) throws {
+        guard let current = try store.memories.fetch(memory) else { return }
+        guard current.kind != kind else { return }
+        try store.memories.setKind(memory, kind)
+        if let chapter = current.chapterID { try chapterRangeFromMembers(chapter) }
+        _ = try ResolverRunner(store: store).run()
+    }
+
     public func addToCollection(_ memory: MemoryID, titled title: String) throws -> Collection {
         let collection = try store.chapters.insertCollection(titled: title)
         try store.chapters.add(memory: memory, to: collection.id)
@@ -368,7 +379,7 @@ public struct CandidateActions: Sendable {
 
     /// A chapter's range is the span of its placed members, origin `derived`; unplaced when none are placed.
     public func chapterRangeFromMembers(_ chapter: ChapterID) throws {
-        try store.chapters.setRange(chapter, ChapterRepository.span(over: try store.memories.memories(inChapter: chapter).map(\.range)))
+        try store.chapters.setRange(chapter, ChapterRepository.span(over: try store.memories.moments(inChapter: chapter).map(\.range)))
     }
 
     // MARK: - Helpers

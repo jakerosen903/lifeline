@@ -141,7 +141,8 @@ extension CandidateActions {
         let out = card.flatMap(CandidatePayload.memory)
         let segmentText = try store.sessions.fetchSegment(span.segmentID)?.text ?? ""
         let fresh = Memory(id: .init(), title: span.titleText ?? original.title, summaryQuote: out?.quote ?? segmentText, visibility: original.visibility,
-                           chapterID: nil, createdFromCandidateID: span.candidateID, createdAt: .now, hiddenFromTimeline: original.hiddenFromTimeline)
+                           chapterID: nil, createdFromCandidateID: span.candidateID, createdAt: .now, hiddenFromTimeline: original.hiddenFromTimeline,
+                           kind: original.kind)
 
         // What this telling alone named goes with it; what another telling also named stays.
         let leaving = try tellingOutputs(of: span, card: card)

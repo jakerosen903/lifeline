@@ -85,7 +85,7 @@ public struct ResolverRunner: Sendable {
         // Chapters follow their members wherever the members just moved.
         if !changes.isEmpty {
             for chapter in chapters {
-                try store.chapters.setRange(chapter.id, ChapterRepository.span(over: try store.memories.memories(inChapter: chapter.id).map(\.range)))
+                try store.chapters.setRange(chapter.id, ChapterRepository.span(over: try store.memories.moments(inChapter: chapter.id).map(\.range)))
             }
         }
 
@@ -97,7 +97,7 @@ public struct ResolverRunner: Sendable {
         let refs = try memories.map { memory in
             let span = try store.memories.spans(of: memory.id).first
             return MemoryRef(id: memory.id, title: memory.title, range: memory.range,
-                             primarySpan: MemoryRef.Span(segmentID: span?.segmentID ?? SegmentID(rawValue: ""), startMs: span?.startMs ?? 0, endMs: span?.endMs ?? 0))
+                             primarySpan: MemoryRef.Span(segmentID: span?.segmentID ?? SegmentID(rawValue: ""), startMs: span?.startMs ?? 0, endMs: span?.endMs ?? 0), kind: memory.kind)
         }
         return ResolverInput(memories: refs, anchors: anchors, birthDate: birth, chapters: chapters, config: config)
     }
