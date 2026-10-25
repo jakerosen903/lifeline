@@ -55,6 +55,18 @@ struct TimelineScreen: View {
                 Button { viewModel.showHidden.toggle() } label: { Image(systemName: viewModel.showHidden ? "eye" : "eye.slash") }
                     .accessibilityLabel(viewModel.showHidden ? "Showing hidden memories" : "Hidden memories are not shown")
                     .accessibilityIdentifier("timeline.showHidden")
+                if !viewModel.allTags.isEmpty {
+                    Menu {
+                        Button("Everything") { viewModel.tagFilter = nil }
+                        ForEach(viewModel.allTags, id: \.self) { tag in
+                            Button { viewModel.tagFilter = tag } label: {
+                                if viewModel.tagFilter == tag { Label(tag, systemImage: "checkmark") } else { Text(tag) }
+                            }
+                        }
+                    } label: { Image(systemName: viewModel.tagFilter == nil ? "tag" : "tag.fill") }
+                        .accessibilityLabel(viewModel.tagFilter.map { "Showing \($0)" } ?? "Filter by tag")
+                        .accessibilityIdentifier("timeline.tagFilter")
+                }
                 NavigationLink { SessionsScreen(viewModel: viewModel.home) } label: { Image(systemName: "waveform") }
                     .accessibilityIdentifier("timeline.sessions")
                 NavigationLink { PeopleScreen(viewModel: PeopleViewModel(deps: viewModel.deps)) } label: { Image(systemName: "person.2") }

@@ -81,6 +81,9 @@ final class TimelineViewModel {
     private(set) var error: String?
     /// The Hidden filter: show memories hidden from the timeline too.
     var showHidden = false { didSet { refresh() } }
+    /// Domains (M7): only what carries this free-text tag; nil shows everything.
+    var tagFilter: String? { didSet { refresh() } }
+    private(set) var allTags: [String] = []
     /// What is still sorting (M6); polled every second only while there is something to say.
     /// The view reads `sorting`, which changes only when the words or the buttons do, so the
     /// row is not rebuilt every time the worker's activity flips.
@@ -144,7 +147,10 @@ final class TimelineViewModel {
     func refresh() {
         do {
             let store = deps.extractionStore
-            let kept = try (showHidden ? store.memories.allMemories() : store.memories.visibleMemories()).filter { !$0.isFloating }
+            allTags = try store.tags.all()
+            let tagged = try tagFilter.map { try store.tags.elements(.memory, tagged: $0) }
+            let kept = try (showHidden ? store.memories.allMemories() : store.memories.visibleMemories())
+                .filter { !$0.isFloating && (tagged?.contains($0.id.rawValue) ?? true) }
             // Only moments are on the timeline; the rest sit under About, their stored ranges unshown (M7).
             let all = kept.filter(\.isMoment)
             let birth = try store.profile.ownerBirthDate()
