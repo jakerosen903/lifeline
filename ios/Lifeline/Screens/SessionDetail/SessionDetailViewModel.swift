@@ -14,6 +14,8 @@ final class SessionDetailViewModel {
 
     let session: Session
     private(set) var segments: [Segment] = []
+    /// The person's moments with what the interviewer said between them, in file order.
+    private(set) var transcript: [TranscriptItem] = []
     private(set) var memories: [MemoryRow] = []
     private(set) var waiting: [Card] = []
     private(set) var dismissed: [Candidate] = []
@@ -33,6 +35,7 @@ final class SessionDetailViewModel {
     func refresh() {
         do {
             segments = try deps.sessions.segments(in: session.id)
+            transcript = TranscriptItem.merge(segments: segments, turns: try InterviewerTurnRepository(deps.database).turns(in: session.id))
             // Every telling in this recording counts, including one merged into an older memory.
             var seen = Set<MemoryID>()
             memories = try deps.extractionStore.memories.spans(in: session.id).map(\.0).filter { seen.insert($0.id).inserted }.map { memory in

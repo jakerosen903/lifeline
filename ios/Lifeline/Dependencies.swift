@@ -71,11 +71,17 @@ struct Dependencies {
         ExtractionQueue(session: session, service: extraction, store: extractionStore, matcher: matcher, reporter: reporter, log: { print("[extract] \($0)") })
     }
 
-    /// A recorder whose stored segments feed `queue`. Finish returns at once; the queue keeps
-    /// sorting in the background and the launch-time worker picks up anything it leaves.
-    func makeRecorder(onStatus: @escaping @Sendable (TranscriberAvailability) -> Void, queue: ExtractionQueue) -> SessionRecorder {
+    /// A recorder whose stored segments feed `queue`, and whose voice events and stored segments go to
+    /// `interviewer` in order. Finish returns at once; the queue keeps sorting in the background and the
+    /// launch-time worker picks up anything it leaves.
+    func makeRecorder(onStatus: @escaping @Sendable (TranscriberAvailability) -> Void, queue: ExtractionQueue,
+                      interviewer: @escaping @Sendable (InterviewerInput) -> Void) -> SessionRecorder {
         SessionRecorder(voice: makeVoiceSession(onStatus), sessions: sessions, turns: InterviewerTurnRepository(database), audioURL: { try audioURL(for: $0) },
-                        hooks: RecorderHooks(onSegmentStored: { id in Task { await queue.enqueue(id) } },
+                        hooks: RecorderHooks(onSegmentStored: { id in
+                                                 interviewer(.segmentStored(id))
+                                                 Task { await queue.enqueue(id) }
+                                             },
+                                             onVoiceEvent: { interviewer(.voice($0)) },
                                              onStopped: { Task { await queue.drain() } }))
     }
 

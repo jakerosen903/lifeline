@@ -1,7 +1,8 @@
 import Foundation
 import LifelineKit
 
-/// The live session. Owns the recorder, the extraction queue, the card queue and the arc.
+/// The live session. Owns the recorder, the extraction queue, the card queue, the arc and the
+/// interviewer loop. In this PR the loop's turns are stored and shown but not heard.
 /// A quick story never sees the clock; settling in is offered the next question when the room
 /// goes quiet and a wrap-up at the planned length. Finishing never waits for sorting.
 @MainActor
@@ -35,6 +36,8 @@ final class SessionViewModel: Identifiable {
     let deps: Dependencies
     private var recorder: SessionRecorder?
     private var queue: ExtractionQueue?
+    /// Everything the interviewer loop hears, in order. Finished when the session ends.
+    private var interviewer: AsyncStream<InterviewerInput>.Continuation?
     private var observation: Task<Void, Never>?
     private var cardObservation: Task<Void, Never>?
     private var ticker: Task<Void, Never>?
@@ -75,6 +78,13 @@ final class SessionViewModel: Identifiable {
     /// True until start() has created the recorder; Finish is disabled meanwhile.
     var recorderNotStarted: Bool { recorder == nil }
     var visibleCards: [Card] { cardQueue.cards }
+    /// The newest thing the interviewer said, for the Listen view. The opening is the prompt already.
+    var latestTurn: InterviewerTurn? { state.turns.last { $0.kind != .opening } }
+    /// The person's segments with the interviewer's turns between them, in file order. The opening is
+    /// left out: the prompt card above the transcript shows it.
+    var transcript: [TranscriptItem] {
+        TranscriptItem.merge(segments: state.segments, turns: state.turns.filter { $0.kind != .opening })
+    }
     var isPaused: Bool { state.isPaused }
 
     /// Errors first, then an interruption, then the download hint, then extraction: a stuck hint must not hide a failure.
@@ -93,9 +103,12 @@ final class SessionViewModel: Identifiable {
         let (statuses, statusContinuation) = AsyncStream<TranscriberAvailability>.makeStream()
         let sessionID = SessionID()
         let queue = deps.makeExtractionQueue(for: sessionID)
-        let recorder = deps.makeRecorder(onStatus: { status in statusContinuation.yield(status) }, queue: queue)
+        let (inputs, interviewer) = AsyncStream<InterviewerInput>.makeStream()
+        let recorder = deps.makeRecorder(onStatus: { status in statusContinuation.yield(status) }, queue: queue,
+                                         interviewer: { interviewer.yield($0) })
         self.recorder = recorder
         self.queue = queue
+        self.interviewer = interviewer
         observation = Task { [weak self] in
             await withTaskGroup(of: Void.self) { group in
                 group.addTask { for await s in recorder.states { await self?.apply(s) } }
@@ -106,7 +119,15 @@ final class SessionViewModel: Identifiable {
             for await event in queue.events { await self?.apply(event) }
         }
         do {
+            let captureStart = ContinuousClock.now
             try await recorder.start(id: sessionID, kind: kind)
+            let loop = InterviewerLoop(kind: kind, config: deps.arcConfig,
+                                       speak: { await recorder.speak($0) },
+                                       now: { ContinuousClock.now - captureStart },
+                                       sleep: { try? await Task.sleep(for: $0) })
+            // Ends once the stream is finished at the end of the session and its last inputs are delivered.
+            Task { for await input in inputs { await input.deliver(to: loop) } }
+            interviewer.yield(.captureStarted(opening: prompt))
             arc = SessionArc(kind: kind, config: deps.arcConfig, startedAt: startedAt)
             persistLog()
             try? deps.promptLog.record(promptID: opening.main.logID, session: sessionID)
@@ -120,6 +141,8 @@ final class SessionViewModel: Identifiable {
             startError = "Could not start recording: \(error.localizedDescription)"
             observation?.cancel()
             cardObservation?.cancel()
+            interviewer.finish()
+            self.interviewer = nil
             self.recorder = nil
         }
     }
@@ -132,6 +155,8 @@ final class SessionViewModel: Identifiable {
         ticker?.cancel()
         quietTimer?.cancel()
         do { try await recorder.stop() } catch { stopError = error.localizedDescription }
+        // The loop heard `ended` with the effect above; no voice event follows the stop.
+        interviewer?.finish()
         persistLog()
         await queue?.finish()
         observation?.cancel()
@@ -151,6 +176,7 @@ final class SessionViewModel: Identifiable {
     func keepGoing() {
         wrapUpOffered = false
         apply(arc.apply(.keepGoing, now: .now))
+        interviewer?.yield(.keepGoing)
     }
 
     func dismissDisclosure() { disclosure = nil }
@@ -214,6 +240,7 @@ final class SessionViewModel: Identifiable {
 
     private func apply(_ effect: ArcEffect?) {
         persistLog()
+        if let effect { interviewer?.yield(.arc(effect, stage: arc.stage)) }
         switch effect {
         case .offerWrapUp:
             wrapUpOffered = true
@@ -280,7 +307,8 @@ final class SessionViewModel: Identifiable {
         case .candidates:
             extractionStatus = nil
             cardQueue.cards.forEach { cards.shown($0) }
-        case .flags(let flags, _):
+        case .flags(let flags, let segment):
+            interviewer?.yield(.flags(flags, segment: segment))
             apply(arc.apply(.flags(flags), now: .now))
         case .skipped:
             break
