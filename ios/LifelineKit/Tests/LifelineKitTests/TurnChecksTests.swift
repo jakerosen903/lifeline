@@ -57,3 +57,25 @@ private func reply(_ kind: ReplyKind, _ text: String?, askedAboutApp: Bool = fal
     #expect(TurnChecks.validate(reply(.question, "Anything at all Zed", askedAboutApp: true), sessionWords: said) == .aboutApp)
     #expect(TurnChecks.validate(reply(.none, nil, askedAboutApp: true), sessionWords: said) == .aboutApp)
 }
+
+@Test func aNameJoinedByPunctuationIsStillChecked() {
+    #expect(TurnChecks.validate(reply(.reflection, "The garden\u{2014}Maya's place."), sessionWords: said) == .dropped("not said: mayas"))
+    #expect(TurnChecks.validate(reply(.question, "garden,Maya?"), sessionWords: said) == .dropped("not said: maya"))
+    #expect(TurnChecks.validate(reply(.reflection, "The ex-Navy tree."), sessionWords: said) == .dropped("not said: navy"))
+    #expect(TurnChecks.validate(reply(.reflection, "mary-Ann kept bees."), sessionWords: said) == .dropped("not said: ann"))
+}
+
+@Test func anAbbreviationDoesNotEndASentence() {
+    #expect(TurnChecks.validate(reply(.question, "Did Dr. Patel help?"), sessionWords: said + ["dr"]) == .dropped("not said: patel"))
+    #expect(TurnChecks.validate(reply(.question, "Did J. Patel help?"), sessionWords: said + ["j"]) == .dropped("not said: patel"))
+    #expect(TurnChecks.validate(reply(.reflection, "Bees. Garden."), sessionWords: said) == .speak(.reflection, "Bees. Garden."))
+}
+
+@Test func anAccentedNameThePersonDidNotSayIsDropped() {
+    #expect(TurnChecks.validate(reply(.question, "bees with \u{00C9}lise?"), sessionWords: said) == .dropped("not said: \u{00E9}lise"))
+}
+
+@Test func dashesSplitWordsForTheCount() {
+    let text = Array(repeating: "tree", count: 11).joined(separator: "\u{2014}") + " " + Array(repeating: "tree", count: 10).joined(separator: "-")
+    #expect(TurnChecks.validate(reply(.reflection, text), sessionWords: said) == .dropped("too long"))
+}

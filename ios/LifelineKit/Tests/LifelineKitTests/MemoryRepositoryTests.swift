@@ -68,3 +68,16 @@ private struct Env {
     #expect(try memories.excludedSegmentIDs(in: session) == [segments[0].id])
     #expect(try memories.excludedSegmentIDs(in: other) == [otherSegments[0].id])
 }
+
+@Test func oneExcludedMemoryWithSpansInTwoSegmentsReturnsBoth() throws {
+    let db = try AppDatabase.inMemory()
+    let sessions = SessionRepository(db), candidates = CandidateRepository(db), memories = MemoryRepository(db)
+    let (session, segments) = try StoreFixtures.session(in: sessions, segments: ["one two", "three four", "five six"])
+    let candidate = StoreFixtures.candidate(segments[0].id)
+    try candidates.insert(candidate)
+    let memory = StoreFixtures.memory(from: candidate.id)
+    let spans = [0, 2].enumerated().map { MemorySpan(memoryID: memory.id, segmentID: segments[$1].id, startMs: 0, endMs: 1_000, order: $0) }
+    try memories.insert(memory, spans: spans, people: [], places: [], anchors: [])
+    try memories.setExcluded(memory.id, true)
+    #expect(try memories.excludedSegmentIDs(in: session) == [segments[0].id, segments[2].id])
+}
