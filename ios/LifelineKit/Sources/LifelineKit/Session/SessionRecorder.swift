@@ -197,6 +197,8 @@ public actor SessionRecorder {
             storeTurn(id, startMs: startMs)
         case .turnEnded(let id, let endMs, let interrupted):
             endTurn(id, endMs: endMs, interrupted: interrupted)
+        case .heard:
+            break   // the interviewer loop acts on commands; the recorder stores nothing for them
         }
         hooks.onVoiceEvent(event)
     }

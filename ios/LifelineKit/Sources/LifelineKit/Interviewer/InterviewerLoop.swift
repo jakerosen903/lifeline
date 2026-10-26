@@ -107,7 +107,7 @@ public actor InterviewerLoop {
         case .resumed:
             suspended = false
             await offerPending()
-        case .transcriptFinal, .segmentClosed, .failed:
+        case .transcriptFinal, .segmentClosed, .failed, .heard:
             break
         }
     }
