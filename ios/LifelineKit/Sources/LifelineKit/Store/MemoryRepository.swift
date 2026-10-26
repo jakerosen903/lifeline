@@ -485,6 +485,20 @@ public struct MemoryRepository: Sendable {
         try db.writer.read { Set(try Memory.filter(Column("excluded_from_ai") == true).fetchAll($0).map(\.id)) }
     }
 
+    /// The segments of a session that hold a span of a memory excluded from AI. Their words never go to the interviewer.
+    public func excludedSegmentIDs(in session: SessionID) throws -> Set<SegmentID> {
+        try db.writer.read { db in
+            let ids = try String.fetchAll(db, sql: """
+                select distinct memory_span.segment_id
+                from memory_span
+                join memory on memory.id = memory_span.memory_id
+                join segment on segment.id = memory_span.segment_id
+                where segment.session_id = ? and memory.excluded_from_ai = 1
+                """, arguments: [session.rawValue])
+            return Set(ids.map(SegmentID.init(rawValue:)))
+        }
+    }
+
     public func setHidden(_ id: MemoryID, _ hidden: Bool) throws {
         try db.writer.write { try $0.execute(sql: "update memory set hidden_from_timeline = ? where id = ?", arguments: [hidden, id.rawValue]) }
     }
