@@ -53,7 +53,7 @@ public enum VoiceEvent: Equatable, Sendable {
     case turnStarted(InterviewerTurnID, atMs: Milliseconds)
     /// The turn stopped. `interrupted` is true when pause, an interruption, stop or the person cut it.
     case turnEnded(InterviewerTurnID, atMs: Milliseconds, interrupted: Bool)
-    /// The person asked for something by voice. It follows the partial that carried it, once per utterance.
+    /// The person asked for something by voice. It follows the final that carried it, at most once per utterance.
     case heard(VoiceCommand)
 }
 

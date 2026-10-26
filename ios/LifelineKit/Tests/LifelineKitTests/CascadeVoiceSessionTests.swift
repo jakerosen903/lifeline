@@ -458,13 +458,34 @@ private func settle(_ h: Harness, chunks: Int) async throws {
 
 // MARK: Barge-in and voice commands (M8)
 
-private func partial(_ text: String) -> TranscriptResult {
-    TranscriptResult(text: text, words: [], range: MsRange(start: 0, end: 0), isFinal: false)
+private func partial(_ text: String, _ start: Int, _ end: Int) -> TranscriptResult {
+    TranscriptResult(text: text, words: [], range: MsRange(start: start, end: end), isFinal: false)
 }
 
-/// One second of quiet, then a turn that plays from 1_000 ms. The mic hears the turn and the
-/// person until 2_000 ms, when a partial with two of the person's words arrives.
-private func bargeInMidTurn(_ h: Harness, turn: SpokenTurn, partial heard: String) async throws -> (events: AsyncStream<VoiceEvent>, untilPartial: [VoiceEvent]) {
+private func final(_ words: [TranscribedWord]) -> TranscriptResult {
+    TranscriptResult(text: words.map(\.text).joined(separator: " "), words: words,
+                     range: MsRange(start: words.first?.range.start ?? 0, end: words.last?.range.end ?? 0), isFinal: true)
+}
+
+/// Every event within `ms`. It ends the stream's iteration, so use it last.
+private func collectFor(_ events: AsyncStream<VoiceEvent>, ms: Int) async -> [VoiceEvent] {
+    let seen = Mutex<[VoiceEvent]>([])
+    let reader = Task { for await e in events { seen.withLock { $0.append(e) } } }
+    try? await Task.sleep(for: .milliseconds(ms))
+    reader.cancel()
+    return seen.withLock { $0 }
+}
+
+private func isHeard(_ e: VoiceEvent) -> Bool { if case .heard = e { true } else { false } }
+
+/// Waits until the session has asked the output to stop `count` times.
+private func waitForStops(_ h: Harness, _ count: Int) async throws {
+    for _ in 0..<100 where h.output.stops < count { try await Task.sleep(for: .milliseconds(10)) }
+}
+
+/// One second of quiet, then `turn` plays from 1_000 ms. The mic hears the turn and the person
+/// until 2_000 ms, when the partial `heard` (audio 1_000–2_000 ms) arrives.
+private func partialMidTurn(_ h: Harness, turn: SpokenTurn, partial heard: String) async throws -> AsyncStream<VoiceEvent> {
     let events = try await h.vs.start(writingTo: URL(fileURLWithPath: "/dev/null"))
     h.src.push(speechMs: 0..<0, silenceMs: 0..<1_000)
     try await settle(h, chunks: 10)
@@ -472,37 +493,39 @@ private func bargeInMidTurn(_ h: Harness, turn: SpokenTurn, partial heard: Strin
     _ = try await firstEvent(events, where: isTurnStarted)
     h.src.push(speechMs: 1_000..<2_000)
     try await settle(h, chunks: 20)
-    h.tr.push(partial(heard))
-    let seen = try await collectUntil(events) { if case .transcriptPartial = $0 { true } else { false } }
-    return (events, seen)
+    h.tr.push(partial(heard, 1_000, 2_000))
+    return events
 }
 
 /// The rest of the person's sentence after the cut (3 s, enough speech for a segment), and its
 /// final. "tell me" echoes the turn.
 private func finishTheSentence(_ h: Harness) {
     h.src.push(speechMs: 2_000..<5_000, silenceMs: 5_000..<7_000)
-    let heard = [w("tell", 1_000, 1_200), w("me", 1_200, 1_400), w("my", 1_500, 1_700), w("brother", 1_700, 2_100),
-                 w("built", 2_200, 2_600), w("it", 2_600, 5_000)]
-    h.tr.push(TranscriptResult(text: heard.map(\.text).joined(separator: " "), words: heard, range: MsRange(start: 1_000, end: 5_000), isFinal: true))
+    h.tr.push(final([w("tell", 1_000, 1_200), w("me", 1_200, 1_400), w("my", 1_500, 1_700), w("brother", 1_700, 2_100),
+                     w("built", 2_200, 2_600), w("it", 2_600, 5_000)]))
 }
+
+private let houseTurn = "Tell me about the house."
 
 @Test func bargeInStopsPlaybackAndKeepsThePersonsWords() async throws {
     let h = Harness()
-    let turn = SpokenTurn(id: InterviewerTurnID(), text: "Tell me about the house.")
-    let (events, seen) = try await bargeInMidTurn(h, turn: turn, partial: "tell me my brother")
+    let turn = SpokenTurn(id: InterviewerTurnID(), text: houseTurn)
+    let events = try await partialMidTurn(h, turn: turn, partial: "tell me my brother")
+    let seen = try await collectUntil(events) { if case .transcriptPartial = $0 { true } else { false } }
     #expect(seen == [.turnEnded(turn.id, atMs: 2_000, interrupted: true), .transcriptPartial("tell me my brother")],
             "the turn is cut, then the partial is emitted; saw \(seen)")
-    #expect(h.output.stops == 1)
     finishTheSentence(h)
     let closed = try await firstEvent(events) { if case .segmentClosed = $0 { true } else { false } }
     guard case .segmentClosed(let segment) = closed else { Issue.record("expected a segment"); return }
     #expect(segment.words.map(\.text) == ["my", "brother", "built", "it"])
+    #expect(h.output.stops == 1)
 }
 
 @Test func aBargeInSegmentStartsAtThePersonsFirstWord() async throws {
     let h = Harness()
-    let turn = SpokenTurn(id: InterviewerTurnID(), text: "Tell me about the house.")
-    let (events, _) = try await bargeInMidTurn(h, turn: turn, partial: "tell me my brother")
+    let turn = SpokenTurn(id: InterviewerTurnID(), text: houseTurn)
+    let events = try await partialMidTurn(h, turn: turn, partial: "tell me my brother")
+    _ = try await firstEvent(events) { if case .transcriptPartial = $0 { true } else { false } }
     finishTheSentence(h)
     let seen = try await collectUntil(events) { if case .segmentClosed = $0 { true } else { false } }
     #expect(seen.first == .speechStarted(atMs: 2_000), "real levels reach the segmenter at once after the cut; saw \(seen)")
@@ -511,11 +534,16 @@ private func finishTheSentence(_ h: Harness) {
 }
 
 @Test func aBargeInCanCarryACommand() async throws {
+    // The barge-in partial carries no request; the request is heard on its final.
     let h = Harness()
-    let turn = SpokenTurn(id: InterviewerTurnID(), text: "Tell me about the house.")
-    let (events, seen) = try await bargeInMidTurn(h, turn: turn, partial: "let me talk")
-    #expect(seen == [.turnEnded(turn.id, atMs: 2_000, interrupted: true), .transcriptPartial("let me talk")])
-    #expect(try await collect(events, count: 1) == [.heard(.quiet)])
+    let turn = SpokenTurn(id: InterviewerTurnID(), text: houseTurn)
+    let events = try await partialMidTurn(h, turn: turn, partial: "let me talk")
+    let talk = final([w("let", 1_500, 1_700), w("me", 1_700, 1_800), w("talk", 1_800, 2_000)])
+    h.tr.push(talk)
+    let seen = try await collectUntil(events, isHeard)
+    #expect(seen == [.turnEnded(turn.id, atMs: 2_000, interrupted: true), .transcriptPartial("let me talk"),
+                     .transcriptFinal(talk), .heard(.quiet)], "saw \(seen)")
+    try await waitForStops(h, 1)
     #expect(h.output.stops == 1)
 }
 
@@ -525,19 +553,52 @@ private func finishTheSentence(_ h: Harness) {
     let turn = SpokenTurn(id: InterviewerTurnID(), text: "No questions for now, just tell me what comes to mind.")
     await h.vs.say(turn)
     _ = try await firstEvent(events, where: isTurnStarted)
-    h.tr.push(partial("no questions"))          // the app's own words
-    h.tr.push(partial("no questions for yes"))  // one new word is not enough to barge in
+    h.tr.push(partial("no questions", 0, 0))          // the app's own words
+    h.tr.push(partial("no questions for yes", 0, 0))  // one new word is not enough to barge in
     try await Task.sleep(for: .milliseconds(100))
     h.output.finish()
     #expect(try await collectUntil(events, isTurnEnded) == [.turnEnded(turn.id, atMs: 0, interrupted: false)],
             "dropped partials are not emitted")
-    // Within the pad after the turn ends, its echo is still dropped.
-    h.tr.push(partial("no questions"))
-    #expect(try await collect(events, count: 1, timeoutMs: 200).isEmpty)
+    // Within the pad after the turn ends, its echo is still dropped, and its final carries no request.
+    h.tr.push(partial("no questions", 0, 0))
+    let echo = final([w("no", 0, 100), w("questions", 100, 200)])
+    h.tr.push(echo)
+    #expect(await collectFor(events, ms: 300) == [.transcriptFinal(echo)])
     #expect(h.output.stops == 0)
 }
 
-@Test func aCommandAfterThePadIsHeard() async throws {
+@Test func anEchoedCommandPhraseIsNotHeard() async throws {
+    let h = Harness()
+    let events = try await h.vs.start(writingTo: URL(fileURLWithPath: "/dev/null"))
+    let turn = SpokenTurn(id: InterviewerTurnID(), text: "Say a bit more.")
+    await h.vs.say(turn)
+    _ = try await firstEvent(events, where: isTurnStarted)
+    h.src.push(speechMs: 0..<1_000)
+    try await settle(h, chunks: 10)
+    h.output.finish()
+    _ = try await firstEvent(events, where: isTurnEnded)
+    let echo = final([w("a", 300, 400), w("bit", 400, 600), w("more", 600, 900)])
+    h.tr.push(echo)
+    #expect(await collectFor(events, ms: 300) == [.transcriptFinal(echo)])
+}
+
+@Test func aLateEchoPartialIsStillDropped() async throws {
+    let h = Harness()
+    let events = try await h.vs.start(writingTo: URL(fileURLWithPath: "/dev/null"))
+    let turn = SpokenTurn(id: InterviewerTurnID(), text: houseTurn)
+    await h.vs.say(turn)
+    _ = try await firstEvent(events, where: isTurnStarted)
+    h.src.push(speechMs: 0..<1_000)
+    try await settle(h, chunks: 10)
+    h.output.finish()
+    _ = try await firstEvent(events, where: isTurnEnded)
+    h.src.push(speechMs: 0..<0, silenceMs: 1_000..<2_000)   // 1 s after the turn's end: past the pad
+    try await settle(h, chunks: 20)
+    h.tr.push(partial("tell me about", 100, 800))   // the turn's own audio, reported late
+    #expect(try await collect(events, count: 1, timeoutMs: 300).isEmpty)
+}
+
+@Test func aPartialAndACommandAfterThePadAreThePersons() async throws {
     let h = Harness()
     let events = try await h.vs.start(writingTo: URL(fileURLWithPath: "/dev/null"))
     let turn = SpokenTurn(id: InterviewerTurnID(), text: "No questions for now, just tell me what comes to mind.")
@@ -547,19 +608,77 @@ private func finishTheSentence(_ h: Harness) {
     _ = try await firstEvent(events, where: isTurnEnded)
     h.src.push(speechMs: 0..<0, silenceMs: 0..<400)   // 400 ms after the turn's end: past the 300 ms pad
     try await settle(h, chunks: 4)
-    h.tr.push(partial("no questions"))
-    #expect(try await collect(events, count: 2) == [.transcriptPartial("no questions"), .heard(.quiet)])
+    h.tr.push(partial("no questions", 400, 600))
+    let request = final([w("no", 400, 500), w("questions", 500, 600)])
+    h.tr.push(request)
+    #expect(try await collect(events, count: 3) == [.transcriptPartial("no questions"), .transcriptFinal(request), .heard(.quiet)])
 }
 
 @Test func aCommandIsEmittedOncePerUtterance() async throws {
     let h = Harness()
     let events = try await h.vs.start(writingTo: URL(fileURLWithPath: "/dev/null"))
-    h.tr.push(partial("shh"))
-    h.tr.push(partial("shh shh"))
-    h.tr.push(TranscriptResult(text: "shh shh", words: [w("shh", 0, 300), w("shh", 300, 600)], range: MsRange(start: 0, end: 600), isFinal: true))
-    h.tr.push(partial("keep going"))
-    let seen = try await collect(events, count: 6)
-    let final = TranscriptResult(text: "shh shh", words: [w("shh", 0, 300), w("shh", 300, 600)], range: MsRange(start: 0, end: 600), isFinal: true)
-    #expect(seen == [.transcriptPartial("shh"), .heard(.quiet), .transcriptPartial("shh shh"),
-                     .transcriptFinal(final), .transcriptPartial("keep going"), .heard(.keepGoing)])
+    let first = final([w("shh", 0, 300)]), second = final([w("shh", 300, 500)])
+    h.tr.push(partial("shh", 0, 300))
+    h.tr.push(first)
+    h.tr.push(second)
+    #expect(try await collect(events, count: 4) == [.transcriptPartial("shh"), .transcriptFinal(first), .heard(.quiet), .transcriptFinal(second)])
+    // The person pauses: the next utterance can carry a request again.
+    h.src.push(speechMs: 0..<500, silenceMs: 500..<2_500)
+    _ = try await firstEvent(events) { if case .userPaused = $0 { true } else { false } }
+    let more = final([w("keep", 3_000, 3_300), w("going", 3_300, 3_600)])
+    h.tr.push(more)
+    #expect(try await collect(events, count: 2) == [.transcriptFinal(more), .heard(.keepGoing)])
+}
+
+@Test func aPauseEndsTheUtterance() async throws {
+    let h = Harness()
+    let events = try await h.vs.start(writingTo: URL(fileURLWithPath: "/dev/null"))
+    let shh = final([w("shh", 0, 300)])
+    h.tr.push(shh)
+    #expect(try await collect(events, count: 2) == [.transcriptFinal(shh), .heard(.quiet)])
+    try await h.vs.pause()
+    try await h.vs.resume()
+    _ = try await firstEvent(events) { $0 == .resumed }
+    h.tr.push(shh)
+    #expect(try await collect(events, count: 2) == [.transcriptFinal(shh), .heard(.quiet)])
+}
+
+@Test func aCommandAtTheStartOfAStoryIsIgnored() async throws {
+    let h = Harness()
+    let events = try await h.vs.start(writingTo: URL(fileURLWithPath: "/dev/null"))
+    for text in ["let", "let me", "let me talk", "let me talk about"] { h.tr.push(partial(text, 0, 1_000)) }
+    let story = final([w("let", 0, 200), w("me", 200, 300), w("talk", 300, 600), w("about", 600, 900),
+                       w("my", 900, 1_000), w("mother", 1_000, 1_400)])
+    h.tr.push(story)
+    let seen = await collectFor(events, ms: 300)
+    #expect(seen.count == 5 && seen.last == .transcriptFinal(story))
+    #expect(!seen.contains(where: isHeard), "saw \(seen)")
+}
+
+@Test func aLoneShhOverTheAppIsHeard() async throws {
+    let h = Harness()
+    let turn = SpokenTurn(id: InterviewerTurnID(), text: houseTurn)
+    let events = try await partialMidTurn(h, turn: turn, partial: "shh")   // one word: dropped
+    let shh = final([w("shh", 1_500, 1_800)])
+    h.tr.push(shh)
+    let seen = try await collectUntil(events, isTurnEnded)
+    #expect(seen == [.transcriptFinal(shh), .heard(.quiet), .turnEnded(turn.id, atMs: 2_000, interrupted: true)], "saw \(seen)")
+    try await waitForStops(h, 1)
+    #expect(h.output.stops == 1)
+}
+
+@Test func aTurnAfterABargeInWaitsForTheStop() async throws {
+    let h = Harness()
+    let turn = SpokenTurn(id: InterviewerTurnID(), text: houseTurn)
+    let next = SpokenTurn(id: InterviewerTurnID(), text: "And after that?")
+    h.output.stopDelay.withLock { $0 = .milliseconds(300) }
+    let events = try await partialMidTurn(h, turn: turn, partial: "tell me my brother")
+    _ = try await firstEvent(events) { if case .transcriptPartial = $0 { true } else { false } }
+    #expect(await h.vs.say(next))
+    #expect(try await firstEvent(events, where: isTurnStarted) == .turnStarted(next.id, atMs: 2_000))
+    #expect(h.output.stops == 1)
+    try await Task.sleep(for: .milliseconds(400))   // past the slow stop
+    h.output.finish()
+    #expect(try await collect(events, count: 1) == [.turnEnded(next.id, atMs: 2_000, interrupted: false)],
+            "the barge-in's stop does not cut the next turn")
 }

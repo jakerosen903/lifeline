@@ -1,7 +1,8 @@
-/// Hears a request in a live partial, on the device. A request is short: a phrase counts only
-/// in a partial of a few words, so "my father would never let me talk back" is a story, not a request.
+/// Hears a request in what the person said, on the device. The voice session passes the person's
+/// words of one final. A request is short: a phrase counts only in a few words, so
+/// "my father would never let me talk back" is a story, not a request.
 public enum QuietMatcher {
-    /// The longest partial, in tokens, that can be a request.
+    /// The most tokens that can be a request.
     static let maxTokens = 4
 
     private static let phrases: [(tokens: [String], command: VoiceCommand)] = [
@@ -13,7 +14,7 @@ public enum QuietMatcher {
         (["a", "bit", "more"], .keepGoing),
     ]
 
-    /// The request in `partial`: a phrase as consecutive tokens, or any "shh" ("sh", "shhhh").
+    /// The request in `partial` (the person's words): a phrase as consecutive tokens, or any "shh" ("sh", "shhhh").
     public static func command(in partial: String) -> VoiceCommand? {
         let tokens = TurnText.tokens(partial)
         guard !tokens.isEmpty, tokens.count <= maxTokens else { return nil }
