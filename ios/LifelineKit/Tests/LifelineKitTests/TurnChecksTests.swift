@@ -48,6 +48,11 @@ private func reply(_ kind: ReplyKind, _ text: String?, askedAboutApp: Bool = fal
     #expect(TurnChecks.validate(reply(.reflection, "Seven is a lucky tree."), sessionWords: said) == .speak(.reflection, "Seven is a lucky tree."))
 }
 
+@Test func oneIsNotCountedAsANumber() {
+    #expect(TurnChecks.validate(reply(.reflection, "The garden was the one place you felt calm."), sessionWords: said)
+        == .speak(.reflection, "The garden was the one place you felt calm."))
+}
+
 @Test func digitsPassWhenThePersonSpelledTheNumber() {
     let session = said + ["three", "sisters"]
     #expect(TurnChecks.validate(reply(.reflection, "Your 3 sisters kept bees."), sessionWords: session) == .speak(.reflection, "Your 3 sisters kept bees."))
