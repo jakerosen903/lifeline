@@ -15,7 +15,7 @@ public struct PeopleRepository: Sendable {
     /// Owner first, then by display name.
     public func people() throws -> [Person] {
         try db.writer.read {
-            try Person.order(Column("is_owner").desc, Column("display_name").collating(.nocase)).fetchAll($0)
+            try Person.fetchAll($0, sql: Person.selectSQL + "order by person.is_owner desc, entity.title collate nocase")
         }
     }
 
@@ -23,19 +23,18 @@ public struct PeopleRepository: Sendable {
     /// People never linked come last. Feeds the packet's relevance order (M5).
     public func peopleByRecentLink() throws -> [Person] {
         try db.writer.read { db in
-            try Person.fetchAll(db, sql: """
-                select person.* from person
-                left join (select memory_person.person_id, max(memory.created_at) as last_linked from memory_person
-                           join memory on memory.id = memory_person.memory_id group by memory_person.person_id) links
-                  on links.person_id = person.id
+            try Person.fetchAll(db, sql: Person.selectSQL + """
+                left join (select me.entity_id, max(memory.created_at) as last_linked from moment_entity me
+                           join memory on memory.id = me.memory_id group by me.entity_id) links
+                  on links.entity_id = person.entity_id
                 where person.is_owner = 0
-                order by links.last_linked is null, links.last_linked desc, person.display_name collate nocase
+                order by links.last_linked is null, links.last_linked desc, entity.title collate nocase
                 """)
         }
     }
 
     public func person(id: PersonID) throws -> Person? {
-        try db.writer.read { try Person.fetchOne($0, key: id.rawValue) }
+        try db.writer.read { try Person.fetchOne($0, sql: Person.selectSQL + "where person.id = ?", arguments: [id.rawValue]) }
     }
 
     public func aliases(of person: PersonID) throws -> [Alias] {
@@ -55,10 +54,9 @@ public struct PeopleRepository: Sendable {
         let needle = Self.normalize(text)
         guard !needle.isEmpty else { return nil }
         return try db.writer.read { db in
-            try Person.fetchOne(db, sql: """
-                select person.* from person
+            try Person.fetchOne(db, sql: Person.selectSQL + """
                 left join alias on alias.person_id = person.id
-                where lower(trim(person.display_name)) = ? or lower(trim(alias.text)) = ?
+                where lower(trim(entity.title)) = ? or lower(trim(alias.text)) = ?
                 limit 1
                 """, arguments: [needle, needle])
         }
@@ -85,10 +83,8 @@ public struct PeopleRepository: Sendable {
         let name = newName.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !name.isEmpty else { throw Error.emptyName }
         try db.writer.write { db in
-            guard var row = try Person.fetchOne(db, key: person.rawValue) else { return }
-            let old = row.displayName
-            row.displayName = name
-            try row.update(db)
+            guard let old = try String.fetchOne(db, sql: "select title from entity where id = ?", arguments: [person.rawValue]) else { return }
+            try db.execute(sql: "update entity set title = ? where id = ?", arguments: [name, person.rawValue])
             try Self.insertAlias(old, person, db)
             try Self.insertAlias(name, person, db)
         }
@@ -99,7 +95,7 @@ public struct PeopleRepository: Sendable {
         let person = Person(id: .init(), displayName: displayName.trimmingCharacters(in: .whitespacesAndNewlines),
                             notes: nil, isOwner: false, birthDate: nil, birthDateOrigin: nil)
         try db.writer.write { db in
-            try person.insert(db)
+            try person.insertWithEntity(db)
             try Self.insertAlias(person.displayName, person.id, db)
         }
         return person
@@ -153,20 +149,12 @@ public struct PeopleRepository: Sendable {
         }
     }
 
-    /// Reuses a place with the same name, ignoring case.
+    /// Reuses a place with the same name, ignoring case. A place is an entity (M7).
     public func insertPlace(nameText: String) throws -> Place {
-        let needle = Self.normalize(nameText)
-        return try db.writer.write { db in
-            if let existing = try Place.fetchOne(db, sql: "select * from place where lower(trim(name_text)) = ?", arguments: [needle]) {
-                return existing
-            }
-            let place = Place(id: .init(), nameText: nameText.trimmingCharacters(in: .whitespacesAndNewlines), lat: nil, lon: nil)
-            try place.insert(db)
-            return place
-        }
+        Place(try EntityRepository(db).insert(type: .place, title: nameText))
     }
 
-    private static func insertAlias(_ text: String, _ person: PersonID, _ db: Database) throws {
+    static func insertAlias(_ text: String, _ person: PersonID, _ db: Database) throws {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
         let exists = try Alias.fetchOne(db, sql: "select * from alias where person_id = ? and lower(trim(text)) = ?",

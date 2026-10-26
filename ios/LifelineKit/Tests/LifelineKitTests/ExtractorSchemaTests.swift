@@ -70,7 +70,7 @@ import Testing
 
 @Test func configDefaultsMatchTheSpec() {
     let c = ExtractorConfig.default
-    #expect(c.model == "claude-opus-5-5" && c.effort == "low" && c.maxTokens == 4096 && c.version == "v5")
+    #expect(c.model == "claude-opus-5-5" && c.effort == "low" && c.maxTokens == 4096 && c.version == "v6")
     #expect(c.betas.contains("server-side-fallback-2026-07-01"))
 }
 
@@ -86,4 +86,31 @@ import Testing
     #expect(props["extra_spans"] == nil, "app-written, never asked of the model")
     let required = Set((memory["required"] as? [String]) ?? [])
     #expect(required.isSuperset(of: ["same_as_memory_ids", "continues_candidate_id", "story_ref", "story_title_hint"]))
+}
+
+// The API refuses a schema with more than 16 union-typed parameters (type arrays or anyOf). The
+// handles and hints are plain strings where "" means none, so the count stays well under.
+@Test func schemaStaysUnderTheUnionLimit() {
+    var unions = 0
+    func walk(_ node: Any) {
+        if let dict = node as? [String: Any] {
+            if dict["type"] is [Any] || dict["anyOf"] != nil { unions += 1 }
+            dict.values.forEach(walk)
+        } else if let array = node as? [Any] { array.forEach(walk) }
+    }
+    walk(ExtractorSchema.json)
+    #expect(unions <= 12, "\(unions) union-typed parameters; the API's limit is 16")
+}
+
+@Test func emptyHandlesAndHintsDecodeAsNone() throws {
+    let json = """
+    {"memories":[{"ref":"m1","kind":"fact","title":"The fence was white","quote":"the fence was white","segment_span":{"start_word":0,"end_word":3},
+      "people_refs":[],"place_text":null,"anchors":[],"same_as_memory_ids":[],"continues_candidate_id":null,"story_ref":null,"story_title_hint":null,
+      "collection_hint":null,"chapter_hint":null,"confidence":0.9,"entity_refs":[],"about_ref":"","domain_hint":""}],
+     "mentions":[{"text":"the fence","kind":"thing","likely_alias_of_person_id":null,"confidence":0.9,"relation_text":null,"ref":"","likely_entity_id":null,"title":"","domain_hint":""}],
+     "flags":{"disclosure":"none","wants_to_stop":false,"wants_to_change_subject":false}}
+    """
+    let out = try ExtractorOutput.decode(from: Data(json.utf8))
+    #expect(out.memories[0].aboutRef == nil && out.memories[0].domainHint == nil)
+    #expect(out.mentions[0].ref == nil && out.mentions[0].title == nil && out.mentions[0].domainHint == nil)
 }

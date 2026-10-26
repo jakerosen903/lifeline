@@ -24,7 +24,7 @@ public enum CandidatePayload {
     }
 
     public static func mention(_ candidate: Candidate) -> MentionOut? {
-        guard candidate.kind == .person || candidate.kind == .place else { return nil }
+        guard candidate.kind == .person || candidate.kind == .place || candidate.kind == .entity else { return nil }
         return try? decode(MentionOut.self, from: candidate.payload)
     }
 }

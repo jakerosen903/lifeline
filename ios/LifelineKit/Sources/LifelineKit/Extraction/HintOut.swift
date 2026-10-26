@@ -2,6 +2,8 @@ import Foundation
 
 public enum HintKind: String, Codable, Sendable {
     case collection, chapter, story
+    /// "Sounds like it belongs to: home": a free-text domain tag (M7).
+    case domain
 }
 
 /// "Sounds like it belongs here": a collection or chapter phrase the extractor heard in a memory.

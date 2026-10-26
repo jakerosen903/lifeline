@@ -48,6 +48,16 @@ public struct ContextPacket: Codable, Sendable, Equatable {
         public init(id: String, title: String?, momentTitles: [String]) { self.id = id; self.title = title; self.momentTitles = momentTitles }
     }
 
+    /// A place, thing or idea on file, with one line of detail in the person's words (M7).
+    public struct EntityEntry: Codable, Sendable, Equatable {
+        public var id: String
+        public var type: String
+        public var title: String
+        public var detail: String?
+
+        public init(id: String, type: String, title: String, detail: String?) { self.id = id; self.type = type; self.title = title; self.detail = detail }
+    }
+
     public var previousSegments: [String]
     public var people: [PersonEntry]
     public var chapters: [ChapterEntry]
@@ -57,6 +67,7 @@ public struct ContextPacket: Codable, Sendable, Equatable {
     public var profileFreeText: String?
     public var pending: [PendingEntry] = []
     public var stories: [StoryEntry] = []
+    public var entities: [EntityEntry] = []
 
     /// Sorted keys, so the same packet always renders to the same bytes.
     public func encodedJSON() throws -> Data {
@@ -78,7 +89,7 @@ public struct ContextPacketLimits: Sendable, Equatable {
 
 /// Pure. Fills the packet in relevance order and trims it to a token ceiling (M5): previous
 /// segments, pending cards, related and session memories, people (pass them already ordered),
-/// stories, chapters, curiosity. Whole entries go, least relevant section first, and every
+/// entities (M7), stories, chapters, curiosity. Whole entries go, least relevant section first, and every
 /// section keeps its first entry. Profile free text is never dropped.
 public enum ContextPacketBuilder {
     public static let defaultBudgetTokens = 6000
@@ -87,6 +98,7 @@ public enum ContextPacketBuilder {
                              profileFreeText: String?, stage: String, limits: ContextPacketLimits = ContextPacketLimits(),
                              chapters: [Chapter] = [], curiosity: [CuriosityItem] = [], excludedMemoryIDs: Set<MemoryID> = [],
                              related: [Memory] = [], pending: [Candidate] = [], stories: [(Story, [Memory])] = [],
+                             entities: [(Entity, String?)] = [],
                              budgetTokens: Int = ContextPacketBuilder.defaultBudgetTokens) -> ContextPacket {
         let earlier = previous.filter { $0.index < segment.index }.sorted { $0.index < $1.index }
         let window = earlier.suffix(limits.previousSegments).map(\.text)
@@ -122,7 +134,11 @@ public enum ContextPacketBuilder {
         }
         var packet = ContextPacket(previousSegments: Array(window), people: Array(entries), chapters: chapterEntries, memories: memoryEntries,
                                    curiosity: Array(questions), stage: stage, profileFreeText: profileFreeText,
-                                   pending: pendingEntries, stories: storyEntries)
+                                   pending: pendingEntries, stories: storyEntries,
+                                   // People have their own section; an entity excluded from AI is never sent (M7).
+                                   entities: entities.filter { $0.0.type != .person && !$0.0.excludedFromAI }.map { entity, detail in
+                                       ContextPacket.EntityEntry(id: entity.id.rawValue, type: entity.type.rawValue, title: entity.title, detail: detail)
+                                   })
         trim(&packet, to: budgetTokens)
         return packet
     }
@@ -140,6 +156,7 @@ public enum ContextPacketBuilder {
             { $0.curiosity.count > 1 ? ($0.curiosity.removeLast(), true).1 : false },
             { $0.chapters.count > 1 ? ($0.chapters.removeLast(), true).1 : false },
             { $0.stories.count > 1 ? ($0.stories.removeLast(), true).1 : false },
+            { $0.entities.count > 1 ? ($0.entities.removeLast(), true).1 : false },
             { $0.people.count > 1 ? ($0.people.removeLast(), true).1 : false },
             { $0.memories.count > 1 ? ($0.memories.removeLast(), true).1 : false },
             { $0.pending.count > 1 ? ($0.pending.removeLast(), true).1 : false },

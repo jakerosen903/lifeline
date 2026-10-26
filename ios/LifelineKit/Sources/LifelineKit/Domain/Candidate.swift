@@ -4,6 +4,8 @@ public enum CandidateKind: String, Codable, Sendable {
     case memory, person, place, flag
     /// A collection or chapter the extractor heard in a memory; shown once the memory is accepted.
     case hint
+    /// A place, thing or idea named in the segment that no memory on the card carries (M7).
+    case entity
 }
 
 public enum CandidateStatus: String, Codable, Sendable {

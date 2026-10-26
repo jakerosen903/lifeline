@@ -82,7 +82,7 @@ struct Dependencies {
     static func live() throws -> Dependencies {
         let root = try AudioLocation.defaultRoot()
         // A restore the person staged is applied now, before anything opens the database (M6).
-        if try Backup.applyPendingRestore(root: root) { print("[backup] restored a copy at launch") }
+        if try Backup.applyPendingRestore(root: root, safetyCopyDirectory: try Backup.safetyCopyDirectory()) { print("[backup] restored a copy at launch") }
         // An export the share sheet left behind is a full copy of everything; it does not outlive the launch.
         Backup.removeTemporaryExports()
         let db = try AppDatabase.open(at: root.appending(path: "Lifeline/lifeline.sqlite"))
@@ -138,14 +138,14 @@ struct Dependencies {
         } else {
             root = FileManager.default.temporaryDirectory.appending(path: "lifeline-ui-\(UUID().uuidString)")
         }
-        if try Backup.applyPendingRestore(root: root) { print("[backup] restored a copy at launch") }
+        if try Backup.applyPendingRestore(root: root, safetyCopyDirectory: try Backup.safetyCopyDirectory()) { print("[backup] restored a copy at launch") }
         let db = try AppDatabase.open(at: root.appending(path: "Lifeline/lifeline.sqlite"))
         let store = ExtractionStore(db)
         // `-uiTesting-slowExtract`: seconds per segment, for tests that watch sorting go on; `-uiTesting-noKey`:
         // an empty key store, and a scripted service that refuses to sort without one, as the live one does.
         let secrets = InMemorySecretStore(args.contains("-uiTesting-noKey") ? [:] : [.anthropicAPIKey: "sk-ant-api03-" + String(repeating: "x", count: 40)])
         let scripted = ScriptedExtractionService(delayMs: args.contains("-uiTesting-slowExtract") ? 4_000 : 200, heavy: args.contains("-uiTesting-heavy"),
-                                                 facts: args.contains("-uiTesting-fact"))
+                                                 facts: args.contains("-uiTesting-fact"), entities: args.contains("-uiTesting-entities"))
         let extraction = KeyGatedExtractionService(inner: scripted, hasKey: { ((try? secrets.read(.anthropicAPIKey)) ?? nil) != nil })
         // Word-overlap vectors under test: deterministic, and enough for the scripted retelling
         // to be retrieved into the packet so the scripted extractor can name it.
@@ -160,6 +160,7 @@ struct Dependencies {
             makeVoiceSession: { onStatus in
                 onStatus(.ready)
                 // `-uiTesting-slow`: a segment every few seconds, for tests that act between segments.
+                if args.contains("-uiTesting-entities") { return ScriptedVoiceSession(script: ScriptedVoiceSession.entityScript, intervalMs: 800) }
                 return ScriptedVoiceSession(intervalMs: args.contains("-uiTesting-slow") ? 2_500 : 800)
             },
             activateAudio: {},

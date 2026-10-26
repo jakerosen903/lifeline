@@ -111,8 +111,8 @@ import GRDB
 }
 
 @Test func schemaVersionsOrderByMigrationPosition() {
-    #expect(Migrations.currentSchemaVersion == "v9")
-    #expect(Migrations.isNewer("v9", than: "v8") && !Migrations.isNewer("v8", than: "v9"))
+    #expect(Migrations.currentSchemaVersion == "v10")
+    #expect(Migrations.isNewer("v9", than: "v8") && !Migrations.isNewer("v8", than: "v9") && Migrations.isNewer("v10", than: "v9"))
     #expect(Migrations.isNewer("v8", than: "v7") && !Migrations.isNewer("v7", than: "v8") && !Migrations.isNewer("v8", than: "v8"))
     #expect(Migrations.isNewer("v99", than: "v8"), "an unknown version is from the future")
 }

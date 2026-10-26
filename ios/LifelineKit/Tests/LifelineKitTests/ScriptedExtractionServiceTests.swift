@@ -80,3 +80,37 @@ import Testing
     let event = try await ScriptedExtractionService(delayMs: 0).extract(request).output.memories.first
     #expect(event?.kind == .event && event?.title == "The blue door")
 }
+
+@Test func entityScriptLandsAThingAnIdeaAndACard() throws {
+    let store = ExtractionStore(try AppDatabase.inMemory())
+    let actions = CandidateActions(store: store)
+    let texts = ScriptedVoiceSession.entityScript.map(\.text)
+    let (session, _) = try StoreFixtures.session(in: store.sessions, segments: texts)
+    let segments = try store.sessions.segments(in: session)
+    var cards: [Candidate] = []
+    for (segment, text) in zip(segments, texts) {
+        let words = text.split(separator: " ").map(String.init)
+        let validated = OutputValidator.validate(ScriptedExtractionService.entityOutput(text: text, words: words), segmentText: text, words: words)
+        for (i, item) in validated.accepted.enumerated() {
+            switch item {
+            case .memory(let m):
+                let c = StoreFixtures.candidate(segment.id, ordinal: i, payload: try CandidatePayload.encode(m)); try store.candidates.insert(c); cards.append(c)
+            case .mention(let m):
+                var c = StoreFixtures.candidate(segment.id, ordinal: i, kind: .entity, payload: try CandidatePayload.encode(m))
+                if ExtractionQueue.carried(m, by: validated.accepted) { c.status = .accepted }
+                try store.candidates.insert(c); cards.append(c)
+            }
+        }
+    }
+    for card in cards where card.kind == .memory { _ = try actions.acceptMemory(card) }
+    let house = try #require(try store.entities.find(type: .thing, title: "the house"))
+    #expect(try store.entities.details(of: house.id).map(\.title) == ["The house had a blue door"])
+    #expect(try store.entities.moments(of: house.id).map(\.title) == ["We painted the house"])
+    #expect(EntityPage.spanText(try store.entities.span(of: house.id)) == "in 1995")
+    #expect(try store.tags.tags(of: .entity, house.id.rawValue).isEmpty, "the model's domain hint tags nothing until the hint card is tapped")
+    let ideas = try store.entities.entities(type: .idea).filter { $0.title == "hard work" }
+    #expect(ideas.count == 2, "each Keep makes its own idea: an idea on file is reused by id only, never by title")
+    #expect(ideas.allSatisfy { (try? store.entities.moments(of: $0.id).count) == 1 })
+    let pending = cards.filter { $0.kind == .entity && $0.status == .pending }
+    #expect(pending.compactMap(CandidatePayload.mention).map(\.text) == ["the old shed"], "only the shed is a card")
+}

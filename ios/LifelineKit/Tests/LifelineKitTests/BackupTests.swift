@@ -46,9 +46,10 @@ private struct Root {
 
     let target = FileManager.default.temporaryDirectory.appending(path: "lifeline-restore-\(UUID().uuidString)")
     _ = try AppDatabase.open(at: target.appending(path: "Lifeline/lifeline.sqlite"))   // a phone with its own, empty archive
-    let pending = try Backup.stage(archive, root: target, appVersion: "1.0 (7)")
+    let documents = try docs()
+    let pending = try Backup.stage(archive, root: target, appVersion: "1.0 (7)", safetyCopyDirectory: documents)
     #expect(pending.manifest == manifest && FileManager.default.fileExists(atPath: pending.safetyCopy.path))
-    #expect(try Backup.applyPendingRestore(root: target))
+    #expect(try Backup.applyPendingRestore(root: target, safetyCopyDirectory: documents))
     let restored = ExtractionStore(try AppDatabase.open(at: target.appending(path: "Lifeline/lifeline.sqlite")))
     #expect(try restored.sessions.listSessions().count == 2 && (try restored.memories.allMemories()).count == 3)
     let bytes = try source.audioBytes()
@@ -56,7 +57,7 @@ private struct Root {
     for (name, data) in bytes { #expect(try Data(contentsOf: restoredDir.appending(path: name)) == data) }
     #expect(try String(contentsOf: target.appending(path: "Lifeline/pauses.log"), encoding: .utf8) == "paused once\n")
     #expect(!FileManager.default.fileExists(atPath: target.appending(path: "Lifeline-restore-pending.json").path))
-    #expect(try !Backup.applyPendingRestore(root: target), "nothing left to apply")
+    #expect(try !Backup.applyPendingRestore(root: target, safetyCopyDirectory: documents), "nothing left to apply")
 }
 
 @Test func exportedDatabaseMatchesTheSourceUnderConcurrentWrites() async throws {
@@ -71,8 +72,9 @@ private struct Root {
     let after = try source.store.sessions.listSessions().count
     let staging = FileManager.default.temporaryDirectory.appending(path: "lifeline-check-\(UUID().uuidString)")
     _ = try AppDatabase.open(at: staging.appending(path: "Lifeline/lifeline.sqlite"))
-    _ = try Backup.stage(archive, root: staging, appVersion: "1.0")
-    #expect(try Backup.applyPendingRestore(root: staging))
+    let documents = try docs()
+    _ = try Backup.stage(archive, root: staging, appVersion: "1.0", safetyCopyDirectory: documents)
+    #expect(try Backup.applyPendingRestore(root: staging, safetyCopyDirectory: documents))
     let copy = try AppDatabase.open(at: staging.appending(path: "Lifeline/lifeline.sqlite"))
     let count = try SessionRepository(copy).listSessions().count
     #expect(count >= before && count <= after)
@@ -91,7 +93,8 @@ private func integrity(_ db: AppDatabase) throws -> String? {
     let future = try Backup.rewritingManifest(of: archive) { $0.schemaVersion = "v99" }
     let target = FileManager.default.temporaryDirectory.appending(path: "lifeline-t-\(UUID().uuidString)")
     _ = try AppDatabase.open(at: target.appending(path: "Lifeline/lifeline.sqlite"))
-    #expect(throws: Backup.Error.newerSchema("v99")) { try Backup.stage(future, root: target, appVersion: "1.0") }
+    let documents = try docs()
+    #expect(throws: Backup.Error.newerSchema("v99")) { try Backup.stage(future, root: target, appVersion: "1.0", safetyCopyDirectory: documents) }
 
     // An archive from a v7 database restores and migrates on open.
     let oldRoot = FileManager.default.temporaryDirectory.appending(path: "lifeline-v7-\(UUID().uuidString)")
@@ -103,8 +106,8 @@ private func integrity(_ db: AppDatabase) throws -> String? {
     let oldArchive = oldRoot.appending(path: "old.lifeline")
     let old = try Backup.export(root: oldRoot, appVersion: "0.9", to: oldArchive)
     #expect(old.schemaVersion == "v7" && old.sessions == 1)
-    _ = try Backup.stage(oldArchive, root: target, appVersion: "1.0")
-    #expect(try Backup.applyPendingRestore(root: target))
+    _ = try Backup.stage(oldArchive, root: target, appVersion: "1.0", safetyCopyDirectory: documents)
+    #expect(try Backup.applyPendingRestore(root: target, safetyCopyDirectory: documents))
     let opened = try AppDatabase.open(at: target.appending(path: "Lifeline/lifeline.sqlite"))
     #expect(try SessionRepository(opened).listSessions().count == 1)
     #expect(try opened.writer.read { try $0.tableExists("story") }, "migrated to the current schema on open")
@@ -115,7 +118,7 @@ private func integrity(_ db: AppDatabase) throws -> String? {
     let staging = target.url.appending(path: "Lifeline-restore-staging")
     try FileManager.default.createDirectory(at: staging.appending(path: "audio"), withIntermediateDirectories: true)
     try Data("{}".utf8).write(to: target.url.appending(path: "Lifeline-restore-pending.json"))
-    #expect(try !Backup.applyPendingRestore(root: target.url), "no lifeline.sqlite in the stage: discarded")
+    #expect(try !Backup.applyPendingRestore(root: target.url, safetyCopyDirectory: try docs()), "no lifeline.sqlite in the stage: discarded")
     #expect(!FileManager.default.fileExists(atPath: staging.path) && !FileManager.default.fileExists(atPath: target.url.appending(path: "Lifeline-restore-pending.json").path))
     #expect(try target.store.sessions.listSessions().count == 1, "the original is intact")
 }
@@ -173,6 +176,38 @@ private func archives(in dir: URL) throws -> [URL] {
     #expect(first.safetyCopy.lastPathComponent.hasPrefix("Lifeline-before-restore-"))
 }
 
+@Test func parallelStagesIntoOneFolderEachKeepTheirOwnCopy() async throws {
+    // Restores in the same second (parallel tests, or a second tap) once picked the same name and
+    // shared one partial file, and one move failed with "no such file".
+    let documents = try docs()
+    let copies = try await withThrowingTaskGroup(of: URL.self) { group in
+        for _ in 0..<8 {
+            group.addTask {
+                let phone = try Root(sessions: 1, memories: 1)
+                let archive = phone.url.appending(path: "self.lifeline")
+                _ = try Backup.export(root: phone.url, appVersion: "1.0", to: archive, database: phone.db)
+                return try Backup.stage(archive, root: phone.url, appVersion: "1.0", database: phone.db, safetyCopyDirectory: documents).safetyCopy
+            }
+        }
+        return try await group.reduce(into: [URL]()) { $0.append($1) }
+    }
+    #expect(Set(copies).count == 8)
+    for copy in copies { #expect(try Backup.inspect(copy).sessions == 1, Comment(rawValue: copy.lastPathComponent)) }
+    let names = try FileManager.default.contentsOfDirectory(atPath: documents.path)
+    #expect(names.count == 8 && !names.contains { $0.hasSuffix(".partial") }, "no partial file or empty placeholder is left: \(names)")
+}
+
+@Test func aFailedStageReleasesTheNameItReserved() throws {
+    let phone = try Root(sessions: 1, memories: 1)
+    let archive = phone.url.appending(path: "self.lifeline")
+    _ = try Backup.export(root: phone.url, appVersion: "1.0", to: archive, database: phone.db)
+    let documents = try docs()
+    // The phone's own database is gone after the unzip check: the safety export fails.
+    try FileManager.default.removeItem(at: phone.url.appending(path: "Lifeline"))
+    #expect(throws: (any Error).self) { try Backup.stage(archive, root: phone.url, appVersion: "1.0", safetyCopyDirectory: documents) }
+    #expect(try FileManager.default.contentsOfDirectory(atPath: documents.path).isEmpty, "no empty placeholder and no partial file")
+}
+
 @Test func applyRecoversFromAHalfSwap() throws {
     let phone = try Root(sessions: 1, memories: 1)
     let other = try Root(sessions: 3, memories: 1)
@@ -210,8 +245,9 @@ private func archives(in dir: URL) throws -> [URL] {
     let total = await writer.value
     let staging = FileManager.default.temporaryDirectory.appending(path: "lifeline-check-\(UUID().uuidString)")
     _ = try AppDatabase.open(at: staging.appending(path: "Lifeline/lifeline.sqlite"))
-    _ = try Backup.stage(archive, root: staging, appVersion: "1.0", safetyCopyDirectory: try docs())
-    #expect(try Backup.applyPendingRestore(root: staging, safetyCopyDirectory: try docs()))
+    let documents = try docs()
+    _ = try Backup.stage(archive, root: staging, appVersion: "1.0", safetyCopyDirectory: documents)
+    #expect(try Backup.applyPendingRestore(root: staging, safetyCopyDirectory: documents))
     let copy = try AppDatabase.open(at: staging.appending(path: "Lifeline/lifeline.sqlite"))
     let count = try SessionRepository(copy).listSessions().count
     #expect(count >= 4 && count <= total + 1)

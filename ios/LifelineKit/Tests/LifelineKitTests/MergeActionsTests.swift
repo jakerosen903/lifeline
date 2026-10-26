@@ -454,9 +454,9 @@ private func twoSegmentCard(_ env: Env, first: String, second: String, title: St
     // A known person: the card links her with the phrase as said, which is the link's role text.
     let (_, _, card) = try env.card("my sister Maya climbed the tree", title: "Maya climbed", people: ["my sister, Maya"])
     _ = try env.actions.mergeCandidate(card, into: a.id)
-    #expect(try env.store.memories.snapshot(of: a.id)?.people.first { $0.personID == maya.id }?.roleText == "my sister, Maya")
+    #expect(try env.store.memories.snapshot(of: a.id)?.links.first { $0.entityID == maya.entityID }?.roleText == "my sister, Maya")
     let fresh = try env.actions.separateTelling(a.id, order: 1)
-    let link = try #require(try env.store.memories.snapshot(of: fresh.id)?.people.first { $0.personID == maya.id })
+    let link = try #require(try env.store.memories.snapshot(of: fresh.id)?.links.first { $0.entityID == maya.entityID })
     #expect(link.roleText == "my sister, Maya", "the role on the link moves with the telling")
     #expect(try env.store.memories.people(of: a.id).isEmpty, "only the separated telling named Maya")
 }

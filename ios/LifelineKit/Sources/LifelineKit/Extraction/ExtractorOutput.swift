@@ -99,6 +99,12 @@ public struct MemoryOut: Codable, Sendable, Equatable {
     public var chapterHint: String?
     public var confidence: Double
     public var extraSpans: [ExtraSpan]
+    /// Places, things and ideas this memory names (v6). A place named only in `place_text` reads as a place ref.
+    public var entityRefs: [EntityRefOut]
+    /// What a fact, feeling or goal is about (v6): an entity id from the packet, a mention's `ref`, or `self`.
+    public var aboutRef: String?
+    /// The part of life this belongs to, in a word or two (v6).
+    public var domainHint: String?
 
     public var kindOrDefault: MemoryKind { kind ?? .other }
     /// The first named memory, for callers that take one.
@@ -106,11 +112,20 @@ public struct MemoryOut: Codable, Sendable, Equatable {
 
     public init(ref: String, kind: MemoryKind? = nil, title: String, quote: String, segmentSpan: WordSpan, peopleRefs: [String], placeText: String?,
                 anchors: [AnchorOut], sameAsMemoryIDs: [String] = [], continuesCandidateID: String? = nil, storyRef: String? = nil,
-                storyTitleHint: String? = nil, collectionHint: String?, chapterHint: String?, confidence: Double, extraSpans: [ExtraSpan] = []) {
+                storyTitleHint: String? = nil, collectionHint: String?, chapterHint: String?, confidence: Double, extraSpans: [ExtraSpan] = [],
+                entityRefs: [EntityRefOut] = [], aboutRef: String? = nil, domainHint: String? = nil) {
         self.ref = ref; self.kind = kind; self.title = title; self.quote = quote; self.segmentSpan = segmentSpan; self.peopleRefs = peopleRefs
         self.placeText = placeText; self.anchors = anchors; self.sameAsMemoryIDs = sameAsMemoryIDs; self.continuesCandidateID = continuesCandidateID
         self.storyRef = storyRef; self.storyTitleHint = storyTitleHint
         self.collectionHint = collectionHint; self.chapterHint = chapterHint; self.confidence = confidence; self.extraSpans = extraSpans
+        self.entityRefs = entityRefs; self.aboutRef = aboutRef; self.domainHint = domainHint
+    }
+
+    /// The entity refs with `place_text` folded in as a place when no place ref names it.
+    public var allEntityRefs: [EntityRefOut] {
+        guard let place = placeText?.trimmingCharacters(in: .whitespacesAndNewlines), !place.isEmpty,
+              !entityRefs.contains(where: { $0.kind == .place && PeopleRepository.normalize($0.text) == PeopleRepository.normalize(place) }) else { return entityRefs }
+        return entityRefs + [EntityRefOut(text: place, kind: .place, likelyEntityID: nil)]
     }
 
     enum CodingKeys: String, CodingKey {
@@ -118,6 +133,7 @@ public struct MemoryOut: Codable, Sendable, Equatable {
         case sameAsMemoryID = "same_as_memory_id", sameAsMemoryIDs = "same_as_memory_ids", continuesCandidateID = "continues_candidate_id"
         case storyRef = "story_ref", storyTitleHint = "story_title_hint", collectionHint = "collection_hint", chapterHint = "chapter_hint"
         case confidence, extraSpans = "extra_spans"
+        case entityRefs = "entity_refs", aboutRef = "about_ref", domainHint = "domain_hint"
     }
 
     /// Reads v3/v4 payloads (one `same_as_memory_id`) and v5 ones (a list); the app-written fields default when absent.
@@ -143,6 +159,9 @@ public struct MemoryOut: Codable, Sendable, Equatable {
         chapterHint = try c.decodeIfPresent(String.self, forKey: .chapterHint)
         confidence = try c.decode(Double.self, forKey: .confidence)
         extraSpans = try c.decodeIfPresent([ExtraSpan].self, forKey: .extraSpans) ?? []
+        entityRefs = try c.decodeIfPresent([EntityRefOut].self, forKey: .entityRefs) ?? []
+        aboutRef = try c.decodeNonEmpty(forKey: .aboutRef)
+        domainHint = try c.decodeNonEmpty(forKey: .domainHint)
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -163,11 +182,34 @@ public struct MemoryOut: Codable, Sendable, Equatable {
         try c.encode(chapterHint, forKey: .chapterHint)
         try c.encode(confidence, forKey: .confidence)
         try c.encode(extraSpans, forKey: .extraSpans)
+        try c.encode(entityRefs, forKey: .entityRefs)
+        try c.encode(aboutRef, forKey: .aboutRef)
+        try c.encode(domainHint, forKey: .domainHint)
     }
 }
 
+/// A place, thing or idea a memory names (v6).
+public struct EntityRefOut: Codable, Sendable, Equatable {
+    public var text: String
+    public var kind: MentionKind
+    public var likelyEntityID: String?
+
+    public init(text: String, kind: MentionKind, likelyEntityID: String?) { self.text = text; self.kind = kind; self.likelyEntityID = likelyEntityID }
+
+    enum CodingKeys: String, CodingKey { case text, kind, likelyEntityID = "likely_entity_id" }
+}
+
 public enum MentionKind: String, Codable, Sendable, CaseIterable {
-    case person, place
+    case person, place, thing, idea
+
+    public var entityType: EntityType {
+        switch self {
+        case .person: .person
+        case .place: .place
+        case .thing: .thing
+        case .idea: .idea
+        }
+    }
 }
 
 public struct MentionOut: Codable, Sendable, Equatable {
@@ -177,14 +219,23 @@ public struct MentionOut: Codable, Sendable, Equatable {
     public var confidence: Double
     /// The owner's kin or role phrase for a person ("my mom", "my best friend"), or nil.
     public var relationText: String?
+    /// A handle a memory's `about_ref` can point at (v6).
+    public var ref: String?
+    /// An entity on file this names, from the packet (v6).
+    public var likelyEntityID: String?
+    /// An idea's title: the person's own words, at most 8, or nil (v6). Never composed.
+    public var title: String?
+    public var domainHint: String?
 
-    public init(text: String, kind: MentionKind, likelyAliasOfPersonID: String?, confidence: Double, relationText: String? = nil) {
+    public init(text: String, kind: MentionKind, likelyAliasOfPersonID: String?, confidence: Double, relationText: String? = nil,
+                ref: String? = nil, likelyEntityID: String? = nil, title: String? = nil, domainHint: String? = nil) {
         self.text = text; self.kind = kind; self.likelyAliasOfPersonID = likelyAliasOfPersonID; self.confidence = confidence
-        self.relationText = relationText
+        self.relationText = relationText; self.ref = ref; self.likelyEntityID = likelyEntityID; self.title = title; self.domainHint = domainHint
     }
 
     enum CodingKeys: String, CodingKey {
         case text, kind, likelyAliasOfPersonID = "likely_alias_of_person_id", confidence, relationText = "relation_text"
+        case ref, likelyEntityID = "likely_entity_id", title, domainHint = "domain_hint"
     }
 
     public init(from decoder: Decoder) throws {
@@ -194,6 +245,19 @@ public struct MentionOut: Codable, Sendable, Equatable {
         likelyAliasOfPersonID = try c.decodeIfPresent(String.self, forKey: .likelyAliasOfPersonID)
         confidence = try c.decode(Double.self, forKey: .confidence)
         relationText = try c.decodeIfPresent(String.self, forKey: .relationText)
+        ref = try c.decodeNonEmpty(forKey: .ref)
+        likelyEntityID = try c.decodeIfPresent(String.self, forKey: .likelyEntityID)
+        title = try c.decodeNonEmpty(forKey: .title)
+        domainHint = try c.decodeNonEmpty(forKey: .domainHint)
+    }
+}
+
+extension KeyedDecodingContainer {
+    /// A string the schema sends as "" when there is none (see `ExtractorSchema`): absent, null,
+    /// empty and whitespace all read as nil.
+    func decodeNonEmpty(forKey key: Key) throws -> String? {
+        guard let text = try decodeIfPresent(String.self, forKey: key)?.trimmingCharacters(in: .whitespacesAndNewlines), !text.isEmpty else { return nil }
+        return text
     }
 }
 

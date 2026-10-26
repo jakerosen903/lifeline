@@ -122,3 +122,24 @@ private struct Env {
     #expect(renamed.id == created.id && renamed.title == "Yosemite summers", "the member's story is renamed, not doubled")
     #expect(try env.store.stories.stories().count == 1)
 }
+
+// M7: domains are free-text tags from a tapped hint.
+@Test func domainHintAcceptedTagsTheElement() throws {
+    let env = try Env()
+    let card = try env.memoryCandidate()
+    let hint = try env.hintCandidate(for: card, kind: .domain, phrase: "travel", ordinal: 1)
+    let kept = try env.actions.acceptMemory(card)
+    #expect(try env.store.tags.tags(of: .memory, kept.memory.id.rawValue).isEmpty, "nothing is tagged before the tap")
+    #expect(try env.actions.acceptHint(hint) == .domain("travel"))
+    #expect(try env.store.tags.tags(of: .memory, kept.memory.id.rawValue) == ["travel"])
+}
+
+@Test func notQuiteTagsNothing() throws {
+    let env = try Env()
+    let card = try env.memoryCandidate()
+    let hint = try env.hintCandidate(for: card, kind: .domain, phrase: "travel", ordinal: 1)
+    let kept = try env.actions.acceptMemory(card)
+    try env.actions.dismiss(hint)
+    #expect(try env.store.tags.tags(of: .memory, kept.memory.id.rawValue).isEmpty)
+    #expect(try env.store.tags.all().isEmpty)
+}

@@ -108,6 +108,8 @@ public struct MemorySpan: Codable, Sendable, Equatable {
     }
 }
 
+/// A memory naming a person: a `moment_entity` row of relation `mention` (M7). The person's id is
+/// their entity's id.
 public struct MemoryPerson: Codable, Sendable, Equatable {
     public var memoryID: MemoryID
     public var personID: PersonID
@@ -117,8 +119,11 @@ public struct MemoryPerson: Codable, Sendable, Equatable {
     public init(memoryID: MemoryID, personID: PersonID, roleText: String?) {
         self.memoryID = memoryID; self.personID = personID; self.roleText = roleText
     }
+
+    public var link: MomentEntity { MomentEntity(memoryID: memoryID, entityID: EntityID(rawValue: personID.rawValue), relation: .mention, roleText: roleText) }
 }
 
+/// A place as a memory shows it: an entity of type place (M7). Its id is the entity's id.
 public struct Place: Codable, Sendable, Equatable, Identifiable {
     public var id: PlaceID
     public var nameText: String
@@ -128,6 +133,12 @@ public struct Place: Codable, Sendable, Equatable, Identifiable {
     public init(id: PlaceID, nameText: String, lat: Double?, lon: Double?) {
         self.id = id; self.nameText = nameText; self.lat = lat; self.lon = lon
     }
+
+    public init(_ entity: Entity) {
+        self.init(id: PlaceID(rawValue: entity.id.rawValue), nameText: entity.title, lat: nil, lon: nil)
+    }
+
+    public var entityID: EntityID { EntityID(rawValue: id.rawValue) }
 }
 
 public struct MemoryPlace: Codable, Sendable, Equatable {
@@ -137,4 +148,6 @@ public struct MemoryPlace: Codable, Sendable, Equatable {
     public init(memoryID: MemoryID, placeID: PlaceID) {
         self.memoryID = memoryID; self.placeID = placeID
     }
+
+    public var link: MomentEntity { MomentEntity(memoryID: memoryID, entityID: EntityID(rawValue: placeID.rawValue), relation: .mention) }
 }

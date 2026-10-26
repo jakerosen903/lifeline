@@ -39,7 +39,12 @@ public enum OpeningChooser {
         let scenes = orderedScenes(bank, lastUsed: lastUsed)
         let lead = curiosity
             .filter { $0.status == .open }
-            .sorted { ($0.payoffCount, $1.text) > ($1.payoffCount, $0.text) }
+            .sorted { a, b in
+                if a.payoffCount != b.payoffCount { return a.payoffCount > b.payoffCount }
+                // A dated question is never outranked by an entity question (M7).
+                if (a.kind == .unresolvedAnchor) != (b.kind == .unresolvedAnchor) { return a.kind == .unresolvedAnchor }
+                return a.text < b.text
+            }
             .first { item in
                 guard let used = lastUsed["curiosity:\(item.id.rawValue)"] else { return true }
                 return now.timeIntervalSince(used) >= curiosityCooldown
@@ -68,6 +73,7 @@ public enum OpeningChooser {
     /// A phrase the owner said becomes "You mentioned “…”. Tell me about that."; a title reads "Tell me about …".
     static func phrase(for item: CuriosityItem) -> String {
         let text = item.text.trimmingCharacters(in: .whitespacesAndNewlines)
+        if item.kind.isEntityQuestion { return text }
         let looksLikeTitle = text.first?.isUppercase == true && text.split(separator: " ").count <= 6
         return looksLikeTitle ? "Tell me about \(text)." : "You mentioned “\(text)”. Tell me about that."
     }

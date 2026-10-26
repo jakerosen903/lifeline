@@ -2,7 +2,9 @@ import Foundation
 
 /// JSON Schema for `ExtractorOutput`, sent as `output_config.format`. Structured outputs need
 /// `additionalProperties: false` on every object, every property listed in `required`, and
-/// nullable types for optional fields. Keep this in step with `ExtractorOutput`.
+/// nullable types for optional fields. The API allows at most 16 union-typed parameters in one
+/// schema, so handles and hints (`about_ref`, `domain_hint`, a mention's `ref` and `title`) are
+/// plain strings where "" means none; the decoders read "" as nil. Keep this in step with `ExtractorOutput`.
 /// Computed, not stored: `[String: Any]` is not Sendable, so a stored static would be shared state.
 public enum ExtractorSchema {
     public static var json: [String: Any] {
@@ -39,6 +41,13 @@ public enum ExtractorSchema {
             "collection_hint": nullableString,
             "chapter_hint": nullableString,
             "confidence": number,
+            "entity_refs": array(object([
+                "text": string,
+                "kind": ["type": "string", "enum": [MentionKind.place, .thing, .idea].map(\.rawValue)],
+                "likely_entity_id": nullableString,
+            ])),
+            "about_ref": string,     // "" when none
+            "domain_hint": string,   // "" when none
         ])
     }
 
@@ -49,6 +58,10 @@ public enum ExtractorSchema {
             "likely_alias_of_person_id": nullableString,
             "confidence": number,
             "relation_text": nullableString,
+            "ref": string,           // "" when none
+            "likely_entity_id": nullableString,
+            "title": string,         // "" when none
+            "domain_hint": string,   // "" when none
         ])
     }
 

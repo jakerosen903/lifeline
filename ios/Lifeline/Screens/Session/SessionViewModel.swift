@@ -175,6 +175,11 @@ final class SessionViewModel: Identifiable {
         cardQueue.remove(card.id)
         if case .memory = card { cardQueue.memoryAccepted(card.id) }
     }
+    /// Keep on an entity card as the type chosen (M7).
+    func keepEntity(_ card: Card, as type: EntityType?) {
+        guard cards.acceptEntity(card, as: type) != nil else { return }
+        cardQueue.remove(card.id)
+    }
     func change(_ card: Card) {
         guard let memory = cards.keep(card) else { return }
         cardQueue.remove(card.id)

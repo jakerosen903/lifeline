@@ -48,6 +48,9 @@ struct TimelineScreen: View {
             .linenBackground()
             .navigationTitle("Your story so far")
             .storyDialogs(rename: $renameTarget, title: $storyTitle, split: $splitTarget, move: $moveTarget, viewModel: viewModel)
+            .navigationDestination(item: Binding(get: { viewModel.openedEntity }, set: { viewModel.openedEntity = $0 })) { entity in
+                EntityScreen(viewModel: EntityViewModel(entity: entity, deps: viewModel.deps)) { viewModel.refresh() }
+            }
             .navigationDestination(item: $openMemory) { row in
                 MemoryScreen(viewModel: MemoryViewModel(memory: row.memory, deps: viewModel.deps), deps: viewModel.deps) { viewModel.refresh() }
             }
@@ -55,8 +58,23 @@ struct TimelineScreen: View {
                 Button { viewModel.showHidden.toggle() } label: { Image(systemName: viewModel.showHidden ? "eye" : "eye.slash") }
                     .accessibilityLabel(viewModel.showHidden ? "Showing hidden memories" : "Hidden memories are not shown")
                     .accessibilityIdentifier("timeline.showHidden")
+                if !viewModel.allTags.isEmpty {
+                    Menu {
+                        Button("Everything") { viewModel.tagFilter = nil }
+                        ForEach(viewModel.allTags, id: \.self) { tag in
+                            Button { viewModel.tagFilter = tag } label: {
+                                if viewModel.tagFilter == tag { Label(tag, systemImage: "checkmark") } else { Text(tag) }
+                            }
+                        }
+                    } label: { Image(systemName: viewModel.tagFilter == nil ? "tag" : "tag.fill") }
+                        .accessibilityLabel(viewModel.tagFilter.map { "Showing \($0)" } ?? "Filter by tag")
+                        .accessibilityIdentifier("timeline.tagFilter")
+                }
                 NavigationLink { SessionsScreen(viewModel: viewModel.home) } label: { Image(systemName: "waveform") }
                     .accessibilityIdentifier("timeline.sessions")
+                NavigationLink { EntitiesScreen(deps: viewModel.deps) } label: { Image(systemName: "square.grid.2x2") }
+                    .accessibilityLabel("People, places, things and ideas")
+                    .accessibilityIdentifier("timeline.entities")
                 NavigationLink { PeopleScreen(viewModel: PeopleViewModel(deps: viewModel.deps)) } label: { Image(systemName: "person.2") }
                     .accessibilityIdentifier("home.people")
                 Button { showSettings = true } label: { Image(systemName: "gearshape") }
@@ -138,7 +156,8 @@ struct TimelineScreen: View {
                           onAccept: { viewModel.accept($0) }, onChange: { viewModel.change($0) }, onDismiss: { viewModel.dismiss($0) },
                           onResolve: { viewModel.resolve($0, $1) }, onUndo: { viewModel.undo() },
                           onSameStory: { viewModel.sameStory($0, into: $1) }, onUndoMerge: { viewModel.undoMerge() },
-                          pairs: viewModel.pairs, onPair: { viewModel.answerPair($0, same: $1) }, onUndoPair: { viewModel.undoPair() })
+                          pairs: viewModel.pairs, onPair: { viewModel.answerPair($0, same: $1) }, onUndoPair: { viewModel.undoPair() },
+                          onKeepEntity: { viewModel.keepEntity($0, as: $1) })
                     .listRowBackground(Color.clear)
                     .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
             } header: {

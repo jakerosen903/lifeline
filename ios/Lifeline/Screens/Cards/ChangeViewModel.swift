@@ -114,9 +114,42 @@ final class ChangeViewModel {
 
     var shownKind: MemoryKind { memory.kind == .other ? .event : memory.kind }
 
+    /// "About whom or what?" (M7): where a fact, feeling or goal sits. The owner reads "About you".
+    private(set) var aboutChoices: [(entity: Entity, label: String)] = []
+    private(set) var aboutEntity: EntityID?
+
+    func moveDetail(to entity: EntityID?) {
+        attempt("Could not move that") { try deps.actions.moveDetail(memory.id, to: entity) }
+    }
+
+    var aboutLabel: String { aboutChoices.first { $0.entity.id == aboutEntity }?.label ?? "Nothing in particular (About)" }
+
+    /// After a kind change, while the sheet is open: what it is now, with Undo. A moment that
+    /// leaves a story gets its place back on Undo.
+    private(set) var kindNotice: String?
+    private var kindReceipt: KindReceipt?
+
     func setKind(_ kind: MemoryKind) {
         guard kind != shownKind else { return }
-        attempt("Could not change that") { try deps.actions.setKind(memory.id, kind) }
+        attempt("Could not change that") {
+            let receipt = try deps.actions.setKind(memory.id, kind)
+            kindReceipt = receipt
+            let label = Self.kindChoices.first { $0.kind == kind }?.label ?? "A moment"
+            kindNotice = receipt?.story != nil ? "Now \(label.lowercased()). It left its story." : "Now \(label.lowercased())."
+        }
+    }
+
+    func undoKind() {
+        guard let receipt = kindReceipt else { return }
+        do {
+            try deps.actions.undoKind(receipt)
+            kindReceipt = nil
+            kindNotice = nil
+            error = nil
+            refresh()
+        } catch {
+            self.error = "That can't be undone any more: \(error.localizedDescription)"
+        }
     }
 
     /// "Tell me when" from the sheet.
@@ -137,6 +170,12 @@ final class ChangeViewModel {
             people = try store.memories.people(of: memory.id)
             let linked = Set(people.map(\.id))
             choices = try store.people.people().filter { !$0.isOwner && !linked.contains($0.id) }
+            let owner = try store.profile.owner()?.entityID
+            aboutEntity = try store.entities.links(of: memory.id).first { $0.link.relation == .detail }?.entity.id
+            aboutChoices = try (owner.flatMap { try store.entities.entity(id: $0) }.map { [(entity: $0, label: "About you")] } ?? [])
+                + [EntityType.person, .place, .thing, .idea].flatMap { type in
+                    try store.entities.entities(type: type).filter { $0.id != owner }.map { (entity: $0, label: "\($0.title) · \(type.singular.lowercased())") }
+                }
             parts = try store.memories.spans(of: memory.id).map { Part(span: $0, words: try store.sessions.words(in: $0.segmentID)) }
             when.refresh()
         } catch {

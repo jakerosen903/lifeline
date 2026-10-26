@@ -17,15 +17,18 @@ public struct MemoryRepository: Sendable {
     /// continuations are marked with it, and the memory joins its story, in that same
     /// transaction (M5): a kill never leaves a kept memory with its continuation cards still
     /// pending or its "Part of" line lost.
-    public func insert(_ memory: Memory, spans: [MemorySpan], people: [MemoryPerson], places: [MemoryPlace], anchors: [Anchor],
+    public func insert(_ memory: Memory, spans: [MemorySpan], people: [MemoryPerson], places: [MemoryPlace], links: [MomentEntity] = [], entities: EntityRepository.Write = .init(), anchors: [Anchor],
                        acceptingCandidate candidate: CandidateID? = nil, acceptingContinuations continuations: [CandidateID] = [],
                        joiningStory story: (id: StoryID, chapterID: ChapterID?)? = nil) throws {
         guard !spans.isEmpty else { throw Error.noSpan }
         try db.writer.write { db in
             try memory.insert(db)
             for span in spans { try span.insert(db) }
-            for person in people { try person.insert(db) }
-            for place in places { try place.insert(db) }
+            try EntityRepository.apply(entities, in: db)
+            for person in people { try person.link.insertIgnoringDuplicate(db) }
+            for place in places { try place.link.insertIgnoringDuplicate(db) }
+            for link in links { try link.insertIgnoringDuplicate(db) }
+            try EntityRepository.giveFirstTelling(toEntitiesOf: memory.id, span: spans[0], in: db)
             for anchor in anchors { try anchor.insert(db) }
             if let candidate {
                 try db.execute(sql: "update candidate set status = ? where id = ?", arguments: [CandidateStatus.accepted.rawValue, candidate.rawValue])
@@ -88,11 +91,10 @@ public struct MemoryRepository: Sendable {
 
     public func people(of memory: MemoryID) throws -> [Person] {
         try db.writer.read { db in
-            try Person.fetchAll(db, sql: """
-                select person.* from person
-                join memory_person on memory_person.person_id = person.id
-                where memory_person.memory_id = ?
-                order by person.display_name
+            try Person.fetchAll(db, sql: Person.selectSQL + """
+                join moment_entity me on me.entity_id = person.entity_id
+                where me.memory_id = ? and me.relation = 'mention'
+                order by entity.title
                 """, arguments: [memory.rawValue])
         }
     }
@@ -173,8 +175,8 @@ public struct MemoryRepository: Sendable {
     public struct Snapshot: Sendable, Equatable {
         public var memory: Memory
         public var spans: [MemorySpan]
-        public var people: [MemoryPerson]
-        public var places: [MemoryPlace]
+        /// Every person, place, thing and idea it names or describes (M7: one link table).
+        public var links: [MomentEntity]
         public var anchors: [Anchor]
         public var collectionIDs: [CollectionID]
         /// Pair decisions and story membership go with a memory on cascade; undo brings them back (M5).
@@ -190,8 +192,7 @@ public struct MemoryRepository: Sendable {
             return Snapshot(
                 memory: memory,
                 spans: try MemorySpan.filter(Column("memory_id") == id.rawValue).order(Column("order")).fetchAll(db),
-                people: try MemoryPerson.filter(Column("memory_id") == id.rawValue).fetchAll(db),
-                places: try MemoryPlace.filter(Column("memory_id") == id.rawValue).fetchAll(db),
+                links: try MomentEntity.filter(Column("memory_id") == id.rawValue).fetchAll(db),
                 anchors: try Anchor.filter(Column("memory_id") == id.rawValue).fetchAll(db),
                 collectionIDs: try String.fetchAll(db, sql: "select collection_id from collection_memory where memory_id = ?", arguments: [id.rawValue]).map(CollectionID.init(rawValue:)),
                 pairs: try DuplicatePair.filter(Column("a_memory_id") == id.rawValue || Column("b_memory_id") == id.rawValue).fetchAll(db),
@@ -230,12 +231,12 @@ public struct MemoryRepository: Sendable {
     private static func restore(_ snapshot: Snapshot, in db: Database) throws {
             let id = snapshot.memory.id.rawValue
             try snapshot.memory.save(db)
-            for table in ["memory_span", "memory_person", "memory_place", "anchor", "collection_memory"] {
+            for table in ["memory_span", "moment_entity", "anchor", "collection_memory"] {
                 try db.execute(sql: "delete from \(table) where memory_id = ?", arguments: [id])
             }
             for span in snapshot.spans { try span.insert(db) }
-            for person in snapshot.people { try person.insert(db) }
-            for place in snapshot.places { try place.insert(db) }
+            // An entity deleted since the snapshot stays deleted; its link does not come back.
+            for link in snapshot.links where try Entity.exists(db, key: link.entityID.rawValue) { try link.insertIgnoringDuplicate(db) }
             for anchor in snapshot.anchors { try anchor.insert(db) }
             for collection in snapshot.collectionIDs {
                 try db.execute(sql: "insert or ignore into collection_memory (collection_id, memory_id) values (?, ?)", arguments: [collection.rawValue, id])
@@ -260,16 +261,16 @@ public struct MemoryRepository: Sendable {
     /// `promotingStandIn` carries the card's title, quote and candidate when the target is a
     /// resolver stand-in: its borrowed span goes, this telling becomes order 0 and the memory
     /// becomes real. A failure anywhere leaves the card pending and the target untouched.
-    public func mergeSpan(_ span: MemorySpan, continuations: [MemorySpan] = [], people: [MemoryPerson], places: [MemoryPlace], anchors: [Anchor],
+    public func mergeSpan(_ span: MemorySpan, continuations: [MemorySpan] = [], people: [MemoryPerson], places: [MemoryPlace], links: [MomentEntity] = [], entities: EntityRepository.Write = .init(), anchors: [Anchor],
                           promotingStandIn: (title: String, summaryQuote: String)?, acceptingCandidate candidate: CandidateID,
                           acceptingContinuations continuationCards: [CandidateID] = []) throws {
         try db.writer.write { db in
-            try Self.mergeSpan(span, continuations: continuations, people: people, places: places, anchors: anchors,
+            try Self.mergeSpan(span, continuations: continuations, people: people, places: places, links: links, entities: entities, anchors: anchors,
                                promotingStandIn: promotingStandIn, acceptingCandidate: candidate, acceptingContinuations: continuationCards, in: db)
         }
     }
 
-    static func mergeSpan(_ span: MemorySpan, continuations: [MemorySpan], people: [MemoryPerson], places: [MemoryPlace], anchors: [Anchor],
+    static func mergeSpan(_ span: MemorySpan, continuations: [MemorySpan], people: [MemoryPerson], places: [MemoryPlace], links: [MomentEntity] = [], entities: EntityRepository.Write = .init(), anchors: [Anchor],
                           promotingStandIn: (title: String, summaryQuote: String)?, acceptingCandidate candidate: CandidateID,
                           acceptingContinuations continuationCards: [CandidateID] = [], in db: Database) throws {
             var span = span
@@ -287,13 +288,11 @@ public struct MemoryRepository: Sendable {
                 extra.continuesOrder = span.order
                 try extra.insert(db)
             }
-            for person in people {
-                try db.execute(sql: "insert or ignore into memory_person (memory_id, person_id, role_text) values (?, ?, ?)",
-                               arguments: [person.memoryID.rawValue, person.personID.rawValue, person.roleText])
-            }
-            for place in places {
-                try db.execute(sql: "insert or ignore into memory_place (memory_id, place_id) values (?, ?)", arguments: [place.memoryID.rawValue, place.placeID.rawValue])
-            }
+            try EntityRepository.apply(entities, in: db)
+            for person in people { try person.link.insertIgnoringDuplicate(db) }
+            for place in places { try place.link.insertIgnoringDuplicate(db) }
+            for link in links { try link.insertIgnoringDuplicate(db) }
+            try EntityRepository.giveFirstTelling(toEntitiesOf: span.memoryID, span: span, in: db)
             for anchor in anchors { try anchor.insert(db) }
             try db.execute(sql: "update candidate set status = ? where id = ?", arguments: [CandidateStatus.accepted.rawValue, candidate.rawValue])
             try Self.accept(continuationCards, in: db)
@@ -302,7 +301,7 @@ public struct MemoryRepository: Sendable {
     /// A group (M5): every source folds into the target, oldest first as given, then the card
     /// joins as the last telling. One transaction: a failure anywhere leaves every memory as it was.
     public func mergeGroup(sources: [Memory], into target: Memory, span: MemorySpan, continuations: [MemorySpan], people: [MemoryPerson],
-                           places: [MemoryPlace], anchors: [Anchor], promotingStandIn: (title: String, summaryQuote: String)?,
+                           places: [MemoryPlace], links: [MomentEntity] = [], entities: EntityRepository.Write = .init(), anchors: [Anchor], promotingStandIn: (title: String, summaryQuote: String)?,
                            acceptingCandidate candidate: CandidateID, acceptingContinuations continuationCards: [CandidateID] = []) throws {
         try db.writer.write { db in
             for source in sources {
@@ -311,7 +310,7 @@ public struct MemoryRepository: Sendable {
             }
             var last = span
             last.order = (try Int.fetchOne(db, sql: "select max(\"order\") from memory_span where memory_id = ?", arguments: [target.id.rawValue]) ?? -1) + 1
-            try Self.mergeSpan(last, continuations: continuations, people: people, places: places, anchors: anchors,
+            try Self.mergeSpan(last, continuations: continuations, people: people, places: places, links: links, entities: entities, anchors: anchors,
                                promotingStandIn: promotingStandIn, acceptingCandidate: candidate, acceptingContinuations: continuationCards, in: db)
         }
     }
@@ -351,17 +350,13 @@ public struct MemoryRepository: Sendable {
                 guard try Anchor.exists(db, key: anchor.rawValue) else { throw Error.noSpan }
                 try db.execute(sql: "update anchor set memory_id = ? where id = ?", arguments: [new.id.rawValue, anchor.rawValue])
             }
-            for person in moving.people {
-                // The link moves with its role text ("my sister"); a role the person typed is theirs to keep.
+            // A link moves with its role text ("my sister"); a role the person typed is theirs to keep.
+            for entity in moving.people.map(\.rawValue) + moving.places.map(\.rawValue) {
                 try db.execute(sql: """
-                    insert or ignore into memory_person (memory_id, person_id, role_text)
-                    select ?, person_id, role_text from memory_person where memory_id = ? and person_id = ?
-                    """, arguments: [new.id.rawValue, memory.rawValue, person.rawValue])
-                try db.execute(sql: "delete from memory_person where memory_id = ? and person_id = ?", arguments: [memory.rawValue, person.rawValue])
-            }
-            for place in moving.places {
-                try db.execute(sql: "delete from memory_place where memory_id = ? and place_id = ?", arguments: [memory.rawValue, place.rawValue])
-                try db.execute(sql: "insert or ignore into memory_place (memory_id, place_id) values (?, ?)", arguments: [new.id.rawValue, place.rawValue])
+                    insert or ignore into moment_entity (memory_id, entity_id, relation, role_text)
+                    select ?, entity_id, relation, role_text from moment_entity where memory_id = ? and entity_id = ?
+                    """, arguments: [new.id.rawValue, memory.rawValue, entity])
+                try db.execute(sql: "delete from moment_entity where memory_id = ? and entity_id = ?", arguments: [memory.rawValue, entity])
             }
             if clearRange {
                 try db.execute(sql: "update memory set earliest = null, latest = null, likely_start = null, likely_end = null, granularity = null, origin = null, evidence_text = null where id = ?",
@@ -389,7 +384,9 @@ public struct MemoryRepository: Sendable {
     }
 
     public func unlinkPlace(_ place: PlaceID, from memory: MemoryID) throws {
-        try db.writer.write { try $0.execute(sql: "delete from memory_place where memory_id = ? and place_id = ?", arguments: [memory.rawValue, place.rawValue]) }
+        try db.writer.write { db in
+            try db.execute(sql: "delete from moment_entity where memory_id = ? and entity_id = ? and relation = 'mention'", arguments: [memory.rawValue, place.rawValue])
+        }
     }
 
     /// Re-points every edge of `source` at `target` and appends its spans after the target's.
@@ -422,8 +419,10 @@ public struct MemoryRepository: Sendable {
                 moved.range = source.range
                 try moved.update(db, columns: ["earliest", "latest", "likely_start", "likely_end", "granularity", "origin", "evidence_text"])
             }
-            try db.execute(sql: "insert or ignore into memory_person (memory_id, person_id, role_text) select ?, person_id, role_text from memory_person where memory_id = ?", arguments: [target.id.rawValue, source.id.rawValue])
-            try db.execute(sql: "insert or ignore into memory_place (memory_id, place_id) select ?, place_id from memory_place where memory_id = ?", arguments: [target.id.rawValue, source.id.rawValue])
+            try db.execute(sql: """
+                insert or ignore into moment_entity (memory_id, entity_id, relation, role_text)
+                select ?, entity_id, relation, role_text from moment_entity where memory_id = ?
+                """, arguments: [target.id.rawValue, source.id.rawValue])
             try db.execute(sql: "update anchor set memory_id = ? where memory_id = ?", arguments: [target.id.rawValue, source.id.rawValue])
             let targetCollections = try Int.fetchOne(db, sql: "select count(*) from collection_memory where memory_id = ?", arguments: [target.id.rawValue]) ?? 0
             if targetCollections == 0 {
@@ -449,9 +448,7 @@ public struct MemoryRepository: Sendable {
     }
 
     public func insertPlace(_ place: MemoryPlace) throws {
-        try db.writer.write { db in
-            try db.execute(sql: "insert or ignore into memory_place (memory_id, place_id) values (?, ?)", arguments: [place.memoryID.rawValue, place.placeID.rawValue])
-        }
+        try db.writer.write { try place.link.insertIgnoringDuplicate($0) }
     }
 
     public func update(_ anchor: Anchor) throws {
@@ -460,10 +457,10 @@ public struct MemoryRepository: Sendable {
 
     public func places(of memory: MemoryID) throws -> [Place] {
         try db.writer.read { db in
-            try Place.fetchAll(db, sql: """
-                select place.* from place join memory_place on memory_place.place_id = place.id
-                where memory_place.memory_id = ? order by place.name_text
-                """, arguments: [memory.rawValue])
+            try Entity.fetchAll(db, sql: """
+                select entity.* from entity join moment_entity me on me.entity_id = entity.id
+                where me.memory_id = ? and me.relation = 'mention' and entity.type = 'place' order by entity.title
+                """, arguments: [memory.rawValue]).map(Place.init)
         }
     }
 
@@ -513,10 +510,65 @@ public struct MemoryRepository: Sendable {
 
     /// The kind, and the chapter's derived range with it, in one write: a fact leaves the range,
     /// a moment joins it, and a kill between the two can never leave the chapter stale (M7).
-    public func setKind(_ id: MemoryID, _ kind: MemoryKind) throws {
+    /// The receipt holds what the change took away (a story place, detail links) for `undoKind`.
+    @discardableResult
+    public func setKind(_ id: MemoryID, _ kind: MemoryKind) throws -> KindReceipt {
         try db.writer.write { db in
+            let from = try MemoryKind(rawValue: String.fetchOne(db, sql: "select kind from memory where id = ?", arguments: [id.rawValue]) ?? "") ?? .event
+            var receipt = KindReceipt(memory: id, from: from, to: kind, story: nil, details: [])
             try db.execute(sql: "update memory set kind = ? where id = ?", arguments: [kind.rawValue, id.rawValue])
             try Self.refreshChapterRange(ofMemory: id, in: db)
+            if kind.isMoment {
+                // A moment names what it was about; it is no longer a standing statement (M7).
+                let rows = try MomentEntity.filter(Column("memory_id") == id.rawValue).fetchAll(db)
+                receipt.details = rows.filter { $0.relation == .detail }.map(\.entityID)
+                receipt.alsoMentioned = Set(rows.filter { $0.relation == .mention }.map(\.entityID)).intersection(receipt.details)
+                try db.execute(sql: """
+                    insert or ignore into moment_entity (memory_id, entity_id, relation, role_text)
+                    select memory_id, entity_id, 'mention', role_text from moment_entity where memory_id = ? and relation = 'detail'
+                    """, arguments: [id.rawValue])
+                try db.execute(sql: "delete from moment_entity where memory_id = ? and relation = 'detail'", arguments: [id.rawValue])
+            } else {
+                // Stories are for scenes. The place is remembered so an undo can give it back.
+                if let moment = try StoryMoment.filter(Column("memory_id") == id.rawValue).fetchOne(db),
+                   let story = try Story.fetchOne(db, key: moment.storyID.rawValue) {
+                    receipt.story = StoryRepository.Membership(moment: moment, title: story.title, chapterID: story.chapterID)
+                }
+                try db.execute(sql: "delete from story_moment where memory_id = ?", arguments: [id.rawValue])
+                try db.execute(sql: Self.deleteEmptyStoriesSQL)
+            }
+            return receipt
+        }
+    }
+
+    /// Puts a kind change back, in one write: the kind, the chapter range, the detail links a
+    /// moment turned into mentions, and the story place a fact, feeling or goal gave up (with
+    /// the story itself when it was deleted for being empty). Stale once the kind moved again.
+    public func undoKind(_ receipt: KindReceipt) throws {
+        try db.writer.write { db in
+            guard try String.fetchOne(db, sql: "select kind from memory where id = ?", arguments: [receipt.memory.rawValue]) == receipt.to.rawValue else {
+                throw CandidateActions.Error.stale
+            }
+            try db.execute(sql: "update memory set kind = ? where id = ?", arguments: [receipt.from.rawValue, receipt.memory.rawValue])
+            try Self.refreshChapterRange(ofMemory: receipt.memory, in: db)
+            for entity in receipt.details {
+                if receipt.alsoMentioned.contains(entity) {
+                    try db.execute(sql: """
+                        insert or ignore into moment_entity (memory_id, entity_id, relation, role_text)
+                        select memory_id, entity_id, 'detail', role_text from moment_entity where memory_id = ? and entity_id = ? and relation = 'mention'
+                        """, arguments: [receipt.memory.rawValue, entity.rawValue])
+                } else {
+                    try db.execute(sql: "update moment_entity set relation = 'detail' where memory_id = ? and entity_id = ? and relation = 'mention'",
+                                   arguments: [receipt.memory.rawValue, entity.rawValue])
+                }
+            }
+            if let membership = receipt.story {
+                if try !Story.exists(db, key: membership.moment.storyID.rawValue) {
+                    try Story(id: membership.moment.storyID, title: membership.title, chapterID: membership.chapterID, createdAt: .now).insert(db)
+                }
+                try db.execute(sql: "delete from story_moment where memory_id = ?", arguments: [receipt.memory.rawValue])
+                try membership.moment.insert(db)
+            }
         }
     }
 
@@ -553,15 +605,14 @@ public struct MemoryRepository: Sendable {
 
     public func unlink(_ person: PersonID, from memory: MemoryID) throws {
         try db.writer.write { db in
-            try db.execute(sql: "delete from memory_person where memory_id = ? and person_id = ?", arguments: [memory.rawValue, person.rawValue])
+            try db.execute(sql: "delete from moment_entity where memory_id = ? and entity_id = ? and relation = 'mention'", arguments: [memory.rawValue, person.rawValue])
         }
     }
 
     /// Links a person to a memory; a second link to the same person is a no-op.
     public func link(_ person: PersonID, to memory: MemoryID, roleText: String?) throws {
         try db.writer.write { db in
-            try db.execute(sql: "insert or ignore into memory_person (memory_id, person_id, role_text) values (?, ?, ?)",
-                           arguments: [memory.rawValue, person.rawValue, roleText])
+            try MemoryPerson(memoryID: memory, personID: person, roleText: roleText).link.insertIgnoringDuplicate(db)
         }
     }
 }

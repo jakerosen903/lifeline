@@ -273,6 +273,69 @@ enum Migrations {
                       in ('event', 'fact', 'feeling', 'goal', 'other')
                 """)
         }
+        // v10 (M7, PR B): people, places, things and ideas are entities, with one link table.
+        // `place`, `memory_place` and `memory_person` are copied in and kept one release, read nowhere.
+        m.registerMigration("v10") { db in
+            try db.create(table: "entity") { t in
+                t.primaryKey("id", .text)
+                t.column("type", .text).notNull().indexed()
+                t.column("title", .text).notNull()
+                t.column("detail_text", .text)
+                t.column("created_from_candidate_id", .text).references("candidate", onDelete: .setNull)
+                t.column("created_at", .datetime).notNull()
+                for column in ["earliest", "latest", "likely_start", "likely_end", "granularity", "origin", "evidence_text"] {
+                    t.column(column, .text)
+                }
+                t.column("hidden_from_timeline", .boolean).notNull().defaults(to: false)
+                t.column("excluded_from_ai", .boolean).notNull().defaults(to: false)
+            }
+            try db.create(table: "entity_span") { t in
+                t.column("entity_id", .text).notNull().references("entity", onDelete: .cascade)
+                t.column("segment_id", .text).notNull().references("segment", onDelete: .cascade)
+                t.column("start_ms", .integer).notNull()
+                t.column("end_ms", .integer).notNull()
+                t.column("order", .integer).notNull()
+                t.primaryKey(["entity_id", "order"])
+            }
+            try db.create(table: "moment_entity") { t in
+                t.column("memory_id", .text).notNull().references("memory", onDelete: .cascade)
+                t.column("entity_id", .text).notNull().references("entity", onDelete: .cascade).indexed()
+                t.column("relation", .text).notNull()
+                t.column("role_text", .text)
+                t.primaryKey(["memory_id", "entity_id", "relation"])
+            }
+            try db.create(table: "domain_tag") { t in
+                t.column("element_kind", .text).notNull()
+                t.column("element_id", .text).notNull()
+                t.column("text", .text).notNull()
+                t.primaryKey(["element_kind", "element_id", "text"])
+            }
+            // A migrated person or place keeps its id as its entity's id.
+            try db.execute(sql: """
+                insert into entity (id, type, title, created_at) select id, 'person', display_name, datetime('now') from person;
+                insert into entity (id, type, title, created_at) select id, 'place', name_text, datetime('now') from place;
+                insert or ignore into moment_entity (memory_id, entity_id, relation, role_text) select memory_id, person_id, 'mention', role_text from memory_person;
+                insert or ignore into moment_entity (memory_id, entity_id, relation, role_text) select memory_id, place_id, 'mention', null from memory_place;
+                insert into entity_span (entity_id, segment_id, start_ms, end_ms, "order")
+                select mp.place_id, ms.segment_id, ms.start_ms, ms.end_ms, 0
+                from memory_place mp
+                join memory m on m.id = mp.memory_id
+                join memory_span ms on ms.memory_id = m.id and ms."order" = 0
+                where m.id = (select m2.id from memory_place mp2 join memory m2 on m2.id = mp2.memory_id
+                              join memory_span s2 on s2.memory_id = m2.id and s2."order" = 0
+                              where mp2.place_id = mp.place_id order by m2.created_at, m2.id limit 1);
+                """)
+            // The name moves to the entity. Nothing is dropped: `person.display_name` stays one release,
+            // read nowhere (like `place`, `memory_place`, `memory_person`), and new rows leave it empty.
+            try db.alter(table: "person") { t in
+                t.add(column: "entity_id", .text).references("entity", onDelete: .cascade)
+            }
+            try db.execute(sql: "update person set entity_id = id")
+            try db.create(index: "person_entity_id", on: "person", columns: ["entity_id"], unique: true)
+            try db.alter(table: "curiosity_item") { t in
+                t.add(column: "entity_id", .text).references("entity", onDelete: .cascade)
+            }
+        }
         return m
     }
 }

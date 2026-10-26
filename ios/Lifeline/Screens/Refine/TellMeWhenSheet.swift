@@ -11,6 +11,8 @@ struct TellMeWhenSheet: View {
 
     let title: String
     let birthDate: CivilDate?
+    /// "From when to when?" when a place or thing gets its dates (M7).
+    var heading = "Tell me when"
     let onSave: (TimeRange) -> Void
     @Environment(\.dismiss) private var dismiss
     @State private var shape: Shape = .year
@@ -20,9 +22,10 @@ struct TellMeWhenSheet: View {
 
     private static let years = Array(AnchorPhrase.yearRange)
 
-    init(title: String, birthDate: CivilDate?, onSave: @escaping (TimeRange) -> Void) {
+    init(title: String, birthDate: CivilDate?, heading: String = "Tell me when", onSave: @escaping (TimeRange) -> Void) {
         self.title = title
         self.birthDate = birthDate
+        self.heading = heading
         self.onSave = onSave
         let now = CivilDate.today().year
         _year = State(initialValue: now - 20)
@@ -81,7 +84,7 @@ struct TellMeWhenSheet: View {
             }
             .padding(24)
             .linenBackground()
-            .navigationTitle("Tell me when")
+            .navigationTitle(heading)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }

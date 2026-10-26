@@ -5,6 +5,13 @@ public enum CuriosityKind: String, Codable, Sendable {
     case unexplainedPerson = "unexplained_person"
     case placeWithoutStory = "place_without_story"
     case droppedThread = "dropped_thread"
+    /// M7: one scene question per entity with no moment yet. Never a date, never an opinion.
+    case entityWithoutMoment = "entity_without_moment"
+    case personWithoutMoment = "person_without_moment"
+    case ideaWithoutMoment = "idea_without_moment"
+
+    /// The entity kinds carry their whole question as text.
+    public var isEntityQuestion: Bool { self == .entityWithoutMoment || self == .personWithoutMoment || self == .ideaWithoutMoment }
 }
 
 public enum CuriosityStatus: String, Codable, Sendable {
@@ -22,10 +29,12 @@ public struct CuriosityItem: Codable, Sendable, Equatable, Identifiable {
     public var sourceMemoryID: MemoryID?
     /// For `unresolvedAnchor`: the floating memory that stands for the target phrase.
     public var targetMemoryID: MemoryID?
+    /// For the entity kinds (M7): the person, place, thing or idea the question is about.
+    public var entityID: EntityID?
 
     public init(id: CuriosityItemID, kind: CuriosityKind, text: String, payoffCount: Int, status: CuriosityStatus,
-                sourceMemoryID: MemoryID?, targetMemoryID: MemoryID?) {
+                sourceMemoryID: MemoryID?, targetMemoryID: MemoryID?, entityID: EntityID? = nil) {
         self.id = id; self.kind = kind; self.text = text; self.payoffCount = payoffCount; self.status = status
-        self.sourceMemoryID = sourceMemoryID; self.targetMemoryID = targetMemoryID
+        self.sourceMemoryID = sourceMemoryID; self.targetMemoryID = targetMemoryID; self.entityID = entityID
     }
 }

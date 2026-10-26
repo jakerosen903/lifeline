@@ -27,15 +27,19 @@ public enum OutputValidator {
         let haystack = tokens(segmentText)
         var result = Validated(accepted: [], rejected: [], flags: output.flags)
 
-        for memory in output.memories {
+        for var memory in output.memories {
+            // A place, thing or idea the segment does not name is dropped, not the memory with it (M7).
+            memory.entityRefs = memory.entityRefs.filter { contains(haystack, $0.text) }
             if let reason = problem(with: memory, haystack: haystack, wordCount: words.count) {
                 result.rejected.append(Rejected(candidate: .memory(memory), reason: reason))
             } else {
                 result.accepted.append(.memory(memory))
             }
         }
-        for mention in output.mentions {
+        for var mention in output.mentions {
             if contains(haystack, mention.text) {
+                // An idea's title must be the person's words; anything else gives way to the dated default (M7).
+                if mention.kind == .idea { mention.title = IdeaTitle.verbatim(mention.title, in: segmentText) }
                 result.accepted.append(.mention(mention))
             } else {
                 result.rejected.append(Rejected(candidate: .mention(mention), reason: "text not in segment: \(mention.text)"))

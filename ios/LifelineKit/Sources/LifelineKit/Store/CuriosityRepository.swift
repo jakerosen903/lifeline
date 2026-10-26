@@ -8,11 +8,41 @@ public struct CuriosityRepository: Sendable {
 
     public init(_ db: AppDatabase) { self.db = db }
 
-    /// Biggest payoff first, then by text.
+    /// Biggest payoff first; at equal payoff a dated question before an entity question (M7); then by text.
     public func open() throws -> [CuriosityItem] {
         try db.writer.read {
-            try CuriosityItem.filter(Column("status") == CuriosityStatus.open.rawValue)
-                .order(Column("payoff_count").desc, Column("text").collating(.nocase)).fetchAll($0)
+            try CuriosityItem.fetchAll($0, sql: """
+                select * from curiosity_item where status = ?
+                order by payoff_count desc, case when kind = ? then 0 else 1 end, text collate nocase
+                """, arguments: [CuriosityStatus.open.rawValue, CuriosityKind.unresolvedAnchor.rawValue])
+        }
+    }
+
+    /// The entity questions (M7), owned by the resolver run like anchor items. One transaction:
+    /// an open item no longer wanted is answered (a moment arrived); a wanted one is refreshed or
+    /// inserted, unless the person dismissed that question before.
+    public func replaceOpenEntityItems(_ items: [CuriosityItem]) throws {
+        try db.writer.write { db in
+            let kinds = [CuriosityKind.entityWithoutMoment, .personWithoutMoment, .ideaWithoutMoment].map(\.rawValue)
+            let all = try CuriosityItem.filter(kinds.contains(Column("kind"))).fetchAll(db)
+            func key(_ item: CuriosityItem) -> String { "\(item.kind.rawValue)|\(item.entityID?.rawValue ?? "")" }
+            let wanted = Dictionary(items.map { (key($0), $0) }, uniquingKeysWith: { a, _ in a })
+            for var old in all where old.status == .open {
+                if let fresh = wanted[key(old)] {
+                    old.text = fresh.text
+                    try old.update(db)
+                } else {
+                    old.status = .answered
+                    try old.update(db)
+                }
+            }
+            let openKeys = Set(all.filter { $0.status == .open }.map(key))
+            let declined = Set(all.filter { $0.status == .dismissed }.map(key))
+            for item in items where !openKeys.contains(key(item)) && !declined.contains(key(item)) {
+                var row = item
+                row.status = .open
+                try row.insert(db)
+            }
         }
     }
 

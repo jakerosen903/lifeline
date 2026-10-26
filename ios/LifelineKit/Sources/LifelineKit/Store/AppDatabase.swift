@@ -51,11 +51,36 @@ extension Word: FetchableRecord, PersistableRecord {
     }
 }
 
+/// A person's name lives on their entity (M7): every read joins it in as `display_name`, and a
+/// write touches only what is the person's own. Fetch with `Person.selectSQL`, never `select *`.
 extension Person: FetchableRecord, PersistableRecord {
     public static let databaseTableName = "person"
+    /// Columns named one by one: the row's own old name column is read nowhere (M7).
+    static let selectSQL = """
+        select person.id, person.entity_id, person.notes, person.is_owner, person.birth_date, person.birth_date_origin,
+               entity.title as display_name
+        from person join entity on entity.id = person.entity_id 
+        """
     enum CodingKeys: String, CodingKey {
         case id, displayName = "display_name", notes, isOwner = "is_owner"
         case birthDate = "birth_date", birthDateOrigin = "birth_date_origin"
+    }
+
+    public func encode(to container: inout PersistenceContainer) throws {
+        container["id"] = id.rawValue
+        container["entity_id"] = entityID.rawValue
+        // Kept one release for the v8 schema's NOT NULL; the name lives on the entity.
+        container["display_name"] = ""
+        container["notes"] = notes
+        container["is_owner"] = isOwner
+        container["birth_date"] = birthDate
+        container["birth_date_origin"] = birthDateOrigin?.rawValue
+    }
+
+    /// The entity row first, then the person row, in the caller's transaction.
+    func insertWithEntity(_ db: Database) throws {
+        try Entity(id: entityID, type: .person, title: displayName).insert(db)
+        try insert(db)
     }
 }
 
@@ -147,6 +172,7 @@ extension CuriosityItem: FetchableRecord, PersistableRecord {
     public static let databaseTableName = "curiosity_item"
     enum CodingKeys: String, CodingKey {
         case id, kind, text, payoffCount = "payoff_count", status, sourceMemoryID = "source_memory_id", targetMemoryID = "target_memory_id"
+        case entityID = "entity_id"
     }
 }
 
@@ -173,21 +199,6 @@ extension DuplicatePair: FetchableRecord, PersistableRecord {
     enum CodingKeys: String, CodingKey {
         case id, aMemoryID = "a_memory_id", bMemoryID = "b_memory_id", score, verdict, status, decidedAt = "decided_at"
     }
-}
-
-extension MemoryPerson: FetchableRecord, PersistableRecord {
-    public static let databaseTableName = "memory_person"
-    enum CodingKeys: String, CodingKey { case memoryID = "memory_id", personID = "person_id", roleText = "role_text" }
-}
-
-extension Place: FetchableRecord, PersistableRecord {
-    public static let databaseTableName = "place"
-    enum CodingKeys: String, CodingKey { case id, nameText = "name_text", lat, lon }
-}
-
-extension MemoryPlace: FetchableRecord, PersistableRecord {
-    public static let databaseTableName = "memory_place"
-    enum CodingKeys: String, CodingKey { case memoryID = "memory_id", placeID = "place_id" }
 }
 
 extension Alias: FetchableRecord, PersistableRecord {

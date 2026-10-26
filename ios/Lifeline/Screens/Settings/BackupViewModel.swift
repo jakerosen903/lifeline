@@ -113,7 +113,8 @@ final class BackupViewModel {
         Task.detached(priority: .userInitiated) { [weak self] in
             defer { try? FileManager.default.removeItem(at: confirming.url) }
             do {
-                _ = try Backup.stage(confirming.url, root: root, appVersion: Dependencies.appVersion, database: database)
+                _ = try Backup.stage(confirming.url, root: root, appVersion: Dependencies.appVersion, database: database,
+                                     safetyCopyDirectory: try Backup.safetyCopyDirectory())
                 await MainActor.run {
                     self?.progressText = nil
                     self?.relaunchText = "Your copy is ready. Close Lifeline and open it again to finish."

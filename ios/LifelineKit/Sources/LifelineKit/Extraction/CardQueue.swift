@@ -12,10 +12,12 @@ public enum Card: Identifiable, Equatable, Sendable {
     case memory(Candidate, MemoryOut)
     case whoIsThis(WhoSource, text: String)
     case hint(Candidate, HintOut)
+    /// "Sounds like a thing you had" / a place / something you think (M7).
+    case entity(Candidate, MentionOut)
 
     public var id: String {
         switch self {
-        case .memory(let c, _), .hint(let c, _): c.id.rawValue
+        case .memory(let c, _), .hint(let c, _), .entity(let c, _): c.id.rawValue
         case .whoIsThis(.candidate(let c), _): c.id.rawValue
         case .whoIsThis(.mention(let m), _): m.id.rawValue
         }
@@ -32,6 +34,9 @@ public enum Card: Identifiable, Equatable, Sendable {
         case .hint:
             guard let out = CandidatePayload.hint(candidate) else { return nil }
             self = .hint(candidate, out)
+        case .entity:
+            guard let out = CandidatePayload.mention(candidate) else { return nil }
+            self = .entity(candidate, out)
         case .place, .flag:
             return nil
         }
