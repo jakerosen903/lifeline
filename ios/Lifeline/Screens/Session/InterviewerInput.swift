@@ -12,15 +12,20 @@ enum InterviewerInput: Sendable {
     /// An arc effect and the stage the arc is in after it.
     case arc(ArcEffect, stage: Stage)
     case keepGoing
+    /// The Quiet control: true makes the interviewer quiet, false asks it back.
+    case quiet(Bool)
 
     func deliver(to loop: InterviewerLoop) async {
         switch self {
         case .captureStarted(let opening): await loop.captureStarted(opening: opening)
+        // "Shh" by voice: the same quiet as the tap, in the order it was heard.
+        case .voice(.heard(.quiet)): await loop.setQuiet(true)
         case .voice(let event): await loop.voice(event)
         case .segmentStored(let id): await loop.segmentStored(id)
         case .flags(let flags, let segment): await loop.flags(flags, segment: segment)
         case .arc(let effect, let stage): await loop.arc(effect, stage: stage)
         case .keepGoing: await loop.keepGoing()
+        case .quiet(let quiet): await loop.setQuiet(quiet)
         }
     }
 }

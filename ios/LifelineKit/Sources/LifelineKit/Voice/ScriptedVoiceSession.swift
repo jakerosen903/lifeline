@@ -3,14 +3,28 @@ import Foundation
 
 /// A voice session that plays a fixed script instead of listening. Used by UI tests and demos.
 /// It writes a tone to the audio URL so playback of the "recorded" segments works.
+/// A turn "plays" for `msPerWord` a word. A scripted segment that starts during a turn cuts it,
+/// as the person's speech would.
 public actor ScriptedVoiceSession: VoiceSession {
+    public static let msPerWord = 150
+
+    /// The turn playing now, and the timer that ends it.
+    private struct Playing {
+        let id: InterviewerTurnID
+        let startMs: Milliseconds
+        let startedAt: ContinuousClock.Instant
+        let durationMs: Milliseconds
+        let timer: Task<Void, Never>
+    }
+
     private let script: [SegmentTranscript]
     private let intervalMs: Int
     private var continuation: AsyncStream<VoiceEvent>.Continuation?
     private var task: Task<Void, Never>?
     private var paused = false
-    /// The end of the last scripted segment: the file clock a turn is stamped with.
+    /// The end of the last scripted segment: the file clock a turn starts at.
     private var clockMs: Milliseconds = 0
+    private var playing: Playing?
 
     public init(script: [SegmentTranscript] = ScriptedVoiceSession.sampleScript, intervalMs: Int = 1_500) {
         self.script = script
@@ -30,6 +44,7 @@ public actor ScriptedVoiceSession: VoiceSession {
                     try? await Task.sleep(for: .milliseconds(100))
                     guard !Task.isCancelled else { return }
                 }
+                await self?.cutTurn()
                 c.yield(.speechStarted(atMs: segment.range.start))
                 c.yield(.transcriptPartial(String(segment.text.prefix(segment.text.count / 2))))
                 try? await Task.sleep(for: .milliseconds(intervalMs / 3))
@@ -42,24 +57,52 @@ public actor ScriptedVoiceSession: VoiceSession {
 
     public func stop() async throws {
         task?.cancel()
+        cutTurn()
         continuation?.finish()
         continuation = nil
     }
 
-    public func pause() async throws { paused = true; continuation?.yield(.paused) }
+    public func pause() async throws {
+        paused = true
+        cutTurn()
+        continuation?.yield(.paused)
+    }
+
     public func resume() async throws { paused = false; continuation?.yield(.resumed) }
 
-    /// The turn starts and ends at once; timed playback comes later.
+    /// Plays for `msPerWord` a word. A turn still playing ends, interrupted, first.
     @discardableResult
     public func say(_ turn: SpokenTurn) async -> Bool {
         guard let continuation, !paused else { return false }
+        cutTurn()
         continuation.yield(.turnStarted(turn.id, atMs: clockMs))
-        continuation.yield(.turnEnded(turn.id, atMs: clockMs, interrupted: false))
+        let durationMs = turn.text.split(whereSeparator: \.isWhitespace).count * Self.msPerWord
+        let timer = Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(durationMs))
+            guard !Task.isCancelled else { return }
+            await self?.endTurn(turn.id, interrupted: false)
+        }
+        playing = Playing(id: turn.id, startMs: clockMs, startedAt: .now, durationMs: durationMs, timer: timer)
         return true
     }
 
     public func acknowledge() async {}
-    public func interrupt() async {}
+    public func interrupt() async { cutTurn() }
+
+    private func cutTurn() {
+        guard let playing else { return }
+        endTurn(playing.id, interrupted: true)
+    }
+
+    /// A played turn ends at its full length on the file clock; a cut one where it was cut.
+    private func endTurn(_ id: InterviewerTurnID, interrupted: Bool) {
+        guard let current = playing, current.id == id else { return }
+        playing = nil
+        current.timer.cancel()
+        let elapsed = ContinuousClock.now - current.startedAt
+        let playedMs = interrupted ? min(current.durationMs, Int(elapsed / .milliseconds(1))) : current.durationMs
+        continuation?.yield(.turnEnded(id, atMs: current.startMs + playedMs, interrupted: interrupted))
+    }
 
     private func close(_ segment: SegmentTranscript) {
         clockMs = segment.range.end

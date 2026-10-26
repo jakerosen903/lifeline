@@ -8,7 +8,10 @@ struct Dependencies {
     let sessions: SessionRepository
     let profile: ProfileRepository
     let audioRoot: URL
-    let makeVoiceSession: @Sendable (_ onStatus: @escaping @Sendable (TranscriberAvailability) -> Void) -> any VoiceSession
+    /// "Lifeline speaks", read once when a session starts. Under `-uiTesting`, on only with `-uiTesting-speaks`.
+    let speaks: @Sendable () -> Bool
+    /// `speaks` on: voice processing and the system voice. Off: today's listen-only session.
+    let makeVoiceSession: @Sendable (_ speaks: Bool, _ onStatus: @escaping @Sendable (TranscriberAvailability) -> Void) -> any VoiceSession
     let activateAudio: @Sendable () throws -> Void
     let activatePlayback: @Sendable () throws -> Void
     let deactivateAudio: @Sendable () -> Void
@@ -74,9 +77,9 @@ struct Dependencies {
     /// A recorder whose stored segments feed `queue`, and whose voice events and stored segments go to
     /// `interviewer` in order. Finish returns at once; the queue keeps sorting in the background and the
     /// launch-time worker picks up anything it leaves.
-    func makeRecorder(onStatus: @escaping @Sendable (TranscriberAvailability) -> Void, queue: ExtractionQueue,
+    func makeRecorder(speaks: Bool, onStatus: @escaping @Sendable (TranscriberAvailability) -> Void, queue: ExtractionQueue,
                       interviewer: @escaping @Sendable (InterviewerInput) -> Void) -> SessionRecorder {
-        SessionRecorder(voice: makeVoiceSession(onStatus), sessions: sessions, turns: InterviewerTurnRepository(database), audioURL: { try audioURL(for: $0) },
+        SessionRecorder(voice: makeVoiceSession(speaks, onStatus), sessions: sessions, turns: InterviewerTurnRepository(database), audioURL: { try audioURL(for: $0) },
                         hooks: RecorderHooks(onSegmentStored: { id in
                                                  interviewer(.segmentStored(id))
                                                  Task { await queue.enqueue(id) }
@@ -105,11 +108,15 @@ struct Dependencies {
             sessions: sessions,
             profile: ProfileRepository(db),
             audioRoot: root,
-            makeVoiceSession: { onStatus in
-                CascadeVoiceSession(
-                    source: AVAudioEngineSource(),
+            speaks: { LifelineSpeaks.isOn },
+            makeVoiceSession: { speaks, onStatus in
+                // The system voice plays on the capture engine, so echo cancellation hears it.
+                let source = AVAudioEngineSource(voiceProcessing: speaks)
+                return CascadeVoiceSession(
+                    source: source,
                     sink: AudioFileWriter(),
                     transcriber: SpeechAnalyzerTranscriber(onStatus: onStatus, log: { print("[speech] \($0)") }),
+                    output: speaks ? AVSpeechVoiceOutput(source: source) : SilentVoiceOutput(),
                     log: { line in
                         print("[voice] \(line)")
                         Task { await pauseLog.record(line) }
@@ -159,11 +166,15 @@ struct Dependencies {
         let actions = CandidateActions(store: store, matcher: matcher)
         let reconcile = ScriptedReconcileService()
         let reporter = SortingReporter()
+        // Every UI test starts from the default "Lifeline speaks"; a test that turns it off must not leave it off.
+        UserDefaults.standard.removeObject(forKey: LifelineSpeaks.key)
         var deps = Dependencies(
             sessions: SessionRepository(db),
             profile: ProfileRepository(db),
             audioRoot: root,
-            makeVoiceSession: { onStatus in
+            // The scripted voice "speaks" for 150 ms a word; tests that do not ask for it keep the listen-only session.
+            speaks: { args.contains("-uiTesting-speaks") && LifelineSpeaks.isOn },
+            makeVoiceSession: { _, onStatus in
                 onStatus(.ready)
                 // `-uiTesting-slow`: a segment every few seconds, for tests that act between segments.
                 if args.contains("-uiTesting-entities") { return ScriptedVoiceSession(script: ScriptedVoiceSession.entityScript, intervalMs: 800) }

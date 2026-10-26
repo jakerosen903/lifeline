@@ -1,7 +1,7 @@
 import LifelineKit
 import SwiftUI
 
-/// Settings: the About you form in edit mode, and the key that lets the app sort what you say.
+/// Settings: the About you form in edit mode, the key that lets the app sort what you say, and whether Lifeline speaks.
 struct SettingsScreen: View {
     let deps: Dependencies
     /// True while a session is live or unlanded; export and restore wait for it (M6).
@@ -21,6 +21,8 @@ struct SettingsScreen: View {
 
                 // A saved key starts sorting whatever waited for one (M6).
                 APIKeySection(key: key, secrets: deps.secrets, onSaved: { deps.worker.requestStart() })
+
+                SpeaksSection()
 
                 if let backup {
                     YourCopySection(viewModel: backup)

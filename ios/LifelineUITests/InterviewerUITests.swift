@@ -1,7 +1,8 @@
 import XCTest
 
 /// M8: what the interviewer says is shown where the person reads, and kept with the session.
-/// In this PR playback is silent; the scripted voice reports each turn as played at once.
+/// The scripted voice plays each turn for 150 ms a word, and a scripted segment cuts the turn it starts in.
+/// Under UI testing the app speaks only with `-uiTesting-speaks`.
 final class InterviewerUITests: XCTestCase {
     private static let spokenPastDisclosure = "Thank you for telling me that. You can stop here, or keep going. It is your choice."
     private static let earlyWindDown = "We can leave this here and come back whenever you want."
@@ -22,6 +23,13 @@ final class InterviewerUITests: XCTestCase {
         app.staticTexts.matching(identifier: identifier).matching(NSPredicate(format: "label == %@", label)).firstMatch
     }
 
+    /// The "cut off" mark sits on the line above a turn's words.
+    @MainActor
+    private func hasCutOffMark(_ app: XCUIApplication, above words: XCUIElement) -> Bool {
+        app.staticTexts.matching(identifier: "transcript.turn.interrupted").allElementsBoundByIndex
+            .contains { $0.frame.maxY <= words.frame.minY + 1 && words.frame.minY - $0.frame.maxY < 20 }
+    }
+
     /// From the timeline, the newest session's detail, settled so it can scroll.
     @MainActor
     private func openSessionDetail(_ app: XCUIApplication) {
@@ -38,7 +46,7 @@ final class InterviewerUITests: XCTestCase {
     /// does not repeat it under the prompt, which already shows it.
     @MainActor
     func testTheOpeningIsStoredButNotRepeatedOnTheListenView() {
-        let app = launchToTimeline()
+        let app = launchToTimeline(arguments: ["-uiTesting-speaks"])
         app.startSession(review: false)
         let prompt = app.staticTexts["session.prompt"]
         XCTAssertTrue(prompt.waitForExistence(timeout: 5))
@@ -58,7 +66,7 @@ final class InterviewerUITests: XCTestCase {
     /// so the Listen view ends on the wind-down line. The detail keeps both, in order, after the person's words.
     @MainActor
     func testScriptedDisclosureShowsAndStoresTheFixedText() {
-        let app = launchToTimeline(arguments: ["-uiTesting-heavy"])
+        let app = launchToTimeline(arguments: ["-uiTesting-speaks", "-uiTesting-heavy"])
         app.startSession(review: false)
         XCTAssertTrue(app.any("session.disclosure").waitForExistence(timeout: 15), "the second segment is flagged")
         let turn = text(app, "session.turn", Self.earlyWindDown)
@@ -76,5 +84,78 @@ final class InterviewerUITests: XCTestCase {
             .matching(NSPredicate(format: "label CONTAINS %@", "climbed it in 1998")).firstMatch
         XCTAssertTrue(flagged.exists)
         XCTAssertLessThan(flagged.frame.minY, disclosure.frame.minY, "the turn follows the words it answers")
+    }
+
+    /// Slow script: the second segment is flagged as a past disclosure and the spoken text (17 words,
+    /// about 2.5 s) starts after its pause. The third segment starts about 2.5 s after that pause, so it
+    /// cuts the disclosure text. The detail marks that turn as cut off.
+    @MainActor
+    func testSpeechDuringATurnMarksItInterrupted() {
+        let app = launchToTimeline(arguments: ["-uiTesting-speaks", "-uiTesting-heavy", "-uiTesting-slow"])
+        app.startSession(review: false)
+        XCTAssertTrue(app.any("session.disclosure").waitForExistence(timeout: 20), "the second segment is flagged")
+        // The wind-down line waits for the third segment's pause, then plays to its end (about 1.7 s).
+        XCTAssertTrue(text(app, "session.turn", Self.earlyWindDown).waitForExistence(timeout: 15))
+        RunLoop.current.run(until: Date().addingTimeInterval(3))
+        app.buttons["session.disclosureOkay"].tap()
+        app.finishSession()
+
+        openSessionDetail(app)
+        let disclosure = text(app, "transcript.turn", Self.spokenPastDisclosure)
+        XCTAssertTrue(app.reveal(disclosure), "the cut turn is kept with the session")
+        XCTAssertTrue(hasCutOffMark(app, above: disclosure), "the disclosure text is marked as cut off")
+        let windDown = text(app, "transcript.turn", Self.earlyWindDown)
+        XCTAssertTrue(app.reveal(windDown))
+        XCTAssertFalse(hasCutOffMark(app, above: windDown), "a turn that played to its end is not marked")
+    }
+
+    /// One tap makes the interviewer quiet for the session, and one tap asks it back. The label follows
+    /// the interviewer's own state. Quiet holds every turn but the arc's fixed answers; in this PR the
+    /// only such turn is the opening, so nothing new is said either way.
+    @MainActor
+    func testQuietStopsTurnsAndAskMeAgainBringsThemBack() {
+        let app = launchToTimeline(arguments: ["-uiTesting-speaks"])
+        app.startSession(review: false)
+        let quiet = app.buttons["session.quiet"]
+        XCTAssertTrue(quiet.waitForExistence(timeout: 5), "the Listen view offers Quiet while the app may speak")
+        XCTAssertEqual(quiet.label, "Quiet")
+        quiet.tap()
+        XCTAssertTrue(quiet.wait(for: \.label, toEqual: "Ask me again", timeout: 5), "the interviewer is quiet")
+        XCTAssertTrue(app.staticTexts["session.count"].wait(for: \.label, toEqual: "2 possible memories", timeout: 15))
+        XCTAssertFalse(app.staticTexts["session.turn"].exists, "nothing is said while quiet")
+        XCTAssertEqual(quiet.label, "Ask me again", "quiet lasts until the person asks again")
+        quiet.tap()
+        XCTAssertTrue(quiet.wait(for: \.label, toEqual: "Quiet", timeout: 5), "the interviewer may speak again")
+        app.finishSession()
+    }
+
+    /// "Lifeline speaks" off: today's listening session. No Quiet control, and no turn is kept, not even the opening.
+    @MainActor
+    func testSpeaksOffShowsNoTurns() {
+        let app = launchToTimeline(arguments: ["-uiTesting-speaks"])
+        app.buttons["home.settings"].tap()
+        let toggle = app.switches["settings.speaks"]
+        XCTAssertTrue(app.reveal(toggle), "Settings has Lifeline speaks")
+        XCTAssertEqual(toggle.value as? String, "1", "on by default")
+        toggle.switches.firstMatch.tap()
+        XCTAssertEqual(toggle.value as? String, "0")
+        app.buttons["settings.done"].tap()
+
+        app.startSession(review: false)
+        XCTAssertTrue(app.staticTexts["session.count"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["session.count"].wait(for: \.label, toEqual: "2 possible memories", timeout: 15))
+        XCTAssertFalse(app.buttons["session.quiet"].exists, "no Quiet control when the app does not speak")
+        app.finishSession()
+
+        openSessionDetail(app)
+        // The list is lazy: look for a turn at every scroll position down to the person's words.
+        let words = app.descendants(matching: .any).matching(identifier: "detail.segment")
+            .matching(NSPredicate(format: "label CONTAINS %@", "climbed it in 1998")).firstMatch
+        for _ in 0..<6 where !words.exists {
+            XCTAssertFalse(app.staticTexts["transcript.turn"].exists, "no turn is kept")
+            app.swipeUp()
+        }
+        XCTAssertTrue(words.waitForExistence(timeout: 2), "the person's words are kept")
+        XCTAssertFalse(app.staticTexts["transcript.turn"].exists, "no turn is kept, not even the opening")
     }
 }

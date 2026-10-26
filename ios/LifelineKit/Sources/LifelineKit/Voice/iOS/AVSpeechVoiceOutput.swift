@@ -206,13 +206,16 @@ public final class AVSpeechVoiceOutput: VoiceOutput, @unchecked Sendable {
         return buffer
     }
 
-    /// The best installed English voice (`VoicePicker`); nil lets the system choose.
-    private static func bestVoice() -> AVSpeechSynthesisVoice? {
-        let installed = AVSpeechSynthesisVoice.speechVoices()
-        let infos = installed.map { voice in
+    /// The system voices installed now, as `VoicePicker` sees them. Settings asks `VoicePicker.onlyCompact` of these.
+    public static func installedVoices() -> [VoiceInfo] {
+        AVSpeechSynthesisVoice.speechVoices().map { voice in
             VoiceInfo(identifier: voice.identifier, language: voice.language, quality: quality(voice.quality))
         }
-        guard let best = VoicePicker.best(infos) else { return AVSpeechSynthesisVoice(language: "en-US") }
+    }
+
+    /// The best installed English voice (`VoicePicker`); nil lets the system choose.
+    private static func bestVoice() -> AVSpeechSynthesisVoice? {
+        guard let best = VoicePicker.best(installedVoices()) else { return AVSpeechSynthesisVoice(language: "en-US") }
         return AVSpeechSynthesisVoice(identifier: best.identifier)
     }
 

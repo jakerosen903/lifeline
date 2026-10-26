@@ -1,8 +1,8 @@
 import Foundation
 import LifelineKit
 
-/// The live session. Owns the recorder, the extraction queue, the card queue, the arc and the
-/// interviewer loop. In this PR the loop's turns are stored and shown but not heard.
+/// The live session. Owns the recorder, the extraction queue, the card queue, the arc and, when
+/// "Lifeline speaks" is on, the interviewer loop. Off, the session only listens: there is no loop and no turn.
 /// A quick story never sees the clock; settling in is offered the next question when the room
 /// goes quiet and a wrap-up at the planned length. Finishing never waits for sorting.
 @MainActor
@@ -29,6 +29,10 @@ final class SessionViewModel: Identifiable {
     private(set) var nextPrompt: OpeningPrompt?
     /// The fixed words shown once after a disclosure.
     private(set) var disclosure: String?
+    /// True while the interviewer loop runs: the Quiet control shows only then.
+    private(set) var interviewerRuns = false
+    /// The loop's own quiet flag, by tap or by voice.
+    private(set) var isQuiet = false
     var view: ViewMode = .listen
     var changing: Memory?
     let cards: CardHandler
@@ -42,6 +46,7 @@ final class SessionViewModel: Identifiable {
     private var cardObservation: Task<Void, Never>?
     private var ticker: Task<Void, Never>?
     private var quietTimer: Task<Void, Never>?
+    private var interviewerObservation: Task<Void, Never>?
     private var segmentsSeen = 0
     private var declinedOffers = 0
 
@@ -103,12 +108,15 @@ final class SessionViewModel: Identifiable {
         let (statuses, statusContinuation) = AsyncStream<TranscriberAvailability>.makeStream()
         let sessionID = SessionID()
         let queue = deps.makeExtractionQueue(for: sessionID)
+        // Read once: a change in Settings applies to the next session.
+        let speaks = deps.speaks()
         let (inputs, interviewer) = AsyncStream<InterviewerInput>.makeStream()
-        let recorder = deps.makeRecorder(onStatus: { status in statusContinuation.yield(status) }, queue: queue,
+        let recorder = deps.makeRecorder(speaks: speaks, onStatus: { status in statusContinuation.yield(status) }, queue: queue,
                                          interviewer: { interviewer.yield($0) })
         self.recorder = recorder
         self.queue = queue
-        self.interviewer = interviewer
+        // Off: no loop reads the stream, so it is finished now and every yield to it is dropped.
+        if speaks { self.interviewer = interviewer } else { interviewer.finish() }
         observation = Task { [weak self] in
             await withTaskGroup(of: Void.self) { group in
                 group.addTask { for await s in recorder.states { await self?.apply(s) } }
@@ -121,13 +129,7 @@ final class SessionViewModel: Identifiable {
         do {
             let captureStart = ContinuousClock.now
             try await recorder.start(id: sessionID, kind: kind)
-            let loop = InterviewerLoop(kind: kind, config: deps.arcConfig,
-                                       speak: { await recorder.speak($0) },
-                                       now: { ContinuousClock.now - captureStart },
-                                       sleep: { try? await Task.sleep(for: $0) })
-            // Ends once the stream is finished at the end of the session and its last inputs are delivered.
-            Task { for await input in inputs { await input.deliver(to: loop) } }
-            interviewer.yield(.captureStarted(opening: prompt))
+            if speaks { startInterviewer(inputs: inputs, recorder: recorder, captureStart: captureStart) }
             arc = SessionArc(kind: kind, config: deps.arcConfig, startedAt: startedAt)
             persistLog()
             try? deps.promptLog.record(promptID: opening.main.logID, session: sessionID)
@@ -147,6 +149,26 @@ final class SessionViewModel: Identifiable {
         }
     }
 
+    /// The loop hears the session's inputs in order, and the Quiet control follows its state.
+    private func startInterviewer(inputs: AsyncStream<InterviewerInput>, recorder: SessionRecorder, captureStart: ContinuousClock.Instant) {
+        let loop = InterviewerLoop(kind: kind, config: deps.arcConfig,
+                                   speak: { await recorder.speak($0) },
+                                   now: { ContinuousClock.now - captureStart },
+                                   sleep: { try? await Task.sleep(for: $0) })
+        // Ends once the stream is finished at the end of the session and its last inputs are delivered.
+        Task { [weak self] in
+            for await input in inputs {
+                await input.deliver(to: loop)
+                if case .voice(.heard(.keepGoing)) = input { self?.heardKeepGoing() }
+            }
+        }
+        interviewerObservation = Task { [weak self] in
+            for await state in loop.states { self?.isQuiet = state.isQuiet }
+        }
+        interviewerRuns = true
+        interviewer?.yield(.captureStarted(opening: prompt))
+    }
+
     /// Finish: stops capture, writes the row, returns at once. Sorting carries on behind the landing.
     func finish() async {
         guard let recorder, !isStopping else { return }
@@ -154,6 +176,8 @@ final class SessionViewModel: Identifiable {
         apply(arc.apply(.finish, now: .now))
         ticker?.cancel()
         quietTimer?.cancel()
+        interviewerObservation?.cancel()
+        interviewerRuns = false
         do { try await recorder.stop() } catch { stopError = error.localizedDescription }
         // The loop heard `ended` with the effect above; no voice event follows the stop.
         interviewer?.finish()
@@ -177,6 +201,17 @@ final class SessionViewModel: Identifiable {
         wrapUpOffered = false
         apply(arc.apply(.keepGoing, now: .now))
         interviewer?.yield(.keepGoing)
+    }
+
+    /// "Keep going" by voice counts only while the wrap-up is offered, as the banner's button does.
+    private func heardKeepGoing() {
+        guard wrapUpOffered, !isStopping else { return }
+        keepGoing()
+    }
+
+    /// The Quiet control: "Quiet" makes the interviewer quiet for the session; "Ask me again" asks it back.
+    func toggleQuiet() {
+        interviewer?.yield(.quiet(!isQuiet))
     }
 
     func dismissDisclosure() { disclosure = nil }
