@@ -261,9 +261,9 @@ enum Migrations {
                 t.add(column: "continues_order", .integer)
             }
         }
-        // v9a (M7, PR A): a memory's kind lives in a column, filled from its card; no card, or a
+        // v9 (M7, PR A): a memory's kind lives in a column, filled from its card; no card, or a
         // card without a kind, is an event.
-        m.registerMigration("v9a") { db in
+        m.registerMigration("v9") { db in
             try db.alter(table: "memory") { t in
                 t.add(column: "kind", .text).notNull().defaults(to: "event")
             }

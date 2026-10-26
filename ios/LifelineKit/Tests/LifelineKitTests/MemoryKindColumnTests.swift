@@ -40,7 +40,7 @@ private func year(_ y: Int) -> TimeRange {
     TimeRange(earliest: d("\(y)-01-01"), latest: d("\(y)-12-31"), likelyStart: nil, likelyEnd: nil, granularity: .year, origin: .stated, evidenceText: "in \(y)")
 }
 
-@Test func v9aFillsKindFromPayloads() throws {
+@Test func v9FillsKindFromPayloads() throws {
     var config = Configuration()
     config.foreignKeysEnabled = true
     let queue = try DatabaseQueue(configuration: config)
