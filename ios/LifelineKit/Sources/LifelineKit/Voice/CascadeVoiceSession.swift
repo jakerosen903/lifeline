@@ -1,8 +1,10 @@
 import Foundation
 
-/// The V1 voice session: it listens and never speaks. One actor owns the file clock and
-/// feeds every chunk to the sink, the transcriber and the segmenter, in that order.
-public actor ListenOnlyVoiceSession: VoiceSession {
+/// The cascade voice session: it listens, and it speaks a turn through `output` when asked.
+/// One actor owns the file clock and feeds every chunk to the sink, the transcriber and the
+/// segmenter, in that order. The app's own words never reach a segment: while a turn plays the
+/// segmenter hears silence, and words that echo a turn are removed when a segment closes.
+public actor CascadeVoiceSession: VoiceSession {
     public struct Timing: Sendable {
         /// After asking the transcriber to finalize, close the segment once this long passes with no new final.
         public var finalizeGraceMs: Int
@@ -16,6 +18,8 @@ public actor ListenOnlyVoiceSession: VoiceSession {
     private let source: any AudioSource
     private let sink: any AudioSink
     private let transcriber: any Transcriber
+    private let output: any VoiceOutput
+    private let echo: EchoConfig
     private let timing: Timing
     private let log: @Sendable (String) -> Void
 
@@ -31,12 +35,21 @@ public actor ListenOnlyVoiceSession: VoiceSession {
     private var isPaused = false
     private var graceTimer: Task<Void, Never>?
 
+    /// The turn handed to `output`. `startMs` is nil until playback reports `started`.
+    private var playing: (turn: SpokenTurn, startMs: Milliseconds?, task: Task<Void, Never>)?
+    /// Every turn played this session. Kept to the end: a turn's echo can reach a segment that
+    /// closes after the turn ended.
+    private var played: [PlaybackWindow] = []
+
     public init(source: any AudioSource, sink: any AudioSink, transcriber: any Transcriber,
+                output: any VoiceOutput = SilentVoiceOutput(), echo: EchoConfig = .init(),
                 segmenter: SegmenterConfig = .init(), timing: Timing = .init(),
                 log: @escaping @Sendable (String) -> Void = { _ in }) {
         self.source = source
         self.sink = sink
         self.transcriber = transcriber
+        self.output = output
+        self.echo = echo
         self.segmenter = Segmenter(config: segmenter)
         self.timing = timing
         self.log = log
@@ -64,6 +77,7 @@ public actor ListenOnlyVoiceSession: VoiceSession {
     /// owner's closing words (which often arrive only at finish) are stored and not dropped.
     public func stop() async throws {
         isStopping = true
+        await cutTurn()
         await source.stop()
         await sourceTask?.value
         var closing: [MsRange] = []
@@ -90,6 +104,7 @@ public actor ListenOnlyVoiceSession: VoiceSession {
     public func pause() async throws {
         guard !isPaused, !isStopping else { return }
         isPaused = true
+        await cutTurn()
         await source.pause()
         await closeSegments(segmenter.flush(atMs: lastChunkEndMs))
         log("paused at \(lastChunkEndMs) ms")
@@ -104,9 +119,28 @@ public actor ListenOnlyVoiceSession: VoiceSession {
         emit(.resumed)
     }
 
-    public func say(_ text: String) async { log("say (no-op in listen-only): \(text)") }
-    public func acknowledge() async { log("acknowledge (no-op in listen-only)") }
-    public func interrupt() async { log("interrupt (no-op in listen-only)") }
+    public func say(_ turn: SpokenTurn) async {
+        guard events != nil, !isPaused, !isStopping else {
+            log("say dropped (paused or stopped)")
+            return
+        }
+        await cutTurn()
+        guard !isPaused, !isStopping else { return }   // a pause or stop arrived while the last turn was cut
+        let playback = output.play(turn.text)
+        let task = Task { [weak self] in
+            for await event in playback { await self?.handle(event, of: turn.id) }
+            await self?.playbackEnded(turn.id)
+        }
+        playing = (turn, nil, task)
+    }
+
+    public func acknowledge() async { log("acknowledge (no-op)") }
+
+    /// The person spoke over the app.
+    public func interrupt() async {
+        log("interrupt")
+        await cutTurn()
+    }
 
     // MARK: Source events
 
@@ -119,8 +153,11 @@ public actor ListenOnlyVoiceSession: VoiceSession {
             if chunk.startMs / 5_000 != (chunk.startMs - chunk.durationMs) / 5_000 {
                 log("level \(Int(chunk.levelDb)) dBFS at \(chunk.startMs) ms, pending words \(pendingWords.count)")
             }
-            await closeSegments(segmenter.observe(levelDb: chunk.levelDb, startMs: chunk.startMs, durationMs: chunk.durationMs))
+            // The app's own voice must not open a segment or end a pause.
+            let level = playing?.startMs != nil ? -Float.infinity : chunk.levelDb
+            await closeSegments(segmenter.observe(levelDb: level, startMs: chunk.startMs, durationMs: chunk.durationMs))
         case .interrupted:
+            await cutTurn()
             await closeSegments(segmenter.flush(atMs: lastChunkEndMs))
             emit(.interrupted)
         case .resumed:
@@ -153,15 +190,64 @@ public actor ListenOnlyVoiceSession: VoiceSession {
     }
 
     /// Every unclaimed word that starts before the segment's end belongs to it. Words that start
-    /// later are held for the next segment. A segment widens its start to contain a straggler
-    /// (a word after the previous segment's end, or from an abandoned short blip), so every
-    /// stored word starts inside its segment's range and nothing the owner said is lost.
+    /// later are held for the next segment. Words that echo a turn the app spoke are dropped.
+    /// A segment widens its start to contain a straggler (a word after the previous segment's end,
+    /// or from an abandoned short blip), so every stored word starts inside its segment's range
+    /// and nothing the owner said is lost.
     private func takeSegment(_ range: MsRange) -> SegmentTranscript {
-        let (inside, held) = pendingWords.stablePartition { $0.range.start < range.end }
+        let (claimed, held) = pendingWords.stablePartition { $0.range.start < range.end }
         pendingWords = held
+        let inside = EchoFilter.personsWords(claimed, windows: playbackWindows, config: echo)
         var range = range
         if let earliest = inside.map(\.range.start).min() { range.start = min(range.start, earliest) }
         return SegmentTranscript(range: range, text: inside.map(\.text).joined(separator: " "), words: inside)
+    }
+
+    /// The played turns, and the one playing now up to the newest chunk.
+    private var playbackWindows: [PlaybackWindow] {
+        guard let playing, let start = playing.startMs else { return played }
+        return played + [PlaybackWindow(range: MsRange(start: start, end: lastChunkEndMs), text: playing.turn.text)]
+    }
+
+    // MARK: Playback
+
+    /// Each turn is stamped with the end of the newest chunk, the file clock's "now".
+    private func handle(_ event: PlaybackEvent, of id: InterviewerTurnID) {
+        guard let current = playing, current.turn.id == id else { return }   // a cut turn reports late
+        switch event {
+        case .started:
+            guard current.startMs == nil else { return }
+            playing?.startMs = lastChunkEndMs
+            log("turn started at \(lastChunkEndMs) ms")
+            emit(.turnStarted(id, atMs: lastChunkEndMs))
+        case .finished(let completed):
+            endTurn(interrupted: !completed)
+        }
+    }
+
+    /// A playback stream that ends without `finished` still ends the turn.
+    private func playbackEnded(_ id: InterviewerTurnID) {
+        guard playing?.turn.id == id else { return }
+        endTurn(interrupted: true)
+    }
+
+    /// Stops the turn that is playing, if any. The turn ends first, so a late report from the
+    /// output finds no turn. A cut turn is not resumed.
+    private func cutTurn() async {
+        guard let current = playing else { return }
+        current.task.cancel()
+        endTurn(interrupted: true)
+        await output.stop()
+    }
+
+    /// A turn that never started (cut before playback began) has no window and no events.
+    private func endTurn(interrupted: Bool) {
+        guard let current = playing else { return }
+        playing = nil
+        guard let start = current.startMs else { return }
+        played.append(PlaybackWindow(range: MsRange(start: start, end: lastChunkEndMs), text: current.turn.text))
+        log("turn ended at \(lastChunkEndMs) ms\(interrupted ? ", interrupted" : "")")
+        emit(.turnEnded(current.turn.id, atMs: lastChunkEndMs, interrupted: interrupted))
     }
 
     // MARK: Transcriber results

@@ -3,14 +3,14 @@ import Testing
 @testable import LifelineKit
 
 private struct Harness {
-    let src = FakeAudioSource(), tr = FakeTranscriber(), sink = FakeAudioSink()
+    let src = FakeAudioSource(), tr = FakeTranscriber(), sink = FakeAudioSink(), output = FakeVoiceOutput()
     let log = LogCollector()
-    let vs: ListenOnlyVoiceSession
+    let vs: CascadeVoiceSession
     init() {
         let log = self.log
-        vs = ListenOnlyVoiceSession(source: src, sink: sink, transcriber: tr,
-                                    timing: .init(finalizeGraceMs: 700, finalizeTimeoutMs: 1_500),
-                                    log: { log.append($0) })
+        vs = CascadeVoiceSession(source: src, sink: sink, transcriber: tr, output: output,
+                                 timing: .init(finalizeGraceMs: 700, finalizeTimeoutMs: 1_500),
+                                 log: { log.append($0) })
     }
 }
 
@@ -180,12 +180,23 @@ private func collect(_ events: AsyncStream<VoiceEvent>, count: Int, timeoutMs: I
     #expect(h.sink.closed && h.tr.finished && h.src.stopped)
 }
 
-@Test func speakingCommandsAreNoOpsThatLog() async throws {
+@Test func aSilentTurnStartsAndEndsAtOnce() async throws {
+    let vs = CascadeVoiceSession(source: FakeAudioSource(), sink: FakeAudioSink(), transcriber: FakeTranscriber())
+    let events = try await vs.start(writingTo: URL(fileURLWithPath: "/dev/null"))
+    let turn = SpokenTurn(id: InterviewerTurnID(), text: "What would you like to tell me about today?")
+    await vs.say(turn)
+    let seen = try await collect(events, count: 2)
+    #expect(seen == [.turnStarted(turn.id, atMs: 0), .turnEnded(turn.id, atMs: 0, interrupted: false)])
+    try await vs.stop()
+}
+
+@Test func acknowledgeAndInterruptWithNoTurnOnlyLog() async throws {
     let h = Harness()
     let events = try await h.vs.start(writingTo: URL(fileURLWithPath: "/dev/null"))
-    await h.vs.say("hello"); await h.vs.acknowledge(); await h.vs.interrupt()
-    #expect(h.log.all.count == 3)
+    await h.vs.acknowledge(); await h.vs.interrupt()
+    #expect(h.log.all.count == 2)
     #expect(try await collect(events, count: 1, timeoutMs: 200).isEmpty)
+    #expect(h.output.stops == 0)
 }
 
 @Test func pausesAreLoggedNotEmitted() async throws {
@@ -229,4 +240,114 @@ private func collect(_ events: AsyncStream<VoiceEvent>, count: Int, timeoutMs: I
     let second = try await firstEvent(events) { if case .segmentClosed(let s) = $0 { s.range.start >= 4_000 } else { false } }
     guard case .segmentClosed(let next) = second else { Issue.record("expected a second segment"); return }
     #expect(next.range.start == 4_000)
+}
+
+// MARK: Turns (M8)
+
+private func isTurnStarted(_ e: VoiceEvent) -> Bool { if case .turnStarted = e { true } else { false } }
+private func isTurnEnded(_ e: VoiceEvent) -> Bool { if case .turnEnded = e { true } else { false } }
+
+/// Waits until the session has taken `chunks` chunks, so `lastChunkEndMs` is where the test expects.
+private func settle(_ h: Harness, chunks: Int) async throws {
+    for _ in 0..<100 where h.tr.fed.count < chunks { try await Task.sleep(for: .milliseconds(20)) }
+    try await Task.sleep(for: .milliseconds(100))
+}
+
+@Test func appWordsInAFinalNeverReachASegment() async throws {
+    let h = Harness()
+    let events = try await h.vs.start(writingTo: URL(fileURLWithPath: "/dev/null"))
+    h.src.push(speechMs: 0..<0, silenceMs: 0..<1_000)
+    try await settle(h, chunks: 10)
+    let turn = SpokenTurn(id: InterviewerTurnID(), text: "Where did you grow up?")
+    await h.vs.say(turn)
+    _ = try await firstEvent(events, where: isTurnStarted)
+    h.src.push(speechMs: 1_000..<2_500)   // the app's own voice reaches the mic
+    try await settle(h, chunks: 25)
+    h.output.finish()
+    _ = try await firstEvent(events, where: isTurnEnded)
+    // The transcriber hears the turn and then the person, in one final.
+    let heard = [w("where", 1_100, 1_300), w("did", 1_300, 1_500), w("you", 1_500, 1_700), w("grow", 1_700, 2_000), w("up", 2_000, 2_300),
+                 w("by", 2_600, 2_800), w("the", 2_800, 3_000), w("sea", 3_000, 3_600), w("every", 4_000, 4_500), w("summer", 4_500, 6_400)]
+    h.tr.push(TranscriptResult(text: heard.map(\.text).joined(separator: " "), words: heard, range: MsRange(start: 1_100, end: 6_400), isFinal: true))
+    h.src.push(speechMs: 2_500..<6_500, silenceMs: 6_500..<8_500)
+    let closed = try await firstEvent(events) { if case .segmentClosed = $0 { true } else { false } }
+    guard case .segmentClosed(let segment) = closed else { Issue.record("expected a segment"); return }
+    #expect(segment.words.map(\.text) == ["by", "the", "sea", "every", "summer"])
+    #expect(segment.text == "by the sea every summer")
+    #expect(segment.range == MsRange(start: 2_500, end: 6_500), "the app's words do not widen the segment")
+}
+
+@Test func energyDuringPlaybackOpensNoSegment() async throws {
+    let h = Harness()
+    let events = try await h.vs.start(writingTo: URL(fileURLWithPath: "/dev/null"))
+    let turn = SpokenTurn(id: InterviewerTurnID(), text: "Tell me about the house.")
+    await h.vs.say(turn)
+    _ = try await firstEvent(events, where: isTurnStarted)
+    h.src.push(speechMs: 0..<4_000, silenceMs: 4_000..<6_000)
+    try await settle(h, chunks: 60)
+    h.output.finish()
+    let during = try await collectUntil(events, isTurnEnded)
+    #expect(during == [.turnEnded(turn.id, atMs: 6_000, interrupted: false)], "no speech, pause or segment from the app's voice; saw \(during)")
+    #expect(h.sink.written.count == 60, "the audio file still records every chunk")
+    // After the turn, the person's energy opens a segment again.
+    h.src.push(speechMs: 6_000..<7_000)
+    let started = try await firstEvent(events) { if case .speechStarted = $0 { true } else { false } }
+    #expect(started == .speechStarted(atMs: 6_000))
+}
+
+@Test func pauseCutsTheTurn() async throws {
+    let h = Harness()
+    let events = try await h.vs.start(writingTo: URL(fileURLWithPath: "/dev/null"))
+    h.src.push(speechMs: 0..<0, silenceMs: 0..<1_000)
+    try await settle(h, chunks: 10)
+    let turn = SpokenTurn(id: InterviewerTurnID(), text: "Who lived next door?")
+    await h.vs.say(turn)
+    #expect(try await firstEvent(events, where: isTurnStarted) == .turnStarted(turn.id, atMs: 1_000))
+    try await h.vs.pause()
+    let seen = try await collectUntil(events) { $0 == .paused }
+    #expect(seen.contains(.turnEnded(turn.id, atMs: 1_000, interrupted: true)))
+    #expect(h.output.stops == 1)
+    // A turn offered while paused is dropped, and the cut turn does not come back.
+    await h.vs.say(SpokenTurn(id: InterviewerTurnID(), text: "And after that?"))
+    #expect(h.output.played == [turn.text])
+    try await h.vs.resume()
+    #expect(try await collect(events, count: 1) == [.resumed], "the dropped turn emitted nothing")
+}
+
+@Test func anInterruptionCutsTheTurn() async throws {
+    let h = Harness()
+    let events = try await h.vs.start(writingTo: URL(fileURLWithPath: "/dev/null"))
+    let turn = SpokenTurn(id: InterviewerTurnID(), text: "Who lived next door?")
+    await h.vs.say(turn)
+    _ = try await firstEvent(events, where: isTurnStarted)
+    h.src.pushInterrupted()
+    let seen = try await collectUntil(events) { $0 == .interrupted }
+    #expect(seen.contains(.turnEnded(turn.id, atMs: 0, interrupted: true)))
+    #expect(h.output.stops == 1)
+}
+
+@Test func stopCutsTheTurnAndAcceptsNoOther() async throws {
+    let h = Harness()
+    let events = try await h.vs.start(writingTo: URL(fileURLWithPath: "/dev/null"))
+    let turn = SpokenTurn(id: InterviewerTurnID(), text: "Who lived next door?")
+    await h.vs.say(turn)
+    _ = try await firstEvent(events, where: isTurnStarted)
+    try await h.vs.stop()
+    await h.vs.say(SpokenTurn(id: InterviewerTurnID(), text: "And after that?"))
+    var rest: [VoiceEvent] = []
+    for await e in events { rest.append(e) }
+    #expect(rest == [.turnEnded(turn.id, atMs: 0, interrupted: true)])
+    #expect(h.output.stops == 1 && h.output.played == [turn.text])
+}
+
+@Test func aNewTurnEndsThePlayingOneFirst() async throws {
+    let h = Harness()
+    let events = try await h.vs.start(writingTo: URL(fileURLWithPath: "/dev/null"))
+    let first = SpokenTurn(id: InterviewerTurnID(), text: "Who lived next door?")
+    let second = SpokenTurn(id: InterviewerTurnID(), text: "We can leave it here, or carry on.")
+    await h.vs.say(first)
+    _ = try await firstEvent(events, where: isTurnStarted)
+    await h.vs.say(second)
+    let seen = try await collect(events, count: 2)
+    #expect(seen == [.turnEnded(first.id, atMs: 0, interrupted: true), .turnStarted(second.id, atMs: 0)])
 }

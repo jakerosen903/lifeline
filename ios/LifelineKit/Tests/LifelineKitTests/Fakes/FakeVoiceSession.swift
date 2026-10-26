@@ -22,7 +22,8 @@ actor FakeVoiceSession: VoiceSession {
     private(set) var resumeCalls = 0
     func pause() async throws { pauseCalls += 1; continuation?.yield(.paused) }
     func resume() async throws { resumeCalls += 1; continuation?.yield(.resumed) }
-    func say(_ text: String) async {}
+    private(set) var said: [SpokenTurn] = []
+    func say(_ turn: SpokenTurn) async { said.append(turn) }
     func acknowledge() async {}
     func interrupt() async {}
 

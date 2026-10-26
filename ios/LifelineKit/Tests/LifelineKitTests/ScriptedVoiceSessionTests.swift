@@ -26,3 +26,15 @@ import Testing
     #expect(all.contains { if case .segmentClosed = $0 { true } else { false } }, "the script goes on after resume")
     try await session.stop()
 }
+
+@Test func scriptedSessionReportsTurns() async throws {
+    let session = ScriptedVoiceSession(intervalMs: 60_000)   // the script stays quiet during the test
+    let url = FileManager.default.temporaryDirectory.appending(path: "scripted-\(UUID().uuidString).m4a")
+    let events = try await session.start(writingTo: url)
+    let turn = SpokenTurn(id: InterviewerTurnID(), text: "What would you like to tell me about today?")
+    await session.say(turn)
+    try await session.stop()
+    var all: [VoiceEvent] = []
+    for await event in events { all.append(event) }
+    #expect(all == [.turnStarted(turn.id, atMs: 0), .turnEnded(turn.id, atMs: 0, interrupted: false)])
+}
