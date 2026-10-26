@@ -15,6 +15,15 @@ private func turn(_ session: SessionID, _ kind: TurnKind = .question, text: Stri
     #expect(try repo.turns(in: .init()).isEmpty)
 }
 
+@Test func turnsWithTheSameStartKeepInsertOrder() throws {
+    let db = try AppDatabase.inMemory()
+    let (session, _) = try StoreFixtures.session(in: SessionRepository(db))
+    let repo = InterviewerTurnRepository(db)
+    let turns = (0..<5).map { turn(session, .disclosure, text: "turn \($0)", startMs: 9_000) }
+    for t in turns { try repo.insert(t) }
+    #expect(try repo.turns(in: session) == turns)
+}
+
 @Test func endSetsEndAndInterrupted() throws {
     let db = try AppDatabase.inMemory()
     let (session, _) = try StoreFixtures.session(in: SessionRepository(db))

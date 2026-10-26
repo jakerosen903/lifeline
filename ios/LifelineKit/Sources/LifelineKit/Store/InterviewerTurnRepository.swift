@@ -19,10 +19,11 @@ public struct InterviewerTurnRepository: Sendable {
         }
     }
 
-    /// In file order.
+    /// In file order. Turns with the same start keep the order they were stored in: the scripted voice
+    /// stamps back-to-back turns with one clock value.
     public func turns(in session: SessionID) throws -> [InterviewerTurn] {
         try db.writer.read {
-            try InterviewerTurn.filter(Column("session_id") == session.rawValue).order(Column("start_ms")).fetchAll($0)
+            try InterviewerTurn.filter(Column("session_id") == session.rawValue).order(Column("start_ms"), Column.rowID).fetchAll($0)
         }
     }
 }
