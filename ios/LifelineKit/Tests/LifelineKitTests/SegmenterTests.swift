@@ -31,6 +31,13 @@ private func ended(_ events: [SegmenterEvent]) -> [MsRange] {
     #expect(ended(ev).isEmpty)
 }
 
+@Test func anAbandonedBlipEndsSpeaking() {
+    var s = Segmenter()
+    var ev = feed(&s, db: -20, from: 0, count: 5)           // 500 ms speech
+    ev += feed(&s, db: -60, from: 500, count: 18)           // 1.8 s quiet
+    #expect(ev == [.speechStarted(atMs: 0), .abandoned(MsRange(start: 0, end: 500))])
+}
+
 @Test func pauseInsideSpeechDoesNotSplit() {
     var s = Segmenter()
     var ev = feed(&s, db: -20, from: 0, count: 30)

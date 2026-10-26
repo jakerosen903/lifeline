@@ -17,3 +17,22 @@ private let card = "Thank you for telling me that. You can stop here, or keep go
     #expect(line.number == "988" && line.label.contains("Suicide and Crisis Lifeline"))
     #expect(FixedResponses.crisisLine(locale: Locale(identifier: "de_DE")) == line, "V1 ships the US line only")
 }
+
+@Test func presentSpokenEqualsTheCard() throws {
+    #expect(try FixedResponses.spokenDisclosure(.present, locale: Locale(identifier: "en_US")) == card)
+}
+
+@Test func thePastTextHasNoCrisisNumber() throws {
+    let past = try #require(try FixedResponses.spokenDisclosure(.past, locale: Locale(identifier: "en_US")))
+    #expect(past == "Thank you for telling me that. You can stop here, or keep going. It is your choice.")
+    #expect(!past.contains("988"))
+}
+
+@Test func theCardStartsWithThePastText() throws {
+    let past = try #require(try FixedResponses.spokenDisclosure(.past))
+    #expect(try FixedResponses.disclosure().hasPrefix(past))
+}
+
+@Test func noDisclosureSpeaksNothing() throws {
+    #expect(try FixedResponses.spokenDisclosure(.none) == nil)
+}

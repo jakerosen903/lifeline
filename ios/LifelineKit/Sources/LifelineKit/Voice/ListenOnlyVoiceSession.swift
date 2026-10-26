@@ -136,6 +136,9 @@ public actor ListenOnlyVoiceSession: VoiceSession {
                 emit(.speechStarted(atMs: ms))
             case .pauseObserved(let ms):
                 log("pause \(ms)")
+            case .abandoned(let range):
+                log("abandoned blip \(range.start)-\(range.end) ms")
+                emit(.userPaused(afterMs: range.end))
             case .segmentEnded(let range):
                 emit(.userPaused(afterMs: range.end))
                 // Not awaited: a finalize that never returns must not block capture or stop().

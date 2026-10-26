@@ -26,7 +26,7 @@ private func flags(disclosure: DisclosureKind = .none, stop: Bool = false, chang
 @Test func settleInOffersWrapUpAtThePlannedLengthAndNeverStops() {
     var a = arc(.settleIn)
     #expect(a.apply(.tick(elapsed: .seconds(29 * 60)), now: at(29 * 60)) == nil)
-    #expect(a.apply(.tick(elapsed: .seconds(30 * 60)), now: at(30 * 60)) == .offerWrapUp)
+    #expect(a.apply(.tick(elapsed: .seconds(30 * 60)), now: at(30 * 60)) == .offerWrapUp(.plannedLength))
     #expect(a.stage == .windDown && a.wrapUpOffered && a.log.last?.reason == "plannedLength")
     #expect(a.apply(.tick(elapsed: .seconds(31 * 60)), now: at(31 * 60)) == nil, "offered once")
     for minute in 32...170 { _ = a.apply(.tick(elapsed: .seconds(minute * 60)), now: at(Double(minute) * 60)) }
@@ -38,7 +38,7 @@ private func flags(disclosure: DisclosureKind = .none, stop: Bool = false, chang
     _ = a.apply(.tick(elapsed: .seconds(30 * 60)), now: at(30 * 60))
     #expect(a.apply(.keepGoing, now: at(30 * 60 + 5)) == nil && a.log.last?.reason == "keepGoing")
     #expect(a.apply(.tick(elapsed: .seconds(35 * 60)), now: at(35 * 60)) == nil)
-    #expect(a.apply(.tick(elapsed: .seconds(40 * 60 + 5)), now: at(40 * 60 + 5)) == .offerWrapUp)
+    #expect(a.apply(.tick(elapsed: .seconds(40 * 60 + 5)), now: at(40 * 60 + 5)) == .offerWrapUp(.plannedLength))
 }
 
 @Test func finishLandsFromAnyStage() {
@@ -57,17 +57,44 @@ private func flags(disclosure: DisclosureKind = .none, stop: Bool = false, chang
 
 @Test func wantsToStopWindsDown() {
     var a = arc(.quick)
-    #expect(a.apply(.flags(flags(stop: true)), now: at(60)) == .offerWrapUp)
+    #expect(a.apply(.flags(flags(stop: true)), now: at(60)) == .offerWrapUp(.wantsToStop))
     #expect(a.stage == .windDown && a.heavy && a.log.last?.reason == "wantsToStop")
 }
 
-@Test func disclosureShowsTheCardOnceAndMarksHeavy() {
+@Test func disclosureShowsTheCardAndMarksHeavy() {
     var a = arc(.settleIn)
-    #expect(a.apply(.flags(flags(disclosure: .past)), now: at(60)) == .showDisclosureCard)
+    #expect(a.apply(.flags(flags(disclosure: .past)), now: at(60)) == .showDisclosureCard(.past))
     #expect(a.stage == .windDown && a.heavy && a.log.last?.reason == "disclosure")
-    #expect(a.apply(.flags(flags(disclosure: .present)), now: at(120)) == nil, "the card is shown once per session")
-    #expect(a.log.filter { $0.reason.hasPrefix("disclosure") }.count == 2, "but every disclosure is logged")
+    #expect(a.apply(.flags(flags(disclosure: .present)), now: at(120)) == .showDisclosureCard(.present))
+    #expect(a.apply(.flags(flags(disclosure: .present)), now: at(180)) == nil, "never a third card")
+    #expect(a.log.filter { $0.reason.hasPrefix("disclosure") }.count == 3, "but every disclosure is logged")
     #expect(a.presentDanger, "present danger is remembered for the landing")
+}
+
+@Test func presentAfterPastShowsTheCardAgain() {
+    var a = arc(.quick)
+    #expect(a.apply(.flags(flags(disclosure: .past)), now: at(60)) == .showDisclosureCard(.past))
+    #expect(a.apply(.flags(flags(disclosure: .present)), now: at(120)) == .showDisclosureCard(.present))
+    #expect(a.apply(.flags(flags(disclosure: .past)), now: at(180)) == nil)
+    #expect(a.apply(.flags(flags(disclosure: .present)), now: at(240)) == nil)
+}
+
+@Test func presentFirstShowsTheCardOnce() {
+    var a = arc(.quick)
+    #expect(a.apply(.flags(flags(disclosure: .present)), now: at(60)) == .showDisclosureCard(.present))
+    #expect(a.apply(.flags(flags(disclosure: .past)), now: at(120)) == nil)
+}
+
+@Test func plannedLengthAndGraceGiveThePlannedReason() {
+    var a = arc(.settleIn)
+    #expect(a.apply(.tick(elapsed: .seconds(30 * 60)), now: at(30 * 60)) == .offerWrapUp(.plannedLength))
+    _ = a.apply(.keepGoing, now: at(30 * 60 + 5))
+    #expect(a.apply(.tick(elapsed: .seconds(40 * 60 + 5)), now: at(40 * 60 + 5)) == .offerWrapUp(.plannedLength))
+}
+
+@Test func wantsToStopGivesTheWantsToStopReason() {
+    var a = arc(.settleIn)
+    #expect(a.apply(.flags(flags(stop: true)), now: at(60)) == .offerWrapUp(.wantsToStop))
 }
 
 @Test func changeSubjectOnlyLogs() {

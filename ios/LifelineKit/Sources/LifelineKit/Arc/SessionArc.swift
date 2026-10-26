@@ -14,9 +14,14 @@ public enum ArcSignal: Equatable, Sendable {
     case landed
 }
 
+/// Why a wrap-up is offered. The words differ: the planned length is a clock, wants-to-stop is a wish.
+public enum WrapUpReason: Equatable, Sendable {
+    case plannedLength, wantsToStop
+}
+
 public enum ArcEffect: Equatable, Sendable {
-    case offerWrapUp
-    case showDisclosureCard
+    case offerWrapUp(WrapUpReason)
+    case showDisclosureCard(DisclosureKind)
     case land
 }
 
@@ -39,7 +44,8 @@ public struct SessionArc: Equatable, Sendable {
     public private(set) var heavy = false
     public private(set) var presentDanger = false
     public private(set) var wrapUpOffered = false
-    private var disclosureShown = false
+    /// The kind the card last showed. A later flag shows it again only when past becomes present.
+    private var cardShown: DisclosureKind = .none
     private var nextOfferAt: Duration?
 
     public init(kind: SessionKind, config: ArcConfig, startedAt: Date) {
@@ -60,12 +66,12 @@ public struct SessionArc: Equatable, Sendable {
             if !wrapUpOffered, elapsed >= config.settleInPlanned {
                 wrapUpOffered = true
                 move(to: .windDown, "plannedLength", now)
-                return .offerWrapUp
+                return .offerWrapUp(.plannedLength)
             }
             if let due = nextOfferAt, elapsed >= due {
                 nextOfferAt = nil
                 log.append(StageChange(stage: stage, at: now, reason: "plannedLength"))
-                return .offerWrapUp
+                return .offerWrapUp(.plannedLength)
             }
             return nil
         case .keepGoing:
@@ -86,12 +92,15 @@ public struct SessionArc: Equatable, Sendable {
                 heavy = true
                 if flags.disclosure == .present { presentDanger = true }
                 move(to: .windDown, flags.disclosure == .present ? "disclosure:present" : "disclosure", now)
-                if !disclosureShown { disclosureShown = true; effect = .showDisclosureCard }
+                if cardShown == .none || (cardShown == .past && flags.disclosure == .present) {
+                    cardShown = flags.disclosure
+                    effect = .showDisclosureCard(flags.disclosure)
+                }
             }
             if flags.wantsToStop {
                 heavy = true
                 move(to: .windDown, "wantsToStop", now)
-                if effect == nil { effect = .offerWrapUp }
+                if effect == nil { effect = .offerWrapUp(.wantsToStop) }
             }
             if flags.wantsToChangeSubject {
                 log.append(StageChange(stage: stage, at: now, reason: "changeSubject"))

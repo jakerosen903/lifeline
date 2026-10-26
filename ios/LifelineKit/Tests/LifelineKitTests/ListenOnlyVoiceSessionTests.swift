@@ -65,6 +65,18 @@ private func collect(_ events: AsyncStream<VoiceEvent>, count: Int, timeoutMs: I
     #expect(h.tr.finalizedThrough == [4_000])
 }
 
+@Test func anAbandonedBlipEndsSpeaking() async throws {
+    let h = Harness()
+    let events = try await h.vs.start(writingTo: URL(fileURLWithPath: "/dev/null"))
+    h.src.push(speechMs: 0..<500, silenceMs: 500..<2_500)
+    let seen = try await collectUntil(events) { if case .userPaused = $0 { true } else { false } }
+    #expect(seen == [.speechStarted(atMs: 0), .userPaused(afterMs: 500)])
+    try await h.vs.stop()
+    var rest: [VoiceEvent] = []
+    for await e in events { rest.append(e) }
+    #expect(!rest.contains { if case .segmentClosed = $0 { true } else { false } })
+}
+
 @Test func wordsAfterASegmentEndWidenTheNextSegment() async throws {
     let h = Harness()
     let events = try await h.vs.start(writingTo: URL(fileURLWithPath: "/dev/null"))
