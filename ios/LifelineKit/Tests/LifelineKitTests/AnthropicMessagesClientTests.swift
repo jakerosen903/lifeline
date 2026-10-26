@@ -136,3 +136,40 @@ private func client(_ transport: FakeHTTPTransport, key: String? = "sk-ant-api03
     #expect(sleeper.durations == [AnthropicMessagesClient.maxRetryDelay])
     #expect(AnthropicMessagesClient.maxRetryDelay <= .seconds(10))
 }
+
+private func interviewerClient(_ transport: FakeHTTPTransport) -> AnthropicMessagesClient {
+    AnthropicMessagesClient(config: .interviewer, apiKey: { "sk-ant-api03-test" }, transport: transport, sleep: { _ in })
+}
+
+@Test func oneAttemptOnly() async throws {
+    let transport = FakeHTTPTransport([.response(status: 500, body: APIBodies.apiError), .response(status: 200, body: APIBodies.success())])
+    await #expect(throws: ExtractionError.server(status: 500)) {
+        try await interviewerClient(transport).extract(system: [.init(text: "S", cached: true)], user: "U", schema: ["type": "object"])
+    }
+    #expect(transport.requests.count == 1)
+}
+
+@Test func thinkingDisabledIsSent() async throws {
+    let transport = FakeHTTPTransport([.response(status: 200, body: APIBodies.success())])
+    _ = try await interviewerClient(transport).extract(system: [.init(text: "S", cached: true)], user: "U", schema: ["type": "object"])
+    let body = try transport.body(of: 0)
+    #expect((body["thinking"] as? [String: Any])?["type"] as? String == "disabled")
+    #expect(body["model"] as? String == "claude-haiku-5-5")
+    #expect(body["max_tokens"] as? Int == 512)
+    #expect((body["output_config"] as? [String: Any])?["effort"] as? String == "low")
+    #expect(body["temperature"] == nil && body["top_p"] == nil && body["top_k"] == nil)
+}
+
+@Test func noFallbackForTheInterviewer() async throws {
+    let transport = FakeHTTPTransport([.response(status: 200, body: APIBodies.success())])
+    _ = try await interviewerClient(transport).extract(system: [.init(text: "S", cached: true)], user: "U", schema: ["type": "object"])
+    #expect(try transport.body(of: 0)["fallbacks"] == nil)
+    #expect(transport.requests[0].value(forHTTPHeaderField: "anthropic-beta") == nil)
+}
+
+@Test func theExtractorRequestIsUnchanged() async throws {
+    let transport = FakeHTTPTransport([.response(status: 200, body: APIBodies.success())])
+    _ = try await client(transport).extract(system: [.init(text: "S", cached: true)], user: "U")
+    #expect(try transport.body(of: 0)["thinking"] == nil)
+    #expect(ExtractorConfig.default.maxAttempts == 3 && !ExtractorConfig.default.thinkingDisabled)
+}

@@ -24,7 +24,6 @@ public struct AnthropicMessagesClient: Sendable {
         public var usage: Usage
     }
 
-    public static let maxAttempts = 3
     /// A server-named wait longer than this is not worth holding a session for.
     public static let maxRetryDelay: Duration = .seconds(10)
 
@@ -55,7 +54,7 @@ public struct AnthropicMessagesClient: Sendable {
         do { request = try makeRequest(key: key, system: system, user: user, schema: schema) } catch { throw .badRequest("\(error)") }
 
         var lastError: ExtractionError = .network("no attempt")
-        for attempt in 1...Self.maxAttempts {
+        for attempt in 1...max(1, config.maxAttempts) {
             do {
                 let (data, response) = try await transport.send(request)
                 switch response.statusCode {
@@ -70,7 +69,7 @@ public struct AnthropicMessagesClient: Sendable {
             } catch {
                 lastError = .network(error.localizedDescription)
             }
-            if attempt < Self.maxAttempts { await sleep(Self.delay(for: lastError, attempt: attempt)) }
+            if attempt < config.maxAttempts { await sleep(Self.delay(for: lastError, attempt: attempt)) }
         }
         throw lastError
     }
@@ -89,6 +88,7 @@ public struct AnthropicMessagesClient: Sendable {
             "messages": [["role": "user", "content": user]],
             "output_config": ["effort": config.effort, "format": ["type": "json_schema", "schema": schema]],
         ]
+        if config.thinkingDisabled { body["thinking"] = ["type": "disabled"] }
         if config.betas.contains(where: { $0.hasPrefix("server-side-fallback") }) { body["fallbacks"] = "default" }
 
         var request = URLRequest(url: config.endpoint)
