@@ -23,7 +23,13 @@ actor FakeVoiceSession: VoiceSession {
     func pause() async throws { pauseCalls += 1; continuation?.yield(.paused) }
     func resume() async throws { resumeCalls += 1; continuation?.yield(.resumed) }
     private(set) var said: [SpokenTurn] = []
-    func say(_ turn: SpokenTurn) async { said.append(turn) }
+    /// What `say` answers.
+    var acceptsTurns = true
+    func say(_ turn: SpokenTurn) async -> Bool {
+        said.append(turn)
+        return acceptsTurns
+    }
+    func setAcceptsTurns(_ accepts: Bool) { acceptsTurns = accepts }
     func acknowledge() async {}
     func interrupt() async {}
 

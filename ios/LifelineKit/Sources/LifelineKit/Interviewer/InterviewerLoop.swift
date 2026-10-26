@@ -7,7 +7,7 @@ public struct InterviewerState: Equatable, Sendable {
 }
 
 /// Feeds the session's events to a `TurnPolicy` and offers it turns. A turn the policy lets through
-/// goes to `speak` (`SessionRecorder.speak` in the app). This task offers fixed turns only: the
+/// goes to `speak` (`SessionRecorder.speak` in the app), which returns false when the voice refused it. This task offers fixed turns only: the
 /// opening, and the arc's answer to a disclosure or a wish to stop. `now` is the time since the
 /// session started; `sleep` waits on the same clock, so tests drive both by hand.
 public actor InterviewerLoop {
@@ -15,7 +15,7 @@ public actor InterviewerLoop {
     private let stateContinuation: AsyncStream<InterviewerState>.Continuation
 
     private let config: ArcConfig
-    private let speak: @Sendable (TurnDraft) async -> Void
+    private let speak: @Sendable (TurnDraft) async -> Bool
     private let now: @Sendable () -> Duration
     private let sleep: @Sendable (Duration) async -> Void
 
@@ -32,9 +32,13 @@ public actor InterviewerLoop {
     /// The draft handed to `speak` whose playback has not ended. The voice session reports turns by id
     /// only, so its kind comes from here. Nothing else is offered while it is set.
     private var playing: TurnDraft?
-    /// The voice session reported `playing` as started. A draft that never started was dropped.
+    /// The voice session reported `playing` as started. A draft that ends unstarted was never heard.
     private var started = false
-    /// Between `.paused` or `.interrupted` and `.resumed`: the voice session drops every turn.
+    /// Counts drafts handed to `speak`, so a refusal that returns late knows whether its draft is still out.
+    private var handCount = 0
+    private var playingHand = 0
+    /// Between `.paused` or `.interrupted` and `.resumed`. Saves offers the voice would refuse;
+    /// a refused draft is requeued anyway, so nothing depends on this matching the session's state.
     private var suspended = false
     /// The person paused after their newest speech start, so a refusal for speaking is a partial's hold.
     private var pausedSinceSpeech = false
@@ -44,7 +48,7 @@ public actor InterviewerLoop {
     private var retries: [UUID: Task<Void, Never>] = [:]
 
     public init(kind: SessionKind, config: ArcConfig,
-                speak: @escaping @Sendable (TurnDraft) async -> Void,
+                speak: @escaping @Sendable (TurnDraft) async -> Bool,
                 now: @escaping @Sendable () -> Duration,
                 sleep: @escaping @Sendable (Duration) async -> Void) {
         self.config = config
@@ -80,10 +84,13 @@ public actor InterviewerLoop {
             observe(.turnStarted(playing.kind))
         case .turnEnded:
             observe(.turnEnded)
+            // Cut before it started (a pause, an interruption, barge-in): it was never heard.
+            // A started turn that was cut is not spoken again.
+            if let draft = playing, !started { requeue(draft) }
             playing = nil; started = false
             await offerPending()
         case .paused, .interrupted:
-            suspend()
+            suspended = true
         case .resumed:
             suspended = false
             await offerPending()
@@ -150,13 +157,10 @@ public actor InterviewerLoop {
         policy.decide(TurnOffer(kind: draft.kind, source: draft.source, text: draft.text), at: now())
     }
 
-    /// A turn cut after it started is not spoken again; the session reports its end before the pause.
-    /// A draft that never started was dropped by the session, so it goes back to the front, except the
-    /// opening, which is now or never.
-    private func suspend() {
-        suspended = true
-        if let draft = playing, !started, draft.kind != .opening { pending.insert(draft, at: 0) }
-        playing = nil; started = false
+    /// A draft that was never heard goes back to the front, except the opening, which is now or never.
+    private func requeue(_ draft: TurnDraft) {
+        guard draft.kind != .opening else { return }
+        pending.insert(draft, at: 0)
     }
 
     /// The disclosure text goes before a wind-down line that is still waiting, so a later present
@@ -211,9 +215,15 @@ public actor InterviewerLoop {
     }
 
     /// `playing` is set before the await, so an event that arrives meanwhile offers nothing on top.
+    /// A refused draft is requeued but not offered again at once: the voice would refuse it again
+    /// until a resume, a pause's grace, a turn's end or the floor retry.
     private func hand(_ draft: TurnDraft) async {
-        playing = draft
-        await speak(draft)
+        handCount += 1
+        let hand = handCount
+        playing = draft; started = false; playingHand = hand
+        guard !(await speak(draft)), playingHand == hand, playing != nil else { return }
+        playing = nil
+        requeue(draft)
     }
 
     /// Offer again after `delay`, then judge afresh: the person may have spoken, or the session

@@ -50,10 +50,12 @@ public actor ScriptedVoiceSession: VoiceSession {
     public func resume() async throws { paused = false; continuation?.yield(.resumed) }
 
     /// The turn starts and ends at once; timed playback comes later.
-    public func say(_ turn: SpokenTurn) async {
-        guard let continuation, !paused else { return }
+    @discardableResult
+    public func say(_ turn: SpokenTurn) async -> Bool {
+        guard let continuation, !paused else { return false }
         continuation.yield(.turnStarted(turn.id, atMs: clockMs))
         continuation.yield(.turnEnded(turn.id, atMs: clockMs, interrupted: false))
+        return true
     }
 
     public func acknowledge() async {}

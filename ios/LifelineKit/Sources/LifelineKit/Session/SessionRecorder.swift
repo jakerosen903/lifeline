@@ -140,11 +140,15 @@ public actor SessionRecorder {
 
     /// Hands the turn to the voice. Its row is written when the voice reports that it started,
     /// so a turn dropped while paused leaves no row, and a crash mid-turn leaves one with no end.
-    public func speak(_ draft: TurnDraft) async {
-        guard let row = session, row.endedAt == nil else { return }
+    /// Returns false when the session has ended or the voice refused the turn.
+    @discardableResult
+    public func speak(_ draft: TurnDraft) async -> Bool {
+        guard let row = session, row.endedAt == nil else { return false }
         let id = InterviewerTurnID()
         drafts[id] = draft
-        await voice.say(SpokenTurn(id: id, text: draft.text))
+        let accepted = await voice.say(SpokenTurn(id: id, text: draft.text))
+        if !accepted { drafts[id] = nil }
+        return accepted
     }
 
     /// After a crash: every session left open has its recording ended. One with words waits for
@@ -210,6 +214,7 @@ public actor SessionRecorder {
         }
     }
 
+    /// A turn cut before it started has no row: its end is ignored.
     private func endTurn(_ id: InterviewerTurnID, endMs: Milliseconds, interrupted: Bool) {
         drafts[id] = nil
         guard let index = state.turns.firstIndex(where: { $0.id == id }) else { return }

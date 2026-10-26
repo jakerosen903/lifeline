@@ -382,12 +382,76 @@ private func settle(_ h: Harness, chunks: Int) async throws {
     try await h.vs.stop()
     var all: [VoiceEvent] = []
     for await e in events { all.append(e) }
-    var open: Set<InterviewerTurnID> = [first.id], maxOpen = 1
+    // A turn cut before playback reported `started` ends with no start; it never starts after that.
+    var open: Set<InterviewerTurnID> = [first.id], ended: Set<InterviewerTurnID> = [], maxOpen = 1
     for e in all {
-        if case .turnStarted(let id, _) = e { #expect(open.insert(id).inserted, "a turn starts once"); maxOpen = max(maxOpen, open.count) }
-        if case .turnEnded(let id, _, _) = e { #expect(open.remove(id) != nil, "a turn ends once, after it started; saw \(all)") }
+        if case .turnStarted(let id, _) = e {
+            #expect(!ended.contains(id) && open.insert(id).inserted, "a turn starts once, before its end")
+            maxOpen = max(maxOpen, open.count)
+        }
+        if case .turnEnded(let id, _, _) = e {
+            open.remove(id)
+            #expect(ended.insert(id).inserted, "a turn ends once; saw \(all)")
+        }
     }
     #expect(open.isEmpty, "every started turn ended; saw \(all)")
     #expect(maxOpen == 1, "one turn at a time")
     #expect(!h.output.played.contains(second.text), "the superseded turn never plays")
+}
+
+@Test func aTurnCutBeforeItStartsStillEnds() async throws {
+    // A pause.
+    let paused = Harness()
+    paused.output.startsAtOnce.withLock { $0 = false }
+    var events = try await paused.vs.start(writingTo: URL(fileURLWithPath: "/dev/null"))
+    let turn = SpokenTurn(id: InterviewerTurnID(), text: "Who lived next door?")
+    #expect(await paused.vs.say(turn))
+    try await paused.vs.pause()
+    #expect(try await collectUntil(events) { $0 == .paused } == [.turnEnded(turn.id, atMs: 0, interrupted: true), .paused])
+
+    // Barge-in.
+    let bargeIn = Harness()
+    bargeIn.output.startsAtOnce.withLock { $0 = false }
+    events = try await bargeIn.vs.start(writingTo: URL(fileURLWithPath: "/dev/null"))
+    #expect(await bargeIn.vs.say(turn))
+    await bargeIn.vs.interrupt()
+    #expect(try await collect(events, count: 1) == [.turnEnded(turn.id, atMs: 0, interrupted: true)])
+
+    // A newer turn.
+    let superseded = Harness()
+    superseded.output.startsAtOnce.withLock { $0 = false }
+    events = try await superseded.vs.start(writingTo: URL(fileURLWithPath: "/dev/null"))
+    let newer = SpokenTurn(id: InterviewerTurnID(), text: "And after that?")
+    #expect(await superseded.vs.say(turn))
+    #expect(await superseded.vs.say(newer))
+    #expect(try await collect(events, count: 1) == [.turnEnded(turn.id, atMs: 0, interrupted: true)])
+    try await superseded.vs.stop()
+    var rest: [VoiceEvent] = []
+    for await e in events { rest.append(e) }
+    #expect(rest == [.turnEnded(newer.id, atMs: 0, interrupted: true)], "stop ends the unstarted newer turn too")
+}
+
+@Test func aRefusedSayReturnsFalse() async throws {
+    let turn = SpokenTurn(id: InterviewerTurnID(), text: "Who lived next door?")
+
+    let paused = Harness()
+    _ = try await paused.vs.start(writingTo: URL(fileURLWithPath: "/dev/null"))
+    try await paused.vs.pause()
+    #expect(await paused.vs.say(turn) == false)
+
+    let interrupted = Harness()
+    let events = try await interrupted.vs.start(writingTo: URL(fileURLWithPath: "/dev/null"))
+    interrupted.src.pushInterrupted()
+    _ = try await firstEvent(events) { $0 == .interrupted }
+    #expect(await interrupted.vs.say(turn) == false)
+
+    let stopped = Harness()
+    _ = try await stopped.vs.start(writingTo: URL(fileURLWithPath: "/dev/null"))
+    try await stopped.vs.stop()
+    #expect(await stopped.vs.say(turn) == false)
+    #expect(paused.output.played.isEmpty && interrupted.output.played.isEmpty && stopped.output.played.isEmpty)
+
+    let open = Harness()
+    _ = try await open.vs.start(writingTo: URL(fileURLWithPath: "/dev/null"))
+    #expect(await open.vs.say(turn), "an open session accepts the turn")
 }

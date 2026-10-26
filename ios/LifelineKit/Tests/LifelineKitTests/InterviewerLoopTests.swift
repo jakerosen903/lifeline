@@ -36,24 +36,34 @@ private final class Shared<Value: Sendable>: Sendable {
     func update(_ change: (inout Value) -> Void) { value.withLock { change(&$0) } }
 }
 
-/// One loop with a manual clock, a manual sleep and a `speak` that records drafts.
-/// It plays the voice session's part: `finishTurn` reports the newest draft's playback.
+/// One loop with a manual clock, a manual sleep and a `speak` that records the drafts it accepts.
+/// It plays the voice session's part: `finishTurn` reports the newest draft's playback, and
+/// `refuses` makes `speak` answer as a paused or interrupted session does.
 private struct Harness {
     let clock = Shared<Duration>(.zero)
     let spokenDrafts = Shared<[TurnDraft]>([])
+    let refusedDrafts = Shared<[TurnDraft]>([])
+    let refusing = Shared(false)
     let sleeper = ManualSleeper()
     let loop: InterviewerLoop
 
     init(kind: SessionKind = .settleIn) {
-        let clock = clock, spokenDrafts = spokenDrafts, sleeper = sleeper
+        let clock = clock, spokenDrafts = spokenDrafts, refusedDrafts = refusedDrafts, refusing = refusing, sleeper = sleeper
         loop = InterviewerLoop(kind: kind, config: .default,
-                               speak: { draft in spokenDrafts.update { $0.append(draft) } },
+                               speak: { draft in
+                                   if refusing.current { refusedDrafts.update { $0.append(draft) }; return false }
+                                   spokenDrafts.update { $0.append(draft) }
+                                   return true
+                               },
                                now: { clock.current },
                                sleep: { await sleeper.sleep($0) })
     }
 
     var spoken: [TurnDraft] { spokenDrafts.current }
     var spokenKinds: [TurnKind] { spoken.map(\.kind) }
+    var refused: [TurnDraft] { refusedDrafts.current }
+
+    func refuses(_ refuses: Bool) { refusing.update { $0 = refuses } }
 
     func at(_ seconds: Double) { clock.update { $0 = .milliseconds(Int((seconds * 1000).rounded())) } }
 
@@ -62,6 +72,11 @@ private struct Harness {
         let id = InterviewerTurnID()
         await loop.voice(.turnStarted(id, atMs: 0))
         await loop.voice(.turnEnded(id, atMs: 0, interrupted: false))
+    }
+
+    /// The voice session cuts the newest draft before it started: an end with no start.
+    func cutBeforeStart() async {
+        await loop.voice(.turnEnded(InterviewerTurnID(), atMs: 0, interrupted: true))
     }
 
     /// The reply grace after a pause passes: wake the loop's sleep and wait for its retry.
@@ -206,16 +221,41 @@ private func disclosureText(_ kind: DisclosureKind) throws -> String {
 
 // MARK: Pauses and interruptions
 
-@Test func aDraftDroppedDuringAPauseIsSpokenAfterResume() async throws {
+@Test func aDraftCutBeforeItStartedIsSpokenAfterResume() async throws {
     let h = Harness()
     h.at(10); await h.loop.arc(.showDisclosureCard(.past), stage: .windDown)
+    // The session pauses before playback starts: the turn ends unstarted, and the session,
+    // already paused, refuses the re-offer. Then the pause is reported.
+    h.refuses(true)
+    await h.cutBeforeStart()
     await h.loop.voice(.paused)
-    #expect(h.spoken.count == 1, "handed out, but the session never started it")
+    #expect(h.spoken.count == 1 && h.refused.count == 1)
+    h.refuses(false)
     h.at(40); await h.loop.voice(.resumed)
     let past = try disclosureText(.past)
     #expect(h.spoken.map(\.text) == [past, past])
     await h.finishTurn()
     #expect(h.spokenKinds == [.disclosure, .disclosure, .earlyWindDown])
+}
+
+@Test func aResumeWhileStillInterruptedDoesNotLoseTheDisclosure() async throws {
+    let h = Harness()
+    await h.loop.voice(.paused)
+    h.at(10); await h.loop.arc(.showDisclosureCard(.present), stage: .windDown)
+    await h.loop.voice(.interrupted)
+    // `resume()` ends the pause, but the interruption holds: the session refuses the turn.
+    h.refuses(true)
+    h.at(20); await h.loop.voice(.resumed)
+    let present = try disclosureText(.present)
+    #expect(h.refused.map(\.text) == [present] && h.spoken.isEmpty)
+    h.at(21); await h.loop.voice(.userPaused(afterMs: 21_000))
+    h.at(22.5); await h.gracePasses()
+    #expect(h.refused.count == 2, "the refused draft stays at the front")
+    h.refuses(false)
+    h.at(30); await h.loop.voice(.resumed)
+    #expect(h.spoken.map(\.text) == [present])
+    await h.finishTurn()
+    #expect(h.spokenKinds == [.disclosure, .earlyWindDown])
 }
 
 @Test func nothingIsOfferedWhilePaused() async throws {
@@ -226,7 +266,7 @@ private func disclosureText(_ kind: DisclosureKind) throws -> String {
     h.at(11); await h.loop.voice(.userPaused(afterMs: 11_000))
     h.at(13); await h.gracePasses()
     await h.loop.voice(.turnEnded(InterviewerTurnID(), atMs: 0, interrupted: true))
-    #expect(h.spoken.isEmpty)
+    #expect(h.spoken.isEmpty && h.refused.isEmpty)
     h.at(20); await h.loop.voice(.resumed)
     await h.finishTurn()
     #expect(h.spokenKinds == [.disclosure, .earlyWindDown], "the opening is now or never")
@@ -237,22 +277,26 @@ private func disclosureText(_ kind: DisclosureKind) throws -> String {
     h.at(10); await h.loop.arc(.showDisclosureCard(.past), stage: .windDown)
     let cut = InterviewerTurnID()
     await h.loop.voice(.turnStarted(cut, atMs: 10_000))
-    // The session reports the cut turn's end before the pause; the wind-down line it offers then is dropped.
+    // The session is pausing: it reports the cut turn's end, then refuses the wind-down line it is offered.
+    h.refuses(true)
     await h.loop.voice(.turnEnded(cut, atMs: 11_000, interrupted: true))
     await h.loop.voice(.paused)
+    #expect(h.refused.map(\.kind) == [.earlyWindDown])
+    h.refuses(false)
     h.at(30); await h.loop.voice(.resumed)
-    await h.finishTurn()
-    #expect(h.spokenKinds == [.disclosure, .earlyWindDown, .earlyWindDown])
-    #expect(h.spoken.filter { $0.kind == .disclosure }.count == 1)
+    #expect(h.spokenKinds == [.disclosure, .earlyWindDown], "the cut disclosure text is not spoken again")
 }
 
 @Test func anInterruptionBehavesLikeAPause() async throws {
     let h = Harness()
     h.at(10); await h.loop.arc(.showDisclosureCard(.present), stage: .windDown)
+    h.refuses(true)
+    await h.cutBeforeStart()
     await h.loop.voice(.interrupted)
     h.at(12); await h.loop.voice(.userPaused(afterMs: 12_000))
     h.at(14); await h.gracePasses()
-    #expect(h.spoken.count == 1, "nothing more while interrupted")
+    #expect(h.spoken.count == 1 && h.refused.count == 1, "no offer while interrupted after the refused one")
+    h.refuses(false)
     h.at(30); await h.loop.voice(.resumed)
     let present = try disclosureText(.present)
     #expect(h.spoken.map(\.text) == [present, present])
@@ -261,10 +305,21 @@ private func disclosureText(_ kind: DisclosureKind) throws -> String {
 @Test func aDroppedOpeningDoesNotBlockTheDisclosure() async throws {
     let h = Harness()
     await h.loop.captureStarted(opening: opening)
+    await h.cutBeforeStart()
     await h.loop.voice(.paused)
     h.at(10); await h.loop.arc(.showDisclosureCard(.past), stage: .windDown)
     h.at(20); await h.loop.voice(.resumed)
-    #expect(h.spokenKinds == [.opening, .disclosure])
+    #expect(h.spokenKinds == [.opening, .disclosure] && h.refused.isEmpty)
+}
+
+@Test func aRefusedOpeningIsNotRequeued() async throws {
+    let h = Harness()
+    h.refuses(true)
+    await h.loop.captureStarted(opening: opening)
+    h.refuses(false)
+    h.at(10); await h.loop.arc(.showDisclosureCard(.past), stage: .windDown)
+    #expect(h.refused.map(\.kind) == [.opening])
+    #expect(h.spokenKinds == [.disclosure])
 }
 
 @Test func aPartialAfterThePauseDoesNotStrandTheDisclosure() async throws {

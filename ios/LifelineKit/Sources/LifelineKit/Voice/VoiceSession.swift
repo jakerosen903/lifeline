@@ -62,9 +62,12 @@ public protocol VoiceSession: Actor {
     /// Closes what was said and stops capture; the next chunk after `resume` follows the last one on the file clock.
     func pause() async throws
     func resume() async throws
-    /// Starts the turn and returns at once; `turnStarted` and `turnEnded` report it. Dropped while
-    /// paused or stopped. A turn that is playing ends, interrupted, before the next one starts.
-    func say(_ turn: SpokenTurn) async
+    /// Starts the turn and returns at once; `turnStarted` and `turnEnded` report it. Returns false
+    /// when the turn is refused (paused, interrupted, stopped, or superseded before it played):
+    /// a refused turn emits nothing. An accepted turn ends with exactly one `turnEnded`, even when
+    /// it is cut before `turnStarted`. A turn that is playing ends, interrupted, before the next one starts.
+    @discardableResult
+    func say(_ turn: SpokenTurn) async -> Bool
     func acknowledge() async
     func interrupt() async
 }

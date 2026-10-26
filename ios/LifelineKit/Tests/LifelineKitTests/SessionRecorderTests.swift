@@ -309,3 +309,36 @@ private func waitUntil(_ cond: @escaping () async -> Bool, timeoutMs: Int = 2_00
     await rec.speak(TurnDraft(kind: .question, source: .model, text: "And after that?"))
     #expect(await voice.said.count == 1, "nothing is said after the session ended")
 }
+
+@Test func anEndWithoutAStartStoresNothing() async throws {
+    let db = try AppDatabase.inMemory(); let repo = SessionRepository(db); let turns = InterviewerTurnRepository(db)
+    let voice = FakeVoiceSession()
+    let rec = makeRecorder(voice: voice, repo: repo, db: db)
+    let id = try await rec.start()
+    #expect(await rec.speak(TurnDraft(kind: .disclosure, source: .fixed, text: "Invented words.")))
+    let said = try #require(await voice.said.first)
+    await voice.emit(.turnEnded(said.id, atMs: 900, interrupted: true))   // cut before it started
+    await voice.emit(.transcriptPartial("marker"))
+    await waitUntil { await rec.state.partial == "marker" }
+    #expect(try turns.turns(in: id).isEmpty)
+    let state = await rec.state
+    #expect(state.turns.isEmpty && state.speakingTurn == nil && state.error == nil, "no row and no error")
+    try await rec.stop()
+}
+
+@Test func aRefusedTurnReturnsFalseAndLeavesNoDraft() async throws {
+    let db = try AppDatabase.inMemory(); let repo = SessionRepository(db); let turns = InterviewerTurnRepository(db)
+    let voice = FakeVoiceSession()
+    let rec = makeRecorder(voice: voice, repo: repo, db: db)
+    let id = try await rec.start()
+    await voice.setAcceptsTurns(false)
+    #expect(await rec.speak(TurnDraft(kind: .disclosure, source: .fixed, text: "Invented words.")) == false)
+    let said = try #require(await voice.said.first)
+    // A late start for the refused id finds no draft, so it stores nothing.
+    await voice.emit(.turnStarted(said.id, atMs: 100))
+    await voice.emit(.transcriptPartial("marker"))
+    await waitUntil { await rec.state.partial == "marker" }
+    #expect(try turns.turns(in: id).isEmpty)
+    try await rec.stop()
+    #expect(await rec.speak(TurnDraft(kind: .disclosure, source: .fixed, text: "Invented words.")) == false, "the session ended")
+}

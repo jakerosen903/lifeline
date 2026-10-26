@@ -8,9 +8,12 @@ final class FakeVoiceOutput: VoiceOutput, Sendable {
     var played: [String] { state.withLock { $0.played } }
     var stops: Int { state.withLock { $0.stops } }
 
+    /// When false, a turn waits for `start()` before it reports `started`, as a slow engine would.
+    let startsAtOnce = Mutex(true)
+
     func play(_ text: String) -> AsyncStream<PlaybackEvent> {
         let (stream, continuation) = AsyncStream<PlaybackEvent>.makeStream()
-        continuation.yield(.started)
+        if startsAtOnce.withLock({ $0 }) { continuation.yield(.started) }
         state.withLock { $0.played.append(text); $0.playing = continuation }
         return stream
     }

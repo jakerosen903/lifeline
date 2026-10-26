@@ -123,10 +123,11 @@ public actor CascadeVoiceSession: VoiceSession {
         emit(.resumed)
     }
 
-    public func say(_ turn: SpokenTurn) async {
+    @discardableResult
+    public func say(_ turn: SpokenTurn) async -> Bool {
         guard canSpeak else {
             log("say dropped (paused, interrupted or stopped)")
-            return
+            return false
         }
         sayGeneration += 1
         let generation = sayGeneration
@@ -135,7 +136,7 @@ public actor CascadeVoiceSession: VoiceSession {
         // `cutTurn` leaves `playing` nil and only a newer `say` sets it, so with no newer `say` nothing plays.
         guard canSpeak, generation == sayGeneration else {
             log("say dropped (superseded, paused, interrupted or stopped)")
-            return
+            return false
         }
         let playback = output.play(turn.text)
         let task = Task { [weak self] in
@@ -143,6 +144,7 @@ public actor CascadeVoiceSession: VoiceSession {
             await self?.playbackEnded(turn.id)
         }
         playing = (turn, nil, task)
+        return true
     }
 
     private var canSpeak: Bool { events != nil && !isPaused && !isInterrupted && !isStopping }
@@ -255,12 +257,14 @@ public actor CascadeVoiceSession: VoiceSession {
         await output.stop()
     }
 
-    /// A turn that never started (cut before playback began) has no window and no events.
+    /// Every accepted turn ends once. A turn cut before playback began has no window, and its end
+    /// comes with no start, so the caller knows it was not heard.
     private func endTurn(interrupted: Bool) {
         guard let current = playing else { return }
         playing = nil
-        guard let start = current.startMs else { return }
-        played.append(PlaybackWindow(range: MsRange(start: start, end: lastChunkEndMs), text: current.turn.text))
+        if let start = current.startMs {
+            played.append(PlaybackWindow(range: MsRange(start: start, end: lastChunkEndMs), text: current.turn.text))
+        }
         log("turn ended at \(lastChunkEndMs) ms\(interrupted ? ", interrupted" : "")")
         emit(.turnEnded(current.turn.id, atMs: lastChunkEndMs, interrupted: interrupted))
     }
