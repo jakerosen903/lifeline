@@ -91,12 +91,12 @@ public struct Segmenter: Sendable {
         }
     }
 
-    /// Closes an open segment (if it has enough speech) at `atMs` or at the last speech end,
-    /// whichever is earlier. Used at stop and at interruptions. Idempotent.
+    /// Closes an open segment at `atMs` or at the last speech end, whichever is earlier; a segment
+    /// with too little speech is abandoned instead. Used at stop and at interruptions. Idempotent.
     public mutating func flush(atMs: Milliseconds) -> [SegmenterEvent] {
         guard case .open(let segmentStart, let speechMs, let lastSpeechEnd, _) = state else { return [] }
         state = .idle
-        guard speechMs >= config.minSegmentSpeechMs else { return [] }
-        return [.segmentEnded(MsRange(start: segmentStart, end: min(atMs, lastSpeechEnd)))]
+        let range = MsRange(start: segmentStart, end: min(atMs, lastSpeechEnd))
+        return [speechMs >= config.minSegmentSpeechMs ? .segmentEnded(range) : .abandoned(range)]
     }
 }

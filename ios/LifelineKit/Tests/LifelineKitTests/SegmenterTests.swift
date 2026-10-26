@@ -54,10 +54,10 @@ private func ended(_ events: [SegmenterEvent]) -> [MsRange] {
     #expect(s.flush(atMs: 5_000) == [.segmentEnded(MsRange(start: 0, end: 5_000))])
 }
 
-@Test func flushOnShortSpeechProducesNothing() {
+@Test func flushOnShortSpeechAbandonsTheBlipOnce() {
     var s = Segmenter()
     _ = feed(&s, db: -20, from: 0, count: 10)
-    #expect(s.flush(atMs: 1_000).isEmpty)
+    #expect(s.flush(atMs: 1_000) == [.abandoned(MsRange(start: 0, end: 1_000))])
     #expect(s.flush(atMs: 1_000).isEmpty)   // idempotent
 }
 
