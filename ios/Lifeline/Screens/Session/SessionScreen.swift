@@ -72,7 +72,10 @@ struct SessionScreen: View {
                     TurnLine(turn: turn, font: .system(.headline, design: .serif), identifier: "session.turn", marksCutOff: false)
                 }
                 if viewModel.interviewerRuns { quietControl }
-                Text("Take your time. Pauses are fine. I'm only listening.")
+                Text(viewModel.interviewerRuns
+                     ? "Take your time. Pauses are fine. I'll stay quiet while you talk."
+                     : "Take your time. Pauses are fine. I'm only listening.")
+                    .accessibilityIdentifier("session.listenCopy")
                     .font(.system(.body, design: .serif))
                     .foregroundStyle(Theme.stone)
                 HStack(spacing: 8) {

@@ -63,6 +63,7 @@ final class InterviewerUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["session.count"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.staticTexts["session.count"].wait(for: \.label, toEqual: "2 possible memories", timeout: 15))
         XCTAssertFalse(app.staticTexts["session.turn"].exists, "the opening is not shown as a turn")
+        XCTAssertEqual(app.staticTexts["session.listenCopy"].label, "Take your time. Pauses are fine. I'll stay quiet while you talk.")
         app.finishSession()
 
         openSessionDetail(app)
@@ -184,6 +185,7 @@ final class InterviewerUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["session.count"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.staticTexts["session.count"].wait(for: \.label, toEqual: "2 possible memories", timeout: 15))
         XCTAssertFalse(app.buttons["session.quiet"].exists, "no Quiet control when the app does not speak")
+        XCTAssertEqual(app.staticTexts["session.listenCopy"].label, "Take your time. Pauses are fine. I'm only listening.")
         app.finishSession()
 
         openSessionDetail(app)
