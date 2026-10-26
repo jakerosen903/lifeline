@@ -203,3 +203,87 @@ private func disclosureText(_ kind: DisclosureKind) throws -> String {
     await h.finishTurn()
     #expect(h.spokenKinds == [.disclosure, .earlyWindDown])
 }
+
+// MARK: Pauses and interruptions
+
+@Test func aDraftDroppedDuringAPauseIsSpokenAfterResume() async throws {
+    let h = Harness()
+    h.at(10); await h.loop.arc(.showDisclosureCard(.past), stage: .windDown)
+    await h.loop.voice(.paused)
+    #expect(h.spoken.count == 1, "handed out, but the session never started it")
+    h.at(40); await h.loop.voice(.resumed)
+    let past = try disclosureText(.past)
+    #expect(h.spoken.map(\.text) == [past, past])
+    await h.finishTurn()
+    #expect(h.spokenKinds == [.disclosure, .disclosure, .earlyWindDown])
+}
+
+@Test func nothingIsOfferedWhilePaused() async throws {
+    let h = Harness()
+    await h.loop.voice(.paused)
+    await h.loop.captureStarted(opening: opening)
+    h.at(10); await h.loop.arc(.showDisclosureCard(.past), stage: .windDown)
+    h.at(11); await h.loop.voice(.userPaused(afterMs: 11_000))
+    h.at(13); await h.gracePasses()
+    await h.loop.voice(.turnEnded(InterviewerTurnID(), atMs: 0, interrupted: true))
+    #expect(h.spoken.isEmpty)
+    h.at(20); await h.loop.voice(.resumed)
+    await h.finishTurn()
+    #expect(h.spokenKinds == [.disclosure, .earlyWindDown], "the opening is now or never")
+}
+
+@Test func aTurnCutAfterItStartedIsNotRespoken() async throws {
+    let h = Harness()
+    h.at(10); await h.loop.arc(.showDisclosureCard(.past), stage: .windDown)
+    let cut = InterviewerTurnID()
+    await h.loop.voice(.turnStarted(cut, atMs: 10_000))
+    // The session reports the cut turn's end before the pause; the wind-down line it offers then is dropped.
+    await h.loop.voice(.turnEnded(cut, atMs: 11_000, interrupted: true))
+    await h.loop.voice(.paused)
+    h.at(30); await h.loop.voice(.resumed)
+    await h.finishTurn()
+    #expect(h.spokenKinds == [.disclosure, .earlyWindDown, .earlyWindDown])
+    #expect(h.spoken.filter { $0.kind == .disclosure }.count == 1)
+}
+
+@Test func anInterruptionBehavesLikeAPause() async throws {
+    let h = Harness()
+    h.at(10); await h.loop.arc(.showDisclosureCard(.present), stage: .windDown)
+    await h.loop.voice(.interrupted)
+    h.at(12); await h.loop.voice(.userPaused(afterMs: 12_000))
+    h.at(14); await h.gracePasses()
+    #expect(h.spoken.count == 1, "nothing more while interrupted")
+    h.at(30); await h.loop.voice(.resumed)
+    let present = try disclosureText(.present)
+    #expect(h.spoken.map(\.text) == [present, present])
+}
+
+@Test func aDroppedOpeningDoesNotBlockTheDisclosure() async throws {
+    let h = Harness()
+    await h.loop.captureStarted(opening: opening)
+    await h.loop.voice(.paused)
+    h.at(10); await h.loop.arc(.showDisclosureCard(.past), stage: .windDown)
+    h.at(20); await h.loop.voice(.resumed)
+    #expect(h.spokenKinds == [.opening, .disclosure])
+}
+
+@Test func aPartialAfterThePauseDoesNotStrandTheDisclosure() async throws {
+    let h = Harness()
+    h.at(5); await h.loop.voice(.speechStarted(atMs: 5_000))
+    h.at(6); await h.loop.arc(.showDisclosureCard(.past), stage: .windDown)
+    h.at(8); await h.loop.voice(.userPaused(afterMs: 8_000))
+    h.at(9); await h.loop.voice(.transcriptPartial("my brother"))
+    h.at(9.5); await h.gracePasses()
+    #expect(h.spoken.isEmpty, "the late partial still holds the floor")
+    h.at(10.5); await h.gracePasses()
+    #expect(h.spokenKinds == [.disclosure])
+    #expect(await h.sleeper.requested == [ArcConfig.default.replyGrace, ArcConfig.default.partialHoldsFloor])
+}
+
+@Test func aPastAfterPresentSpeaksNothingMore() async throws {
+    let h = Harness()
+    h.at(10); await h.loop.arc(.showDisclosureCard(.present), stage: .windDown)
+    await h.finishTurn(); await h.finishTurn()
+    h.at(20); await h.loop.arc(.showDisclosureCard(.past), stage: .windDown)
+    #expect(h.spoken.map(\.text) == [try disclosureText(.present), FixedTurns.earlyWindDown])
+}
