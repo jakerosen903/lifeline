@@ -39,7 +39,7 @@ public struct RecorderHooks: Sendable {
 }
 
 /// A turn the interviewer wants spoken. The recorder gives it an id and stores it once it starts.
-public struct TurnDraft: Equatable, Sendable {
+public struct TurnDraft: Hashable, Sendable {
     public var kind: TurnKind
     public var source: TurnSource
     public var text: String

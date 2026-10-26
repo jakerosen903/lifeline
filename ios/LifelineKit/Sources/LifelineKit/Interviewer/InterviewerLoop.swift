@@ -46,6 +46,10 @@ public actor InterviewerLoop {
     private var floorRetryArmed = false
     /// Offers waiting out the reply grace or a partial's hold.
     private var retries: [UUID: Task<Void, Never>] = [:]
+    /// How often each draft ended before its playback started. A voice that keeps failing must
+    /// not hold the queue for the whole session.
+    private var unstartedEnds: [TurnDraft: Int] = [:]
+    private static let maxUnstartedEnds = 3
 
     public init(kind: SessionKind, config: ArcConfig,
                 speak: @escaping @Sendable (TurnDraft) async -> Bool,
@@ -84,11 +88,14 @@ public actor InterviewerLoop {
             observe(.turnStarted(playing.kind))
         case .turnEnded:
             observe(.turnEnded)
-            // Cut before it started (a pause, an interruption, barge-in): it was never heard.
-            // A started turn that was cut is not spoken again.
-            if let draft = playing, !started { requeue(draft) }
+            let unstarted = started ? nil : playing
             playing = nil; started = false
-            await offerPending()
+            // A started turn that was cut is not spoken again.
+            guard let unstarted else { await offerPending(); return }
+            // Cut before it started (a pause, an interruption, barge-in, a voice that failed): it was
+            // never heard. It waits at the front for the next resume, pause's grace or floor retry;
+            // an offer now would feed a failing voice the same draft in a loop.
+            endedUnstarted(unstarted)
         case .paused, .interrupted:
             suspended = true
         case .resumed:
@@ -161,6 +168,17 @@ public actor InterviewerLoop {
     private func requeue(_ draft: TurnDraft) {
         guard draft.kind != .opening else { return }
         pending.insert(draft, at: 0)
+    }
+
+    /// Requeues a draft that was never heard, until it has ended unstarted `maxUnstartedEnds` times.
+    private func endedUnstarted(_ draft: TurnDraft) {
+        let count = unstartedEnds[draft, default: 0] + 1
+        unstartedEnds[draft] = count
+        guard count < Self.maxUnstartedEnds else {
+            print("[interviewer] dropped a \(draft.kind.rawValue) turn: it ended \(count) times before playback started")
+            return
+        }
+        requeue(draft)
     }
 
     /// The disclosure text goes before a wind-down line that is still waiting, so a later present

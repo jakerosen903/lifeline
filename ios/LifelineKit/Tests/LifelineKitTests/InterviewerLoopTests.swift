@@ -224,12 +224,12 @@ private func disclosureText(_ kind: DisclosureKind) throws -> String {
 @Test func aDraftCutBeforeItStartedIsSpokenAfterResume() async throws {
     let h = Harness()
     h.at(10); await h.loop.arc(.showDisclosureCard(.past), stage: .windDown)
-    // The session pauses before playback starts: the turn ends unstarted, and the session,
-    // already paused, refuses the re-offer. Then the pause is reported.
+    // The session pauses before playback starts: the turn ends unstarted and waits at the front,
+    // not offered at once (the paused session would refuse it). Then the pause is reported.
     h.refuses(true)
     await h.cutBeforeStart()
     await h.loop.voice(.paused)
-    #expect(h.spoken.count == 1 && h.refused.count == 1)
+    #expect(h.spoken.count == 1 && h.refused.isEmpty)
     h.refuses(false)
     h.at(40); await h.loop.voice(.resumed)
     let past = try disclosureText(.past)
@@ -295,11 +295,37 @@ private func disclosureText(_ kind: DisclosureKind) throws -> String {
     await h.loop.voice(.interrupted)
     h.at(12); await h.loop.voice(.userPaused(afterMs: 12_000))
     h.at(14); await h.gracePasses()
-    #expect(h.spoken.count == 1 && h.refused.count == 1, "no offer while interrupted after the refused one")
+    #expect(h.spoken.count == 1 && h.refused.isEmpty, "no offer after the unstarted end, nor while interrupted")
     h.refuses(false)
     h.at(30); await h.loop.voice(.resumed)
     let present = try disclosureText(.present)
     #expect(h.spoken.map(\.text) == [present, present])
+}
+
+@Test func anUnstartedEndDoesNotReofferAtOnce() async throws {
+    let h = Harness()
+    h.at(10); await h.loop.arc(.showDisclosureCard(.past), stage: .windDown)
+    // The voice failed before any audio: the turn ends with no start, and nothing is paused.
+    await h.cutBeforeStart()
+    #expect(h.spoken.count == 1 && h.refused.isEmpty, "a failing voice must not be fed the same draft in a loop")
+    h.at(11); await h.loop.voice(.userPaused(afterMs: 11_000))
+    h.at(12.5); await h.gracePasses()
+    let past = try disclosureText(.past)
+    #expect(h.spoken.map(\.text) == [past, past], "the next pause's grace offers it again, from the front")
+}
+
+@Test func aDraftThatNeverStartsIsDroppedAfterThreeTries() async throws {
+    let h = Harness()
+    h.at(10); await h.loop.arc(.showDisclosureCard(.past), stage: .windDown)
+    for attempt in 1...3 {
+        await h.cutBeforeStart()
+        let at = 10.0 + Double(attempt) * 2
+        h.at(at); await h.loop.voice(.userPaused(afterMs: Int(at * 1000)))
+        h.at(at + 1.5); await h.gracePasses()
+    }
+    let past = try disclosureText(.past)
+    #expect(h.spoken.map(\.text) == [past, past, past, FixedTurns.earlyWindDown],
+            "after the third unstarted end the draft is dropped and the turn behind it goes next")
 }
 
 @Test func aDroppedOpeningDoesNotBlockTheDisclosure() async throws {
