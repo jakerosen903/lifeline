@@ -9,4 +9,7 @@ public struct KindReceipt: Sendable, Equatable {
     public var story: StoryRepository.Membership?
     /// The entities a fact, feeling or goal was about, turned into mentions when it became a moment.
     public var details: [EntityID]
+    /// Those of `details` the memory also mentioned: the mention row stayed, so Undo adds the
+    /// detail row back beside it instead of turning the mention into one.
+    public var alsoMentioned: Set<EntityID> = []
 }

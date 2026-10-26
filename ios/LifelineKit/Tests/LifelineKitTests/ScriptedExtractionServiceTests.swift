@@ -107,9 +107,10 @@ import Testing
     #expect(try store.entities.details(of: house.id).map(\.title) == ["The house had a blue door"])
     #expect(try store.entities.moments(of: house.id).map(\.title) == ["We painted the house"])
     #expect(EntityPage.spanText(try store.entities.span(of: house.id)) == "in 1995")
-    #expect(try store.tags.tags(of: .entity, house.id.rawValue) == ["home"])
-    let idea = try #require(try store.entities.find(type: .idea, title: "hard work"))
-    #expect(try store.entities.moments(of: idea.id).count == 2)
+    #expect(try store.tags.tags(of: .entity, house.id.rawValue).isEmpty, "the model's domain hint tags nothing until the hint card is tapped")
+    let ideas = try store.entities.entities(type: .idea).filter { $0.title == "hard work" }
+    #expect(ideas.count == 2, "each Keep makes its own idea: an idea on file is reused by id only, never by title")
+    #expect(ideas.allSatisfy { (try? store.entities.moments(of: $0.id).count) == 1 })
     let pending = cards.filter { $0.kind == .entity && $0.status == .pending }
     #expect(pending.compactMap(CandidatePayload.mention).map(\.text) == ["the old shed"], "only the shed is a card")
 }

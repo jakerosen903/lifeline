@@ -24,6 +24,9 @@ public enum IdeaTitle {
         return "An idea you mentioned on \(formatter.string(from: date))"
     }
 
+    public static let defaultPrefix = "An idea you mentioned on "
+    public static func isDefault(_ title: String) -> Bool { title.hasPrefix(defaultPrefix) }
+
     /// What the card and the page show.
     public static func title(proposed: String?, segmentText: String, toldOn date: Date, calendar: Calendar = .current) -> String {
         verbatim(proposed, in: segmentText) ?? defaultTitle(toldOn: date, calendar: calendar)

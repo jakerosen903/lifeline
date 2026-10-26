@@ -199,3 +199,17 @@ private func year(_ y: Int) -> TimeRange {
     #expect(throws: CandidateActions.Error.stale) { try env.actions.undoKind(again) }
     #expect(try env.store.memories.fetch(fact.id)?.kind == .feeling, "a stale undo changes nothing")
 }
+
+@Test func undoKindKeepsAMentionThatSatBesideTheDetail() throws {
+    let env = try Env()
+    let fact = try env.memory("The house had a blue door")
+    try env.store.memories.setKind(fact.id, .fact)
+    let house = try env.store.entities.insert(type: .thing, title: "the house")
+    try env.store.entities.link(fact.id, house.id, relation: .mention)
+    try env.store.entities.link(fact.id, house.id, relation: .detail)
+
+    let receipt = try env.actions.setKind(fact.id, .event)
+    #expect(try env.store.entities.links(of: fact.id).map(\.link.relation) == [.mention])
+    try env.actions.undoKind(receipt)
+    #expect(Set(try env.store.entities.links(of: fact.id).map(\.link.relation)) == [.mention, .detail], "both rows come back")
+}

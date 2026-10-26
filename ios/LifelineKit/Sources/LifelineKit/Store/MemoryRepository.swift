@@ -520,8 +520,9 @@ public struct MemoryRepository: Sendable {
             try Self.refreshChapterRange(ofMemory: id, in: db)
             if kind.isMoment {
                 // A moment names what it was about; it is no longer a standing statement (M7).
-                receipt.details = try MomentEntity.filter(Column("memory_id") == id.rawValue && Column("relation") == EntityRelation.detail.rawValue)
-                    .fetchAll(db).map(\.entityID)
+                let rows = try MomentEntity.filter(Column("memory_id") == id.rawValue).fetchAll(db)
+                receipt.details = rows.filter { $0.relation == .detail }.map(\.entityID)
+                receipt.alsoMentioned = Set(rows.filter { $0.relation == .mention }.map(\.entityID)).intersection(receipt.details)
                 try db.execute(sql: """
                     insert or ignore into moment_entity (memory_id, entity_id, relation, role_text)
                     select memory_id, entity_id, 'mention', role_text from moment_entity where memory_id = ? and relation = 'detail'
@@ -551,8 +552,15 @@ public struct MemoryRepository: Sendable {
             try db.execute(sql: "update memory set kind = ? where id = ?", arguments: [receipt.from.rawValue, receipt.memory.rawValue])
             try Self.refreshChapterRange(ofMemory: receipt.memory, in: db)
             for entity in receipt.details {
-                try db.execute(sql: "update moment_entity set relation = 'detail' where memory_id = ? and entity_id = ? and relation = 'mention'",
-                               arguments: [receipt.memory.rawValue, entity.rawValue])
+                if receipt.alsoMentioned.contains(entity) {
+                    try db.execute(sql: """
+                        insert or ignore into moment_entity (memory_id, entity_id, relation, role_text)
+                        select memory_id, entity_id, 'detail', role_text from moment_entity where memory_id = ? and entity_id = ? and relation = 'mention'
+                        """, arguments: [receipt.memory.rawValue, entity.rawValue])
+                } else {
+                    try db.execute(sql: "update moment_entity set relation = 'detail' where memory_id = ? and entity_id = ? and relation = 'mention'",
+                                   arguments: [receipt.memory.rawValue, entity.rawValue])
+                }
             }
             if let membership = receipt.story {
                 if try !Story.exists(db, key: membership.moment.storyID.rawValue) {

@@ -229,10 +229,12 @@ public struct CandidateActions: Sendable {
     }
 
     /// An entity of this type and title on file, already planned, or planned now. Nothing is written.
+    /// An idea on file is reused only by id (`likelyEntityID`), never by title: two ideas can share
+    /// words, and two told on one day share the dated default title.
     func planEntity(type: EntityType, title: String, candidate: CandidateID?, plan: inout EntityRepository.Write) throws -> Entity {
         let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { throw EntityRepository.Error.emptyTitle }
-        if let known = try store.entities.find(type: type, title: trimmed) { return known }
+        if type != .idea, let known = try store.entities.find(type: type, title: trimmed) { return known }
         if let planned = plan.planned(type, trimmed) { return planned }
         let entity = Entity(type: type, title: trimmed, createdFromCandidateID: candidate)
         plan.entities.append(entity)
@@ -263,9 +265,8 @@ public struct CandidateActions: Sendable {
         } else {
             title = mention.text
         }
-        let entity = try planEntity(type: type, title: title, candidate: candidate.id, plan: &plan)
-        if let hint = mention.domainHint { plan.tags.append(.init(entityID: entity.id, text: hint)) }
-        return entity
+        // The model's domain hint is not a tap: the hint card applies a tag, a Keep never does.
+        return try planEntity(type: type, title: title, candidate: candidate.id, plan: &plan)
     }
 
     /// Aliases and the "Who's this?" mentions that follow the edges. Returns the new mentions.

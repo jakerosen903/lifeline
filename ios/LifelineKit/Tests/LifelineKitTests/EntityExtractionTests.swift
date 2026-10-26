@@ -179,3 +179,21 @@ private struct Env {
     #expect(packet.entities.count < 402, "the budget trims entities")
     #expect(ContextPacketBuilder.estimate(String(decoding: (try? packet.encodedJSON()) ?? Data(), as: UTF8.self)) <= ContextPacketBuilder.defaultBudgetTokens)
 }
+
+// Review of PR #11, round 3.
+@Test func keepingAnEntityNeverTagsItFromTheModelsHint() throws {
+    let env = try Env()
+    let out = MentionOut(text: "the house", kind: .thing, likelyAliasOfPersonID: nil, confidence: 0.8, ref: "t1", domainHint: "home")
+    let card = StoreFixtures.candidate(env.segment.id, ordinal: 1, kind: .entity, payload: try CandidatePayload.encode(out))
+    try env.store.candidates.insert(card)
+    let house = try env.actions.acceptEntity(card)
+    #expect(try env.store.tags.tags(of: .entity, house.id.rawValue).isEmpty, "a tag takes a tap on the hint card, not a Keep")
+}
+
+@Test func twoIdeasWithTheDatedDefaultTitleStayTwo() throws {
+    let env = try Env()
+    let first = try env.actions.acceptEntity(try env.mention("hard work was everything", .idea, ref: "i1", title: nil, ordinal: 1))
+    let second = try env.actions.acceptEntity(try env.mention("a house should have one quiet room", .idea, ref: "i2", title: nil, ordinal: 2))
+    #expect(first.title == second.title && first.id != second.id, "the same default title never merges two ideas")
+    #expect(try env.store.entities.entities(type: .idea).count == 2)
+}

@@ -91,8 +91,11 @@ public struct EntityRepository: Sendable {
         public init() {}
 
         /// A planned entity of this type and title, so one Keep never plans the same thing twice.
+        /// Within one plan the same words name the same entity, except two ideas under the dated
+        /// default title, which are two ideas.
         func planned(_ type: EntityType, _ title: String) -> Entity? {
-            entities.first { $0.type == type && PeopleRepository.normalize($0.title) == PeopleRepository.normalize(title) }
+            if type == .idea, IdeaTitle.isDefault(title) { return nil }
+            return entities.first { $0.type == type && PeopleRepository.normalize($0.title) == PeopleRepository.normalize(title) }
         }
 
         /// The union with another plan; an entity both planned keeps this plan's id.
