@@ -1,12 +1,12 @@
 # Lifeline Overview
 
-> Markdown copy of the overview page (live: https://claude.ai/artifact/DrXtBmNYMmqfnjRJhTYEDP), rewritten 2026-10-25 for V1 as built through M6. Figures are SVG files in `docs/figures/`. The "under the hood" section follows ASD-STE100 style.
+> Markdown copy of the overview page (live: https://claude.ai/artifact/DrXtBmNYMmqfnjRJhTYEDP). Regenerate it from the page rather than editing it by hand. Figures are SVG files in `docs/figures/`.
 
 ## An app that listens to your life and keeps it.
 
 You tell a story, a few minutes at a time. It is saved in your own voice the moment you speak, sorted while you get on with your day, and over weeks it grows into a timeline you can play back: chapters, stories, moments.
 
-Status: V1 built (M1 to M6), in daily use on Jake’s iPhone · Updated October 26, 2026
+Status: V1 built through M7, in daily use on Jake’s iPhone; M8, the spoken interviewer, in review · Updated October 26, 2026 (M7, M8)
 
 **How to read this.** The first half (what we are building, what we are learning, and the glossary) is the product: about 10 minutes. The second half, “How it works under the hood”, is the engineering view and is optional.
 
@@ -14,19 +14,19 @@ Status: V1 built (M1 to M6), in daily use on Jake’s iPhone · Updated October 
 
 Most journaling tools ask you to write. Most family-history tools ask you to fill in forms. Lifeline asks you to tell one story out loud, the way you would over lunch, and does the organizing itself, only when you agree to it. The intended rhythm is a few minutes a day, with the timeline growing over weeks rather than in one long sitting.
 
-1. **Talk.** Choose “Tell a quick story” (one prompt, done when you are) or “Settle in” (more of a conversation: the next question arrives when the room goes quiet). One speaker. The screen can lock.
+1. **Talk.** Choose “Tell a quick story” (one prompt, done when you are) or “Settle in” (more of a conversation: the next question arrives when the room goes quiet). One speaker. The screen can lock. With M8, the app can also speak a little: the opening, a short reflection now and then, and never over you.
 2. **Saved.** The audio and an on-device transcript are written as you speak. Finishing never waits for anything else.
 3. **Sorted.** In the background, each completed thought goes to the extractor with the context it needs and comes back as possible memories.
 4. **Kept.** Keep, change or dismiss a card whenever you like, or never. Nothing merges, groups or gets a title without your tap.
-5. **Placed.** Kept moments land on a timeline as honest ranges (“during the Boston years”), inside stories and chapters, or on the shelf until a date turns up.
+5. **Placed.** Moments land on a timeline as honest ranges (“during the Boston years”), inside stories and chapters, or on the shelf until a date turns up. Things that are not moments (a first car, a grandmother, a belief) become details on pages for the people, places, things and ideas they are about.
 
 The result is three things at once: a **journal** for revisiting fond memories, an **autobiography** you can replay in your own voice, and, later, a **family record** where several people’s versions of the same Christmas sit side by side.
 
-The shape changed on the way. The first design imagined 30 to 60 minute oral-history sittings with a spoken interviewer. Real use was a few minutes at a time, and a design review warned that cards, people, dates and session review stacked together would feel like maintaining a database. Both pushed the product toward a short daily practice in which keeping the story comes first and organizing it is optional.
+The shape changed on the way. The first design imagined 30 to 60 minute oral-history sittings led by a spoken interviewer. Real use was a few minutes at a time, and a design review warned that cards, people, dates and session review stacked together would feel like maintaining a database. Both pushed the product toward a short daily practice in which keeping the story comes first and organizing it is optional. The interviewer is now coming back (M8), in a much quieter form: it reflects more than it asks, never fills a pause, and stops the moment you speak.
 
 ![roadmap](figures/roadmap.svg)
 
-*Where the project stands. The top row is built and in use; the bottom row is designed and waiting. Privacy controls beyond hide, exclude and delete were deferred while Jake was the only user; see the open questions.*
+*Where the project stands. The top row is built and in use. In the bottom row, M8 is in review as three pull requests; the rest is designed and waiting. Privacy controls beyond hide, exclude and delete were deferred while Jake was the only user; see the open questions.*
 
 | Milestone | What it added |
 | --- | --- |
@@ -37,6 +37,8 @@ The shape changed on the way. The first design imagined 30 to 60 minute oral-his
 | M4.1 Same story | On-device matching across recordings; “Same as X?” on a card; “Tell me when” for a stated date. |
 | M5 Organize | A duplicate pass over kept memories; groups merge on one tap; a telling across a pause is one card; stories; a token-budgeted context packet. |
 | M6 Steady | A visible, restartable sorting status; “Your copy” export and restore; trim a telling to the words that belong to it. |
+| M7 Kinds and entities | Facts, feelings and goals leave the timeline. People, Places, Things and Ideas get pages; standing statements become their details; “About you”; free-text domain tags; extractor v6. |
+| M8 Interviewer *(in review)* | Three stacked PRs: the interviewer’s turns, recorded but silent; the fixed lines spoken on the phone with barge-in and “Quiet”; short model reflections behind a safety gate. A fourth step is the device run. |
 
 ## What we are learning
 
@@ -66,6 +68,8 @@ Jake has used each milestone on his own phone. Most changes since the first desi
 | Three tellings of one friendship sat side by side; a long telling split into three cards. | A duplicate pass asks a reconciler which kept memories are the same; groups merge on one tap; a telling across a pause grows one card; related moments form stories. | M5 |
 | After a recording the timeline said nothing, and it looked as if half was lost. | One quiet line says what is still sorting, or why sorting stopped, with Try again. | M6 |
 | The phone held the only copy of everything. | “Your copy”: one `.lifeline` file to export and restore, kept out of the cloud backup until the person shares it. | M6 |
+| Much of what Jake said was not a moment: a wall in his room, a first car, a belief. On the timeline these filled the shelf and drew “when?” questions. | Memories have kinds. Facts, feelings and goals leave the timeline and attach to the person, place, thing or idea they are about, each with a page. The app never asks for a date on a thing or a place. An idea’s title is the person’s own words. | M7 |
+| The app gave nothing back while Jake talked. | The app speaks briefly: one opening, an occasional reflection in Settle in, the fixed lines. Any speech stops it; “shh” or one tap makes it quiet; its words never enter the person’s transcript. | M8 (in review) |
 | A wind-down mock-up followed a grief story with “something lighter” about the same person. | A neutral closing line after a heavy session; no organizational prompt during a heavy moment; the disclosure flag tells past narration from present danger. | Review, M4 |
 
 ### Why memories cluster where they do
@@ -88,9 +92,13 @@ People rarely give dates. They say “the summer after I graduated” or “when
 
 A session is when you recorded. A moment is a scene you described, with its own audio; the same moment told twice becomes one moment with two tellings. A story connects related moments, often told across several sessions. A chapter is the wider life context, titled in the person’s words. Collections carry themes across chapters. Stories are built and show as groups on the timeline. The fuller navigation, a Photos-style zoom from life to chapter to story with “Listen at this level”, is designed and not yet built.
 
+### Not everything is a moment
+
+Much of a life story is not an event at a time: the house with the blue door, a grandmother who was Portuguese, a belief about hard work. These are kept as details of an entity, one of four kinds: People, Places, Things and Ideas. Each entity has a page with its details first, in the person’s words, then the moments it appears in. An idea keeps its moments in order, so “I used to think X” and “now I think Y” sit together, and the app never judges the change. Statements about the person themself collect under “About you”. Nothing is reclassified without a tap.
+
 ### People are resolved, not guessed
 
-Every name mentioned becomes a pending “who’s this?” card. The person resolves it once, to someone already in the story, to someone new, or as “not a person”, and the link holds across every memory. That keeps two Sams apart and lets “my sister” and “Maya” be one person. In a heavy moment no such card appears.
+Every name mentioned becomes a pending “who’s this?” card, and places, things and ideas get a matching “Sounds like…” card. The person resolves it once, to an entity already on file, to a new one, or to a different kind, and the link holds across every memory. That keeps two Sams apart and lets “my sister” and “Maya” be one person. In a heavy moment no such card appears.
 
 ### Every session lands
 
@@ -117,17 +125,21 @@ These words have specific meanings in the app, the designs and the code.
 | Sorting | The background work that turns a recording into cards. It never blocks finishing. |
 | Check this | The label on any guessed detail (a year, a person) until the person settles it. |
 | Shelf | Where a memory with no date and no collection waits. It counts just as much as a dated one. |
+| Kind | What a memory is: a moment (an event, or other), or a fact, feeling or goal. Only moments go on the timeline. |
+| Entity | A person, place, thing or idea with a page of its own. |
+| Detail | A standing statement attached to an entity (“the house had a blue door”). “About you” holds the details about the person. |
+| Turn | Something the app says out loud (M8). Stored apart from the person’s words, never made into a memory. |
 | Stated date | A date the person gave with “Tell me when”, shown exactly as said. The app never invents one. |
 
 ---
 
 ## How it works under the hood
 
-Optional for product readers. This section follows Simplified Technical English (ASD-STE100): short sentences, one instruction per sentence, active voice, and “must” for requirements. It describes V1 as built.
+Optional for product readers. This section follows Simplified Technical English (ASD-STE100): short sentences, one instruction per sentence, active voice, and “must” for requirements. It describes V1 as built through M7, and M8 as it stands in review.
 
 ### 1. System overview
 
-The system has two parts. The first part is the iPhone app. The second part is the Anthropic Messages API. V1 has no server of its own.
+The system has two parts. The first part is the iPhone app. The second part is the Anthropic Messages API. V1 has no server of its own. The extractor and the reconciler use `claude-opus-5-5`. The M8 interviewer uses `claude-haiku-5-5` for speed.
 
 The app does all work that keeps data. It records, transcribes, stores, matches, resolves and shows the timeline. The app sends text to the API for sorting. The app does not send audio.
 
@@ -147,7 +159,7 @@ Recording continues when the screen locks. An interruption or a route change pau
 
 A segmenter ends a segment after 1.8 seconds of silence. A segment must contain at least 3 seconds of speech. A segment is a unit of capture, not a unit of story. One story can span several segments.
 
-The voice session is a protocol. V1 ships `ListenOnlyVoiceSession`. Its `say`, `acknowledge` and `interrupt` commands do nothing. The spoken interviewer will replace it behind the same protocol.
+The voice session is a protocol. On `main`, the app ships `ListenOnlyVoiceSession`; its `say`, `acknowledge` and `interrupt` commands do nothing. M8 renames it `CascadeVoiceSession` and makes the commands real behind the same protocol (section 10).
 
 ### 3. Sorting
 
@@ -155,7 +167,7 @@ A sorting worker reads pending segments from the store. Finishing a session must
 
 For each segment the worker builds a context packet. The packet holds the profile text, the people and their aliases, the chapters, related earlier moments, the pending cards of the session, and the stories. The packet has a ceiling of 6,000 tokens. When the packet is too large, the builder removes whole entries from the least relevant section first. It never removes the profile text.
 
-The worker sends the segment and the packet to the extractor. The default model is `claude-opus-5-5` at low effort, with a strict JSON schema. The prompt is versioned (extractor v5). Each candidate records the prompt version. A new version adds candidates. It never edits a kept memory.
+The worker sends the segment and the packet to the extractor. The default model is `claude-opus-5-5` at low effort, with a strict JSON schema. The prompt is versioned (extractor v6). Each candidate records the prompt version. A new version adds candidates. It never edits a kept memory.
 
 The API key is in the Keychain. It must never be in the build, the repository or a log. Without a key, the app saves recordings and the segments wait.
 
@@ -189,15 +201,25 @@ The resolver must never ask for a date. It can ask one relative question, a choi
 
 A memory with no range and no collection goes to the shelf. The shelf offers “Add a date” and “Add to a collection”.
 
-### 6. Data model
+### 6. Kinds and entities
+
+Each memory has a kind: `event`, `other`, `fact`, `feeling` or `goal`. Events and other are moments. The timeline shows moments only. The resolver still stores a range for a fact, a feeling or a goal, but the timeline hides it, and the app never asks “when?” about it. The person changes a kind on the Change sheet (“What is this?”). The app never changes a kind without a tap.
+
+An entity is a person, a place, a thing or an idea. One table holds all four. One link table connects memories to entities, with the relation “detail” or “mention”. A person keeps one extra record for what only a person has: the owner flag and a birth date. Every entity comes from something the person said and has a span that plays.
+
+The extractor (v6) names entities in each memory. A named entity that is on file links to the memory. Otherwise the app matches by type and normalized title, or makes a new one. An idea’s title must be at most 8 consecutive words the person said. If no such quote exists, the title is “An idea you mentioned on {date}”. The app never asks for a date on a place or a thing. The person can add one.
+
+Domains (home, family, work, travel, and anything else the person says) are free-text tags on any element. There is no fixed list.
+
+### 7. Data model
 
 The store is SQLite (GRDB). Audio files are next to it. All offsets are milliseconds from the start of the session file.
 
 ![data-model](figures/data-model.svg)
 
-*A session is when the person spoke; a segment is a unit of capture; a candidate is raw extractor output and is never edited. A memory is what the person kept, with one or more tellings, each an audio span in some session. Stories, chapters and collections group memories. Embeddings and duplicate pairs support organizing.*
+*A session is when the person spoke; a segment is a unit of capture; a candidate is raw extractor output and is never edited. A memory is what the person kept, with a kind and one or more tellings, each an audio span in some session. A memory links to entities as a detail (“the house had a blue door”) or a mention. Stories, chapters and collections group moments.*
 
-### 7. Session arc and safety
+### 8. Session arc and safety
 
 The stages are open, wind-down and ended. A quick story shows no clock. It ends when the person taps “Let’s leave it there”.
 
@@ -211,7 +233,7 @@ A memory has two privacy flags. “Hide from timeline” removes it from everyda
 
 If the app stops during a session, the next launch opens the landing for that session.
 
-### 8. Keeping a copy
+### 9. Keeping a copy
 
 “Your copy” in Settings exports one `.lifeline` file. The file holds the database, the audio, the pause log and a manifest. It must never hold the API key.
 
@@ -219,22 +241,34 @@ A restore first writes a safety copy of the data on the phone. Then it stages th
 
 The app excludes every `.lifeline` file and the audio folder from the phone’s cloud backup. A copy leaves the phone only when the person shares the file.
 
+### 10. The spoken interviewer (M8, in review)
+
+M8 is three stacked pull requests. PR A records the interviewer’s turns and shows them as text, silently. PR B speaks the fixed turns. PR C adds model turns. A fourth step is the device run.
+
+The turn policy is a pure function of events and a clock. Silence is its default. It must not start a turn while the person speaks. It must not speak two turns without a closed segment between them. After a question, the next two turns must not be questions. The next question after a quiet stays on screen only; the app never fills a pause by voice.
+
+The fixed turns are the opening, the wrap-up offer, the early wind-down line, the disclosure text and the “about the app” line. A model turn is a reflection or, rarely, one question for a scene. The model sees only this session’s words. A model turn must be 20 words or fewer. Every name and number in it must be something the person said. If a check fails, the app drops the turn and does not repair it.
+
+The safety gate: every turn after the opening waits for a clean check of the latest segment. A disclosure or a heavy flag closes the gate for the rest of the session. After that, the app speaks only fixed text. Past and present disclosures have different spoken texts, both pre-written.
+
+The voice is on-device (`AVSpeechSynthesizer`), through the same audio engine as capture, with echo cancellation. Any speech from the person stops the app’s voice. “Quiet”, “shh” or “let me talk”, or one tap on Quiet, silences it for the session. The app’s own words are removed from the person’s transcript and stored as turns. The audio file keeps everything. “Lifeline speaks” in Settings turns the voice off and gives the listen-only app.
+
 ### Designed, not built
 
-- **The spoken interviewer.** Reflections, acknowledgements and rare questions, in a cascade (voice activity, speech-to-text, a text model, text-to-speech) behind the existing voice-session protocol. Its turn policy: about 1 second of silence starts a fast end-of-thought check; a complete thought gets a reply after a 1 to 2 second grace; an unfinished one gets a capped wait of 6 to 8 seconds and then only a soft acknowledgement. A realtime speech model can replace the cascade later.
-- **Navigation by level.** Life, chapter, story and moment as one zoomable view in the manner of Photos, with a year scrubber on the edge and “Listen at this level” as a playlist in the person’s voice.
+- **Replay (M9).** “Listen at this level”: a playlist in the person’s voice for a story, a chapter or a life, with narration added only later and only as the person approves it.
+- **Navigation by level.** Life, chapter, story and moment as one zoomable view in the manner of Photos, with a year scrubber on the edge.
 - **Protect, when others use the app.** A privacy screen with Share and a Local-only session chosen before recording; span-level deletion that keeps playback offsets; re-running a new extractor version from inside the app.
 - **Phase 1.5: one photo, one story.** Pick a photo and tell its story. No clustering, no faces.
 - **Phase 2: props.** Favorite photos as prompts and anchors (PhotoKit gives dates and places; people are tagged by hand; a face model only after an evaluation against those tags), then music from an era.
 - **Phase 3: family.** Per-memory sharing, several perspectives on one event, questions for each other, and a read-only web viewer.
 
-> **Next.** Run the recording study now that V1 exists: 5 to 8 people, ten minutes each, scored with the app’s evaluation command (protocol in `docs/experiments/recording-study.md`). Settle the open product questions below, starting with what a second user needs. Engineering meanwhile tunes the starting numbers (match thresholds, the packet budget, the segment pause) on real recordings. Then choose the next build: the spoken interviewer or the one-photo prompt.
+> **Next.** Merge M8’s three pull requests in order and run its device checklist: echo, barge-in within half a second, voice quality, and the safety gate. Run the recording study now that V1 exists: 5 to 8 people, ten minutes each, scored with the app’s evaluation command. Settle the open product questions below, starting with what a second user needs. Engineering meanwhile tunes the starting numbers on real recordings. Then choose the next build: replay (M9) or the one-photo prompt.
 
 ### Open questions
 
 - Does a gentle daily nudge belong in V1 at all, given that streaks and counters are ruled out?
 - How much may the app write? Verbatim quotes assembled into stories, or prose it composes in the person’s style?
-- Memory kinds and domains (a feeling, a goal, an event; relationships, health, travel): a later design, with the seam kept open.
+- A cloud voice would sound better than the on-device one, but it changes the data posture. Does that trade belong in V1?
 - A second person is starting to use the app. Is “each person’s recordings stay on their own phone” enough for now, or must part of “protect” (sharing controls, Local-only, finer deletion) ship first?
 
-Companion material: the [grounding principles](https://claude.ai/artifact/VUpLNWEM86y4UHSbCgTHhE) (also `docs/PRINCIPLES.md`), the [design canvas](https://claude.ai/artifact/6vReaCCBrkFqzSkMk6JfRN) (start with the “Review revisions” row, R1 to R9; sources in `docs/design/`), `docs/DECISIONS.md` (every decision, newest first), and `docs/specs/` and `docs/plans/` (one spec and one plan per milestone).
+Companion material: the [grounding principles](https://claude.ai/artifact/VUpLNWEM86y4UHSbCgTHhE) (the research behind the nine principles), the [design canvas](https://claude.ai/artifact/6vReaCCBrkFqzSkMk6JfRN) (start with the “Review revisions” row, R1 to R9), and the [repository](https://github.com/jakerosen903/lifeline), which holds the decision log, one spec and one plan per milestone, and the code.
