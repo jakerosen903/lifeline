@@ -15,9 +15,11 @@ public struct MemoryRef: Sendable, Equatable {
     public var title: String
     public var range: TimeRange
     public var primarySpan: Span
+    /// A non-moment is placed like any memory, but nothing asks about it (M7).
+    public var kind: MemoryKind
 
-    public init(id: MemoryID, title: String, range: TimeRange, primarySpan: Span) {
-        self.id = id; self.title = title; self.range = range; self.primarySpan = primarySpan
+    public init(id: MemoryID, title: String, range: TimeRange, primarySpan: Span, kind: MemoryKind = .event) {
+        self.id = id; self.title = title; self.range = range; self.primarySpan = primarySpan; self.kind = kind
     }
 }
 
@@ -97,6 +99,7 @@ public enum Resolver {
         var floating: [FloatingTarget] = []
         var seenPhrases = Set<String>()
         var payoff: [String: (count: Int, memories: Set<MemoryID>, targetID: MemoryID?)] = [:]
+        let nonMoments = Set(input.memories.filter { !$0.kind.isMoment }.map(\.id))
         for anchor in input.anchors where anchor.isRelative && !resolved.contains(anchor.id) && !(original[anchor.memoryID]?.isSettled ?? false) {
             guard let phrase = anchor.targetText?.trimmingCharacters(in: .whitespacesAndNewlines), !phrase.isEmpty else { continue }
             let key = PeopleRepository.normalize(phrase)
@@ -106,6 +109,8 @@ public enum Resolver {
             if target == nil, seenPhrases.insert(key).inserted {
                 floating.append(FloatingTarget(phrase: phrase, anchorID: anchor.id, fromMemory: anchor.memoryID))
             }
+            // A fact, feeling or goal is placed but never the subject of a question (M7).
+            guard nonMoments.contains(anchor.memoryID) == false else { continue }
             var entry = payoff[key] ?? (0, [], target?.id)
             if entry.memories.insert(anchor.memoryID).inserted { entry.count += 1 }
             if entry.targetID == nil { entry.targetID = target?.id }

@@ -97,7 +97,7 @@ public struct ChapterRepository: Sendable {
     /// member is a guess, plainly only when every member is stated or confirmed. Unplaced when
     /// no member is placed.
     public func derivedSpan(of collection: CollectionID) throws -> TimeRange {
-        Self.span(over: try members(of: collection).map(\.range))
+        Self.span(over: try members(of: collection).filter(\.isMoment).map(\.range))   // a fact's range is hidden everywhere (M7)
     }
 
     public static func span(over ranges: [TimeRange]) -> TimeRange {

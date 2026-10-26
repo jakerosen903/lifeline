@@ -50,6 +50,10 @@ public struct AnchorOut: Codable, Sendable, Equatable {
 public enum MemoryKind: String, Codable, Sendable, CaseIterable {
     case event, fact, feeling, goal, other
 
+    /// A moment belongs on the timeline. A fact, a feeling or a goal is placed but never shown on
+    /// it and never asked "when?" (M7).
+    public var isMoment: Bool { self == .event || self == .other }
+
     /// The card heading. Only an event is called a memory.
     public var cardLabel: String {
         switch self {

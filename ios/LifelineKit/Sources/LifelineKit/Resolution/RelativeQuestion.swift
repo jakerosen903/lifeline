@@ -25,7 +25,7 @@ public enum RelativeQuestions {
     /// nothing else. A birthday alone would make a date question and is not used.
     public static func question(for memory: MemoryRef, anchors: [Anchor], placed: [MemoryRef], siblings: [MemoryRef],
                                 birthDate: CivilDate?, config: ResolverConfig) -> RelativeQuestion? {
-        guard !memory.range.isSettled else { return nil }
+        guard !memory.range.isSettled, memory.kind.isMoment else { return nil }
         if let q = beforeOrAfter(memory, anchors: anchors, placed: placed, config: config) { return q }
         return sameYear(memory, siblings: siblings)
     }

@@ -261,6 +261,18 @@ enum Migrations {
                 t.add(column: "continues_order", .integer)
             }
         }
+        // v9 (M7, PR A): a memory's kind lives in a column, filled from its card; no card, or a
+        // card without a kind, is an event.
+        m.registerMigration("v9") { db in
+            try db.alter(table: "memory") { t in
+                t.add(column: "kind", .text).notNull().defaults(to: "event")
+            }
+            try db.execute(sql: """
+                update memory set kind = (select json_extract(c.payload, '$.kind') from candidate c where c.id = memory.created_from_candidate_id)
+                where (select json_extract(c.payload, '$.kind') from candidate c where c.id = memory.created_from_candidate_id)
+                      in ('event', 'fact', 'feeling', 'goal', 'other')
+                """)
+        }
         return m
     }
 }

@@ -16,6 +16,13 @@ struct MemoryScreen: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
+                if !viewModel.memory.isMoment {
+                    // A fact, feeling or goal has no "when" to show or ask about (M7).
+                    Text(viewModel.memory.kind.cardLabel)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(Theme.olive)
+                        .accessibilityIdentifier("memory.kind")
+                } else {
                 Button { refining = true } label: {
                     HStack(spacing: 8) {
                         Text([viewModel.rangeText, viewModel.ageText].compactMap { $0 }.joined(separator: " · "))
@@ -28,6 +35,7 @@ struct MemoryScreen: View {
                     }
                 }
                 .accessibilityIdentifier("memory.range")
+                }
 
                 Text(viewModel.memory.title).titleStyle()
 
@@ -99,7 +107,7 @@ struct MemoryScreen: View {
                     }
                 }
 
-                if let evidence = viewModel.evidence {
+                if viewModel.memory.isMoment, let evidence = viewModel.evidence {
                     Text("you said: “\(evidence)”")
                         .font(.footnote)
                         .foregroundStyle(Theme.stone)
