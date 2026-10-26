@@ -885,3 +885,31 @@ private func wrapUpInsideTheGrace(_ h: Harness) async {
     #expect(await service.askedAbout == [bees, "the house had a blue door"])
     #expect(h.spoken.map(\.text) == ["Bees behind the old garage.", FixedTurns.wrapUp])
 }
+
+// MARK: Fix round 2: a clean extraction stands for clean flags
+
+@Test func aCleanExtractionReleasesAFailedCheck() async {
+    let service = TestInterviewer([.failure(.network("offline")), .success(reflection("A blue door."))])
+    let h = Harness(service: service)
+    let s1 = await h.story("s1", bees, from: 2, pause: 8)
+    h.at(9.5); await h.gracePasses(expecting: 2)
+    await h.story("s2", "the house had a blue door", from: 10, pause: 12)
+    h.at(13.5); await h.gracePasses(expecting: 2)
+    #expect(h.spoken.isEmpty)
+    h.at(14); await h.loop.extracted(s1)
+    #expect(h.spoken == [TurnDraft(kind: .reflection, source: .model, text: "A blue door.")])
+}
+
+@Test func extractedAfterHeavyFlagsDoesNotClean() async {
+    let service = TestInterviewer([.failure(.network("offline")), .success(reflection("A blue door."))])
+    let h = Harness(service: service)
+    let s1 = await h.story("s1", bees, from: 2, pause: 8)
+    h.at(9.5); await h.gracePasses(expecting: 2)
+    await h.story("s2", "the house had a blue door", from: 10, pause: 12)
+    h.at(13.5); await h.gracePasses(expecting: 2)
+    h.at(14); await h.loop.flags(pastFlags, segment: s1)
+    await h.loop.extracted(s1)
+    h.at(16); await h.loop.voice(.userPaused(afterMs: 16_000))
+    h.at(17.5); await h.gracePasses()
+    #expect(h.spoken.isEmpty, "still latched")
+}

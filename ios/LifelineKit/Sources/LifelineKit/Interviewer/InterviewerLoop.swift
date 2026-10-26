@@ -84,6 +84,8 @@ public actor InterviewerLoop {
     private var callSegment: SegmentID?
     /// Segments whose call was skipped, so the skip is logged once.
     private var skippedSegments: Set<SegmentID> = []
+    /// Segments whose extractor flags arrived. The extraction queue reports only flags that are set.
+    private var flaggedSegments: Set<SegmentID> = []
 
     public init(kind: SessionKind, config: ArcConfig,
                 service: (any InterviewerService)?,
@@ -174,8 +176,17 @@ public actor InterviewerLoop {
 
     /// Flags can open the gate: a segment whose check failed holds it until they arrive.
     public func flags(_ flags: Flags, segment: SegmentID) async {
+        flaggedSegments.insert(segment)
         observe(.extractorFlags(segment, flags))
         await offerPending()
+    }
+
+    /// The segment's extraction succeeded. The queue reports set flags before the candidates and no
+    /// event for clean ones, so a success with no flags before it means the flags are clean. That
+    /// releases a gate held by the segment's failed check. Flags that came first are never overwritten.
+    public func extracted(_ segment: SegmentID) async {
+        guard !flaggedSegments.contains(segment) else { return }
+        await flags(Flags(disclosure: .none, wantsToStop: false, wantsToChangeSubject: false), segment: segment)
     }
 
     /// The stage is observed before the effect, so the policy judges the effect's turn in its stage.
