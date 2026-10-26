@@ -126,18 +126,23 @@ public final class AVAudioEngineSource: AudioSource, @unchecked Sendable {
     @discardableResult
     public func schedule(_ buffer: AVAudioPCMBuffer) async -> Bool {
         await withCheckedContinuation { (done: CheckedContinuation<Bool, Never>) in
-            schedule(buffer) { done.resume(returning: $0) }
+            schedule(buffer, accepted: { if !$0 { done.resume(returning: false) } },
+                     played: { done.resume(returning: true) })
         }
     }
 
     /// `schedule` for a caller that cannot wait, such as a synthesizer's buffer callback. Calls on
-    /// one thread play in call order. `completion` runs once, on an audio or control thread.
-    public func schedule(_ buffer: AVAudioPCMBuffer, completion: @escaping @Sendable (Bool) -> Void) {
+    /// one thread play in call order. `accepted` runs once on the control queue: true just before
+    /// the buffer goes to the player, false when it is refused. Only an accepted buffer later calls
+    /// `played`, once, on an audio thread or the control queue.
+    public func schedule(_ buffer: AVAudioPCMBuffer, accepted: @escaping @Sendable (Bool) -> Void,
+                         played: @escaping @Sendable () -> Void) {
         nonisolated(unsafe) let buffer = buffer   // handed to the player and not touched again
         control.async {
             guard self.player.engine != nil, !self.isStopped, !self.isPaused, !self.isInterrupted,
-                  self.engine.isRunning else { completion(false); return }
-            self.player.scheduleBuffer(buffer, completionCallbackType: .dataPlayedBack) { _ in completion(true) }
+                  self.engine.isRunning else { accepted(false); return }
+            accepted(true)
+            self.player.scheduleBuffer(buffer, completionCallbackType: .dataPlayedBack) { _ in played() }
             if !self.player.isPlaying { self.player.play() }
         }
     }
@@ -231,7 +236,10 @@ public final class AVAudioEngineSource: AudioSource, @unchecked Sendable {
         case .began:
             // A suspension notice arrives when the app wakes; the engine was already paused by the system.
             if let reasonRaw = note.userInfo?[AVAudioSessionInterruptionReasonKey] as? UInt,
-               AVAudioSession.InterruptionReason(rawValue: reasonRaw) == .appWasSuspended { return }
+               AVAudioSession.InterruptionReason(rawValue: reasonRaw) == .appWasSuspended {
+                stopPlayer()   // no turn may wait on a player the system has silenced
+                return
+            }
             stopPlayer()
             engine.pause()
             markInterrupted()

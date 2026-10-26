@@ -47,8 +47,12 @@ public actor InterviewerLoop {
     /// Offers waiting out the reply grace or a partial's hold.
     private var retries: [UUID: Task<Void, Never>] = [:]
     /// How often each draft ended before its playback started. A voice that keeps failing must
-    /// not hold the queue for the whole session.
+    /// not hold the queue for the whole session. Only voice failures count: a pause or an
+    /// interruption, and a turn that starts, reset the count.
     private var unstartedEnds: [TurnDraft: Int] = [:]
+    /// The draft whose unstarted end came last. The session reports the end before the
+    /// `.paused` or `.interrupted` that caused it, so that event clears this draft's count.
+    private var lastUnstarted: TurnDraft?
     private static let maxUnstartedEnds = 3
 
     public init(kind: SessionKind, config: ArcConfig,
@@ -85,6 +89,7 @@ public actor InterviewerLoop {
             // A start with no draft handed out is not one of this loop's turns.
             guard let playing else { return }
             started = true
+            unstartedEnds[playing] = nil
             observe(.turnStarted(playing.kind))
         case .turnEnded:
             observe(.turnEnded)
@@ -98,6 +103,7 @@ public actor InterviewerLoop {
             endedUnstarted(unstarted)
         case .paused, .interrupted:
             suspended = true
+            if let draft = lastUnstarted { unstartedEnds[draft] = nil }
         case .resumed:
             suspended = false
             await offerPending()
@@ -174,6 +180,7 @@ public actor InterviewerLoop {
     private func endedUnstarted(_ draft: TurnDraft) {
         let count = unstartedEnds[draft, default: 0] + 1
         unstartedEnds[draft] = count
+        lastUnstarted = draft
         guard count < Self.maxUnstartedEnds else {
             print("[interviewer] dropped a \(draft.kind.rawValue) turn: it ended \(count) times before playback started")
             return
@@ -239,6 +246,7 @@ public actor InterviewerLoop {
         handCount += 1
         let hand = handCount
         playing = draft; started = false; playingHand = hand
+        lastUnstarted = nil
         guard !(await speak(draft)), playingHand == hand, playing != nil else { return }
         playing = nil
         requeue(draft)

@@ -226,11 +226,9 @@ private func disclosureText(_ kind: DisclosureKind) throws -> String {
     h.at(10); await h.loop.arc(.showDisclosureCard(.past), stage: .windDown)
     // The session pauses before playback starts: the turn ends unstarted and waits at the front,
     // not offered at once (the paused session would refuse it). Then the pause is reported.
-    h.refuses(true)
     await h.cutBeforeStart()
     await h.loop.voice(.paused)
     #expect(h.spoken.count == 1 && h.refused.isEmpty)
-    h.refuses(false)
     h.at(40); await h.loop.voice(.resumed)
     let past = try disclosureText(.past)
     #expect(h.spoken.map(\.text) == [past, past])
@@ -290,7 +288,7 @@ private func disclosureText(_ kind: DisclosureKind) throws -> String {
 @Test func anInterruptionBehavesLikeAPause() async throws {
     let h = Harness()
     h.at(10); await h.loop.arc(.showDisclosureCard(.present), stage: .windDown)
-    h.refuses(true)
+    h.refuses(true)   // an offer during the interruption would be refused and show up in `refused`
     await h.cutBeforeStart()
     await h.loop.voice(.interrupted)
     h.at(12); await h.loop.voice(.userPaused(afterMs: 12_000))
@@ -326,6 +324,19 @@ private func disclosureText(_ kind: DisclosureKind) throws -> String {
     let past = try disclosureText(.past)
     #expect(h.spoken.map(\.text) == [past, past, past, FixedTurns.earlyWindDown],
             "after the third unstarted end the draft is dropped and the turn behind it goes next")
+}
+
+@Test func pausesDoNotCountTowardTheDrop() async throws {
+    let h = Harness()
+    h.at(10); await h.loop.arc(.showDisclosureCard(.past), stage: .windDown)
+    for attempt in 1...3 {
+        // The person pauses before the audio starts: the session ends the turn, then reports the pause.
+        await h.cutBeforeStart()
+        await h.loop.voice(.paused)
+        h.at(10 + Double(attempt) * 10); await h.loop.voice(.resumed)
+    }
+    let past = try disclosureText(.past)
+    #expect(h.spoken.map(\.text) == [past, past, past, past], "three pause cuts are not voice failures")
 }
 
 @Test func aDroppedOpeningDoesNotBlockTheDisclosure() async throws {

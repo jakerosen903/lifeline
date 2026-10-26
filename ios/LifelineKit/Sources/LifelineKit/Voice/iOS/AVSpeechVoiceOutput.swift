@@ -10,7 +10,8 @@ import Synchronization
 /// cannot end a newer turn. `stop` cuts the playback that is current when it runs. The session ends
 /// its turn before it calls `stop` and plays the next turn after `stop` returns; only a `say` that
 /// races an `interrupt()` in the hop into `stop` could have its new turn cut.
-/// `.started` comes when the first buffer is handed to the player. A turn that renders no audio, or
+/// `.started` comes when the source accepts the first buffer for the player; a refused first
+/// buffer ends the stream with no events. A turn that renders no audio, or
 /// whose synthesizer goes silent, finishes with no events: the session then treats it as unheard.
 ///
 /// Threads: buffer callbacks run on the synthesizer's thread, completions on the source's; both
@@ -116,28 +117,26 @@ public final class AVSpeechVoiceOutput: VoiceOutput, @unchecked Sendable {
             guard let converted = convert(pcm, with: &playback.converter) else { return }
             playback.outstanding += 1
             // Under the lock, so a stop that comes later is ordered after this buffer on the source.
-            source.schedule(converted) { [weak self] played in self?.played(played, token: token) }
-            if !playback.started {
-                playback.started = true
-                playback.continuation.yield(.started)
-            }
+            source.schedule(converted,
+                            accepted: { [weak self] accepted in self?.accepted(accepted, token: token) },
+                            played: { [weak self] in self?.played(token: token) })
         }
     }
 
-    /// A buffer played (true), or the source refused it (false: paused, interrupted, stopped).
-    private func played(_ played: Bool, token: Int) {
+    /// The source took a buffer for the player (true), or refused it (false: paused, interrupted,
+    /// stopped). The first accepted buffer starts the turn. A refusal ends it: with no events if
+    /// nothing was accepted yet, so the session knows the turn was not heard.
+    private func accepted(_ accepted: Bool, token: Int) {
         let refused = state.withLock { state -> AVSpeechSynthesizer? in
             guard var playback = state.current, playback.token == token else { return nil }
-            guard played else {
+            guard accepted else {
                 state.current = nil
                 end(playback, completed: false)
                 return playback.synthesizer
             }
-            playback.outstanding -= 1
-            if playback.renderingDone, playback.outstanding == 0 {
-                state.current = nil
-                end(playback, completed: true)
-            } else {
+            if !playback.started {
+                playback.started = true
+                playback.continuation.yield(.started)
                 state.current = playback
             }
             return nil
@@ -145,13 +144,27 @@ public final class AVSpeechVoiceOutput: VoiceOutput, @unchecked Sendable {
         refused?.stopSpeaking(at: .immediate)
     }
 
+    /// An accepted buffer played, or was cut by a player stop.
+    private func played(token: Int) {
+        state.withLock { state in
+            guard var playback = state.current, playback.token == token else { return }
+            playback.outstanding -= 1
+            if playback.renderingDone, playback.outstanding == 0 {
+                state.current = nil
+                end(playback, completed: true)
+            } else {
+                state.current = playback
+            }
+        }
+    }
+
     /// Ends a turn whose synthesizer stopped calling back without its last buffer, or never began.
     private func watchdog(_ token: Int) -> Task<Void, Never> {
         Task { [weak self] in
             while !Task.isCancelled {
                 try? await Task.sleep(for: .milliseconds(500))
-                guard let self, self.endIfStalled(token) else { continue }
-                return
+                guard let self else { return }
+                if self.endIfStalled(token) { return }
             }
         }
     }
