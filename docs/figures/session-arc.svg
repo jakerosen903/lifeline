@@ -1,23 +1,2 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 170" role="img" aria-label="Session arc over 60 minutes: open for the first few minutes, middle until about minute 45, wind-down for the last 10 minutes; an early wind-down can start at any time on a signal.">
-<g font-size="12" fill="#332A23" fill-opacity=".7">
-<text x="40" y="150" text-anchor="middle">0</text>
-<text x="190" y="150" text-anchor="middle">15</text>
-<text x="340" y="150" text-anchor="middle">30</text>
-<text x="490" y="150" text-anchor="middle">45</text>
-<text x="620" y="150" text-anchor="middle">60 min</text>
-</g>
-<rect x="40" y="50" width="50" height="34" rx="6" fill="#5F7046" fill-opacity=".25"/>
-<rect x="90" y="50" width="420" height="34" rx="6" fill="#5F7046" fill-opacity=".5"/>
-<rect x="510" y="50" width="110" height="34" rx="6" fill="#C8893F"/>
-<g font-size="12" font-weight="600" fill="#332A23">
-<text x="65" y="72" text-anchor="middle">Open</text>
-<text x="300" y="72" text-anchor="middle">Middle · reflections, follow-ups, at most one door</text>
-</g>
-<text x="565" y="72" text-anchor="middle" font-size="12" font-weight="600" fill="#332A23">Wind-down</text>
-<path d="M260 110 L260 88" stroke="#C8893F" stroke-width="2" stroke-dasharray="3 3"/>
-<rect x="260" y="92" width="110" height="0"/>
-<text x="260" y="126" font-size="11" fill="#8A5A1E">early wind-down on a signal</text>
-<text x="260" y="140" font-size="11" fill="#332A23" fill-opacity=".7">(asks to stop · long silence after a heavy topic · crying)</text>
-<text x="40" y="36" font-size="11" fill="#332A23" fill-opacity=".7">No new doors after a heavy moment. The last 10 minutes: summary in their words, keep / private / let go, one light question.</text>
-</svg>
+<svg width="720" height="240" xmlns="http://www.w3.org/2000/svg" font-family="Inter, system-ui, sans-serif" viewBox="0 0 720 240" role="img" aria-label="Two session shapes. Quick story: one prompt, no clock on screen, ends when you are done, then the landing. Settle in: listening with a next question after 6 seconds of quiet; at 30 minutes a wrap-up offer with Keep going, repeated every 10 minutes; the 3-hour recording limit lands it. Any time, Let us leave it there or a stop or disclosure signal opens the landing."><defs><marker id="aa" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="#332A23"/></marker></defs><text x="20" y="58" font-size="12" font-weight="600" fill="#332A23">Quick story</text><rect x="140" y="40" width="250" height="30" rx="6" fill="#5F7046" fill-opacity=".5"/><text x="265" y="60" text-anchor="middle" font-size="11" font-weight="600" fill="#332A23">one prompt · no clock on screen</text><rect x="420" y="40" width="96" height="30" rx="6" fill="#5F7046"/><text x="468" y="60" text-anchor="middle" font-size="11" font-weight="600" fill="#FFFFFF">Landing</text><line x1="390" y1="55" x2="418" y2="55" stroke="#332A23" stroke-width="1.4" marker-end="url(#aa)"/><text x="265" y="88" text-anchor="middle" font-size="10" fill="#332A23" fill-opacity=".72">ends when you are done</text><text x="20" y="146" font-size="12" font-weight="600" fill="#332A23">Settle in</text><rect x="140" y="128" width="280" height="30" rx="6" fill="#5F7046" fill-opacity=".5"/><text x="280" y="148" text-anchor="middle" font-size="11" font-weight="600" fill="#332A23">next question after 6 s of quiet</text><rect x="420" y="128" width="170" height="30" rx="6" fill="#C8893F" fill-opacity=".35"/><text x="505" y="148" text-anchor="middle" font-size="11" font-weight="600" fill="#332A23">wrap-up · Keep going</text><rect x="612" y="128" width="96" height="30" rx="6" fill="#5F7046"/><text x="660" y="148" text-anchor="middle" font-size="11" font-weight="600" fill="#FFFFFF">Landing</text><line x1="590" y1="143" x2="610" y2="143" stroke="#332A23" stroke-width="1.4" marker-end="url(#aa)"/><line x1="420" y1="160" x2="420" y2="168" stroke="#332A23" stroke-opacity=".6"/><text x="420" y="180" text-anchor="middle" font-size="10" fill="#332A23" fill-opacity=".72">30 min</text><line x1="475" y1="160" x2="475" y2="168" stroke="#332A23" stroke-opacity=".6"/><text x="475" y="180" text-anchor="middle" font-size="10" fill="#332A23" fill-opacity=".72">+10</text><line x1="530" y1="160" x2="530" y2="168" stroke="#332A23" stroke-opacity=".6"/><text x="530" y="180" text-anchor="middle" font-size="10" fill="#332A23" fill-opacity=".72">+10</text><text x="590" y="180" text-anchor="middle" font-size="10" fill="#332A23" fill-opacity=".72">3 h limit</text><line x1="20" y1="206" x2="700" y2="206" stroke="#C8893F" stroke-width="1.5" stroke-dasharray="4 4"/><text x="20" y="226" font-size="11" fill="#8A5A1E">Any time: “Let’s leave it there”, or a stop or disclosure signal, opens the landing. Nothing organizational is asked in a heavy moment.</text></svg>
