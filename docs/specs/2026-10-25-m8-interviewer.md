@@ -39,7 +39,7 @@ Every spoken turn is one of these kinds. Only two kinds come from the model.
 | --- | --- | --- | --- |
 | Opening | Fixed: `OpeningChooser` (M3, M7) | Once, when capture is running | Both |
 | Reflection | Model | After a closed segment, see Turn policy | Settling in |
-| Follow-up question | Model, or the next question from `OpeningChooser` when the model returns none | After the quiet, see Turn policy | Settling in |
+| Follow-up question | Model, in place of a reflection ("What was that like?"), never two turns after a question | After a closed segment, see Turn policy | Settling in |
 | Wrap-up offer | Fixed: "We can leave it here, or carry on." **(my call: wording; it must not contain a phrase the voice matcher hears)** | `ArcEffect.offerWrapUp` with the reason `plannedLength` or the grace | Settling in |
 | Early wind-down | Fixed: "We can leave this here and come back whenever you want." (PRINCIPLES, arc table) | `ArcEffect.offerWrapUp` with the reason `wantsToStop`, or after the disclosure text | Both |
 | Disclosure | Fixed: `FixedResponses` text, exactly as the card shows it | `ArcEffect.showDisclosureCard` | Both |
@@ -64,17 +64,17 @@ Rules, in precedence order:
 1. While the person is speaking (a `speechStarted` without a closed segment after it, or a partial in the last 1 s), the decision is `stayQuiet`.
 2. A disclosure or a heavy moment ends all model turns for the rest of the session. Only fixed turns are spoken after that.
 3. The quiet flag ends all turns except the disclosure text and the early wind-down line.
-4. **The gate.** A turn about segment N is spoken only when segment N's safety check has returned clean. A clean check is a returned result with no flag set; a failed check is not clean. The source of that check and whether the gate also holds back bank questions are owner's call A.
+4. **The gate.** Every spoken turn after the opening waits for a clean safety check of the latest closed segment, bank questions included (owner's decision B). The check is part of the interviewer's own call (owner's decision A): `disclosure: none | past | present` and `wants_to_stop`. A turn is spoken only if that check is clean and the extractor's flags for the segment, when they have arrived, are clean too. A failed or missing check is not clean. The extractor stays the only input to the arc: an interviewer check that is not clean silences the turn but does not wind the session down.
 5. A model turn is dropped if new speech started after it was requested.
 6. Never two interviewer turns without a closed segment between them, except a fixed turn that follows a disclosure.
 7. After a question, the next two interviewer turns must not be questions.
 8. A reflection is offered `replyGrace` (1.5 s) after a segment closes **(PRINCIPLES: 1 to 2 s)**. The model may answer "none"; most closed segments should get silence.
-9. The follow-up question is offered at `nextPromptAfterQuiet` (6 s, today's value) after the last closed segment, in settling in only, as today's on-screen next question is. The owner's draft cites 8 s; the code says 6 s. Whether it is spoken is owner's call C.
+9. The next question after `nextPromptAfterQuiet` (6 s) stays on screen only, as today (owner's decision C). It is never spoken: PRINCIPLES says the interviewer never fills a pause with a question, and without an end-of-thought check a 6 s quiet cannot be told from a person thinking. The spoken interviewer is the opening, reflections, and the fixed lines.
 10. In `windDown`, only the wrap-up offer and fixed turns are spoken.
 
 ## The model turn
 
-- One Messages API call per candidate turn, from the phone, through the extractor's client and key. Structured output: `{ kind: "reflection" | "question" | "none", text: string?, asked_about_app: bool }`.
+- One Messages API call per candidate turn, from the phone, through the extractor's client and key. Structured output: `{ kind: "reflection" | "question" | "none", text: string?, asked_about_app: bool, disclosure: "none" | "past" | "present", wants_to_stop: bool }`.
 - Context: this session's closed segments, newest first, within a 1500-token budget (characters ÷ 4, as the packet does); the opening prompt; the stage; the last three interviewer turns. Nothing from earlier sessions. A segment whose words belong to a memory the person excluded from AI is left out of the context.
 - Prompt `Prompts/interviewer.v1.md` **(owner's draft)**, with the rules: reflect more than ask; one short turn; quote the person's words; ask for one scene, not a fact ("What was that like?" is the default follow-up); never evaluate; never answer a question about the person's life; return `none` when unsure.
 - Checks on the client before a turn is spoken. A turn that fails one is dropped, never repaired **(my call: truncating can change the meaning)**:
@@ -132,7 +132,7 @@ The core of M8 (voice, turn policy, echo handling, safety, quiet) does not depen
 Four PRs, each usable on the phone. The app can be interrupted from the first PR that speaks.
 
 1. **PR 1 — The interviewer's turns, silent.** `TurnPolicy`, `interviewer_turn` and its migration, the removal of the app's words from segments (against scripted turns), turns shown on the Listen view as text. No audio out.
-2. **PR 2 — Fixed turns are spoken.** `TTS`, `AVSpeechTTS`, the player node, echo cancellation, barge-in, the quiet controls, "Lifeline speaks". Spoken: opening, wrap-up, disclosure, early wind-down, and the bank question if owner's call B allows it. No model.
+2. **PR 2 — Fixed turns are spoken.** `TTS`, `AVSpeechTTS`, the player node, echo cancellation, barge-in, the quiet controls, "Lifeline speaks". Spoken: opening, wrap-up, disclosure, early wind-down. No model, so no gate yet: these lines open the session or follow the arc.
 3. **PR 3 — Reflections and follow-ups.** The interviewer prompt, the model turn, the client checks, the flags gate, "About the app".
 4. **PR 4 — Device run and acknowledgements.** The checklist below; numbers redlined into `ArcConfig`; acknowledgements only if the owner wants them.
 
@@ -150,7 +150,7 @@ Four PRs, each usable on the phone. The app can be interrupted from the first PR
 
 ## Tests the plan must carry
 
-- Kit, `TurnPolicy`: quiet while speaking; no two turns without a closed segment; no question after a question for two turns; no model turn after a heavy flag; no model turn before flags, and none after `flagsWait`; quick story speaks only the opening, the disclosure text and the early wind-down line; a segment emptied by Goal 3 triggers nothing; the arc's reason picks the wrap-up or the early wind-down line; quiet flag; windDown speaks only fixed turns.
+- Kit, `TurnPolicy`: quiet while speaking; no two turns without a closed segment; no question after a question for two turns; no turn after a heavy flag from either check; no turn before the interviewer's check returns; a failed check is silent; an unclean interviewer check silences the turn and does not move the arc; the 6 s next question is never spoken; quick story speaks only the opening, the disclosure text and the early wind-down line; a segment emptied by Goal 3 triggers nothing; the arc's reason picks the wrap-up or the early wind-down line; quiet flag; windDown speaks only fixed turns.
 - Kit, segments: a run matching a turn's text inside its window is removed; a non-matching run inside the window stays; a matching run outside the window stays.
 - Kit, model turn: each client check drops its case; `none` speaks nothing; a refused call is silent; the packet holds this session only and leaves out words of a memory excluded from AI.
 - Kit, fixed text: the spoken disclosure string equals the card's string; "About the app" is never model text.
@@ -162,7 +162,7 @@ Four PRs, each usable on the phone. The app can be interrupted from the first PR
 
 1. Settle in. The opening is spoken within about 1 s of capture starting.
 2. Tell a short story and stop. A short reflection or silence follows; never a question straight away.
-3. Say nothing for 10 s. One question arrives at about 6 s; no more until you speak.
+3. Say nothing for 10 s. The next question appears on screen at about 6 s and is not spoken.
 4. Speak while the app is speaking. It stops at once.
 5. Say "shh". It stays quiet until you tap "Ask me again".
 6. Open Transcript & memories. The app's turns are marked as Lifeline's; no memory card quotes the app.
@@ -180,9 +180,13 @@ Four PRs, each usable on the phone. The app can be interrupted from the first PR
 
 ## Owner's calls
 
-A. **Where the safety check comes from.** The extractor's flags arrive too late to gate a reply: the segment closes after the 1.8 s pause plus up to 2 s of finalizing, the extractor call is `claude-opus-5-5` with the full packet, and the queue runs one segment at a time. A 4 s wait would drop almost every reflection. Options: (1) the interviewer call returns its own check (`disclosure: none | past | present`, `wants_to_stop`), and a turn is spoken only if that check is clean and the extractor's, when it has arrived, is clean too; the extractor stays the only input to the arc (recommended); (2) a separate small check per segment before any turn; (3) gate on the extractor and accept a mostly silent interviewer.
-B. **Does the gate hold back the bank question too?** Today the next question is text on screen. Spoken, after a disclosure whose flag is still in flight, it would be a cheerful scene prompt said aloud. Recommended: yes, every spoken turn after the opening waits for a clean check of the latest segment.
-C. **Is the 6 s next question spoken?** PRINCIPLES says the interviewer never fills a pause with a question, and an unfinished thought gets a capped wait and then only a soft acknowledgement. Without an end-of-thought check, a 6 s quiet cannot be told from a person thinking. Options: (1) keep it on screen only, so the spoken interviewer is the opening and reflections (recommended); (2) speak it only when no reflection followed the last segment; (3) speak it as the owner's draft says.
+Decided 2026-10-25:
+
+A. The safety check comes from the interviewer's own call. The extractor's flags also block a turn when they arrive first. Only the extractor moves the arc.
+B. The gate holds back every spoken turn after the opening, bank questions included.
+C. The 6 s next question stays on screen only.
+
+Still open:
 
 1. **About the app.** Approve or rewrite the fixed line, which must say that words go to Anthropic as text.
 2. **Echo cancellation.** Voice processing on capture changes how the recording sounds. Accept it, or allow speech only with headphones.
