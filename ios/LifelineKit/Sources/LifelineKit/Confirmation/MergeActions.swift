@@ -42,7 +42,7 @@ extension CandidateActions {
         for row in continuations { if let o = CandidatePayload.memory(row) { edges.merge(try self.edges(of: o, for: target, segment: row.segmentID)) } }
         // The owner named this moment before telling it; now they have told it.
         let promotion = targetMemory.isFloating ? (title: out.title, summaryQuote: out.quote) : nil
-        try store.memories.mergeSpan(span, continuations: try continuationSpans(of: out, for: target), people: edges.people, places: edges.places, links: edges.links,
+        try store.memories.mergeSpan(span, continuations: try continuationSpans(of: out, for: target), people: edges.people, places: edges.places, links: edges.links, entities: edges.entityWrite,
                                      anchors: edges.anchors, promotingStandIn: promotion, acceptingCandidate: candidate.id,
                                      acceptingContinuations: continuations.map(\.id))
         let newMentions = try finishEdges(edges, segment: candidate.segmentID)
@@ -94,7 +94,7 @@ extension CandidateActions {
         for row in continuations { if let o = CandidatePayload.memory(row) { edges.merge(try self.edges(of: o, for: oldest.id, segment: row.segmentID)) } }
         let promotion = oldest.isFloating && later.isEmpty ? (title: out.title, summaryQuote: out.quote) : nil
         try store.memories.mergeGroup(sources: later, into: oldest, span: span, continuations: try continuationSpans(of: out, for: oldest.id),
-                                      people: edges.people, places: edges.places, links: edges.links, anchors: edges.anchors,
+                                      people: edges.people, places: edges.places, links: edges.links, entities: edges.entityWrite, anchors: edges.anchors,
                                       promotingStandIn: promotion, acceptingCandidate: candidate.id, acceptingContinuations: continuations.map(\.id))
         let newMentions = try finishEdges(edges, segment: candidate.segmentID)
         try reindex(oldest.id)

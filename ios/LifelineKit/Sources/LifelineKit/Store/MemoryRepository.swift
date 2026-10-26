@@ -17,16 +17,18 @@ public struct MemoryRepository: Sendable {
     /// continuations are marked with it, and the memory joins its story, in that same
     /// transaction (M5): a kill never leaves a kept memory with its continuation cards still
     /// pending or its "Part of" line lost.
-    public func insert(_ memory: Memory, spans: [MemorySpan], people: [MemoryPerson], places: [MemoryPlace], links: [MomentEntity] = [], anchors: [Anchor],
+    public func insert(_ memory: Memory, spans: [MemorySpan], people: [MemoryPerson], places: [MemoryPlace], links: [MomentEntity] = [], entities: EntityRepository.Write = .init(), anchors: [Anchor],
                        acceptingCandidate candidate: CandidateID? = nil, acceptingContinuations continuations: [CandidateID] = [],
                        joiningStory story: (id: StoryID, chapterID: ChapterID?)? = nil) throws {
         guard !spans.isEmpty else { throw Error.noSpan }
         try db.writer.write { db in
             try memory.insert(db)
             for span in spans { try span.insert(db) }
+            try EntityRepository.apply(entities, in: db)
             for person in people { try person.link.insertIgnoringDuplicate(db) }
             for place in places { try place.link.insertIgnoringDuplicate(db) }
             for link in links { try link.insertIgnoringDuplicate(db) }
+            try EntityRepository.giveFirstTelling(toEntitiesOf: memory.id, span: spans[0], in: db)
             for anchor in anchors { try anchor.insert(db) }
             if let candidate {
                 try db.execute(sql: "update candidate set status = ? where id = ?", arguments: [CandidateStatus.accepted.rawValue, candidate.rawValue])
@@ -259,16 +261,16 @@ public struct MemoryRepository: Sendable {
     /// `promotingStandIn` carries the card's title, quote and candidate when the target is a
     /// resolver stand-in: its borrowed span goes, this telling becomes order 0 and the memory
     /// becomes real. A failure anywhere leaves the card pending and the target untouched.
-    public func mergeSpan(_ span: MemorySpan, continuations: [MemorySpan] = [], people: [MemoryPerson], places: [MemoryPlace], links: [MomentEntity] = [], anchors: [Anchor],
+    public func mergeSpan(_ span: MemorySpan, continuations: [MemorySpan] = [], people: [MemoryPerson], places: [MemoryPlace], links: [MomentEntity] = [], entities: EntityRepository.Write = .init(), anchors: [Anchor],
                           promotingStandIn: (title: String, summaryQuote: String)?, acceptingCandidate candidate: CandidateID,
                           acceptingContinuations continuationCards: [CandidateID] = []) throws {
         try db.writer.write { db in
-            try Self.mergeSpan(span, continuations: continuations, people: people, places: places, links: links, anchors: anchors,
+            try Self.mergeSpan(span, continuations: continuations, people: people, places: places, links: links, entities: entities, anchors: anchors,
                                promotingStandIn: promotingStandIn, acceptingCandidate: candidate, acceptingContinuations: continuationCards, in: db)
         }
     }
 
-    static func mergeSpan(_ span: MemorySpan, continuations: [MemorySpan], people: [MemoryPerson], places: [MemoryPlace], links: [MomentEntity] = [], anchors: [Anchor],
+    static func mergeSpan(_ span: MemorySpan, continuations: [MemorySpan], people: [MemoryPerson], places: [MemoryPlace], links: [MomentEntity] = [], entities: EntityRepository.Write = .init(), anchors: [Anchor],
                           promotingStandIn: (title: String, summaryQuote: String)?, acceptingCandidate candidate: CandidateID,
                           acceptingContinuations continuationCards: [CandidateID] = [], in db: Database) throws {
             var span = span
@@ -286,9 +288,11 @@ public struct MemoryRepository: Sendable {
                 extra.continuesOrder = span.order
                 try extra.insert(db)
             }
+            try EntityRepository.apply(entities, in: db)
             for person in people { try person.link.insertIgnoringDuplicate(db) }
             for place in places { try place.link.insertIgnoringDuplicate(db) }
             for link in links { try link.insertIgnoringDuplicate(db) }
+            try EntityRepository.giveFirstTelling(toEntitiesOf: span.memoryID, span: span, in: db)
             for anchor in anchors { try anchor.insert(db) }
             try db.execute(sql: "update candidate set status = ? where id = ?", arguments: [CandidateStatus.accepted.rawValue, candidate.rawValue])
             try Self.accept(continuationCards, in: db)
@@ -297,7 +301,7 @@ public struct MemoryRepository: Sendable {
     /// A group (M5): every source folds into the target, oldest first as given, then the card
     /// joins as the last telling. One transaction: a failure anywhere leaves every memory as it was.
     public func mergeGroup(sources: [Memory], into target: Memory, span: MemorySpan, continuations: [MemorySpan], people: [MemoryPerson],
-                           places: [MemoryPlace], links: [MomentEntity] = [], anchors: [Anchor], promotingStandIn: (title: String, summaryQuote: String)?,
+                           places: [MemoryPlace], links: [MomentEntity] = [], entities: EntityRepository.Write = .init(), anchors: [Anchor], promotingStandIn: (title: String, summaryQuote: String)?,
                            acceptingCandidate candidate: CandidateID, acceptingContinuations continuationCards: [CandidateID] = []) throws {
         try db.writer.write { db in
             for source in sources {
@@ -306,7 +310,7 @@ public struct MemoryRepository: Sendable {
             }
             var last = span
             last.order = (try Int.fetchOne(db, sql: "select max(\"order\") from memory_span where memory_id = ?", arguments: [target.id.rawValue]) ?? -1) + 1
-            try Self.mergeSpan(last, continuations: continuations, people: people, places: places, links: links, anchors: anchors,
+            try Self.mergeSpan(last, continuations: continuations, people: people, places: places, links: links, entities: entities, anchors: anchors,
                                promotingStandIn: promotingStandIn, acceptingCandidate: candidate, acceptingContinuations: continuationCards, in: db)
         }
     }
@@ -504,8 +508,34 @@ public struct MemoryRepository: Sendable {
         try (includingHidden ? allMemories() : visibleMemories()).filter { !$0.isMoment && !$0.isFloating }
     }
 
+    /// The kind, and the chapter's derived range with it, in one write: a fact leaves the range,
+    /// a moment joins it, and a kill between the two can never leave the chapter stale (M7).
     public func setKind(_ id: MemoryID, _ kind: MemoryKind) throws {
-        try db.writer.write { try $0.execute(sql: "update memory set kind = ? where id = ?", arguments: [kind.rawValue, id.rawValue]) }
+        try db.writer.write { db in
+            try db.execute(sql: "update memory set kind = ? where id = ?", arguments: [kind.rawValue, id.rawValue])
+            try Self.refreshChapterRange(ofMemory: id, in: db)
+            if kind.isMoment {
+                // A moment names what it was about; it is no longer a standing statement (M7).
+                try db.execute(sql: """
+                    insert or ignore into moment_entity (memory_id, entity_id, relation, role_text)
+                    select memory_id, entity_id, 'mention', role_text from moment_entity where memory_id = ? and relation = 'detail'
+                    """, arguments: [id.rawValue])
+                try db.execute(sql: "delete from moment_entity where memory_id = ? and relation = 'detail'", arguments: [id.rawValue])
+            } else {
+                // Stories are for scenes.
+                try db.execute(sql: "delete from story_moment where memory_id = ?", arguments: [id.rawValue])
+                try db.execute(sql: Self.deleteEmptyStoriesSQL)
+            }
+        }
+    }
+
+    /// Recomputes the range of the chapter a memory sits in from its placed moments.
+    static func refreshChapterRange(ofMemory id: MemoryID, in db: Database) throws {
+        guard let chapterID = try String.fetchOne(db, sql: "select chapter_id from memory where id = ?", arguments: [id.rawValue]),
+              var chapter = try Chapter.fetchOne(db, key: chapterID) else { return }
+        let members = try Memory.filter(Column("chapter_id") == chapterID).fetchAll(db).filter(\.isMoment)
+        chapter.range = ChapterRepository.span(over: members.map(\.range))
+        try chapter.update(db)
     }
 
     /// Memories with no range at all.

@@ -12,12 +12,16 @@ public struct DomainTagRepository: Sendable {
     public func tag(_ kind: ElementKind, _ id: String, _ text: String) throws {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
-        try db.writer.write { db in
-            let exists = try Int.fetchOne(db, sql: "select count(*) from domain_tag where element_kind = ? and element_id = ? and lower(text) = ?",
-                                          arguments: [kind.rawValue, id, PeopleRepository.normalize(trimmed)]) ?? 0
-            guard exists == 0 else { return }
-            try db.execute(sql: "insert into domain_tag (element_kind, element_id, text) values (?, ?, ?)", arguments: [kind.rawValue, id, trimmed])
-        }
+        try db.writer.write { try Self.tag(kind, id, trimmed, in: $0) }
+    }
+
+    static func tag(_ kind: ElementKind, _ id: String, _ text: String, in db: Database) throws {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        let exists = try Int.fetchOne(db, sql: "select count(*) from domain_tag where element_kind = ? and element_id = ? and lower(text) = ?",
+                                      arguments: [kind.rawValue, id, PeopleRepository.normalize(trimmed)]) ?? 0
+        guard exists == 0 else { return }
+        try db.execute(sql: "insert into domain_tag (element_kind, element_id, text) values (?, ?, ?)", arguments: [kind.rawValue, id, trimmed])
     }
 
     public func untag(_ kind: ElementKind, _ id: String, _ text: String) throws {

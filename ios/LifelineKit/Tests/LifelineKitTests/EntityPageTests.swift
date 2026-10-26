@@ -9,7 +9,9 @@ private func range(_ a: Int, _ b: Int, _ origin: RangeOrigin) -> TimeRange {
 
 @Test func spanTextSaysWhatIsKnown() {
     #expect(EntityPage.spanText(.unplaced) == "no dates yet")
-    #expect(EntityPage.spanText(range(1993, 1998, .derived)) == "from 1993 to 1998")
+    #expect(EntityPage.spanText(range(1993, 1998, .stated)) == "from 1993 to 1998")
+    #expect(EntityPage.spanText(range(1993, 1998, .inferred)) == "between 1993 and 1998", "a guess never reads as fact")
+    #expect(EntityPage.spanText(range(1993, 1998, .derived)) == "between 1993 and 1998")
     #expect(EntityPage.spanText(range(1998, 1998, .inferred)) == "around 1998")
     #expect(EntityPage.spanText(range(1998, 1998, .stated)) == "in 1998")
 }

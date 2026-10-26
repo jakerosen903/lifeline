@@ -128,7 +128,7 @@ public struct CandidateActions: Sendable {
         for row in continuations { if let o = CandidatePayload.memory(row) { edges.merge(try self.edges(of: o, for: memory.id, segment: row.segmentID)) } }
         // The memory, its continuation cards' status and its story line land together (M5).
         let storyRef = joinStory ? out.storyRef.flatMap { $0.isEmpty ? nil : StoryID(rawValue: $0) } : nil
-        try store.memories.insert(memory, spans: spans, people: edges.people, places: edges.places, links: edges.links, anchors: edges.anchors,
+        try store.memories.insert(memory, spans: spans, people: edges.people, places: edges.places, links: edges.links, entities: edges.entityWrite, anchors: edges.anchors,
                                   acceptingCandidate: candidate.id, acceptingContinuations: continuations.map(\.id),
                                   joiningStory: storyRef.map { (id: $0, chapterID: memory.chapterID) })
         let newMentions = try finishEdges(edges, segment: candidate.segmentID)
@@ -148,15 +148,25 @@ public struct CandidateActions: Sendable {
         var anchors: [Anchor] = []
         /// Things and ideas named (mention) and what a fact, feeling or goal is about (detail) (M7).
         var links: [MomentEntity] = []
+        /// New entities and their tags, written in the memory's own transaction (M7).
+        var entityWrite = EntityRepository.Write()
 
         /// The union with another segment's edges, deduplicated as one segment's are.
         mutating func merge(_ other: Edges) {
+            // Two segments that both named a new "the house" plan one entity, not two.
+            let remap = entityWrite.merge(other.entityWrite)
             for person in other.people where !people.contains(where: { $0.personID == person.personID }) { people.append(person) }
             for name in other.unknown where !unknown.contains(where: { CandidateActions.same($0, name) }) { unknown.append(name) }
             roleAliases += other.roleAliases.filter { pair in !roleAliases.contains { $0.0 == pair.0 && $0.1 == pair.1 } }
-            for place in other.places where !places.contains(where: { $0.placeID == place.placeID }) { places.append(place) }
+            for var place in other.places {
+                if let mapped = remap[EntityID(rawValue: place.placeID.rawValue)] { place.placeID = PlaceID(rawValue: mapped.rawValue) }
+                if !places.contains(where: { $0.placeID == place.placeID }) { places.append(place) }
+            }
             anchors += other.anchors.filter { a in !anchors.contains { $0.phrase == a.phrase && $0.relation == a.relation } }
-            for link in other.links where !links.contains(where: { $0.entityID == link.entityID && $0.relation == link.relation }) { links.append(link) }
+            for var link in other.links {
+                link.entityID = remap[link.entityID] ?? link.entityID
+                if !links.contains(where: { $0.entityID == link.entityID && $0.relation == link.relation }) { links.append(link) }
+            }
         }
     }
 
@@ -191,7 +201,7 @@ public struct CandidateActions: Sendable {
         }
         // Places, things and ideas the card names (its chips) link on Keep without a card of their own (M7).
         for ref in out.allEntityRefs where ref.kind != .person {
-            let entity = try entity(for: ref)
+            let entity = try entity(for: ref, plan: &e.entityWrite)
             if ref.kind == .place {
                 if !e.places.contains(where: { $0.placeID.rawValue == entity.id.rawValue }) {
                     e.places.append(MemoryPlace(memoryID: memory, placeID: PlaceID(rawValue: entity.id.rawValue)))
@@ -201,7 +211,7 @@ public struct CandidateActions: Sendable {
             }
         }
         // A fact, feeling or goal is a detail of what it is about; a moment never is (M7).
-        if let kind = out.kind, !kind.isMoment, let about = try aboutEntity(out.aboutRef, segment: currentSegment) {
+        if let kind = out.kind, !kind.isMoment, let about = try aboutEntity(out.aboutRef, segment: currentSegment, plan: &e.entityWrite) {
             e.links.append(MomentEntity(memoryID: memory, entityID: about, relation: .detail))
         }
         e.anchors = out.anchors.map {
@@ -213,25 +223,36 @@ public struct CandidateActions: Sendable {
 
     /// The entity a ref names: the one the packet pointed at when it is that type, else one of the
     /// same type and title, else a new one.
-    private func entity(for ref: EntityRefOut) throws -> Entity {
+    private func entity(for ref: EntityRefOut, plan: inout EntityRepository.Write) throws -> Entity {
         if let id = ref.likelyEntityID, let known = try store.entities.entity(id: EntityID(rawValue: id)), known.type == ref.kind.entityType { return known }
-        return try store.entities.insert(type: ref.kind.entityType, title: ref.text)
+        return try planEntity(type: ref.kind.entityType, title: ref.text, candidate: nil, plan: &plan)
+    }
+
+    /// An entity of this type and title on file, already planned, or planned now. Nothing is written.
+    func planEntity(type: EntityType, title: String, candidate: CandidateID?, plan: inout EntityRepository.Write) throws -> Entity {
+        let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { throw EntityRepository.Error.emptyTitle }
+        if let known = try store.entities.find(type: type, title: trimmed) { return known }
+        if let planned = plan.planned(type, trimmed) { return planned }
+        let entity = Entity(type: type, title: trimmed, createdFromCandidateID: candidate)
+        plan.entities.append(entity)
+        return entity
     }
 
     /// `about_ref` resolved: `self` is the owner; an id on file is that entity; a mention's `ref`
     /// in the same segment becomes its entity. Nil when it names nothing the app can find.
-    private func aboutEntity(_ ref: String?, segment currentSegment: SegmentID?) throws -> EntityID? {
+    private func aboutEntity(_ ref: String?, segment currentSegment: SegmentID?, plan: inout EntityRepository.Write) throws -> EntityID? {
         guard let ref = ref?.trimmingCharacters(in: .whitespacesAndNewlines), !ref.isEmpty else { return nil }
         if ref == "self" { return try store.profile.owner()?.entityID }
         if let known = try store.entities.entity(id: EntityID(rawValue: ref)) { return known.id }
         guard let segment = currentSegment,
               let row = try store.candidates.candidates(for: segment).first(where: { ($0.kind == .entity || $0.kind == .place) && CandidatePayload.mention($0)?.ref == ref }),
               let mention = CandidatePayload.mention(row), mention.kind != .person else { return nil }
-        return try createEntity(from: mention, candidate: row).id
+        return try proposeEntity(from: mention, candidate: row, plan: &plan).id
     }
 
-    /// An entity from a mention: an idea's title is the person's words or the dated default.
-    func createEntity(from mention: MentionOut, candidate: Candidate, as type: EntityType? = nil) throws -> Entity {
+    /// An entity from a mention, planned: an idea's title is the person's words or the dated default.
+    func proposeEntity(from mention: MentionOut, candidate: Candidate, as type: EntityType? = nil, plan: inout EntityRepository.Write) throws -> Entity {
         let type = type ?? mention.kind.entityType
         if let id = mention.likelyEntityID, let known = try store.entities.entity(id: EntityID(rawValue: id)), known.type == type { return known }
         let title: String
@@ -242,8 +263,8 @@ public struct CandidateActions: Sendable {
         } else {
             title = mention.text
         }
-        let entity = try store.entities.insert(type: type, title: title, candidate: candidate.id)
-        if let hint = mention.domainHint { try store.tags.tag(.entity, entity.id.rawValue, hint) }
+        let entity = try planEntity(type: type, title: title, candidate: candidate.id, plan: &plan)
+        if let hint = mention.domainHint { plan.tags.append(.init(entityID: entity.id, text: hint)) }
         return entity
     }
 
@@ -419,18 +440,7 @@ public struct CandidateActions: Sendable {
     public func setKind(_ memory: MemoryID, _ kind: MemoryKind) throws {
         guard let current = try store.memories.fetch(memory) else { return }
         guard current.kind != kind else { return }
-        try store.memories.setKind(memory, kind)
-        if let chapter = current.chapterID { try chapterRangeFromMembers(chapter) }
-        if kind.isMoment {
-            // A moment names what it was about; it is no longer a standing statement (M7).
-            for link in try store.entities.links(of: memory).map(\.link) where link.relation == .detail {
-                try store.entities.unlink(memory, link.entityID, relation: .detail)
-                try store.entities.link(memory, link.entityID, relation: .mention)
-            }
-        } else {
-            // Stories are for scenes.
-            try store.stories.leave([memory], deletingStory: nil)
-        }
+        try store.memories.setKind(memory, kind)   // the chapter range, links and story move in the same write
         _ = try ResolverRunner(store: store).run()
     }
 

@@ -182,7 +182,7 @@ public actor ExtractionQueue {
                                           chapters: try store.chapters.chapters(), curiosity: try store.curiosity.open(),
                                           excludedMemoryIDs: try store.memories.excludedIDs(), related: related,
                                           pending: pending, stories: stories,
-                                          entities: try store.entities.allEntities().filter { $0.type != .person }.map { ($0, try store.entities.details(of: $0.id).first?.summaryQuote) })
+                                          entities: try Self.packetEntities(store))
     }
 
     private static func isNamed(_ entry: (Person, [Alias]), in text: String) -> Bool {
@@ -306,6 +306,16 @@ public actor ExtractionQueue {
     }
 
     /// Hint rows for a memory's collection and chapter phrases, waiting on the card `keyedTo`.
+    /// Places, things and ideas for the packet, each with one line of detail in the person's
+    /// words. A detail excluded from AI or hidden is never that line (M7); the entity's own
+    /// exclusion is applied by the builder.
+    static func packetEntities(_ store: ExtractionStore) throws -> [(Entity, String?)] {
+        let excluded = try store.memories.excludedIDs()
+        return try store.entities.allEntities().filter { $0.type != .person }.map { entity in
+            (entity, try store.entities.details(of: entity.id).first { !excluded.contains($0.id) && !$0.excludedFromAI && !$0.hiddenFromTimeline }?.summaryQuote)
+        }
+    }
+
     /// A memory in this output names the mention in its entity refs or is about it.
     static func carried(_ mention: MentionOut, by accepted: [OutputValidator.ValidatedCandidate]) -> Bool {
         accepted.contains { candidate in

@@ -75,11 +75,86 @@ public struct EntityRepository: Sendable {
         try db.writer.write { try $0.execute(sql: "update entity set excluded_from_ai = ? where id = ?", arguments: [excluded, id.rawValue]) }
     }
 
+    // MARK: - One write
+
+    /// Everything a Keep does to entities, worked out first and written in one transaction (M7):
+    /// new entities (and a new person's row), links, first tellings, tags, and the card's status.
+    /// A kill can never leave an entity without its link or a card pending behind its entity.
+    public struct Write: Sendable {
+        public var entities: [Entity] = []
+        public var persons: [Person] = []
+        public var links: [MomentEntity] = []
+        public var spans: [EntitySpan] = []
+        public var tags: [EntityTag] = []
+        public var acceptingCandidate: CandidateID?
+
+        public init() {}
+
+        /// A planned entity of this type and title, so one Keep never plans the same thing twice.
+        func planned(_ type: EntityType, _ title: String) -> Entity? {
+            entities.first { $0.type == type && PeopleRepository.normalize($0.title) == PeopleRepository.normalize(title) }
+        }
+
+        /// The union with another plan; an entity both planned keeps this plan's id.
+        mutating func merge(_ other: Write) -> [EntityID: EntityID] {
+            var remap: [EntityID: EntityID] = [:]
+            for entity in other.entities {
+                if let mine = planned(entity.type, entity.title) { remap[entity.id] = mine.id } else { entities.append(entity) }
+            }
+            persons += other.persons.filter { p in !persons.contains { $0.id == p.id } }
+            links += other.links.map { var l = $0; l.entityID = remap[l.entityID] ?? l.entityID; return l }
+            spans += other.spans.map { var s = $0; s.entityID = remap[s.entityID] ?? s.entityID; return s }
+            tags += other.tags.map { EntityTag(entityID: remap[$0.entityID] ?? $0.entityID, text: $0.text) }
+            return remap
+        }
+    }
+
+    public struct EntityTag: Sendable, Equatable {
+        public var entityID: EntityID
+        public var text: String
+        public init(entityID: EntityID, text: String) { self.entityID = entityID; self.text = text }
+    }
+
+    public func apply(_ write: Write) throws {
+        try db.writer.write { try Self.apply(write, in: $0) }
+    }
+
+    static func apply(_ write: Write, in db: Database) throws {
+        for entity in write.entities where try !Entity.exists(db, key: entity.id.rawValue) { try entity.insert(db) }
+        for person in write.persons where try !Person.exists(db, key: person.id.rawValue) {
+            try person.insert(db)
+            try PeopleRepository.insertAlias(person.displayName, person.id, db)
+        }
+        for link in write.links { try link.insertIgnoringDuplicate(db) }
+        for span in write.spans { try span.insertIgnoringDuplicate(db) }
+        for tag in write.tags { try DomainTagRepository.tag(.entity, tag.entityID.rawValue, tag.text, in: db) }
+        if let candidate = write.acceptingCandidate {
+            try db.execute(sql: "update candidate set status = ? where id = ?", arguments: [CandidateStatus.accepted.rawValue, candidate.rawValue])
+        }
+    }
+
+    /// Every entity linked to a memory that has no first telling yet takes this span, in the
+    /// caller's transaction (Principle 9: a page can always play its first telling).
+    static func giveFirstTelling(toEntitiesOf memory: MemoryID, span: MemorySpan, in db: Database) throws {
+        try db.execute(sql: """
+            insert or ignore into entity_span (entity_id, segment_id, start_ms, end_ms, "order")
+            select entity_id, ?, ?, ?, 0 from moment_entity where memory_id = ?
+            """, arguments: [span.segmentID.rawValue, span.startMs, span.endMs, memory.rawValue])
+    }
+
     // MARK: - Links
 
     /// One link per memory, entity and relation; a second is a no-op that keeps the first role text.
     public func link(_ memory: MemoryID, _ entity: EntityID, relation: EntityRelation, roleText: String? = nil) throws {
         try db.writer.write { try MomentEntity(memoryID: memory, entityID: entity, relation: relation, roleText: roleText).insertIgnoringDuplicate($0) }
+    }
+
+    /// A detail leaves every entity it was on and lands on `entity` (nil: none), in one write.
+    public func moveDetail(_ memory: MemoryID, to entity: EntityID?) throws {
+        try db.writer.write { db in
+            try db.execute(sql: "delete from moment_entity where memory_id = ? and relation = 'detail'", arguments: [memory.rawValue])
+            if let entity { try MomentEntity(memoryID: memory, entityID: entity, relation: .detail).insertIgnoringDuplicate(db) }
+        }
     }
 
     public func unlink(_ memory: MemoryID, _ entity: EntityID, relation: EntityRelation) throws {

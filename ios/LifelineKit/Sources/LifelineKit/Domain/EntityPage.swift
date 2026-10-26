@@ -2,13 +2,15 @@ import Foundation
 
 /// What an entity page says about time and order (M7). Pure.
 public enum EntityPage {
-    /// "from 1993 to 1998", "around 1998" (a guess), "in 1998" (said), or "no dates yet".
+    /// Said: "in 1998" or "from 1993 to 1998". A guess: "around 1998" or "between 1993 and 1998"
+    /// (Principle 5: a guess never reads as fact). Nothing placed: "no dates yet".
     public static func spanText(_ range: TimeRange) -> String {
         guard range.isPlaced, let first = (range.likelyStart ?? range.earliest)?.year, let last = (range.likelyEnd ?? range.latest)?.year else {
             return "no dates yet"
         }
-        if first == last { return range.origin == .stated || range.origin == .confirmed ? "in \(first)" : "around \(first)" }
-        return "from \(first) to \(last)"
+        let said = range.origin == .stated || range.origin == .confirmed
+        if first == last { return said ? "in \(first)" : "around \(first)" }
+        return said ? "from \(first) to \(last)" : "between \(first) and \(last)"
     }
 
     /// An idea's page reads top to bottom (Goal 4): everything linked, details and moments, by

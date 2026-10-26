@@ -154,7 +154,7 @@ public struct PeopleRepository: Sendable {
         Place(try EntityRepository(db).insert(type: .place, title: nameText))
     }
 
-    private static func insertAlias(_ text: String, _ person: PersonID, _ db: Database) throws {
+    static func insertAlias(_ text: String, _ person: PersonID, _ db: Database) throws {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
         let exists = try Alias.fetchOne(db, sql: "select * from alias where person_id = ? and lower(trim(text)) = ?",
