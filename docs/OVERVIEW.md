@@ -6,7 +6,9 @@
 
 You tell a story, a few minutes at a time. It is saved in your own voice the moment you speak, sorted while you get on with your day, and over weeks it grows into a timeline you can play back: chapters, stories, moments.
 
-Status: V1 built (M1 to M6), in daily use on the owner’s iPhone · Updated October 25, 2026
+Status: V1 built (M1 to M6), in daily use on Jake’s iPhone · Updated October 26, 2026
+
+**How to read this.** The first half (what we are building, what we are learning, and the glossary) is the product: about 10 minutes. The second half, “How it works under the hood”, is the engineering view and is optional.
 
 ## What we are building
 
@@ -24,7 +26,7 @@ The shape changed on the way. The first design imagined 30 to 60 minute oral-his
 
 ![roadmap](figures/roadmap.svg)
 
-*Where the project stands. The top row is built and in use; the bottom row is designed and waiting. Privacy controls beyond hide, exclude and delete wait until someone other than the owner uses the app.*
+*Where the project stands. The top row is built and in use; the bottom row is designed and waiting. Privacy controls beyond hide, exclude and delete were deferred while Jake was the only user; see the open questions.*
 
 | Milestone | What it added |
 | --- | --- |
@@ -52,7 +54,7 @@ The design is grounded in four fields that have worked on the same problem for d
 
 ### What real use taught us
 
-The owner has used each milestone on their own phone. Most changes since the first design came from that, or from the review.
+Jake has used each milestone on his own phone. Most changes since the first design came from that, or from the review.
 
 | What happened | What changed | Where |
 | --- | --- | --- |
@@ -98,11 +100,30 @@ A quick story is one prompt and ends when the person is done. Settling in is a c
 
 *The two session shapes. Nobody is stopped for talking longer than planned; the only automatic landing is the 3-hour recording limit.*
 
+### Words we use
+
+These words have specific meanings in the app, the designs and the code.
+
+| Word | What it means |
+| --- | --- |
+| Session | One recording: when you spoke. Not part of the story structure. |
+| Quick story / Settle in | The two ways in. One prompt, done when you are; or a conversation where the next question comes when it goes quiet. |
+| Memory (moment) | One scene the person kept. The code says memory; the designs often say moment. |
+| Telling | One time a memory was told, with its own audio. The same memory told on two days is one memory with two tellings. |
+| Story | Related memories grouped together, often told across several sessions. |
+| Chapter | A wider stretch of life, titled in the person’s own words (“The Boston years”). |
+| Collection | A theme that crosses chapters (“Family trips”). |
+| Card | A suggestion from the app: a possible memory, “Who’s this?”, “Same as X?”, “Are these the same?”. Nothing changes until the person taps. |
+| Sorting | The background work that turns a recording into cards. It never blocks finishing. |
+| Check this | The label on any guessed detail (a year, a person) until the person settles it. |
+| Shelf | Where a memory with no date and no collection waits. It counts just as much as a dated one. |
+| Stated date | A date the person gave with “Tell me when”, shown exactly as said. The app never invents one. |
+
 ---
 
 ## How it works under the hood
 
-This section follows Simplified Technical English (ASD-STE100): short sentences, one instruction per sentence, active voice, and “must” for requirements. It describes V1 as built.
+Optional for product readers. This section follows Simplified Technical English (ASD-STE100): short sentences, one instruction per sentence, active voice, and “must” for requirements. It describes V1 as built.
 
 ### 1. System overview
 
@@ -207,13 +228,13 @@ The app excludes every `.lifeline` file and the audio folder from the phone’s 
 - **Phase 2: props.** Favorite photos as prompts and anchors (PhotoKit gives dates and places; people are tagged by hand; a face model only after an evaluation against those tags), then music from an era.
 - **Phase 3: family.** Per-memory sharing, several perspectives on one event, questions for each other, and a read-only web viewer.
 
-> **Next.** Tune the starting numbers on real recordings: the match thresholds (0.55 to retrieve, 0.80 to suggest), the 6,000-token packet ceiling and the 1.8-second segment pause. Run the recording study now that V1 exists, scored by `lifeline eval`. Then choose between the spoken interviewer and the one-photo prompt as the next build.
+> **Next.** Run the recording study now that V1 exists: 5 to 8 people, ten minutes each, scored with the app’s evaluation command (protocol in `docs/experiments/recording-study.md`). Settle the open product questions below, starting with what a second user needs. Engineering meanwhile tunes the starting numbers (match thresholds, the packet budget, the segment pause) on real recordings. Then choose the next build: the spoken interviewer or the one-photo prompt.
 
 ### Open questions
 
 - Does a gentle daily nudge belong in V1 at all, given that streaks and counters are ruled out?
 - How much may the app write? Verbatim quotes assembled into stories, or prose it composes in the person’s style?
 - Memory kinds and domains (a feeling, a goal, an event; relationships, health, travel): a later design, with the seam kept open.
-- When the first other person uses the app, which part of “protect” must ship first?
+- A second person is starting to use the app. Is “each person’s recordings stay on their own phone” enough for now, or must part of “protect” (sharing controls, Local-only, finer deletion) ship first?
 
-Companion material in the repository: `docs/PRINCIPLES.md` (the grounding document), `docs/DECISIONS.md` (every decision, newest first), `docs/specs/` and `docs/plans/` (one spec and one plan per milestone), and `docs/design/` (the screens, including the review revisions R1 to R9).
+Companion material: the [grounding principles](https://claude.ai/artifact/VUpLNWEM86y4UHSbCgTHhE) (also `docs/PRINCIPLES.md`), the [design canvas](https://claude.ai/artifact/6vReaCCBrkFqzSkMk6JfRN) (start with the “Review revisions” row, R1 to R9; sources in `docs/design/`), `docs/DECISIONS.md` (every decision, newest first), and `docs/specs/` and `docs/plans/` (one spec and one plan per milestone).
