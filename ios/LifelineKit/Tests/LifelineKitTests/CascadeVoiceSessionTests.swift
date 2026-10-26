@@ -351,3 +351,43 @@ private func settle(_ h: Harness, chunks: Int) async throws {
     let seen = try await collect(events, count: 2)
     #expect(seen == [.turnEnded(first.id, atMs: 0, interrupted: true), .turnStarted(second.id, atMs: 0)])
 }
+
+@Test func aTurnDuringAnInterruptionIsDropped() async throws {
+    let h = Harness()
+    let events = try await h.vs.start(writingTo: URL(fileURLWithPath: "/dev/null"))
+    h.src.pushInterrupted()
+    _ = try await firstEvent(events) { $0 == .interrupted }
+    await h.vs.say(SpokenTurn(id: InterviewerTurnID(), text: "Who lived next door?"))
+    #expect(h.output.played.isEmpty)
+    h.src.pushResumed()
+    #expect(try await collect(events, count: 1) == [.resumed], "the dropped turn emitted nothing")
+}
+
+@Test func overlappingTurnsStayBalanced() async throws {
+    let h = Harness()
+    let events = try await h.vs.start(writingTo: URL(fileURLWithPath: "/dev/null"))
+    let first = SpokenTurn(id: InterviewerTurnID(), text: "Who lived next door?")
+    let second = SpokenTurn(id: InterviewerTurnID(), text: "And after that?")
+    let third = SpokenTurn(id: InterviewerTurnID(), text: "We can leave it here, or carry on.")
+    await h.vs.say(first)
+    #expect(try await firstEvent(events, where: isTurnStarted) == .turnStarted(first.id, atMs: 0))
+    h.output.stopDelay.withLock { $0 = .milliseconds(300) }
+    // `second` cuts `first` and waits in the slow stop; `third` arrives meanwhile.
+    let pending = Task { await h.vs.say(second) }
+    try await Task.sleep(for: .milliseconds(50))
+    await h.vs.say(third)
+    await pending.value
+    h.output.stopDelay.withLock { $0 = nil }
+    await h.vs.interrupt()   // ends whatever plays now
+    try await h.vs.stop()
+    var all: [VoiceEvent] = []
+    for await e in events { all.append(e) }
+    var open: Set<InterviewerTurnID> = [first.id], maxOpen = 1
+    for e in all {
+        if case .turnStarted(let id, _) = e { #expect(open.insert(id).inserted, "a turn starts once"); maxOpen = max(maxOpen, open.count) }
+        if case .turnEnded(let id, _, _) = e { #expect(open.remove(id) != nil, "a turn ends once, after it started; saw \(all)") }
+    }
+    #expect(open.isEmpty, "every started turn ended; saw \(all)")
+    #expect(maxOpen == 1, "one turn at a time")
+    #expect(!h.output.played.contains(second.text), "the superseded turn never plays")
+}

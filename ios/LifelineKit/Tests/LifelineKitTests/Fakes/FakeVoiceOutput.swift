@@ -15,7 +15,11 @@ final class FakeVoiceOutput: VoiceOutput, Sendable {
         return stream
     }
 
+    /// When set, `stop()` takes this long before it stops what is playing then, as a slow engine would.
+    let stopDelay = Mutex<Duration?>(nil)
+
     func stop() async {
+        if let delay = stopDelay.withLock({ $0 }) { try? await Task.sleep(for: delay) }
         let playing = state.withLock { s in s.stops += 1; defer { s.playing = nil }; return s.playing }
         playing?.yield(.finished(completed: false))
         playing?.finish()

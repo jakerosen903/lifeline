@@ -33,6 +33,8 @@ public actor CascadeVoiceSession: VoiceSession {
     private var waiterGeneration = 0
     private var isStopping = false
     private var isPaused = false
+    /// From an audio interruption (a phone call) until capture resumes.
+    private var isInterrupted = false
     private var graceTimer: Task<Void, Never>?
 
     /// The turn handed to `output`. `startMs` is nil until playback reports `started`.
@@ -40,6 +42,8 @@ public actor CascadeVoiceSession: VoiceSession {
     /// Every turn played this session. Kept to the end: a turn's echo can reach a segment that
     /// closes after the turn ended.
     private var played: [PlaybackWindow] = []
+    /// Counts `say` calls, so one that waited while a turn was cut knows a newer one superseded it.
+    private var sayGeneration = 0
 
     public init(source: any AudioSource, sink: any AudioSink, transcriber: any Transcriber,
                 output: any VoiceOutput = SilentVoiceOutput(), echo: EchoConfig = .init(),
@@ -120,12 +124,19 @@ public actor CascadeVoiceSession: VoiceSession {
     }
 
     public func say(_ turn: SpokenTurn) async {
-        guard events != nil, !isPaused, !isStopping else {
-            log("say dropped (paused or stopped)")
+        guard canSpeak else {
+            log("say dropped (paused, interrupted or stopped)")
             return
         }
+        sayGeneration += 1
+        let generation = sayGeneration
         await cutTurn()
-        guard !isPaused, !isStopping else { return }   // a pause or stop arrived while the last turn was cut
+        // While the last turn was cut, a pause, an interruption, stop or a newer `say` may have come.
+        // `cutTurn` leaves `playing` nil and only a newer `say` sets it, so with no newer `say` nothing plays.
+        guard canSpeak, generation == sayGeneration else {
+            log("say dropped (superseded, paused, interrupted or stopped)")
+            return
+        }
         let playback = output.play(turn.text)
         let task = Task { [weak self] in
             for await event in playback { await self?.handle(event, of: turn.id) }
@@ -133,6 +144,8 @@ public actor CascadeVoiceSession: VoiceSession {
         }
         playing = (turn, nil, task)
     }
+
+    private var canSpeak: Bool { events != nil && !isPaused && !isInterrupted && !isStopping }
 
     public func acknowledge() async { log("acknowledge (no-op)") }
 
@@ -157,10 +170,12 @@ public actor CascadeVoiceSession: VoiceSession {
             let level = playing?.startMs != nil ? -Float.infinity : chunk.levelDb
             await closeSegments(segmenter.observe(levelDb: level, startMs: chunk.startMs, durationMs: chunk.durationMs))
         case .interrupted:
+            isInterrupted = true
             await cutTurn()
             await closeSegments(segmenter.flush(atMs: lastChunkEndMs))
             emit(.interrupted)
         case .resumed:
+            isInterrupted = false
             emit(.resumed)
         }
     }
