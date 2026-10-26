@@ -913,3 +913,39 @@ private func wrapUpInsideTheGrace(_ h: Harness) async {
     h.at(17.5); await h.gracePasses()
     #expect(h.spoken.isEmpty, "still latched")
 }
+
+// MARK: Final fix wave
+
+@Test func aWindDownLineThatFinishedBeforeTheCutIsNotSaidTwice() async throws {
+    let h = Harness(kind: .quick)
+    await h.loop.captureStarted(opening: opening)
+    await h.finishTurn()
+    h.at(3); await h.loop.voice(.speechStarted(atMs: 3_000))
+    h.at(9); await h.loop.voice(.userPaused(afterMs: 9_000))
+    let s1 = await h.store("s1", bees)
+    await h.loop.flags(Flags(disclosure: .none, wantsToStop: true, wantsToChangeSubject: false), segment: s1)
+    h.at(10); await h.loop.arc(.offerWrapUp(.wantsToStop), stage: .windDown)
+    let line = InterviewerTurnID()
+    await h.loop.voice(.turnStarted(line, atMs: 10_000))
+    // The line has played to its end, but its turnEnded is still behind the flags on the stream.
+    h.at(12); await h.loop.flags(pastFlags, segment: s1)
+    await h.loop.arc(.showDisclosureCard(.past), stage: .windDown)
+    await h.loop.voice(.turnEnded(line, atMs: 11_900, interrupted: false))
+    await h.finishTurn()
+    await h.finishTurn()
+    #expect(h.spoken.map(\.text) == [opening, FixedTurns.earlyWindDown, try disclosureText(.past)])
+}
+
+@Test func aSegmentStoredWhileATurnPlaysIsAskedAboutWhenTheTurnEnds() async {
+    let service = TestInterviewer([.success(reflection("Bees behind the old garage."))])
+    let h = Harness(service: service)
+    await h.loop.captureStarted(opening: opening)
+    let playing = InterviewerTurnID()
+    await h.loop.voice(.turnStarted(playing, atMs: 0))
+    await h.story("s1", bees, from: 2, pause: 8)
+    h.at(9.5); await h.wakes(expecting: 2)
+    #expect(await service.requests.isEmpty, "a turn is playing")
+    await h.loop.voice(.turnEnded(playing, atMs: 9_600, interrupted: false))
+    await h.loop.callSettled()
+    #expect(await service.askedAbout == [bees])
+}

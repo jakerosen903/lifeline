@@ -129,13 +129,14 @@ public actor InterviewerLoop {
             started = true
             unstartedEnds[playing] = nil
             observe(.turnStarted(playing.kind))
-        case .turnEnded:
+        case .turnEnded(_, _, let interrupted):
             observe(.turnEnded)
             let wasCut = cutHand != nil && cutHand == playingHand
             let unstarted = started || wasCut ? nil : playing
             if wasCut, let playing {
                 if playing.kind == .earlyWindDown {
-                    requeue(playing)
+                    // A line that played to its end before the cut landed was heard: it is not said again.
+                    if interrupted { requeue(playing) }
                 } else if !started {
                     log("[interviewer] dropped a \(playing.kind.rawValue) turn: cut for a disclosure")
                 }
@@ -143,7 +144,7 @@ public actor InterviewerLoop {
             playing = nil; started = false
             if wasCut { cutHand = nil }
             // A started turn that was cut is not spoken again.
-            guard let unstarted else { await offerPending(); return }
+            guard let unstarted else { await offerPending(); askIfAwaiting(); return }
             // Cut before it started (a pause, an interruption, barge-in, a voice that failed): it was
             // never heard. It waits at the front for the next resume, pause's grace or floor retry;
             // an offer now would feed a failing voice the same draft in a loop.
