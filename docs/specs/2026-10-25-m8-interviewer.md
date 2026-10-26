@@ -42,10 +42,10 @@ Every spoken turn is one of these kinds. Only two kinds come from the model.
 | Follow-up question | Model, in place of a reflection ("What was that like?"), never two turns after a question | After a closed segment, see Turn policy | Settling in |
 | Wrap-up offer | Fixed: "We can leave it here, or carry on." **(my call: wording; it must not contain a phrase the voice matcher hears)** | `ArcEffect.offerWrapUp` with the reason `plannedLength` or the grace | Settling in |
 | Early wind-down | Fixed: "We can leave this here and come back whenever you want." (PRINCIPLES, arc table) | `ArcEffect.offerWrapUp` with the reason `wantsToStop`, or after the disclosure text | Both |
-| Disclosure | Fixed: `FixedResponses` text, exactly as the card shows it | `ArcEffect.showDisclosureCard` | Both |
+| Disclosure | Fixed: `FixedResponses` spoken text for the kind (see Safety) | `ArcEffect.showDisclosureCard` | Both |
 | About the app | Fixed, see Safety | The model flags that the person asked what the app is | Settling in |
 
-Acknowledgements ("mm") are not in the first M8 build **(my call)**. The principles allow a soft acknowledgement only after a capped wait on an unfinished thought, and a synthetic "mm" can sound like a second person in the room. They come in the last PR, behind the device check, if the owner wants them (owner's call 4).
+Acknowledgements ("mm") are not in V1. The principles allow a soft acknowledgement only after a capped wait on an unfinished thought, and a synthetic "mm" can sound like a second person in the room. The owner decided this on 2026-10-25 (owner's call 4).
 
 The closing line is not spoken **(my call)**. The landing opens after capture stops, so a spoken closing would need a second audio path that is not recorded, and `Landing.closingLine` can change while sorting finishes (a late heavy flag). It stays on screen, as today.
 
@@ -81,14 +81,14 @@ Rules, in precedence order:
   - At most 20 words.
   - Every capitalized word that is not the first word, and every number, appears in this session's words.
   - No text when `kind` is `none`.
-- Model: `claude-haiku-5-5` by default for latency, configurable like the extractor's model (owner's call 3). The latency target is 1200 ms p50 from request to text. This is a guess to measure on the device, not a fact.
+- Model: `claude-haiku-5-5` by default for latency, configurable like the extractor's model (owner's call 3, decided 2026-10-25). The latency target is 1200 ms p50 from request to text. This is a guess to measure on the device, not a fact.
 - No key, no network, or a refused call: model turns are silent. Fixed turns and bank questions still play. A session never fails because the interviewer cannot speak.
 
 ## Goal 3 — The app's voice stays out of the person's words
 
 Capture and playback share the speaker and the mic (`.playAndRecord`, `.defaultToSpeaker`). Without countermeasures the transcriber hears the app.
 
-1. **Echo cancellation.** Playback must run through the same `AVAudioEngine` as capture, with voice processing enabled on the input node while the app can speak **(my call)**. This gives the system the playback signal to cancel. It changes the recorded sound; the device run must check transcription quality (owner's call 2).
+1. **Echo cancellation.** Playback must run through the same `AVAudioEngine` as capture, with voice processing enabled on the input node while the app can speak **(my call)**. This gives the system the playback signal to cancel. It changes the recorded sound; the device run must check transcription quality. The owner accepts this change; speech is not limited to headphones (owner's call 2, decided 2026-10-25).
 2. **Interviewer turns are stored.** A new table `interviewer_turn (id, session_id, kind, source: fixed | model, text, start_ms, end_ms, interrupted)` on the session's file clock, in migration v11 **(my call: M7 claims v10 for dropping the old people and place tables)**. It is part of the archive and the backup.
 3. **The app's words are removed from segments.** A run of transcribed words that falls inside a turn's playback window (plus 300 ms) and matches that turn's text (60% of its tokens in order) is not part of a segment **(my call: thresholds)**. Words inside the window that do not match are the person's, for example a barge-in, and stay.
 4. **The audio file keeps everything.** Preserve first: the recording is not edited. Playback of a memory may include the app's voice if the person's telling and the app's turn overlap.
@@ -104,17 +104,20 @@ Capture and playback share the speaker and the mic (`.playAndRecord`, `.defaultT
 
 ## Goal 4 — Safety
 
-- **Disclosure.** On `ArcEffect.showDisclosureCard` the app stops any playback and speaks the `FixedResponses` text exactly, then the early wind-down line. The spoken string must be the card's string (a test compares them, like the M4 `FixedResponses` test). Today one text serves both the past and the present kind, and it reads the 988 line aloud for both (owner's call 5).
+- **Disclosure.** On `ArcEffect.showDisclosureCard` the app stops any playback and speaks the fixed text for the kind, then the early wind-down line. The card does not change: it shows the full text, with the 988 line, for both kinds (owner's call 5, decided 2026-10-25).
+  - **Present danger:** the app speaks the card's text exactly, with the 988 line.
+  - **Past:** the app speaks the card's text without the 988 sentence. This text is a second bundled resource, `disclosure-spoken-past.<locale>.md`, never a string cut at run time.
+  - `FixedResponses.spokenDisclosure(kind:locale:)` returns the text. A test must show that the present text equals the card's text, and that the card's text starts with the past text.
 - **The flags gate.** Rule 4 of the turn policy is the guard against an improvised reply to a disclosure. A test must show that a scripted disclosure segment followed by a slow flag gets no model turn.
-- **About the app.** When the model sets `asked_about_app`, the app speaks a fixed line and no model text. The draft's line ("I don't send your voice anywhere") is not true as written: the person's words go to Anthropic as text. Proposed **(owner's call 1)**: "I'm Lifeline. I keep your recording on this phone. Your words go to Anthropic's model as text, so I can sort them and ask the next question."
+- **About the app.** When the model sets `asked_about_app`, the app speaks a fixed line and no model text. The draft's line ("I don't send your voice anywhere") is not true as written: the person's words go to Anthropic as text. Approved **(owner's call 1, decided 2026-10-25)**: "I'm Lifeline. I keep your recording on this phone. Your words go to Anthropic's model as text, so I can sort them and ask the next question."
 
 ## Voice
 
 - `TTS` protocol in the kit. `AVSpeechTTS` in the app renders with `AVSpeechSynthesizer.write(_:toBufferCallback:)` into a player node on the capture engine (needed for echo cancellation and for barge-in). On-device. No audio leaves the phone, so the V1 data posture holds **(owner's draft)**.
-- Voice: the best installed en-US enhanced or premium voice, chosen at first use. If only a compact voice is installed, Settings says that a better voice can be downloaded in iOS Settings **(my call)**. Rate and pitch are the builder's. The persona has no name in V1 copy **(owner's draft)**.
+- Voice: the best installed en-US enhanced or premium voice, chosen at first use (owner's call 6, decided 2026-10-25). If only a compact voice is installed, Settings says that a better voice can be downloaded in iOS Settings **(my call)**. Rate and pitch are the builder's. The persona has no name in V1 copy **(owner's draft)**.
 - A cloud voice is a change to the data posture. It needs its own decision before anyone else uses the app **(owner's draft)**.
 - The app speaks with the screen locked, as it records with the screen locked. Bluetooth headsets (HFP) keep working.
-- Settings has "Lifeline speaks" (on by default) **(my call)**. Off gives exactly today's listen-only session.
+- Settings has "Lifeline speaks", on by default (owner's call 7, decided 2026-10-25). Off gives exactly today's listen-only session.
 
 ## Session kinds
 
@@ -134,7 +137,7 @@ Four PRs, each usable on the phone. The app can be interrupted from the first PR
 1. **PR 1 — The interviewer's turns, silent.** `TurnPolicy`, `interviewer_turn` and its migration, the removal of the app's words from segments (against scripted turns), turns shown on the Listen view as text. No audio out.
 2. **PR 2 — Fixed turns are spoken.** `TTS`, `AVSpeechTTS`, the player node, echo cancellation, barge-in, the quiet controls, "Lifeline speaks". Spoken: opening, wrap-up, disclosure, early wind-down. No model, so no gate yet: these lines open the session or follow the arc.
 3. **PR 3 — Reflections and follow-ups.** The interviewer prompt, the model turn, the client checks, the flags gate, "About the app".
-4. **PR 4 — Device run and acknowledgements.** The checklist below; numbers redlined into `ArcConfig`; acknowledgements only if the owner wants them.
+4. **PR 4 — Device run.** The checklist below; numbers redlined into `ArcConfig`. No acknowledgements (owner's call 4).
 
 ## Edge cases
 
@@ -153,7 +156,7 @@ Four PRs, each usable on the phone. The app can be interrupted from the first PR
 - Kit, `TurnPolicy`: quiet while speaking; no two turns without a closed segment; no question after a question for two turns; no turn after a heavy flag from either check; no turn before the interviewer's check returns; a failed check is silent; an unclean interviewer check silences the turn and does not move the arc; the 6 s next question is never spoken; quick story speaks only the opening, the disclosure text and the early wind-down line; a segment emptied by Goal 3 triggers nothing; the arc's reason picks the wrap-up or the early wind-down line; quiet flag; windDown speaks only fixed turns.
 - Kit, segments: a run matching a turn's text inside its window is removed; a non-matching run inside the window stays; a matching run outside the window stays.
 - Kit, model turn: each client check drops its case; `none` speaks nothing; a refused call is silent; the packet holds this session only and leaves out words of a memory excluded from AI.
-- Kit, fixed text: the spoken disclosure string equals the card's string; "About the app" is never model text.
+- Kit, fixed text: the present spoken disclosure equals the card's string; the card's string starts with the past spoken disclosure; the past text has no crisis number; "About the app" is never model text.
 - Kit, quiet matcher: each phrase sets quiet; "we had to stop at the border" does not; the app's own words inside a playback window do not.
 - Migration: `interviewer_turn` on a populated M7 database; the table is in the backup and survives a restore.
 - UI (scripted voice and TTS): a settle-in session shows a reflection after a scripted segment; speech during a scripted turn marks it interrupted; "Quiet" stops turns and "Ask me again" brings them back; a scripted disclosure shows and logs the fixed text.
@@ -167,7 +170,7 @@ Four PRs, each usable on the phone. The app can be interrupted from the first PR
 5. Say "shh". It stays quiet until you tap "Ask me again".
 6. Open Transcript & memories. The app's turns are marked as Lifeline's; no memory card quotes the app.
 7. Quick story. One spoken opening, then quiet to the landing.
-8. A scripted disclosure phrase. The spoken text matches the card word for word.
+8. A scripted present-danger phrase. The spoken text matches the card word for word, 988 included. A scripted past phrase. The app speaks the card without the 988 sentence; the card still shows it.
 9. Settle in past the planned length. The wrap-up offer is spoken once; "keep going" by voice continues.
 10. Lock the screen during a settle-in. Turns are still spoken and recorded.
 
@@ -186,14 +189,14 @@ A. The safety check comes from the interviewer's own call. The extractor's flags
 B. The gate holds back every spoken turn after the opening, bank questions included.
 C. The 6 s next question stays on screen only.
 
-Still open:
+Decided 2026-10-25, on the recommendations:
 
-1. **About the app.** Approve or rewrite the fixed line, which must say that words go to Anthropic as text.
-2. **Echo cancellation.** Voice processing on capture changes how the recording sounds. Accept it, or allow speech only with headphones.
-3. **Model for the interviewer.** `claude-haiku-5-5` for speed (recommended) or the extractor's `claude-opus-5-5`.
-4. **Acknowledgements.** Leave "mm" out of V1 (recommended), or try them in PR 4.
-5. **Disclosure, spoken.** Speak the full card text, including the 988 line, for both the past and the present kind; or speak the 988 line only for present danger and keep it on the card for both.
-6. **Voice.** Accept the best installed system voice, or pick one by name on the device.
-7. **"Lifeline speaks" default.** On (recommended) or off.
+1. **About the app.** The fixed line in Safety is approved.
+2. **Echo cancellation.** Voice processing is accepted. Speech is not limited to headphones. The device run checks transcription quality.
+3. **Model.** `claude-haiku-5-5`.
+4. **Acknowledgements.** Not in V1.
+5. **Disclosure, spoken.** The 988 line is spoken only for present danger. The card shows it for both kinds.
+6. **Voice.** The best installed system voice.
+7. **"Lifeline speaks".** On by default.
 
 Serves P1, P2, P3, P6, P8 and P9.

@@ -2,6 +2,19 @@
 
 One entry per decision. Newest first. Status is Decided, Open, or Superseded.
 
+## 2026-10-25 · The interviewer speaks briefly, never over the person, and never improvises on safety (M8)
+
+The app speaks its fixed lines and short model reflections in a settle-in session. A quick story stays nearly silent. Any speech from the person stops the app at once. The app's own words are kept apart from the person's in the transcript and never become a memory.
+
+- A spoken turn waits for the safety check in the interviewer's own reply, and for the extractor's flags when they come first. Only the extractor moves the arc. This holds for every turn after the opening, bank questions included.
+- The next question after a quiet spell stays on screen. It is not spoken.
+- The model is `claude-haiku-5-5`. Echo cancellation runs on capture, and the recording sound changes with it; speech is not limited to headphones.
+- The disclosure card does not change. The app speaks the 988 line only for present danger.
+- The "About the app" line says that the person's words go to Anthropic as text.
+- No "mm" acknowledgements in V1. The voice is the best installed system voice. "Lifeline speaks" is on by default.
+
+Why: P1, P2, P3, P6, P8 and P9. See `docs/specs/2026-10-25-m8-interviewer.md`.
+
 ## 2026-10-25 · Memory kinds and domains: moments on the timeline, everything else by what it is about (M7)
 
 **Status:** Decided. Closes "Open · Memory kinds and domains". Source: the owner's answers to the M7 spec, `docs/specs/2026-10-24-m7-elements.md`.
