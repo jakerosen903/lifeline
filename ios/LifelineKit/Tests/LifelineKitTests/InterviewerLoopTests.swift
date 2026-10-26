@@ -181,6 +181,7 @@ private func reflection(_ text: String, disclosure: DisclosureKind = .none) -> I
 
 private let noTurn = InterviewerReply(kind: .none, text: nil, askedAboutApp: false, disclosure: .none, wantsToStop: false)
 private let pastFlags = Flags(disclosure: .past, wantsToStop: false, wantsToChangeSubject: false)
+private let cleanFlags = Flags(disclosure: .none, wantsToStop: false, wantsToChangeSubject: false)
 
 private func disclosureText(_ kind: DisclosureKind) throws -> String {
     try #require(try FixedResponses.spokenDisclosure(kind))
@@ -515,8 +516,9 @@ private func disclosureText(_ kind: DisclosureKind) throws -> String {
     #expect(h.log.first?.hasPrefix("[interviewer] 0 ms error: ") == true)
     await h.story("s2", "the house had a blue door", from: 12, pause: 15)
     h.at(16.5); await h.gracePasses(expecting: 2)
-    #expect(h.spoken == [TurnDraft(kind: .reflection, source: .model, text: "A blue door.")],
-            "a failed call gates its own segment only")
+    #expect(h.spoken.isEmpty, "a missing check is not clean: the gate waits for s1's flags")
+    h.at(17); await h.loop.flags(Flags(disclosure: .none, wantsToStop: false, wantsToChangeSubject: false), segment: SegmentID(rawValue: "s1"))
+    #expect(h.spoken == [TurnDraft(kind: .reflection, source: .model, text: "A blue door.")])
 }
 
 @Test func noKeyMeansNoCallsAndNoSpokenWrapUp() async throws {
@@ -673,10 +675,12 @@ private func disclosureText(_ kind: DisclosureKind) throws -> String {
     h.write("s2", "the house had a blue door")
     h.at(9.5); await h.gracePasses(expecting: 2)
     #expect(await service.requests.isEmpty, "the context's newest segment is not the one awaiting a reply")
-    #expect(h.log.contains { $0.contains("skipped") })
+    #expect(h.log.filter { $0.contains("skipped") }.count == 1, "both wakes, one log line")
     h.at(9.6); await h.loop.segmentStored(SegmentID(rawValue: "s2"))
     await h.loop.callSettled()
     #expect(await service.askedAbout == ["the house had a blue door"])
+    #expect(h.spoken.isEmpty, "the skipped segment holds the gate until its flags arrive")
+    h.at(10); await h.loop.flags(cleanFlags, segment: SegmentID(rawValue: "s1"))
     #expect(h.spokenKinds == [.reflection])
 }
 
@@ -710,7 +714,7 @@ private func disclosureText(_ kind: DisclosureKind) throws -> String {
     #expect(h.spokenKinds == [.reflection, .disclosure, .earlyWindDown])
 }
 
-@Test func aDisclosureDoesNotCutTheArcsOwnLines() async throws {
+@Test func aDisclosureDoesNotCutAPlayingDisclosureText() async throws {
     let h = Harness()
     h.at(10); await h.loop.arc(.showDisclosureCard(.past), stage: .windDown)
     await h.loop.voice(.turnStarted(InterviewerTurnID(), atMs: 10_000))
@@ -745,4 +749,139 @@ private func disclosureText(_ kind: DisclosureKind) throws -> String {
     await service.answer(.success(reflection("Bees behind the old garage.")))
     await h.loop.callSettled()
     #expect(h.spoken.isEmpty)
+}
+
+// MARK: Fix round 1: failed checks, the wind-down cut, check-only calls
+
+@Test func aFailedCheckHoldsLaterReflectionsUntilItsFlagsArrive() async {
+    let service = TestInterviewer([.failure(.network("offline")), .success(reflection("A blue door."))])
+    let h = Harness(service: service)
+    let s1 = await h.story("s1", bees, from: 2, pause: 8)
+    h.at(9.5); await h.gracePasses(expecting: 2)
+    await h.story("s2", "the house had a blue door", from: 10, pause: 12)
+    h.at(13.5); await h.gracePasses(expecting: 2)
+    #expect(await service.requests.count == 2)
+    #expect(h.spoken.isEmpty, "s2's check is clean, but s1 has neither a check nor flags")
+    h.at(14); await h.loop.flags(cleanFlags, segment: s1)
+    #expect(h.spoken == [TurnDraft(kind: .reflection, source: .model, text: "A blue door.")])
+}
+
+@Test func heavyFlagsForAFailedCheckSilenceLaterReflections() async {
+    let service = TestInterviewer([.failure(.network("offline")), .success(reflection("A blue door."))])
+    let h = Harness(service: service)
+    let s1 = await h.story("s1", bees, from: 2, pause: 8)
+    h.at(9.5); await h.gracePasses(expecting: 2)
+    await h.story("s2", "the house had a blue door", from: 10, pause: 12)
+    h.at(13.5); await h.gracePasses(expecting: 2)
+    h.at(14); await h.loop.flags(pastFlags, segment: s1)
+    h.at(16); await h.loop.voice(.userPaused(afterMs: 16_000))
+    h.at(17.5); await h.gracePasses()
+    #expect(h.spoken.isEmpty)
+}
+
+@Test func aDisclosureCutsAPlayingWindDownLineAndSaysItAfter() async throws {
+    let h = Harness()
+    h.at(10); await h.loop.arc(.offerWrapUp(.wantsToStop), stage: .windDown)
+    let playing = InterviewerTurnID()
+    await h.loop.voice(.turnStarted(playing, atMs: 10_000))
+    h.at(11); await h.loop.arc(.showDisclosureCard(.past), stage: .windDown)
+    #expect(h.cuts == 1)
+    await h.loop.voice(.turnEnded(playing, atMs: 11_100, interrupted: true))
+    await h.finishTurn(); await h.finishTurn()
+    #expect(h.spoken.map(\.text) == [FixedTurns.earlyWindDown, try disclosureText(.past), FixedTurns.earlyWindDown])
+}
+
+/// s1 closes at 8; the planned length comes at 9, inside the grace.
+private func wrapUpInsideTheGrace(_ h: Harness) async {
+    await h.story("s1", bees, from: 2, pause: 8)
+    h.at(9); await h.loop.arc(.offerWrapUp(.plannedLength), stage: .windDown)
+}
+
+@Test func aWrapUpInWindDownAsksForACheckAfterTheGrace() async {
+    let service = TestInterviewer([.success(reflection("Bees behind the old garage."))])
+    let h = Harness(service: service)
+    await wrapUpInsideTheGrace(h)
+    #expect(h.spoken.isEmpty)
+    #expect(await service.requests.isEmpty, "the grace has not passed")
+    h.at(9.5); await h.gracePasses(expecting: 2)
+    #expect(await service.askedAbout == [bees])
+    #expect(h.spoken == [TurnDraft(kind: .wrapUp, source: .fixed, text: FixedTurns.wrapUp)], "the reply's words are never spoken")
+    #expect(h.log == ["[interviewer] 0 ms check only"])
+}
+
+@Test func aCheckOnlyReplyNeverSpeaksTheAboutAppLine() async {
+    let reply = InterviewerReply(kind: .none, text: nil, askedAboutApp: true, disclosure: .none, wantsToStop: false)
+    let h = Harness(service: TestInterviewer([.success(reply)]))
+    await wrapUpInsideTheGrace(h)
+    h.at(9.5); await h.gracePasses(expecting: 2)
+    #expect(h.spokenKinds == [.wrapUp])
+}
+
+@Test func anUncleanCheckOnlyCallDropsTheWrapUp() async {
+    let h = Harness(service: TestInterviewer([.success(reflection("Bees.", disclosure: .past))]))
+    await wrapUpInsideTheGrace(h)
+    h.at(9.5); await h.gracePasses(expecting: 2)
+    #expect(h.spoken.isEmpty)
+    #expect(h.log == ["[interviewer] 0 ms check only", "[interviewer] dropped a wrapUp turn: gate"])
+}
+
+@Test func aFailedCheckOnlyCallDropsTheWrapUp() async {
+    let h = Harness(service: TestInterviewer([.failure(.network("offline"))]))
+    await wrapUpInsideTheGrace(h)
+    h.at(9.5); await h.gracePasses(expecting: 2)
+    #expect(h.spoken.isEmpty)
+    #expect(h.log.last == "[interviewer] dropped a wrapUp turn: gate")
+}
+
+@Test func noCheckOnlyCallWithoutAWaitingWrapUp() async {
+    let service = TestInterviewer([.success(noTurn)])
+    let h = Harness(service: service)
+    h.at(1); await h.loop.arc(.offerWrapUp(.plannedLength), stage: .windDown)
+    #expect(h.log == ["[interviewer] dropped a wrapUp turn: gate"], "no segment to check")
+    await h.story("s1", bees, from: 2, pause: 8)
+    h.at(9.5); await h.gracePasses(expecting: 2)
+    #expect(await service.requests.isEmpty)
+}
+
+@Test func noCheckOnlyCallWhenQuietOrInAQuickStory() async {
+    let quickService = TestInterviewer([.success(noTurn)])
+    let quick = Harness(kind: .quick, service: quickService)
+    await wrapUpInsideTheGrace(quick)
+    quick.at(9.5); await quick.gracePasses(expecting: 2)
+    #expect(await quickService.requests.isEmpty)
+    #expect(quick.spoken.isEmpty)
+
+    let quietService = TestInterviewer([.success(noTurn)])
+    let quiet = Harness(service: quietService)
+    await quiet.loop.setQuiet(true)
+    await wrapUpInsideTheGrace(quiet)
+    quiet.at(9.5); await quiet.gracePasses(expecting: 2)
+    #expect(await quietService.requests.isEmpty)
+    #expect(quiet.spoken.isEmpty)
+}
+
+@Test func aCheckedSegmentGetsNoSecondCall() async {
+    let service = TestInterviewer([.success(noTurn), .success(noTurn)])
+    let h = Harness(service: service)
+    await h.story("s1", bees, from: 2, pause: 8)
+    h.at(9.5); await h.gracePasses(expecting: 2)
+    h.at(10); await h.loop.arc(.offerWrapUp(.plannedLength), stage: .windDown)
+    h.at(10.5); await h.loop.voice(.userPaused(afterMs: 10_500))
+    h.at(12); await h.gracePasses()
+    #expect(await service.requests.count == 1)
+    #expect(h.spokenKinds == [.wrapUp])
+}
+
+@Test func aWrapUpAfterAReflectionWaitsForTheNextSegmentAndItsCheck() async {
+    let service = TestInterviewer([.success(reflection("Bees behind the old garage.")), .success(reflection("A blue door."))])
+    let h = Harness(service: service)
+    await h.story("s1", bees, from: 2, pause: 8)
+    h.at(9.5); await h.gracePasses(expecting: 2)
+    await h.finishTurn()
+    h.at(10); await h.loop.arc(.offerWrapUp(.plannedLength), stage: .windDown)
+    #expect(h.spokenKinds == [.reflection], "rule 6: no turn without a segment since")
+    await h.story("s2", "the house had a blue door", from: 11, pause: 14)
+    h.at(15.5); await h.gracePasses(expecting: 2)
+    #expect(await service.askedAbout == [bees, "the house had a blue door"])
+    #expect(h.spoken.map(\.text) == ["Bees behind the old garage.", FixedTurns.wrapUp])
 }

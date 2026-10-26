@@ -119,7 +119,9 @@ struct TurnPolicyTests {
         #expect(p.decide(offer(.reflection), at: t(5)) == .stayQuiet(.gate))
         #expect(p.decide(offer(.wrapUp), at: t(5)) == .stayQuiet(.gate))
         tellClean(&p, second, at: 10)
-        #expect(p.decide(offer(.reflection), at: t(15)) == .speak, "a failed call silences its segment only")
+        #expect(p.decide(offer(.reflection), at: t(15)) == .stayQuiet(.gate), "a missing check is not clean until its flags arrive")
+        p.observe(.extractorFlags(first, Flags(disclosure: .none, wantsToStop: false, wantsToChangeSubject: false)), at: t(16))
+        #expect(p.decide(offer(.reflection), at: t(17)) == .speak, "clean flags release it: no latch")
     }
 
     @Test func anUncleanCheckSilencesTheTurnAndLaterTurns() {
@@ -334,5 +336,62 @@ struct TurnPolicyTests {
         #expect(p.decide(offer(.wrapUp), at: t(8)) == .stayQuiet(.quiet))
         p.observe(.quiet(false), at: t(8))
         #expect(p.decide(offer(.wrapUp), at: t(8)) == .stayQuiet(.gate))
+    }
+
+    // MARK: Check-only calls and failed checks (fix round 1)
+
+    @Test func aSegmentAwaitsACheckInWindDown() {
+        var p = policy()
+        tell(&p, first, at: 1, checked: false)
+        p.observe(.stage(.windDown), at: t(4.2))
+        #expect(p.segmentAwaitingReply(at: t(5.5)) == nil, "no reply in windDown")
+        #expect(p.segmentAwaitingCheck(at: t(5.4)) == nil, "before the grace")
+        #expect(p.segmentAwaitingCheck(at: t(5.5)) == first)
+        #expect(p.checkStillPossible)
+        p.observe(.interviewerCheck(first, clean), at: t(5.6))
+        #expect(p.segmentAwaitingCheck(at: t(6)) == nil, "a check arrived")
+        #expect(!p.checkStillPossible)
+    }
+
+    @Test func noSegmentAwaitsACheckInAQuickStoryOrWhenQuiet() {
+        var quick = policy(.quick)
+        tell(&quick, first, at: 1, checked: false)
+        quick.observe(.stage(.windDown), at: t(4.2))
+        #expect(quick.segmentAwaitingCheck(at: t(6)) == nil && !quick.checkStillPossible)
+        var quiet = policy()
+        tell(&quiet, first, at: 1, checked: false)
+        quiet.observe(.stage(.windDown), at: t(4.2))
+        quiet.observe(.quiet(true), at: t(4.3))
+        #expect(quiet.segmentAwaitingCheck(at: t(6)) == nil && !quiet.checkStillPossible)
+    }
+
+    @Test func noSegmentAwaitsACheckAfterTheLatch() {
+        var unclean = policy()
+        tell(&unclean, first, at: 1, check: pastDisclosure)
+        tell(&unclean, second, at: 10, checked: false)
+        unclean.observe(.stage(.windDown), at: t(13.2))
+        #expect(unclean.segmentAwaitingCheck(at: t(15)) == nil && !unclean.checkStillPossible)
+        var heavy = policy()
+        tell(&heavy, first, at: 1, checked: false)
+        heavy.observe(.extractorFlags(first, Flags(disclosure: .past, wantsToStop: false, wantsToChangeSubject: false)), at: t(4.1))
+        heavy.observe(.stage(.windDown), at: t(4.2))
+        #expect(heavy.segmentAwaitingCheck(at: t(6)) == nil && !heavy.checkStillPossible)
+    }
+
+    @Test func aFailedCheckHoldsTheGateUntilItsFlagsArrive() {
+        var p = policy()
+        tell(&p, first, at: 1, check: nil)
+        tellClean(&p, second, at: 10)
+        #expect(p.decide(offer(.reflection, requestedAt: 13.2), at: t(14)) == .stayQuiet(.gate))
+        #expect(p.gateWaitsForFlags)
+        p.observe(.extractorFlags(first, Flags(disclosure: .none, wantsToStop: false, wantsToChangeSubject: false)), at: t(15))
+        #expect(!p.gateWaitsForFlags)
+        #expect(p.decide(offer(.reflection, requestedAt: 13.2), at: t(15)) == .speak)
+    }
+
+    @Test func aFailedNewestCheckDoesNotWaitForFlags() {
+        var p = policy()
+        tell(&p, first, at: 1, check: nil)
+        #expect(!p.gateWaitsForFlags, "flags alone cannot open the gate: the newest segment has no clean check")
     }
 }

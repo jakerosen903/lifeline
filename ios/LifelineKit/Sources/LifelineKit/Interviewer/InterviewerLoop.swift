@@ -10,7 +10,8 @@ public struct InterviewerState: Equatable, Sendable {
 /// goes to `speak` (`SessionRecorder.speak` in the app), which returns false when the voice refused it.
 /// Fixed turns: the opening, the arc's answer to a disclosure or a wish to stop, and the wrap-up.
 /// Model turns: once `replyGrace` has passed after a story lands, one call to the interviewer asks for a
-/// short reflection and the segment's safety check. `now` is the time since the session started;
+/// short reflection and the segment's safety check. In `windDown`, a waiting wrap-up gets a check-only call:
+/// its check opens the gate, and its words are never spoken. `now` is the time since the session started;
 /// `sleep` waits on the same clock, so tests drive both by hand.
 public actor InterviewerLoop {
     public nonisolated let states: AsyncStream<InterviewerState>
@@ -55,7 +56,8 @@ public actor InterviewerLoop {
     /// Counts drafts handed to `speak`, so a refusal that returns late knows whether its draft is still out.
     private var handCount = 0
     private var playingHand = 0
-    /// The hand this loop asked the voice to cut for a disclosure. A cut turn is never offered again.
+    /// The hand this loop asked the voice to cut for a disclosure. A cut turn is never offered again,
+    /// except the wind-down line, which is said after the disclosure text.
     private var cutHand: Int?
     /// Between `.paused` or `.interrupted` and `.resumed`. Saves offers the voice would refuse;
     /// a refused draft is requeued anyway, so nothing depends on this matching the session's state.
@@ -80,6 +82,8 @@ public actor InterviewerLoop {
     /// The interviewer call that is out, and the segment it asks about. One call at a time.
     private var call: Task<Void, Never>?
     private var callSegment: SegmentID?
+    /// Segments whose call was skipped, so the skip is logged once.
+    private var skippedSegments: Set<SegmentID> = []
 
     public init(kind: SessionKind, config: ArcConfig,
                 service: (any InterviewerService)?,
@@ -127,7 +131,13 @@ public actor InterviewerLoop {
             observe(.turnEnded)
             let wasCut = cutHand != nil && cutHand == playingHand
             let unstarted = started || wasCut ? nil : playing
-            if wasCut, !started, let playing { log("[interviewer] dropped a \(playing.kind.rawValue) turn: cut for a disclosure") }
+            if wasCut, let playing {
+                if playing.kind == .earlyWindDown {
+                    requeue(playing)
+                } else if !started {
+                    log("[interviewer] dropped a \(playing.kind.rawValue) turn: cut for a disclosure")
+                }
+            }
             playing = nil; started = false
             if wasCut { cutHand = nil }
             // A started turn that was cut is not spoken again.
@@ -142,6 +152,7 @@ public actor InterviewerLoop {
         case .resumed:
             suspended = false
             await offerPending()
+            askIfAwaiting()
         case .transcriptFinal, .segmentClosed, .failed, .heard:
             break
         }
@@ -161,8 +172,10 @@ public actor InterviewerLoop {
         }
     }
 
-    public func flags(_ flags: Flags, segment: SegmentID) {
+    /// Flags can open the gate: a segment whose check failed holds it until they arrive.
+    public func flags(_ flags: Flags, segment: SegmentID) async {
         observe(.extractorFlags(segment, flags))
+        await offerPending()
     }
 
     /// The stage is observed before the effect, so the policy judges the effect's turn in its stage.
@@ -183,6 +196,7 @@ public actor InterviewerLoop {
             // no check, so it stays on screen only.
             if service != nil, !pending.contains(where: { $0.kind == .wrapUp }) {
                 enqueue(Queued(draft: TurnDraft(kind: .wrapUp, source: .fixed, text: FixedTurns.wrapUp)))
+                askIfAwaiting()
             }
         case .land:
             break
@@ -262,8 +276,8 @@ public actor InterviewerLoop {
     /// Spec Goal 4: the app stops any playback and speaks the fixed text. The disclosure text goes ahead
     /// of every other waiting turn, so a later present danger's crisis line is not held behind the
     /// wind-down line or a wrap-up. The wind-down line follows, once per session. After present danger,
-    /// a past disclosure adds nothing: the 988 text already covers it. A playing disclosure text or
-    /// wind-down line is the arc's own answer and plays out.
+    /// a past disclosure adds nothing: the 988 text already covers it. A playing wind-down line is cut
+    /// and said again after the disclosure text.
     private func answerDisclosure(_ kind: DisclosureKind) async {
         guard kind != .none else { return }
         if !disclosuresQueued.contains(kind), !(kind == .past && disclosuresQueued.contains(.present)),
@@ -272,7 +286,8 @@ public actor InterviewerLoop {
             enqueue(Queued(draft: TurnDraft(kind: .disclosure, source: .fixed, text: text)))
         }
         queueWindDown()
-        guard let playing, playing.kind != .disclosure, playing.kind != .earlyWindDown, cutHand != playingHand else { return }
+        // A playing disclosure text is not cut: the past text is the start of the present one, which follows it.
+        guard let playing, playing.kind != .disclosure, cutHand != playingHand else { return }
         cutHand = playingHand
         await cut()
     }
@@ -319,9 +334,10 @@ public actor InterviewerLoop {
     }
 
     /// Whether a refused turn keeps its place. The arc's answer always waits for its moment, and the
-    /// opening never does. A gated turn waits only while someone speaks; a wrap-up also waits while
-    /// the check of the newest segment is out. Any other refusal will not clear, and a turn kept for
-    /// it would block the turns behind it.
+    /// opening never does. A gated turn waits while someone speaks, and while the gate waits for the
+    /// flags of a segment whose check failed. A wrap-up also waits while the newest segment's check is
+    /// out or may still be asked for, and for the next segment after a spoken turn. Any other refusal will not clear, and a turn kept for it would
+    /// block the turns behind it.
     private func waits(_ turn: Queued, for reason: QuietReason) -> Bool {
         switch turn.kind {
         case .disclosure, .earlyWindDown:
@@ -331,7 +347,13 @@ public actor InterviewerLoop {
         case .reflection, .question, .wrapUp, .aboutApp:
             switch reason {
             case .personSpeaking, .appSpeaking: return true
-            case .gate: return turn.kind == .wrapUp && callSegment != nil && callSegment == newestSegment
+            case .gate:
+                if policy.gateWaitsForFlags { return true }
+                guard turn.kind == .wrapUp else { return false }
+                return (callSegment != nil && callSegment == newestSegment) || policy.checkStillPossible
+            case .noSegmentSince:
+                // A turn was just spoken: the wrap-up waits for the next segment and its check.
+                return turn.kind == .wrapUp
             default: return false
             }
         }
@@ -355,20 +377,22 @@ public actor InterviewerLoop {
         playing = nil
         if cutHand == hand {
             cutHand = nil
+            if turn.kind == .earlyWindDown { requeue(turn) }
             return
         }
         requeue(turn)
     }
 
     /// Offer again after `delay`, then judge afresh: the person may have spoken, or the session
-    /// paused or ended, in the meantime. Then ask about a segment whose grace has passed.
+    /// paused or ended, in the meantime. First ask about a segment whose grace has passed, so a
+    /// waiting wrap-up sees whether its check is out.
     private func scheduleRetry(after delay: Duration, clearsFloorRetry: Bool = false) {
         let id = UUID()
         retries[id] = Task {
             await sleep(delay)
             if clearsFloorRetry { floorRetryArmed = false }
-            await offerPending()
             askIfAwaiting()
+            await offerPending()
             retries[id] = nil
         }
     }
@@ -376,12 +400,21 @@ public actor InterviewerLoop {
     // MARK: The interviewer call
 
     /// Starts one call about the segment awaiting a reply, if the policy names one and no call is out.
+    /// Failing that, a waiting wrap-up gets a check-only call for the newest segment.
     /// The policy and the context are read with no await between them, so the request is built for
     /// the segment the policy named. A context whose newest segment is another one (the repository
-    /// is ahead of the loop, or the segment is left out of AI) is never sent.
+    /// is ahead of the loop, or the segment is left out of AI) is never sent: that segment counts as
+    /// a failed check, which holds the gate until its flags arrive.
     private func askIfAwaiting() {
-        guard let service, call == nil, !ended, !suspended, playing == nil,
-              let segment = policy.segmentAwaitingReply(at: now()) else { return }
+        guard let service, call == nil, !ended, !suspended, playing == nil else { return }
+        let segment: SegmentID, checkOnly: Bool
+        if let awaiting = policy.segmentAwaitingReply(at: now()) {
+            segment = awaiting; checkOnly = false
+        } else if pending.contains(where: { $0.kind == .wrapUp }), let awaiting = policy.segmentAwaitingCheck(at: now()) {
+            segment = awaiting; checkOnly = true
+        } else {
+            return
+        }
         let requestedAt = now()
         let request: InterviewerRequest, sessionWords: [String]
         do {
@@ -392,22 +425,26 @@ public actor InterviewerLoop {
             return
         }
         guard request.newestSegment == segment else {
-            log("[interviewer] skipped: the context's newest segment is not the one awaiting a reply")
+            observe(.interviewerCheck(segment, nil))
+            if skippedSegments.insert(segment).inserted {
+                log("[interviewer] skipped: the context's newest segment is not the one awaiting a reply")
+            }
             return
         }
         callSegment = segment
         call = Task {
             let result: Result<InterviewerReply, ExtractionError>
             do throws(ExtractionError) { result = .success(try await service.reply(to: request)) } catch { result = .failure(error) }
-            await replied(result, about: segment, requestedAt: requestedAt, sessionWords: sessionWords)
+            await replied(result, about: segment, checkOnly: checkOnly, requestedAt: requestedAt, sessionWords: sessionWords)
         }
     }
 
     /// Spec rule 4 and "The model turn": the check goes to the policy first, so an unclean one closes
     /// the gate before anything is offered. A reply with an unclean check is never offered: the arc's
     /// fixed text is the only answer to a disclosure. Then the client checks; then the turn is
-    /// offered with the time its call started, so speech since then drops it.
-    private func replied(_ result: Result<InterviewerReply, ExtractionError>, about segment: SegmentID,
+    /// offered with the time its call started, so speech since then drops it. A check-only reply
+    /// feeds the policy and nothing else, not even the about-app line.
+    private func replied(_ result: Result<InterviewerReply, ExtractionError>, about segment: SegmentID, checkOnly: Bool,
                          requestedAt: Duration, sessionWords: [String]) async {
         call = nil; callSegment = nil
         let ms = Int(((now() - requestedAt) / .milliseconds(1)).rounded())
@@ -417,7 +454,9 @@ public actor InterviewerLoop {
             log("[interviewer] \(ms) ms error: \(error)")
         case .success(let reply):
             observe(.interviewerCheck(segment, reply.check))
-            if reply.check.isClean {
+            if checkOnly {
+                log("[interviewer] \(ms) ms check only")
+            } else if reply.check.isClean {
                 let checked = TurnChecks.validate(reply, sessionWords: sessionWords)
                 log("[interviewer] \(ms) ms \(Self.describe(checked))")
                 if !ended, let turn = Self.turn(for: checked, requestedAt: requestedAt) { enqueue(turn) }
