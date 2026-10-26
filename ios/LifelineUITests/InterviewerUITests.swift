@@ -203,13 +203,17 @@ final class InterviewerUITests: XCTestCase {
     /// (0.3 s) and its partial's hold on the floor (1 s from 2.5 s) have passed by about 3.6 s, and the
     /// reflection (4 words, 0.6 s) plays to its end long before the second segment starts at about 5.8 s.
     /// With the 0.8 s script, each next segment starts inside the partial's hold and makes the reply stale.
+    /// The Listen view shows the first reflection only until the next one, so its words are checked in the
+    /// stored transcript; on the Listen view, a turn stays once one has played.
     @MainActor
     func testSettleInShowsAReflectionAfterAScriptedSegment() {
         let app = launchToTimeline(arguments: ["-uiTesting-speaks", "-uiTesting-slow"])
         startSettleIn(app)
-        XCTAssertTrue(text(app, "session.turn", "Before Maya climbed it").waitForExistence(timeout: 15),
-                      "the first story is reflected in its own words")
+        XCTAssertTrue(app.staticTexts["session.turn"].waitForExistence(timeout: 15), "the Listen view shows a reflection")
         app.finishSession()
+
+        openSessionDetail(app)
+        XCTAssertTrue(app.reveal(text(app, "transcript.turn", "Before Maya climbed it")), "the first story is reflected in its own words")
     }
 
     /// At the planned length (8 s under UI testing) the arc winds down, and the wrap-up waits for a check

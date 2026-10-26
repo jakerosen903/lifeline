@@ -81,6 +81,7 @@ struct Dependencies {
     /// returned as the session's words, which the client checks a reply against; it is not sent.
     func makeInterviewerContext(for session: SessionID, snapshot: SessionSnapshot) -> @Sendable () throws -> (InterviewerRequest, sessionWords: [String]) {
         let sessions = sessions, memories = extractionStore.memories, turns = InterviewerTurnRepository(database)
+        // A small synchronous GRDB read on the loop's actor, on purpose: the loop reads its policy and the context with no await between.
         return {
             let segments = try sessions.segments(in: session)
             let excluded = try memories.excludedSegmentIDs(in: session)
