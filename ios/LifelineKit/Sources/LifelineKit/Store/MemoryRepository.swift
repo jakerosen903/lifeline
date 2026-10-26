@@ -510,21 +510,56 @@ public struct MemoryRepository: Sendable {
 
     /// The kind, and the chapter's derived range with it, in one write: a fact leaves the range,
     /// a moment joins it, and a kill between the two can never leave the chapter stale (M7).
-    public func setKind(_ id: MemoryID, _ kind: MemoryKind) throws {
+    /// The receipt holds what the change took away (a story place, detail links) for `undoKind`.
+    @discardableResult
+    public func setKind(_ id: MemoryID, _ kind: MemoryKind) throws -> KindReceipt {
         try db.writer.write { db in
+            let from = try MemoryKind(rawValue: String.fetchOne(db, sql: "select kind from memory where id = ?", arguments: [id.rawValue]) ?? "") ?? .event
+            var receipt = KindReceipt(memory: id, from: from, to: kind, story: nil, details: [])
             try db.execute(sql: "update memory set kind = ? where id = ?", arguments: [kind.rawValue, id.rawValue])
             try Self.refreshChapterRange(ofMemory: id, in: db)
             if kind.isMoment {
                 // A moment names what it was about; it is no longer a standing statement (M7).
+                receipt.details = try MomentEntity.filter(Column("memory_id") == id.rawValue && Column("relation") == EntityRelation.detail.rawValue)
+                    .fetchAll(db).map(\.entityID)
                 try db.execute(sql: """
                     insert or ignore into moment_entity (memory_id, entity_id, relation, role_text)
                     select memory_id, entity_id, 'mention', role_text from moment_entity where memory_id = ? and relation = 'detail'
                     """, arguments: [id.rawValue])
                 try db.execute(sql: "delete from moment_entity where memory_id = ? and relation = 'detail'", arguments: [id.rawValue])
             } else {
-                // Stories are for scenes.
+                // Stories are for scenes. The place is remembered so an undo can give it back.
+                if let moment = try StoryMoment.filter(Column("memory_id") == id.rawValue).fetchOne(db),
+                   let story = try Story.fetchOne(db, key: moment.storyID.rawValue) {
+                    receipt.story = StoryRepository.Membership(moment: moment, title: story.title, chapterID: story.chapterID)
+                }
                 try db.execute(sql: "delete from story_moment where memory_id = ?", arguments: [id.rawValue])
                 try db.execute(sql: Self.deleteEmptyStoriesSQL)
+            }
+            return receipt
+        }
+    }
+
+    /// Puts a kind change back, in one write: the kind, the chapter range, the detail links a
+    /// moment turned into mentions, and the story place a fact, feeling or goal gave up (with
+    /// the story itself when it was deleted for being empty). Stale once the kind moved again.
+    public func undoKind(_ receipt: KindReceipt) throws {
+        try db.writer.write { db in
+            guard try String.fetchOne(db, sql: "select kind from memory where id = ?", arguments: [receipt.memory.rawValue]) == receipt.to.rawValue else {
+                throw CandidateActions.Error.stale
+            }
+            try db.execute(sql: "update memory set kind = ? where id = ?", arguments: [receipt.from.rawValue, receipt.memory.rawValue])
+            try Self.refreshChapterRange(ofMemory: receipt.memory, in: db)
+            for entity in receipt.details {
+                try db.execute(sql: "update moment_entity set relation = 'detail' where memory_id = ? and entity_id = ? and relation = 'mention'",
+                               arguments: [receipt.memory.rawValue, entity.rawValue])
+            }
+            if let membership = receipt.story {
+                if try !Story.exists(db, key: membership.moment.storyID.rawValue) {
+                    try Story(id: membership.moment.storyID, title: membership.title, chapterID: membership.chapterID, createdAt: .now).insert(db)
+                }
+                try db.execute(sql: "delete from story_moment where memory_id = ?", arguments: [receipt.memory.rawValue])
+                try membership.moment.insert(db)
             }
         }
     }

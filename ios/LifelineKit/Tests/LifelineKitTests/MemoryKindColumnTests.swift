@@ -164,3 +164,38 @@ private func year(_ y: Int) -> TimeRange {
     let storySpan = try env.store.stories.derivedSpan(of: story.id)
     #expect(storySpan.earliest?.year == 1995 && storySpan.latest?.year == 1995, "nor through a story")
 }
+
+@Test func aKindChangeThatLeavesAStoryCanBeUndone() throws {
+    let env = try Env()
+    let scene = try env.memory("Painting the fence", range: year(1995))
+    let story = try env.store.stories.insert(title: "The fence", chapterID: nil)
+    try env.store.stories.add(memory: scene.id, to: story.id)
+
+    let receipt = try env.actions.setKind(scene.id, .feeling)
+    #expect(try env.store.stories.membership(of: scene.id) == nil, "a feeling is not a scene in a story")
+    #expect(try env.store.stories.story(id: story.id) == nil, "a story with no scenes left is gone")
+
+    try env.actions.undoKind(receipt)
+    #expect(try env.store.memories.fetch(scene.id)?.kind == .event)
+    let back = try #require(try env.store.stories.story(id: story.id))
+    #expect(back.title == "The fence", "the story comes back under its own id and title")
+    #expect(try env.store.stories.membership(of: scene.id)?.moment.storyID == story.id)
+}
+
+@Test func undoKindRestoresDetailLinksAndIsStaleAfterAnotherChange() throws {
+    let env = try Env()
+    let fact = try env.memory("The fence was white")
+    try env.store.memories.setKind(fact.id, .fact)
+    let fence = try env.store.entities.insert(type: .thing, title: "The fence")
+    try env.store.entities.link(fact.id, fence.id, relation: .detail)
+
+    let receipt = try env.actions.setKind(fact.id, .event)
+    #expect(try env.store.entities.links(of: fact.id).map(\.link.relation) == [.mention], "a moment only mentions")
+    try env.actions.undoKind(receipt)
+    #expect(try env.store.entities.links(of: fact.id).map(\.link.relation) == [.detail], "undo puts the detail back")
+
+    let again = try env.actions.setKind(fact.id, .goal)
+    try env.actions.setKind(fact.id, .feeling)
+    #expect(throws: CandidateActions.Error.stale) { try env.actions.undoKind(again) }
+    #expect(try env.store.memories.fetch(fact.id)?.kind == .feeling, "a stale undo changes nothing")
+}

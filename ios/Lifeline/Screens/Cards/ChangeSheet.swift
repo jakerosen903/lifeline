@@ -154,6 +154,15 @@ struct ChangeSheet: View {
                         }
                     }
                     .accessibilityIdentifier("change.kind")
+                    if let changed = viewModel.kindNotice {
+                        HStack {
+                            Text(changed).foregroundStyle(Theme.ink).accessibilityIdentifier("change.kindChanged")
+                            Spacer()
+                            Button("Undo") { viewModel.undoKind() }
+                                .buttonStyle(.bordered).tint(Theme.olive)
+                                .accessibilityIdentifier("change.undoKind")
+                        }
+                    }
                     if !viewModel.memory.isMoment {
                         Menu {
                             Button("Nothing in particular (About)") { viewModel.moveDetail(to: nil) }

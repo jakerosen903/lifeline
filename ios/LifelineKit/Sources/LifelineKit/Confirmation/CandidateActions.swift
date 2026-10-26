@@ -437,10 +437,20 @@ public struct CandidateActions: Sendable {
 
     /// "What is this?" on the Change sheet (M7): the only way a memory changes kind. A moment
     /// turned fact leaves its chapter's range and its questions; a fact turned moment comes back.
-    public func setKind(_ memory: MemoryID, _ kind: MemoryKind) throws {
-        guard let current = try store.memories.fetch(memory) else { return }
-        guard current.kind != kind else { return }
-        try store.memories.setKind(memory, kind)   // the chapter range, links and story move in the same write
+    @discardableResult
+    public func setKind(_ memory: MemoryID, _ kind: MemoryKind) throws -> KindReceipt? {
+        guard let current = try store.memories.fetch(memory) else { return nil }
+        guard current.kind != kind else { return nil }
+        let receipt = try store.memories.setKind(memory, kind)   // the chapter range, links and story move in the same write
+        _ = try ResolverRunner(store: store).run()
+        return receipt
+    }
+
+    /// Undo under "What is this?": the kind and everything the change took with it come back in
+    /// one write. Refused as stale once the kind has moved again.
+    public func undoKind(_ receipt: KindReceipt?) throws {
+        guard let receipt else { return }
+        try store.memories.undoKind(receipt)
         _ = try ResolverRunner(store: store).run()
     }
 
