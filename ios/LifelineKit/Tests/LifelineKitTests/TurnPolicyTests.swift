@@ -136,9 +136,17 @@ struct TurnPolicyTests {
         tell(&p, first, at: 0, check: wantsToStop)
         tellClean(&p, second, at: 10)
         p.observe(.extractorFlags(second, .none), at: t(14))
-        #expect(p.decide(offer(.reflection), at: t(15)) == .stayQuiet(.gate))
-        #expect(p.decide(offer(.question), at: t(15)) == .stayQuiet(.gate))
-        #expect(p.decide(offer(.wrapUp), at: t(15)) == .stayQuiet(.gate))
+        for kind in [TurnKind.reflection, .question, .wrapUp, .aboutApp] {
+            #expect(p.decide(offer(kind), at: t(15)) == .stayQuiet(.gate), "\(kind)")
+        }
+
+        var flagged = policy()
+        tellClean(&flagged, first, at: 0)
+        flagged.observe(.extractorFlags(first, Flags(disclosure: .past, wantsToStop: false, wantsToChangeSubject: false)), at: t(4))
+        tellClean(&flagged, second, at: 10)
+        flagged.observe(.extractorFlags(second, .none), at: t(14))
+        #expect(flagged.decide(offer(.aboutApp), at: t(15)) == .stayQuiet(.gate), "heavy flags on an earlier segment")
+        #expect(flagged.decide(offer(.reflection), at: t(15)) == .stayQuiet(.heavy))
     }
 
     @Test func extractorFlagsThatArrivedMustBeCleanToo() {

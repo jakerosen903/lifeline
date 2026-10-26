@@ -119,9 +119,10 @@ public struct TurnPolicy: Equatable, Sendable {
         if appSpeaking { return .stayQuiet(.appSpeaking) }
         if isModel && heavy { return .stayQuiet(.heavy) }
         if quiet && !answersTheArc { return .stayQuiet(.quiet) }
-        if offer.kind != .opening && !answersTheArc && !gateOpen(for: offer) { return .stayQuiet(.gate) }
+        if offer.kind != .opening && !answersTheArc && !gateOpen { return .stayQuiet(.gate) }
         if let requested = offer.requestedAt, let spoke = lastSpeechStart, spoke > requested { return .stayQuiet(.stale) }
         if offer.kind == .opening && lastSpeechStart != nil { return .stayQuiet(.openingTooLate) }
+        // The arc's answer is exempt at all times, not only right after a disclosure: a late heavy flag must never block it.
         if !answersTheArc && !segmentSinceLastTurn { return .stayQuiet(.noSegmentSince) }
         if offer.kind.isQuestion && recentTurns.contains(where: \.isQuestion) { return .stayQuiet(.questionTooSoon) }
         // `ended` holds model turns too: the session is landing.
@@ -150,9 +151,9 @@ public struct TurnPolicy: Equatable, Sendable {
     }
 
     /// Rule 4: a clean interviewer check of the newest segment, and clean extractor flags if they arrived.
-    /// One unclean check or heavy flag on any segment closes the gate to model turns and the wrap-up for good.
-    private func gateOpen(for offer: TurnOffer) -> Bool {
-        if (offer.source == .model || offer.kind == .wrapUp) && (uncleanCheck || heavy) { return false }
+    /// One unclean check or heavy flag on any segment closes the gate to every gated turn for good.
+    private var gateOpen: Bool {
+        if uncleanCheck || heavy { return false }
         guard let segment = newestSegment, case .returned(let check) = checks[segment], check.isClean else { return false }
         return flags[segment].map { !$0.isHeavy } ?? true
     }
