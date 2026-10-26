@@ -21,6 +21,6 @@ public enum InterviewerContext {
             characters += segment.text.count
         }
         let recent = turns.filter { $0.sessionID == session }.sorted { $0.startMs < $1.startMs }.suffix(3).map(\.text)
-        return InterviewerRequest(segments: texts, opening: opening, stage: stage, recentTurns: Array(recent))
+        return InterviewerRequest(segments: texts, opening: opening, stage: stage, recentTurns: Array(recent), newestSegment: usable.first?.id)
     }
 }

@@ -151,8 +151,12 @@ final class SessionViewModel: Identifiable {
 
     /// The loop hears the session's inputs in order, and the Quiet control follows its state.
     private func startInterviewer(inputs: AsyncStream<InterviewerInput>, recorder: SessionRecorder, captureStart: ContinuousClock.Instant) {
+        // No interviewer yet: no calls, so only the opening and the arc's answers are spoken.
         let loop = InterviewerLoop(kind: kind, config: deps.arcConfig,
+                                   service: nil,
+                                   context: { throw ExtractionError.noKey },
                                    speak: { await recorder.speak($0) },
+                                   cut: { await recorder.interruptTurn() },
                                    now: { ContinuousClock.now - captureStart },
                                    sleep: { try? await Task.sleep(for: $0) })
         // Ends once the stream is finished at the end of the session and its last inputs are delivered.

@@ -78,3 +78,14 @@ private func turn(_ text: String, at startMs: Int, session: SessionID) -> Interv
     #expect(request.recentTurns == ["b", "c", "d"])
     #expect(request.stage == .windDown)
 }
+
+@Test func theRequestNamesItsNewestSegment() throws {
+    let session = SessionID()
+    let older = segment(0, "older", session: session)
+    let newer = segment(1, "newer", session: session)
+    let request = InterviewerContext.build(session: session, segments: [older, newer], excluded: [], opening: "", stage: .open, turns: [])
+    #expect(request.newestSegment == newer.id)
+    let withoutNewer = InterviewerContext.build(session: session, segments: [older, newer], excluded: [newer.id], opening: "", stage: .open, turns: [])
+    #expect(withoutNewer.newestSegment == older.id, "an excluded segment is never named")
+    #expect(!(try request.userMessage()).contains(newer.id.rawValue), "the id is not sent")
+}

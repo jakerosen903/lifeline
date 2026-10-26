@@ -60,9 +60,13 @@ public struct InterviewerRequest: Equatable, Sendable {
     public var stage: Stage
     /// The last three turns the app spoke, oldest first.
     public var recentTurns: [String]
+    /// The stored segment whose text is `segments.first`, so the loop can tell which segment the check is about.
+    /// Not sent to the model.
+    public var newestSegment: SegmentID?
 
-    public init(segments: [String], opening: String, stage: Stage, recentTurns: [String]) {
+    public init(segments: [String], opening: String, stage: Stage, recentTurns: [String], newestSegment: SegmentID? = nil) {
         self.segments = segments; self.opening = opening; self.stage = stage; self.recentTurns = recentTurns
+        self.newestSegment = newestSegment
     }
 
     private struct Body: Encodable {
