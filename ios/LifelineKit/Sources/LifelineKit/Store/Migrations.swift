@@ -336,6 +336,19 @@ enum Migrations {
                 t.add(column: "entity_id", .text).references("entity", onDelete: .cascade)
             }
         }
+        // v11 (M8): what the interviewer said, on the session file's clock.
+        m.registerMigration("v11") { db in
+            try db.create(table: "interviewer_turn") { t in
+                t.primaryKey("id", .text)
+                t.column("session_id", .text).notNull().references("session", onDelete: .cascade).indexed()
+                t.column("kind", .text).notNull()
+                t.column("source", .text).notNull()
+                t.column("text", .text).notNull()
+                t.column("start_ms", .integer).notNull()
+                t.column("end_ms", .integer)
+                t.column("interrupted", .boolean).notNull().defaults(to: false)
+            }
+        }
         return m
     }
 }

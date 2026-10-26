@@ -111,8 +111,38 @@ import GRDB
 }
 
 @Test func schemaVersionsOrderByMigrationPosition() {
-    #expect(Migrations.currentSchemaVersion == "v10")
+    #expect(Migrations.currentSchemaVersion == "v11")
     #expect(Migrations.isNewer("v9", than: "v8") && !Migrations.isNewer("v8", than: "v9") && Migrations.isNewer("v10", than: "v9"))
     #expect(Migrations.isNewer("v8", than: "v7") && !Migrations.isNewer("v7", than: "v8") && !Migrations.isNewer("v8", than: "v8"))
     #expect(Migrations.isNewer("v99", than: "v8"), "an unknown version is from the future")
+}
+
+@Test func v11OnAPopulatedV10Database() throws {
+    var config = Configuration()
+    config.foreignKeysEnabled = true
+    let queue = try DatabaseQueue(configuration: config)
+    try Migrations.migrator.migrate(queue, upTo: "v10")
+    try queue.write { db in
+        try db.execute(sql: """
+            insert into session (id, started_at, ended_at, audio_path, stage_log, landing_choice_made) values ('s1', '2026-10-01', '2026-10-01', 'a.m4a', '[]', 1);
+            insert into segment (id, session_id, "index", start_ms, end_ms, text, status) values ('g1', 's1', 0, 0, 1000, 'hi', 'extracted');
+            insert into entity (id, type, title, created_at) values ('e1', 'person', 'Maya', '2026-10-01');
+            insert into memory (id, title, summary_quote, visibility, created_at) values ('m1', 'A', 'a', 'timeline', '2026-10-01');
+            """)
+    }
+    try Migrations.migrator.migrate(queue)
+    let (columns, kept) = try queue.read { db in
+        (try db.columns(in: "interviewer_turn").map(\.name),
+         try Int.fetchOne(db, sql: "select count(*) from memory") ?? 0)
+    }
+    #expect(Set(columns) == ["id", "session_id", "kind", "source", "text", "start_ms", "end_ms", "interrupted"])
+    #expect(kept == 1, "the existing archive is untouched")
+    try queue.write { db in
+        try db.execute(sql: "insert into interviewer_turn (id, session_id, kind, source, text, start_ms) values ('t1', 's1', 'opening', 'fixed', 'Hello.', 0)")
+    }
+    #expect(throws: DatabaseError.self, "a turn needs its session") {
+        try queue.write { try $0.execute(sql: "insert into interviewer_turn (id, session_id, kind, source, text, start_ms) values ('t2', 'nope', 'opening', 'fixed', 'Hello.', 0)") }
+    }
+    try queue.write { try $0.execute(sql: "delete from session where id = 's1'") }
+    #expect(try queue.read { try Int.fetchOne($0, sql: "select count(*) from interviewer_turn") } == 0, "the turn goes with its session")
 }
