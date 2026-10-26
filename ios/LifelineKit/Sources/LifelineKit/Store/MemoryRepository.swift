@@ -504,8 +504,23 @@ public struct MemoryRepository: Sendable {
         try (includingHidden ? allMemories() : visibleMemories()).filter { !$0.isMoment && !$0.isFloating }
     }
 
+    /// The kind, and the chapter's derived range with it, in one write: a fact leaves the range,
+    /// a moment joins it, and a kill between the two can never leave the chapter stale (M7).
     public func setKind(_ id: MemoryID, _ kind: MemoryKind) throws {
-        try db.writer.write { try $0.execute(sql: "update memory set kind = ? where id = ?", arguments: [kind.rawValue, id.rawValue]) }
+        try db.writer.write { db in
+            try db.execute(sql: "update memory set kind = ? where id = ?", arguments: [kind.rawValue, id.rawValue])
+            try Self.setKindFollowUps(id, kind, in: db)
+        }
+    }
+
+    /// What else changes with a kind: the chapter range. Later milestones add to this in the same write.
+    static func setKindFollowUps(_ id: MemoryID, _ kind: MemoryKind, in db: Database) throws {
+        guard let chapter = try String.fetchOne(db, sql: "select chapter_id from memory where id = ?", arguments: [id.rawValue]) else { return }
+        let members = try Memory.filter(Column("chapter_id") == chapter).fetchAll(db).filter(\.isMoment)
+        let range = ChapterRepository.span(over: members.map(\.range))
+        try db.execute(sql: """
+            update chapter set earliest = ?, latest = ?, likely_start = ?, likely_end = ?, granularity = ?, origin = ?, evidence_text = ? where id = ?
+            """, arguments: [range.earliest, range.latest, range.likelyStart, range.likelyEnd, range.granularity?.rawValue, range.origin?.rawValue, range.evidenceText, chapter])
     }
 
     /// Memories with no range at all.

@@ -55,7 +55,12 @@ extension Word: FetchableRecord, PersistableRecord {
 /// write touches only what is the person's own. Fetch with `Person.selectSQL`, never `select *`.
 extension Person: FetchableRecord, PersistableRecord {
     public static let databaseTableName = "person"
-    static let selectSQL = "select person.*, entity.title as display_name from person join entity on entity.id = person.entity_id "
+    /// Columns named one by one: the row's own old name column is read nowhere (M7).
+    static let selectSQL = """
+        select person.id, person.entity_id, person.notes, person.is_owner, person.birth_date, person.birth_date_origin,
+               entity.title as display_name
+        from person join entity on entity.id = person.entity_id 
+        """
     enum CodingKeys: String, CodingKey {
         case id, displayName = "display_name", notes, isOwner = "is_owner"
         case birthDate = "birth_date", birthDateOrigin = "birth_date_origin"
@@ -64,6 +69,8 @@ extension Person: FetchableRecord, PersistableRecord {
     public func encode(to container: inout PersistenceContainer) throws {
         container["id"] = id.rawValue
         container["entity_id"] = entityID.rawValue
+        // Kept one release for the v8 schema's NOT NULL; the name lives on the entity.
+        container["display_name"] = ""
         container["notes"] = notes
         container["is_owner"] = isOwner
         container["birth_date"] = birthDate

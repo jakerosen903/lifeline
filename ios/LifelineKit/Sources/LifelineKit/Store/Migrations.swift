@@ -325,20 +325,13 @@ enum Migrations {
                               join memory_span s2 on s2.memory_id = m2.id and s2."order" = 0
                               where mp2.place_id = mp.place_id order by m2.created_at, m2.id limit 1);
                 """)
-            // The name moves to the entity; SQLite cannot drop a column with a reference, so the table is
-            // rebuilt. Alias and mention keep their references: SQLite rewrites them on RENAME.
-            try db.create(table: "person_v9") { t in
-                t.primaryKey("id", .text)
-                t.column("entity_id", .text).notNull().unique().references("entity", onDelete: .cascade)
-                t.column("notes", .text)
-                t.column("is_owner", .boolean).notNull().defaults(to: false)
-                t.column("birth_date", .datetime)
-                t.column("birth_date_origin", .text)
+            // The name moves to the entity. Nothing is dropped: `person.display_name` stays one release,
+            // read nowhere (like `place`, `memory_place`, `memory_person`), and new rows leave it empty.
+            try db.alter(table: "person") { t in
+                t.add(column: "entity_id", .text).references("entity", onDelete: .cascade)
             }
-            try db.execute(sql: "insert into person_v9 select id, id, notes, is_owner, birth_date, birth_date_origin from person")
-            try db.drop(table: "person")
-            try db.rename(table: "person_v9", to: "person")
-            try db.create(indexOn: "person", columns: ["is_owner"])
+            try db.execute(sql: "update person set entity_id = id")
+            try db.create(index: "person_entity_id", on: "person", columns: ["entity_id"], unique: true)
             try db.alter(table: "curiosity_item") { t in
                 t.add(column: "entity_id", .text).references("entity", onDelete: .cascade)
             }
