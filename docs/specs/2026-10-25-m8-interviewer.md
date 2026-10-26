@@ -64,7 +64,7 @@ Rules, in precedence order:
 1. While the person is speaking (a `speechStarted` without a closed segment after it, or a partial in the last 1 s), the decision is `stayQuiet`.
 2. A disclosure or a heavy moment ends all model turns for the rest of the session. Only fixed turns are spoken after that.
 3. The quiet flag ends all turns except the disclosure text and the early wind-down line.
-4. **The gate.** Every spoken turn after the opening waits for a clean safety check of the latest closed segment, bank questions included (owner's decision B). The check is part of the interviewer's own call (owner's decision A): `disclosure: none | past | present` and `wants_to_stop`. A turn is spoken only if that check is clean and the extractor's flags for the segment, when they have arrived, are clean too. A failed or missing check is not clean. The extractor stays the only input to the arc: an interviewer check that is not clean silences the turn but does not wind the session down.
+4. **The gate.** Every spoken turn after the opening waits for a clean safety check of the latest closed segment, bank questions included (owner's decision B). The check is part of the interviewer's own call (owner's decision A): `disclosure: none | past | present` and `wants_to_stop`. A turn is spoken only if that check is clean and the extractor's flags for the segment, when they have arrived, are clean too. A failed or missing check is not clean. The extractor stays the only input to the arc: an interviewer check that is not clean silences the turn but does not wind the session down. It also ends model turns and the spoken wrap-up for the rest of the session, as rule 2 does, so a later clean segment cannot get a reflection while the extractor is still slow on the unclean one **(my call, 2026-10-25)**. The disclosure text and the early wind-down line are the arc's response to an unclean check; they are not gated.
 5. A model turn is dropped if new speech started after it was requested.
 6. Never two interviewer turns without a closed segment between them, except a fixed turn that follows a disclosure.
 7. After a question, the next two interviewer turns must not be questions.
@@ -82,7 +82,7 @@ Rules, in precedence order:
   - Every capitalized word that is not the first word, and every number, appears in this session's words.
   - No text when `kind` is `none`.
 - Model: `claude-haiku-5-5` by default for latency, configurable like the extractor's model (owner's call 3, decided 2026-10-25). The latency target is 1200 ms p50 from request to text. This is a guess to measure on the device, not a fact.
-- No key, no network, or a refused call: model turns are silent. Fixed turns and bank questions still play. A session never fails because the interviewer cannot speak.
+- No key, no network, or a refused call: model turns are silent, and so is the wrap-up offer, which waits for a clean check (decision B). The opening, the disclosure text and the early wind-down line still play. A session never fails because the interviewer cannot speak.
 
 ## Goal 3 — The app's voice stays out of the person's words
 
@@ -135,8 +135,8 @@ The core of M8 (voice, turn policy, echo handling, safety, quiet) does not depen
 Four PRs, each usable on the phone. The app can be interrupted from the first PR that speaks.
 
 1. **PR 1 — The interviewer's turns, silent.** `TurnPolicy`, `interviewer_turn` and its migration, the removal of the app's words from segments (against scripted turns), turns shown on the Listen view as text. No audio out.
-2. **PR 2 — Fixed turns are spoken.** `TTS`, `AVSpeechTTS`, the player node, echo cancellation, barge-in, the quiet controls, "Lifeline speaks". Spoken: opening, wrap-up, disclosure, early wind-down. No model, so no gate yet: these lines open the session or follow the arc.
-3. **PR 3 — Reflections and follow-ups.** The interviewer prompt, the model turn, the client checks, the flags gate, "About the app".
+2. **PR 2 — Fixed turns are spoken.** `TTS`, `AVSpeechTTS`, the player node, echo cancellation, barge-in, the quiet controls, "Lifeline speaks". Spoken: opening, disclosure, early wind-down. These lines open the session or answer the arc, so they need no gate. The wrap-up offer stays on screen until PR 3, because under decision B it waits for the interviewer's check **(my call, 2026-10-25)**.
+3. **PR 3 — Reflections and follow-ups.** The interviewer prompt, the model turn, the client checks, the flags gate, "About the app", the spoken wrap-up offer.
 4. **PR 4 — Device run.** The checklist below; numbers redlined into `ArcConfig`. No acknowledgements (owner's call 4).
 
 ## Edge cases
