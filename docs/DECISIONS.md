@@ -10,7 +10,7 @@ One entry per decision. Newest first. Status is Decided, Open, or Superseded.
 
 **Why.** Much of what a person says is not a moment. Forcing it onto the timeline fills the shelf with things that never get a date and makes the app ask the wrong question (Principle 2). A composed idea title or "Do you still think that?" interprets and evaluates a life (Principle 1).
 
-**Consequences.** M7 ships as two PRs: PR A (kind column, migration v9a, About section, "What is this?") first, then PR B (entities, migration v9b, prompt v6). The person split is the largest task of PR B. `place`, `memory_place` and `memory_person` stay one release and are read nowhere; v10 drops them.
+**Consequences.** M7 ships as two PRs: PR A (kind column, migration v9, About section, "What is this?") first, then PR B (entities, migration v10, prompt v6). The person split is the largest task of PR B. `place`, `memory_place` and `memory_person` stay one release and are read nowhere; v10 drops them.
 
 ## 2026-10-24 · Copies of the archive stay out of the phone's cloud backup
 

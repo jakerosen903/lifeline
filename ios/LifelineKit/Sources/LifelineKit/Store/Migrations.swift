@@ -261,9 +261,9 @@ enum Migrations {
                 t.add(column: "continues_order", .integer)
             }
         }
-        // v9a (M7, PR A): a memory's kind lives in a column, filled from its card; no card, or a
+        // v9 (M7, PR A): a memory's kind lives in a column, filled from its card; no card, or a
         // card without a kind, is an event.
-        m.registerMigration("v9a") { db in
+        m.registerMigration("v9") { db in
             try db.alter(table: "memory") { t in
                 t.add(column: "kind", .text).notNull().defaults(to: "event")
             }
@@ -273,9 +273,9 @@ enum Migrations {
                       in ('event', 'fact', 'feeling', 'goal', 'other')
                 """)
         }
-        // v9b (M7, PR B): people, places, things and ideas are entities, with one link table.
+        // v10 (M7, PR B): people, places, things and ideas are entities, with one link table.
         // `place`, `memory_place` and `memory_person` are copied in and kept one release, read nowhere.
-        m.registerMigration("v9b") { db in
+        m.registerMigration("v10") { db in
             try db.create(table: "entity") { t in
                 t.primaryKey("id", .text)
                 t.column("type", .text).notNull().indexed()

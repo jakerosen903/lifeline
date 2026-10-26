@@ -10,12 +10,12 @@ private func guess(_ y: Int) -> TimeRange {
     TimeRange(earliest: d("\(y)-01-01"), latest: d("\(y)-12-31"), likelyStart: nil, likelyEnd: nil, granularity: .year, origin: .inferred, evidenceText: "around then")
 }
 
-/// A v9a database with the shape a person's phone has before M7's entities.
+/// A v9 database with the shape a person's phone has before M7's entities.
 func populatedV9aQueue() throws -> DatabaseQueue {
     var config = Configuration()
     config.foreignKeysEnabled = true
     let queue = try DatabaseQueue(configuration: config)
-    try Migrations.migrator.migrate(queue, upTo: "v9a")
+    try Migrations.migrator.migrate(queue, upTo: "v9")
     try queue.write { db in
         try db.execute(sql: """
             insert into session (id, started_at, ended_at, audio_path, stage_log, landing_choice_made) values ('s1', '2026-10-01', '2026-10-01', 'a.m4a', '[]', 1);
@@ -41,7 +41,7 @@ func populatedV9aQueue() throws -> DatabaseQueue {
     return queue
 }
 
-@Test func v9bOnAPopulatedV8KeepsEveryLink() throws {
+@Test func v10OnAPopulatedV8KeepsEveryLink() throws {
     let queue = try populatedV9aQueue()
     try Migrations.migrator.migrate(queue)
     try queue.read { db in
