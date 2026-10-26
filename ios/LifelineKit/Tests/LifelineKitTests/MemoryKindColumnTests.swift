@@ -147,3 +147,20 @@ private func year(_ y: Int) -> TimeRange {
     try env.store.memories.setKind(m.id, .event)
     #expect(try env.store.chapters.chapter(id: chapter.id)?.range.earliest?.year == 1996, "and comes back with it")
 }
+
+@Test func collectionAndStorySpansSkipAFactsHiddenRange() throws {
+    let env = try Env()
+    let scene = try env.memory("Painting the fence", range: year(1995))
+    let fact = try env.memory("The fence was white", range: year(2010))
+    try env.store.memories.setKind(fact.id, .fact)
+    let collection = try env.store.chapters.insertCollection(titled: "The fence")
+    try env.store.chapters.add(memory: scene.id, to: collection.id)
+    try env.store.chapters.add(memory: fact.id, to: collection.id)
+    let collectionSpan = try env.store.chapters.derivedSpan(of: collection.id)
+    #expect(collectionSpan.earliest?.year == 1995 && collectionSpan.latest?.year == 1995, "a fact's stored range never shows through a collection")
+    let story = try env.store.stories.insert(title: "The fence", chapterID: nil)
+    try env.store.stories.add(memory: scene.id, to: story.id)
+    try env.store.stories.add(memory: fact.id, to: story.id)
+    let storySpan = try env.store.stories.derivedSpan(of: story.id)
+    #expect(storySpan.earliest?.year == 1995 && storySpan.latest?.year == 1995, "nor through a story")
+}

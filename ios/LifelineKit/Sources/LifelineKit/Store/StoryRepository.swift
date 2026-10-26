@@ -162,7 +162,7 @@ public struct StoryRepository: Sendable {
     }
 
     public func derivedSpan(of story: StoryID) throws -> TimeRange {
-        ChapterRepository.span(over: try members(of: story).map(\.range))
+        ChapterRepository.span(over: try members(of: story).filter(\.isMoment).map(\.range))   // a fact's range is hidden everywhere (M7)
     }
 
     private static func clean(_ title: String?) -> String? {
