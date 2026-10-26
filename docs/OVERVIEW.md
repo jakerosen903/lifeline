@@ -1,191 +1,219 @@
-# Life Timeline Overview
+# Lifeline Overview
 
-> Markdown export of the overview page (live copy: https://claude.ai/artifact/DrXtBmNYMmqfnjRJhTYEDP). Diagrams are inline SVG; GitHub renders them. The "under the hood" section follows ASD-STE100 style.
+> Markdown copy of the overview page (live: https://claude.ai/artifact/DrXtBmNYMmqfnjRJhTYEDP), rewritten 2026-10-25 for V1 as built through M6. Figures are SVG files in `docs/figures/`. The "under the hood" section follows ASD-STE100 style.
 
+## An app that listens to your life and keeps it.
 
-## An app that listens to your life and keeps it
+You tell a story, a few minutes at a time. It is saved in your own voice the moment you speak, sorted while you get on with your day, and over weeks it grows into a timeline you can play back: chapters, stories, moments.
 
-You talk. A timeline fills in. Over months it becomes a replayable autobiography in your own voice, and later a shared story with the people who were there.
-
-Status: design and grounding, pre-prototype. Updated October 21, 2026.
+Status: V1 built (M1 to M6), in daily use on the owner’s iPhone · Updated October 25, 2026
 
 ## What we are building
 
-Most journaling tools ask you to write. Most family-history tools ask you to fill in forms. This app asks you to tell a story out loud, the way you would over lunch, and does the organizing itself. The core loop is short: **talk, extract, place, confirm, enrich**. The person tells a memory; the app pulls out what happened, who was there and roughly when; it places the memory on a timeline with honest uncertainty; it checks with a one-tap card; and it quietly notes what it would like to ask about next time.
+Most journaling tools ask you to write. Most family-history tools ask you to fill in forms. Lifeline asks you to tell one story out loud, the way you would over lunch, and does the organizing itself, only when you agree to it. The intended rhythm is a few minutes a day, with the timeline growing over weeks rather than in one long sitting.
 
-The result is three things at once: a **journal** for revisiting fond memories, an **autobiography** you can replay chapter by chapter in your own voice, and eventually a **family record** where several people’s versions of the same Christmas sit side by side.
+1. **Talk.** Choose “Tell a quick story” (one prompt, done when you are) or “Settle in” (more of a conversation: the next question arrives when the room goes quiet). One speaker. The screen can lock.
+2. **Saved.** The audio and an on-device transcript are written as you speak. Finishing never waits for anything else.
+3. **Sorted.** In the background, each completed thought goes to the extractor with the context it needs and comes back as possible memories.
+4. **Kept.** Keep, change or dismiss a card whenever you like, or never. Nothing merges, groups or gets a title without your tap.
+5. **Placed.** Kept moments land on a timeline as honest ranges (“during the Boston years”), inside stories and chapters, or on the shelf until a date turns up.
 
-- **Phase 1 — Personal timeline.** Voice sessions, extraction, fuzzy time, chapters, people, replay. The whole product has to be good here.
-- **Phase 2 — Props.** Favorite photos as prompts and anchors, then music from an era. Photos before music.
-- **Phase 3 — Family.** Per-memory visibility, shared events with multiple perspectives, questions for each other.
+The result is three things at once: a **journal** for revisiting fond memories, an **autobiography** you can replay in your own voice, and, later, a **family record** where several people’s versions of the same Christmas sit side by side.
+
+The shape changed on the way. The first design imagined 30 to 60 minute oral-history sittings with a spoken interviewer. Real use was a few minutes at a time, and a design review warned that cards, people, dates and session review stacked together would feel like maintaining a database. Both pushed the product toward a short daily practice in which keeping the story comes first and organizing it is optional.
+
+![roadmap](figures/roadmap.svg)
+
+*Where the project stands. The top row is built and in use; the bottom row is designed and waiting. Privacy controls beyond hide, exclude and delete wait until someone other than the owner uses the app.*
+
+| Milestone | What it added |
+| --- | --- |
+| M1 Record | Screen-off recording, on-device transcription with word times, local storage, playback of any segment. |
+| M2 Extract | Possible memories as cards; people resolved once with aliases; “who’s this?”; the `lifeline` command on a Mac. |
+| M3 Place | The resolver: memories as ranges, collections, the shelf, relative questions, a fresh opening question each session. |
+| M4 Land | Finishing never waits for sorting; the quiet Listen view and the review view; Keep / Change… / Dismiss with Undo; “Check this” tags; the light landing; the disclosure card; hide and exclude as two flags. |
+| M4.1 Same story | On-device matching across recordings; “Same as X?” on a card; “Tell me when” for a stated date. |
+| M5 Organize | A duplicate pass over kept memories; groups merge on one tap; a telling across a pause is one card; stories; a token-budgeted context packet. |
+| M6 Steady | A visible, restartable sorting status; “Your copy” export and restore; trim a telling to the words that belong to it. |
 
 ## What we are learning
 
-The design is grounded in four fields that have worked on the same problem for decades: oral history, therapy (narrative therapy, motivational interviewing, life review), autobiographical-memory research, and memoir craft. Each one changed something concrete in the product. The eight principles below are the distilled version; every screen and every line of the interviewer’s prompt should be checkable against them.
+The design is grounded in four fields that have worked on the same problem for decades: oral history, therapy (narrative therapy, motivational interviewing, life review), autobiographical-memory research, and memoir craft. The nine principles below are the distilled version; every screen and every prompt is checked against them. The ninth came from the design review.
 
 1. **The person is the author.** The app listens, reflects and organizes. It never interprets, evaluates or corrects a life.
 2. **Ask for scenes, not facts.** Places, people and dates are harvested from stories, never requested as a form.
 3. **Reflect more than you ask.** After any question, the next turns are reflections or silence. Never fill a pause.
 4. **Follow the tangent, keep the thread.** Memory moves by association. Go where the person goes; file the dropped thread for later.
-5. **Uncertainty is shown, never hidden.** Inferred dates and names look like guesses until confirmed. Nothing unsaid is filled in.
+5. **Uncertainty is shown, never hidden.** Guesses look like guesses until confirmed. Nothing unsaid is filled in.
 6. **Hard chapters are doors, not destinations.** Loss, illness and regret are offered once and left alone.
 7. **Many true versions.** Family accounts of one event sit side by side. The app never adjudicates.
-8. **Every session lands.** Sessions end deliberately, on time or early, with a summary and the person’s say over what is kept.
+8. **Every session lands.** Sessions end deliberately and lightly, with the person’s say over what is kept.
+9. **Preserve first, organize later.** The recording is kept the moment it is made. Cards approve organization, never survival.
+
+### What real use taught us
+
+The owner has used each milestone on their own phone. Most changes since the first design came from that, or from the review.
+
+| What happened | What changed | Where |
+| --- | --- | --- |
+| Sessions ran a few minutes, not an hour. | Short is the default. A quick story has no clock on screen; settling in differs in shape, not length. The timer became a backstop, with no automatic stop before a 3-hour recording limit. | M4 |
+| The review warned that the app could feel like homework. | Principle 9. Recording is the default view; review is optional and opened by choice; the landing says the recording is saved and offers “Done for now”. | M4 |
+| “Not quite” dismissed a card that only needed fixing. | Keep / Change… / Dismiss with Undo. Keeping does not endorse the guesses, which carry “Check this”. Later: trim a telling to its own words. | M4, M6 |
+| One story told on two days became two memories. | On-device matching finds related moments in every recording; the card asks “Same as X?”; one tap merges, Undo takes it back. | M4.1 |
+| A memory with no anchor had no way to get a date. | “Tell me when”: a year, around a year, between two years, or an age, stored and shown as said. | M4.1 |
+| Three tellings of one friendship sat side by side; a long telling split into three cards. | A duplicate pass asks a reconciler which kept memories are the same; groups merge on one tap; a telling across a pause grows one card; related moments form stories. | M5 |
+| After a recording the timeline said nothing, and it looked as if half was lost. | One quiet line says what is still sorting, or why sorting stopped, with Try again. | M6 |
+| The phone held the only copy of everything. | “Your copy”: one `.lifeline` file to export and restore, kept out of the cloud backup until the person shares it. | M6 |
+| A wind-down mock-up followed a grief story with “something lighter” about the same person. | A neutral closing line after a heavy session; no organizational prompt during a heavy moment; the disclosure flag tells past narration from present danger. | Review, M4 |
 
 ### Why memories cluster where they do
 
-Memory research has a well-replicated finding called the reminiscence bump: adults recall far more from roughly ages 10 to 30 than from any later decade. The kind of cue matters too. Smells pull up the earliest memories, music peaks in the teens, and “tell me about an important moment” pulls later and larger than a cue word. Two product consequences: a thin middle-aged chapter is normal, not a failure to nag about, and the prompt should be chosen for the era we want to reach.
-
-
-
+Adults recall far more from roughly ages 10 to 30 than from any later decade, the reminiscence bump. The kind of cue matters too: smells reach the earliest memories, music peaks in the teens, and “tell me about an important moment” reaches later and wider than a cue word. So a thin middle-aged chapter is normal, not a gap to nag about, and the opening question is chosen for the era it should reach.
 
 ![reminiscence-bump](figures/reminiscence-bump.svg)
 
-
-
-*Illustrative shape of autobiographical recall for an adult over 40 (not measured data). The timeline will naturally be dense in a person’s teens and twenties; the interviewer should expect that rather than fight it.*
+*Illustrative shape of autobiographical recall for an adult over 40 (not measured data). The timeline will be dense in a person’s teens and twenties; the app expects that.*
 
 ### Fuzzy time is the normal case
 
-People rarely give dates. They say “the summer after I graduated” or “when Maya was little.” So every memory carries a time *range*, not a point: a wide “possible” band and a narrower “likely” band. A collection such as *Family trips to Yosemite* can span a whole life (1996 to 2023) while each memory inside it keeps its own range. The range tightens through relative questions, never through a demand for a date.
-
-
-
+People rarely give dates. They say “the summer after I graduated” or “when Maya was little”. Every memory therefore carries a range, not a point: a wide possible band and a narrower likely band. A collection such as *Family trips to Yosemite* can span a whole life while each memory inside it keeps its own range. Ranges tighten through relative questions, never a demand for a date. On screen the precision follows the memory: “during the Boston years” in a list, “probably 2011 to 2013” in the detail, the bands only in the editor.
 
 ![fuzzy-time-ranges](figures/fuzzy-time-ranges.svg)
 
-
-
-*“The bear at the campsite” narrows from a 27-year collection span to a 3-year likely range through two relative questions. The person can stop at any step; the timeline renders whatever range is current.*
-
-### People are resolved, not guessed
-
-Every name mentioned becomes a pending “who’s this?” card. The person resolves it once, to a contact, to someone already in the story, or as someone new, and the link then holds across every memory. This is what keeps two Sams apart and lets “my sister” and “Maya” be one person. In Phase 2, photos use the same card: the person says who is in the picture, and that tag links the photo to a person.
-
-### Preserve first, organize later
-
-The recording is kept the moment it is made, and the first payoff is hearing your own voice play back a story, minutes in. Every card, check and refinement after that approves organization; none of them decides whether a story survives. A person who never touches a card still gets their story. Two ways in are equally valid: a quick story of a few minutes (also the shape of a daily habit) or a longer sit-down.
+*“The bear at the campsite” narrows from a 27-year collection span to a 3-year likely range through two relative questions. The person can stop at any step, or state the year with “Tell me when”; a stated date is shown as said.*
 
 ### Chapters, stories, moments
 
-A session is when you recorded. A moment is a scene you described, with its original audio. A story connects related moments, often told across several sessions. A chapter is the broader life context, titled in the person's words. Years and months are a lens for navigating, shown only when they help; collections carry themes across chapters. Every level can be listened to as a playlist in the person's voice.
+A session is when you recorded. A moment is a scene you described, with its own audio; the same moment told twice becomes one moment with two tellings. A story connects related moments, often told across several sessions. A chapter is the wider life context, titled in the person’s words. Collections carry themes across chapters. Stories are built and show as groups on the timeline. The fuller navigation, a Photos-style zoom from life to chapter to story with “Listen at this level”, is designed and not yet built.
 
-### Every session has a shape
+### People are resolved, not guessed
 
-A quick story is a few minutes; settling in is longer, one speaker at a time. The app owns the landing but keeps it light: the recording is saved, a few moments from today with play, done for now by default. Therapy sessions and oral-history interviews both end deliberately, because ending on a hard memory is what stops people from coming back. A heavy moment triggers the same landing early.
+Every name mentioned becomes a pending “who’s this?” card. The person resolves it once, to someone already in the story, to someone new, or as “not a person”, and the link holds across every memory. That keeps two Sams apart and lets “my sister” and “Maya” be one person. In a heavy moment no such card appears.
 
+### Every session lands
 
-
+A quick story is one prompt and ends when the person is done. Settling in is a conversation with a planned length, a wrap-up offer and an explicit “Keep going”. Either way the app owns the landing and keeps it light. A heavy moment brings the same landing early.
 
 ![session-arc](figures/session-arc.svg)
 
+*The two session shapes. Nobody is stopped for talking longer than planned; the only automatic landing is the 3-hour recording limit.*
 
-
-*The arc a longer session follows. An early signal moves the ochre wind-down block to wherever the person is. There is no automatic stop: at the planned length the app offers a wrap-up and an explicit way to keep going.*
+---
 
 ## How it works under the hood
 
-This section is written in Simplified Technical English (ASD-STE100 style): short sentences, one instruction per sentence, active voice, approved verbs, and “must” for requirements.
+This section follows Simplified Technical English (ASD-STE100): short sentences, one instruction per sentence, active voice, and “must” for requirements. It describes V1 as built.
 
 ### 1. System overview
 
-The system has four parts. The parts are the voice session, the interviewer, the extraction pipeline, and the timeline store. The voice session runs on the device. The interviewer runs on a server. The extraction pipeline runs on a server. The timeline store runs on the device.
+The system has two parts. The first part is the iPhone app. The second part is the Anthropic Messages API. V1 has no server of its own.
 
-The server does not keep data. The server receives a transcript segment with a context packet and returns a result. The device keeps the audio, the transcript, the timeline, and the people. This device memory is the only memory in the system. The device sends the part of it that a turn needs.
+The app does all work that keeps data. It records, transcribes, stores, matches, resolves and shows the timeline. The app sends text to the API for sorting. The app does not send audio.
 
+The API does not keep data. It receives a transcript segment and a context packet. It returns structured output. The app stores the result on the phone.
 
-
+All logic is in a Swift package, `LifelineKit`. The package compiles for iOS and macOS. The app target holds only views, view models and the composition root. A macOS command, `lifeline`, runs the same extraction and resolution code on an exported session.
 
 ![data-flow](figures/data-flow.svg)
 
+*V1 data flow. Capture, storage, matching, resolution and the timeline run on the phone. Only text crosses to the API, which keeps nothing. When a server is needed, it is `LifelineKit` compiled as a Swift server behind the same extraction protocol.*
 
+### 2. Capture and transcription
 
-*The conversation loop (top two rows) runs in real time: streaming speech-to-text, the interviewer, text-to-speech. Device memory holds everything learned so far and gives the interviewer its context each turn. The extractor runs after each turn in the background. Audio never leaves the device; the server keeps nothing. A realtime speech model can replace VAD, speech-to-text and text-to-speech behind one interface.*
+One audio tap feeds two consumers: an audio file writer and the on-device transcriber (`SpeechAnalyzer`, iOS 26). The file and the transcript share one clock. The store keeps each word with its start and end time in milliseconds.
 
-### 2. Voice session
+Recording continues when the screen locks. An interruption or a route change pauses the segment. The person can pause and resume.
 
-The voice session has three stages. The stages are voice activity detection, speech-to-text, and text-to-speech. The voice session runs behind one interface. The interface sends these events: speech started, transcript partial, transcript final, and user paused. The interface accepts these commands: say, acknowledge, and interrupt.
+A segmenter ends a segment after 1.8 seconds of silence. A segment must contain at least 3 seconds of speech. A segment is a unit of capture, not a unit of story. One story can span several segments.
 
-The app must not know which voice implementation is active. Version 1 uses a cascade of the three stages. A later version can use one realtime speech model. The realtime model must send the same events and accept the same commands.
+The voice session is a protocol. V1 ships `ListenOnlyVoiceSession`. Its `say`, `acknowledge` and `interrupt` commands do nothing. The spoken interviewer will replace it behind the same protocol.
 
-The speech-to-text stage must return word timestamps. The replay feature uses the timestamps to align the text with the audio.
+### 3. Sorting
 
-The device must keep the audio file. The device must keep the transcript. The server must not keep a copy.
+A sorting worker reads pending segments from the store. Finishing a session must not wait for the worker. The worker starts at launch, when the person saves a key, when the app returns to the foreground, and on Try again.
 
-### 3. Turn policy
+For each segment the worker builds a context packet. The packet holds the profile text, the people and their aliases, the chapters, related earlier moments, the pending cards of the session, and the stories. The packet has a ceiling of 6,000 tokens. When the packet is too large, the builder removes whole entries from the least relevant section first. It never removes the profile text.
 
-The turn policy decides when the interviewer speaks. The turn policy is a module on the device. The turn policy uses numbers. The numbers are configuration, not code.
+The worker sends the segment and the packet to the extractor. The default model is `claude-opus-5-5` at low effort, with a strict JSON schema. The prompt is versioned (extractor v5). Each candidate records the prompt version. A new version adds candidates. It never edits a kept memory.
 
-- A short silence of about 1 second starts an end-of-thought check. A small, fast model reads the last words and the pause. The model returns one of two results: complete thought, or pause inside a thought.
-- If the thought is complete, the interviewer can reply after a short grace period of about 1 to 2 seconds.
-- If the pause is inside a thought, the interviewer must wait. The wait has a cap of about 6 to 8 seconds. At the cap, the interviewer gives a soft acknowledgement only.
-- The end-of-thought model must run on the device or return in less than 300 milliseconds. The numbers above are initial values for testing, not fixed rules.
-- The interviewer must not speak more than a set number of words in one turn.
-- The interviewer must not ask a question until the person has made a minimum number of turns since the last question.
-- The default reply is an acknowledgement, not a sentence. The acknowledgements are pre-rendered audio files.
+The API key is in the Keychain. It must never be in the build, the repository or a log. Without a key, the app saves recordings and the segments wait.
 
-### 4. Interviewer
+One line on the timeline shows the sorting status: moments still sorting, a duplicate check in progress, sorting stopped (with Try again), or a missing key.
 
-The interviewer is a text model on the server. The interviewer receives the transcript segment, the pause length, the session stage, and a context packet. The context packet comes from device memory. The context packet has the people in the story, the chapters, the memories discussed before, and the curiosity list. The interviewer returns one of three results: no reply, an acknowledgement, or a short reply.
+### 4. Organizing
 
-The conversation loop runs in real time. Speech-to-text streams while the person talks. The interviewer replies inside the turn. The extractor runs after the turn ends and does not block the conversation.
+Organizing never happens without a tap.
 
-The interviewer prompt has three parts. The first part is the stance from the principles. The second part is the session arc. The third part is the curiosity list for this session. The curiosity list has people mentioned but not explained, places named without a story, and time anchors the resolver needs.
+On-device sentence embeddings (Apple NaturalLanguage) represent each kept memory by its title and quote. When a segment arrives, the matcher finds the nearest earlier memories (cosine 0.55 or more) and adds them to the packet as related. The extractor can say that the segment retells one or more of them. A match of 0.80 or more also shows “Same as X?” on the card. A memory excluded from AI is never embedded or suggested.
 
-The interviewer must use the person’s words for names and chapters. The interviewer must not add a detail the person did not say. The interviewer must not evaluate what the person said.
+A segment that continues a pending card makes that card grow. Keep then writes one memory with several spans.
 
-A serious disclosure has a fixed response. The fixed response is text that the team writes and tests. The model must not improvise the response. After the fixed response, the session goes to wind-down.
+After each Keep, and at launch, a duplicate pass examines kept memories. For each memory it takes the three nearest. It sends up to 20 pairs in one batch to the reconciler (prompt v1). The reconciler returns “same moment”, “same story” or “different”. The app shows the first two as pair cards. It stores “different” and never asks again.
 
-### 5. Extractor and resolver
+“Same story” merges the newer memory into the older one. Every telling keeps its audio span. One Undo reverses the merge. “Separate this telling” makes a merged telling its own memory again, at any time.
 
-The extractor is a text model on the server. The extractor receives a transcript segment. The extractor returns candidate events, people, places, and time anchors. A time anchor is a phrase such as “the summer after I graduated.” The extractor marks each candidate with a confidence value.
+A story groups related memories. The extractor can propose membership (“Part of: X”) and a title. The person keeps or removes both.
 
-The resolver is a module on the device. The resolver turns time anchors into ranges. The resolver uses events that are already placed. If the anchor refers to an event that is not placed, the resolver creates a floating event. The resolver adds a question to the curiosity list. One answer can place many floating events.
+![organize](figures/organize.svg)
 
-A silence threshold ends an audio segment. One story can span several segments. The app reconciles related segments before it shows cards, so one story does not become several cards. The context packet is selected within a token budget by relevance, not by fixed caps per table. Pending, unreviewed stories count as context too.
+*Two routes to the same decision. While you talk, the extractor and the matcher propose; after a Keep, the duplicate pass and the reconciler propose. Every route ends in a card, and only a tap changes anything.*
 
-The extractor and the resolver can run again on old sessions. The pipeline must be idempotent. The raw audio and transcript are the source of truth. All other data can be derived again.
+### 5. Placing
+
+The extractor returns anchors. An anchor is a phrase with a relation: before, after, during, same year as, an age, or a stated date. The resolver changes anchors into ranges. The resolver is a pure function of the anchors and the confirmed ranges.
+
+The resolver must never ask for a date. It can ask one relative question, a choice between things the person said. When an anchor refers to something not yet placed, the resolver makes a floating stand-in and a curiosity item with its payoff (“placing this would place 4 memories”).
+
+“Tell me when” lets the person state a year, around a year, a range of years or an age. The app stores the value with origin “stated” and shows it as said. The app never makes up a date.
+
+A memory with no range and no collection goes to the shelf. The shelf offers “Add a date” and “Add to a collection”.
 
 ### 6. Data model
 
-The timeline store is a local relational database. A moment (the `memory` row) has a time range, not a date. A moment points to the audio and transcript span it came from. A story groups related moments, across sessions if needed. A chapter groups stories. A collection carries a theme across chapters. A session records when the person spoke; it is not part of the story structure.
-
-
-
+The store is SQLite (GRDB). Audio files are next to it. All offsets are milliseconds from the start of the session file.
 
 ![data-model](figures/data-model.svg)
 
-
-
-*Every moment keeps a pointer to the audio it came from, so the recording stays the truth and the extraction stays a derivative. Stories connect moments; story and collection spans are derived from members; chapters and stories are titled by the person, or by a proposal the person approves.*
+*A session is when the person spoke; a segment is a unit of capture; a candidate is raw extractor output and is never edited. A memory is what the person kept, with one or more tellings, each an audio span in some session. Stories, chapters and collections group memories. Embeddings and duplicate pairs support organizing.*
 
 ### 7. Session arc and safety
 
-The session controller runs on the device. The session controller tracks the elapsed time and the stage. The stages are open, middle, and wind-down. The controller starts wind-down at the planned length. The controller does not stop the recording by itself. At the planned length the app offers a wrap-up and a way to keep going. The controller starts wind-down early when it receives a signal. The signals are: the person asks to stop, the person asks to change the subject, a long silence after a heavy topic, or audible crying.
+The stages are open, wind-down and ended. A quick story shows no clock. It ends when the person taps “Let’s leave it there”.
 
-In wind-down, the interviewer must not open a new door. During a heavy moment, the app must not show any organizational prompt, including "who's this?". The landing screen shows that the recording is saved and a few moments from today with play. "Done for now" is the default. Review is optional and can happen later. The closing line after a heavy session is neutral.
+Settle in offers the next question after 6 seconds of quiet that follows a story. At the planned length (30 minutes) it offers a wrap-up and “Keep going”. It offers again every 10 minutes. The only automatic landing is the recording limit of 3 hours.
 
-Finishing a session must not wait for extraction. The app persists the recording, shows the landing, and finishes sorting in the background with retries.
+Three signals start an early landing: the person taps “Let’s leave it there”; the extractor flags that the person wants to stop; the extractor flags a serious disclosure. A disclosure flag has two kinds, past and present. On a disclosure the app shows one fixed card. The model never writes it. During a heavy moment the app shows no organizational prompt, including “who’s this?”.
 
-The person controls what is kept with four controls. Hide from timeline keeps the recording and the moment and removes them from everyday browsing. Exclude from AI processing stops future processing and context use; it cannot unsend what was already sent. Share chooses exact content and recipients. Delete removes the selected recording content and everything made from it, and asks first. A session that must never leave the phone is chosen before recording.
+The landing says that the recording is saved. It shows a few moments with play. “Done for now” is the default. Review can wait. “Hide today” and “Delete today’s recording” are one tap away. After a heavy session the closing line is neutral.
 
-### 8. Phase 2 props
+A memory has two privacy flags. “Hide from timeline” removes it from everyday browsing. “Exclude from AI processing” stops all future sorting, matching and context use; it cannot recall text that was already sent.
 
-The person selects photos. The app does not scan the photo library. The app reads the creation date and the location from each photo. The app shows a date from metadata as a fact. The app shows a guessed era as a guess. The person tags who is in each photo. A tag links the photo to a person.
+If the app stops during a session, the next launch opens the landing for that session.
 
-Apple’s PhotoKit does not expose people, memories, or trips. The app computes photo clusters from dates and locations. A cluster is a suggestion. A cluster is not an event until the person tells the story.
+### 8. Keeping a copy
 
-Music uses three sources. The first source is the person. The second source is public charts for the year and country. The third source is an optional upload of streaming history. A spike in plays is a suggestion, like a photo cluster.
+“Your copy” in Settings exports one `.lifeline` file. The file holds the database, the audio, the pause log and a manifest. It must never hold the API key.
 
-**Before the prototype**
+A restore first writes a safety copy of the data on the phone. Then it stages the copy and applies it at the next launch, before the database opens. A copy with a newer schema is refused. An older one migrates.
 
-Two things come first. Record five to eight people telling a ten-minute story, including one older relative, and run extraction on the transcripts by hand to see where it fails. Then write down the data posture in one sentence (today: audio and timeline stay on the device, the server keeps nothing, sharing is explicit) so the technical design has a rule to follow.
+The app excludes every `.lifeline` file and the audio folder from the phone’s cloud backup. A copy leaves the phone only when the person shares the file.
+
+### Designed, not built
+
+- **The spoken interviewer.** Reflections, acknowledgements and rare questions, in a cascade (voice activity, speech-to-text, a text model, text-to-speech) behind the existing voice-session protocol. Its turn policy: about 1 second of silence starts a fast end-of-thought check; a complete thought gets a reply after a 1 to 2 second grace; an unfinished one gets a capped wait of 6 to 8 seconds and then only a soft acknowledgement. A realtime speech model can replace the cascade later.
+- **Navigation by level.** Life, chapter, story and moment as one zoomable view in the manner of Photos, with a year scrubber on the edge and “Listen at this level” as a playlist in the person’s voice.
+- **Protect, when others use the app.** A privacy screen with Share and a Local-only session chosen before recording; span-level deletion that keeps playback offsets; re-running a new extractor version from inside the app.
+- **Phase 1.5: one photo, one story.** Pick a photo and tell its story. No clustering, no faces.
+- **Phase 2: props.** Favorite photos as prompts and anchors (PhotoKit gives dates and places; people are tagged by hand; a face model only after an evaluation against those tags), then music from an era.
+- **Phase 3: family.** Per-memory sharing, several perspectives on one event, questions for each other, and a read-only web viewer.
+
+> **Next.** Tune the starting numbers on real recordings: the match thresholds (0.55 to retrieve, 0.80 to suggest), the 6,000-token packet ceiling and the 1.8-second segment pause. Run the recording study now that V1 exists, scored by `lifeline eval`. Then choose between the spoken interviewer and the one-photo prompt as the next build.
 
 ### Open questions
 
-- Cadence: is a session a weekly ritual, an occasional long sit-down, or both?
-- Who is the first user: the person telling their own life, or the adult child interviewing a parent?
-- How much may the app write? Verbatim quotes assembled into chapters, or prose it composes in the person’s style?
-- Closing question after a hard session: something unrelated by default, or tied gently to the memory?
+- Does a gentle daily nudge belong in V1 at all, given that streaks and counters are ruled out?
+- How much may the app write? Verbatim quotes assembled into stories, or prose it composes in the person’s style?
+- Memory kinds and domains (a feeling, a goal, an event; relationships, health, travel): a later design, with the seam kept open.
+- When the first other person uses the app, which part of “protect” must ship first?
 
-Companion material: the design canvas (hero screens, fuzzy-time options, onboarding, wind-down, Phase 2 props) and the grounding document (literature review and principles).
+Companion material in the repository: `docs/PRINCIPLES.md` (the grounding document), `docs/DECISIONS.md` (every decision, newest first), `docs/specs/` and `docs/plans/` (one spec and one plan per milestone), and `docs/design/` (the screens, including the review revisions R1 to R9).

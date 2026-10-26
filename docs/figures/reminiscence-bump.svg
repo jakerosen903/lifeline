@@ -1,26 +1,26 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 260" role="img" aria-label="Illustrative curve of how many memories people recall by the age the memory is from: very few before age 4, a tall bump between ages 10 and 30, a long low plateau, and a rise near the present.">
-<defs><marker id="arrowT" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="#332A23"/></marker></defs>
-<g stroke="#332A23" stroke-opacity=".35" stroke-width="1">
-<line x1="60" y1="210" x2="610" y2="210"/>
-<line x1="60" y1="210" x2="60" y2="30"/>
-</g>
-<g font-size="12" fill="#332A23" fill-opacity=".7">
-<text x="60" y="232" text-anchor="middle">0</text>
-<text x="130" y="232" text-anchor="middle">10</text>
-<text x="200" y="232" text-anchor="middle">20</text>
-<text x="270" y="232" text-anchor="middle">30</text>
-<text x="340" y="232" text-anchor="middle">40</text>
-<text x="410" y="232" text-anchor="middle">50</text>
-<text x="480" y="232" text-anchor="middle">60</text>
-<text x="550" y="232" text-anchor="middle">70</text>
-<text x="335" y="252" text-anchor="middle">Age the memory is from</text>
-<text x="20" y="120" text-anchor="middle" transform="rotate(-90 20 120)">Memories recalled</text>
-</g>
-<path d="M60 208 C 80 208, 90 200, 100 170 C 120 110, 150 60, 200 55 C 240 52, 260 90, 290 150 C 310 185, 340 195, 400 196 C 460 197, 500 195, 540 180 C 570 168, 590 150, 610 130" fill="none" stroke="#5F7046" stroke-width="3"/>
-<rect x="130" y="40" width="140" height="170" fill="#C8893F" fill-opacity=".14"/>
-<text x="200" y="36" text-anchor="middle" font-size="12" font-weight="600" fill="#8A5A1E">reminiscence bump, ~10–30</text>
-<text x="92" y="200" text-anchor="middle" font-size="11" fill="#332A23" fill-opacity=".7">childhood</text>
-<text x="92" y="213" text-anchor="middle" font-size="11" fill="#332A23" fill-opacity=".7">amnesia</text>
-<text x="585" y="120" text-anchor="middle" font-size="11" fill="#332A23" fill-opacity=".7">recency</text>
-</svg>
+<svg width="640" height="260" xmlns="http://www.w3.org/2000/svg" font-family="Inter, system-ui, sans-serif" viewBox="0 0 640 260" role="img" aria-label="Illustrative curve of how many memories people recall by the age the memory is from: very few before age 4, a tall bump between ages 10 and 30, a long low plateau, and a rise near the present.">
+      <defs><marker id="arrowT" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="#332A23"/></marker></defs>
+      <g stroke="#332A23" stroke-opacity=".35" stroke-width="1">
+        <line x1="60" y1="210" x2="610" y2="210"/>
+        <line x1="60" y1="210" x2="60" y2="30"/>
+      </g>
+      <g font-size="12" fill="#332A23" fill-opacity=".7">
+        <text x="60" y="232" text-anchor="middle">0</text>
+        <text x="130" y="232" text-anchor="middle">10</text>
+        <text x="200" y="232" text-anchor="middle">20</text>
+        <text x="270" y="232" text-anchor="middle">30</text>
+        <text x="340" y="232" text-anchor="middle">40</text>
+        <text x="410" y="232" text-anchor="middle">50</text>
+        <text x="480" y="232" text-anchor="middle">60</text>
+        <text x="550" y="232" text-anchor="middle">70</text>
+        <text x="335" y="252" text-anchor="middle">Age the memory is from</text>
+        <text x="20" y="120" text-anchor="middle" transform="rotate(-90 20 120)">Memories recalled</text>
+      </g>
+      <path d="M60 208 C 80 208, 90 200, 100 170 C 120 110, 150 60, 200 55 C 240 52, 260 90, 290 150 C 310 185, 340 195, 400 196 C 460 197, 500 195, 540 180 C 570 168, 590 150, 610 130" fill="none" stroke="#5F7046" stroke-width="3"/>
+      <rect x="130" y="40" width="140" height="170" fill="#C8893F" fill-opacity=".14"/>
+      <text x="200" y="36" text-anchor="middle" font-size="12" font-weight="600" fill="#8A5A1E">reminiscence bump, ~10–30</text>
+      <text x="92" y="200" text-anchor="middle" font-size="11" fill="#332A23" fill-opacity=".7">childhood</text>
+      <text x="92" y="213" text-anchor="middle" font-size="11" fill="#332A23" fill-opacity=".7">amnesia</text>
+      <text x="585" y="120" text-anchor="middle" font-size="11" fill="#332A23" fill-opacity=".7">recency</text>
+    </svg>

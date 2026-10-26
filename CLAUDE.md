@@ -5,7 +5,7 @@ A voice-first app: a person tells stories from their life, a timeline fills in, 
 ## Read these first
 
 - `docs/PRINCIPLES.md` — the grounding document. Nine principles, the literature behind them, the session arc and safety rules. Every prompt, feature and PR is checked against it.
-- `docs/OVERVIEW.md` — what we are building, what we are learning, and how it works under the hood (data flow, data model, turn policy).
+- `docs/OVERVIEW.md` — what we are building, what real use taught us, and how V1 works under the hood (data flow, sorting, organizing, placing, data model, session arc, backup), plus what is designed but not built.
 - `docs/DECISIONS.md` — the decision log. Add an entry when a choice is made; do not re-litigate closed ones without a new entry.
 - `docs/TECHNICAL_DESIGN.md` — the detailed design, in progress.
 - `docs/design/` — the UX screens (Design canvas sources) with an index.
