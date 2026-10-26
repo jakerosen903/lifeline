@@ -160,8 +160,8 @@ public struct MemoryOut: Codable, Sendable, Equatable {
         confidence = try c.decode(Double.self, forKey: .confidence)
         extraSpans = try c.decodeIfPresent([ExtraSpan].self, forKey: .extraSpans) ?? []
         entityRefs = try c.decodeIfPresent([EntityRefOut].self, forKey: .entityRefs) ?? []
-        aboutRef = try c.decodeIfPresent(String.self, forKey: .aboutRef)
-        domainHint = try c.decodeIfPresent(String.self, forKey: .domainHint)
+        aboutRef = try c.decodeNonEmpty(forKey: .aboutRef)
+        domainHint = try c.decodeNonEmpty(forKey: .domainHint)
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -245,10 +245,19 @@ public struct MentionOut: Codable, Sendable, Equatable {
         likelyAliasOfPersonID = try c.decodeIfPresent(String.self, forKey: .likelyAliasOfPersonID)
         confidence = try c.decode(Double.self, forKey: .confidence)
         relationText = try c.decodeIfPresent(String.self, forKey: .relationText)
-        ref = try c.decodeIfPresent(String.self, forKey: .ref)
+        ref = try c.decodeNonEmpty(forKey: .ref)
         likelyEntityID = try c.decodeIfPresent(String.self, forKey: .likelyEntityID)
-        title = try c.decodeIfPresent(String.self, forKey: .title)
-        domainHint = try c.decodeIfPresent(String.self, forKey: .domainHint)
+        title = try c.decodeNonEmpty(forKey: .title)
+        domainHint = try c.decodeNonEmpty(forKey: .domainHint)
+    }
+}
+
+extension KeyedDecodingContainer {
+    /// A string the schema sends as "" when there is none (see `ExtractorSchema`): absent, null,
+    /// empty and whitespace all read as nil.
+    func decodeNonEmpty(forKey key: Key) throws -> String? {
+        guard let text = try decodeIfPresent(String.self, forKey: key)?.trimmingCharacters(in: .whitespacesAndNewlines), !text.isEmpty else { return nil }
+        return text
     }
 }
 
