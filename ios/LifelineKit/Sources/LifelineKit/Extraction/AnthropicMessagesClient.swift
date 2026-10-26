@@ -54,7 +54,8 @@ public struct AnthropicMessagesClient: Sendable {
         do { request = try makeRequest(key: key, system: system, user: user, schema: schema) } catch { throw .badRequest("\(error)") }
 
         var lastError: ExtractionError = .network("no attempt")
-        for attempt in 1...max(1, config.maxAttempts) {
+        let attempts = max(1, config.maxAttempts)
+        for attempt in 1...attempts {
             do {
                 let (data, response) = try await transport.send(request)
                 switch response.statusCode {
@@ -69,7 +70,7 @@ public struct AnthropicMessagesClient: Sendable {
             } catch {
                 lastError = .network(error.localizedDescription)
             }
-            if attempt < config.maxAttempts { await sleep(Self.delay(for: lastError, attempt: attempt)) }
+            if attempt < attempts { await sleep(Self.delay(for: lastError, attempt: attempt)) }
         }
         throw lastError
     }

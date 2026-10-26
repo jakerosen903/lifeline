@@ -56,7 +56,10 @@ private func body(_ json: String) -> FakeHTTPTransport {
     let transport = body(#"{"kind":"none","text":null,"asked_about_app":false,"disclosure":"none","wants_to_stop":false}"#)
     _ = try await service(transport).reply(to: request)
     let system = try #require(try transport.body(of: 0)["system"] as? [[String: Any]])
-    #expect((system[0]["text"] as? String)?.contains("interviewer") == true)
+    let text = try #require(system[0]["text"] as? String)
+    #expect(text.contains("Never answer a question about the person's life."))
+    #expect(text.contains("When `stage` is `windDown`, return `none`."))
+    #expect(text.contains("narrates harm that happened"))
 }
 
 @Test func theScriptedServiceReflectsTheLastFourWords() async throws {
