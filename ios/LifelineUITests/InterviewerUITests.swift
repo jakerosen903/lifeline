@@ -89,6 +89,11 @@ final class InterviewerUITests: XCTestCase {
     /// Slow script: the second segment is flagged as a past disclosure and the spoken text (17 words,
     /// about 2.5 s) starts after its pause. The third segment starts about 2.5 s after that pause, so it
     /// cuts the disclosure text. The detail marks that turn as cut off.
+    /// Timing: the second segment's pause is at about 6.7 s, the third segment starts at about 9.2 s. The
+    /// disclosure plays from its flags (pause + about 0.2 s of scripted sorting, or up to 1 s more while the
+    /// last partial holds the floor) for 2.55 s, so it is still playing at 9.2 s if it started after about
+    /// 6.6 s, which it must. A slow extraction is the risk: the disclosure is cut only while its flags arrive
+    /// before about 9.2 s, a margin of about 2.3 s over the scripted 0.2 s.
     @MainActor
     func testSpeechDuringATurnMarksItInterrupted() {
         let app = launchToTimeline(arguments: ["-uiTesting-speaks", "-uiTesting-heavy", "-uiTesting-slow"])
@@ -109,11 +114,10 @@ final class InterviewerUITests: XCTestCase {
         XCTAssertFalse(hasCutOffMark(app, above: windDown), "a turn that played to its end is not marked")
     }
 
-    /// One tap makes the interviewer quiet for the session, and one tap asks it back. The label follows
-    /// the interviewer's own state. Quiet holds every turn but the arc's fixed answers; in this PR the
-    /// only such turn is the opening, so nothing new is said either way.
+    /// One tap makes the interviewer quiet, one tap asks it back; the label follows the interviewer's own
+    /// state, and nothing is said while quiet. That turns come back after "Ask me again" is tested with PR 3's reflections.
     @MainActor
-    func testQuietStopsTurnsAndAskMeAgainBringsThemBack() {
+    func testQuietTogglesWithAskMeAgainAndNothingIsSaidWhileQuiet() {
         let app = launchToTimeline(arguments: ["-uiTesting-speaks"])
         app.startSession(review: false)
         let quiet = app.buttons["session.quiet"]
@@ -127,6 +131,33 @@ final class InterviewerUITests: XCTestCase {
         quiet.tap()
         XCTAssertTrue(quiet.wait(for: \.label, toEqual: "Quiet", timeout: 5), "the interviewer may speak again")
         app.finishSession()
+    }
+
+    /// Quiet cuts the turn that is playing, of any kind, and the disclosure card stays. The script's last
+    /// segment pauses at about 3.2 s; the spoken disclosure (17 words, 2.55 s) starts after it, so nothing
+    /// in the script cuts it. A tap reaches the app about 0.5 to 1 s after the turn shows. The wind-down line
+    /// that follows plays to its end, so the mark is the tap's.
+    @MainActor
+    func testQuietCutsTheTurnThatIsPlaying() {
+        let app = launchToTimeline(arguments: ["-uiTesting-speaks", "-uiTesting-heavy"])
+        app.startSession(review: false)
+        XCTAssertTrue(text(app, "session.turn", Self.spokenPastDisclosure).waitForExistence(timeout: 15), "the disclosure text plays")
+        let quiet = app.buttons["session.quiet"]
+        quiet.tap()
+        XCTAssertTrue(quiet.wait(for: \.label, toEqual: "Ask me again", timeout: 5))
+        XCTAssertTrue(app.any("session.disclosure").exists, "the card stays")
+        XCTAssertTrue(text(app, "session.turn", Self.earlyWindDown).waitForExistence(timeout: 10), "the wind-down line is spoken while quiet")
+        RunLoop.current.run(until: Date().addingTimeInterval(3))
+        app.buttons["session.disclosureOkay"].tap()
+        app.finishSession()
+
+        openSessionDetail(app)
+        let disclosure = text(app, "transcript.turn", Self.spokenPastDisclosure)
+        XCTAssertTrue(app.reveal(disclosure))
+        XCTAssertTrue(hasCutOffMark(app, above: disclosure), "the tap cut the disclosure text")
+        let windDown = text(app, "transcript.turn", Self.earlyWindDown)
+        XCTAssertTrue(app.reveal(windDown))
+        XCTAssertFalse(hasCutOffMark(app, above: windDown), "the line after it played to its end")
     }
 
     /// "Lifeline speaks" off: today's listening session. No Quiet control, and no turn is kept, not even the opening.

@@ -209,9 +209,14 @@ final class SessionViewModel: Identifiable {
         keepGoing()
     }
 
-    /// The Quiet control: "Quiet" makes the interviewer quiet for the session; "Ask me again" asks it back.
+    /// The Quiet control: "Quiet" makes the interviewer quiet for the session and cuts the turn playing,
+    /// of any kind, as "shh" does; "Ask me again" asks it back. Quiet goes on the ordered stream before
+    /// the cut, so the loop is quiet before the turn's end reaches it.
     func toggleQuiet() {
-        interviewer?.yield(.quiet(!isQuiet))
+        let quiet = !isQuiet
+        interviewer?.yield(.quiet(quiet))
+        guard quiet, let recorder else { return }
+        Task { await recorder.interruptTurn() }
     }
 
     func dismissDisclosure() { disclosure = nil }

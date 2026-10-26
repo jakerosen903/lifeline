@@ -138,6 +138,12 @@ public actor SessionRecorder {
         try await voice.resume()
     }
 
+    /// Cuts the turn that is playing, if any: the person asked for quiet. The voice reports its end, interrupted.
+    public func interruptTurn() async {
+        guard let row = session, row.endedAt == nil else { return }
+        await voice.interrupt()
+    }
+
     /// Hands the turn to the voice. Its row is written when the voice reports that it started,
     /// so a turn dropped while paused leaves no row, and a crash mid-turn leaves one with no end.
     /// Returns false when the session has ended or the voice refused the turn.
