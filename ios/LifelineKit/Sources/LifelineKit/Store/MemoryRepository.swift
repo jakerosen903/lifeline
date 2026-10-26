@@ -511,8 +511,22 @@ public struct MemoryRepository: Sendable {
         try (includingHidden ? allMemories() : visibleMemories()).filter { !$0.isMoment && !$0.isFloating }
     }
 
+    /// The kind, and the chapter's derived range with it, in one write: a fact leaves the range,
+    /// a moment joins it, and a kill between the two can never leave the chapter stale (M7).
     public func setKind(_ id: MemoryID, _ kind: MemoryKind) throws {
-        try db.writer.write { try $0.execute(sql: "update memory set kind = ? where id = ?", arguments: [kind.rawValue, id.rawValue]) }
+        try db.writer.write { db in
+            try db.execute(sql: "update memory set kind = ? where id = ?", arguments: [kind.rawValue, id.rawValue])
+            try Self.refreshChapterRange(ofMemory: id, in: db)
+        }
+    }
+
+    /// Recomputes the range of the chapter a memory sits in from its placed moments.
+    static func refreshChapterRange(ofMemory id: MemoryID, in db: Database) throws {
+        guard let chapterID = try String.fetchOne(db, sql: "select chapter_id from memory where id = ?", arguments: [id.rawValue]),
+              var chapter = try Chapter.fetchOne(db, key: chapterID) else { return }
+        let members = try Memory.filter(Column("chapter_id") == chapterID).fetchAll(db).filter(\.isMoment)
+        chapter.range = ChapterRepository.span(over: members.map(\.range))
+        try chapter.update(db)
     }
 
     /// Memories with no range at all.

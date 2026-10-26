@@ -362,8 +362,7 @@ public struct CandidateActions: Sendable {
     public func setKind(_ memory: MemoryID, _ kind: MemoryKind) throws {
         guard let current = try store.memories.fetch(memory) else { return }
         guard current.kind != kind else { return }
-        try store.memories.setKind(memory, kind)
-        if let chapter = current.chapterID { try chapterRangeFromMembers(chapter) }
+        try store.memories.setKind(memory, kind)   // the chapter range moves in the same write
         _ = try ResolverRunner(store: store).run()
     }
 

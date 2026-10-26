@@ -133,3 +133,17 @@ private func year(_ y: Int) -> TimeRange {
     try env.actions.setKind(m.id, .event)
     #expect(try env.store.curiosity.open().contains { $0.sourceMemoryID == m.id }, "the question comes back with the moment")
 }
+
+@Test func setKindAndTheChapterRangeChangeInOneWrite() throws {
+    let env = try Env()
+    let chapter = try env.store.chapters.insertChapter(title: "Elm Street")
+    let m = try env.memory("Painting the fence", range: year(1996), chapter: chapter.id)
+    try env.actions.chapterRangeFromMembers(chapter.id)
+    #expect(try env.store.chapters.chapter(id: chapter.id)?.range.earliest?.year == 1996)
+    // The repository alone keeps the chapter honest: no second call needed.
+    try env.store.memories.setKind(m.id, .fact)
+    #expect(try env.store.memories.fetch(m.id)?.kind == .fact)
+    #expect(try env.store.chapters.chapter(id: chapter.id)?.range.isPlaced == false, "a fact leaves the chapter's derived range in the same write")
+    try env.store.memories.setKind(m.id, .event)
+    #expect(try env.store.chapters.chapter(id: chapter.id)?.range.earliest?.year == 1996, "and comes back with it")
+}
