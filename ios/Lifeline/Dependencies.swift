@@ -18,6 +18,8 @@ struct Dependencies {
     let requestMicrophone: @Sendable () async -> Bool
     let secrets: any SecretStore
     let extraction: any ExtractionService
+    /// Reflections and their safety checks during a session (M8). Used only while a key is stored: see `interviewer`.
+    let interviewerService: any InterviewerService
     /// The open database, for a consistent backup copy (M6).
     let database: AppDatabase
     let extractionStore: ExtractionStore
@@ -50,6 +52,10 @@ struct Dependencies {
 
     var hasKey: Bool { ((try? secrets.read(.anthropicAPIKey)) ?? nil) != nil }
 
+    /// Read when a session starts, so a key added in Settings applies to the next session. Nil with no key:
+    /// the loop makes no calls and speaks no wrap-up; the opening and the arc's answers still play.
+    var interviewer: (any InterviewerService)? { hasKey ? interviewerService : nil }
+
     func sortingStatus() -> SortingStatus {
         (try? SortingStatus.current(store: extractionStore, reporter: reporter, hasKey: hasKey)) ?? .empty
     }
@@ -68,6 +74,20 @@ struct Dependencies {
 
     func audioURL(for session: Session) throws -> URL {
         try AudioLocation.directory(under: audioRoot).appending(path: session.audioPath)
+    }
+
+    /// The interviewer's context, read from the store at call time: this session's segments not excluded
+    /// from AI, the turns spoken so far, and the question and stage on screen. The segments' text is also
+    /// returned as the session's words, which the client checks a reply against; it is not sent.
+    func makeInterviewerContext(for session: SessionID, snapshot: SessionSnapshot) -> @Sendable () throws -> (InterviewerRequest, sessionWords: [String]) {
+        let sessions = sessions, memories = extractionStore.memories, turns = InterviewerTurnRepository(database)
+        return {
+            let segments = try sessions.segments(in: session)
+            let excluded = try memories.excludedSegmentIDs(in: session)
+            let request = InterviewerContext.build(session: session, segments: segments, excluded: excluded, opening: snapshot.opening,
+                                                   stage: snapshot.stage, turns: try turns.turns(in: session))
+            return (request, sessionWords: segments.filter { !excluded.contains($0.id) }.map(\.text))
+        }
     }
 
     func makeExtractionQueue(for session: SessionID) -> ExtractionQueue {
@@ -128,6 +148,8 @@ struct Dependencies {
             requestMicrophone: { await AudioSessionConfigurator.requestMicrophoneAccess() },
             secrets: secrets,
             extraction: extraction,
+            interviewerService: AnthropicInterviewerService(config: .interviewer, apiKey: { try? secrets.read(.anthropicAPIKey) },
+                                                            transport: URLSessionTransport(timeout: 4)),
             database: db,
             extractionStore: store,
             actions: actions,
@@ -186,6 +208,8 @@ struct Dependencies {
             requestMicrophone: { true },
             secrets: secrets,
             extraction: extraction,
+            // A reflection of each segment's last four words, always clean; with `-uiTesting-noKey` there is no interviewer.
+            interviewerService: ScriptedInterviewerService(disclosureOn: []),
             database: db,
             extractionStore: store,
             actions: actions,

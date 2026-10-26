@@ -21,8 +21,10 @@ final class SessionViewModel: Identifiable {
     private(set) var stopError: String?
     private(set) var cardQueue = CardQueue()
     private(set) var extractionStatus: String?
-    private(set) var opening: Opening
-    private(set) var arc: SessionArc
+    private(set) var opening: Opening { didSet { snapshot.opening = opening.main.text } }
+    private(set) var arc: SessionArc { didSet { snapshot.stage = arc.stage } }
+    /// The question and the stage, as the interviewer's context reads them off the main actor.
+    private let snapshot: SessionSnapshot
     /// The wrap-up banner (settle in only).
     private(set) var wrapUpOffered = false
     /// The next question, offered after a quiet moment (settle in only).
@@ -54,8 +56,11 @@ final class SessionViewModel: Identifiable {
         self.deps = deps
         self.kind = kind
         cards = CardHandler(deps: deps)
-        opening = deps.opening()
-        arc = SessionArc(kind: kind, config: deps.arcConfig, startedAt: .now)
+        let opening = deps.opening()
+        let arc = SessionArc(kind: kind, config: deps.arcConfig, startedAt: .now)
+        self.opening = opening
+        self.arc = arc
+        snapshot = SessionSnapshot(opening: opening.main.text, stage: arc.stage)
     }
 
     var prompt: String { opening.main.text }
@@ -129,7 +134,7 @@ final class SessionViewModel: Identifiable {
         do {
             let captureStart = ContinuousClock.now
             try await recorder.start(id: sessionID, kind: kind)
-            if speaks { startInterviewer(inputs: inputs, recorder: recorder, captureStart: captureStart) }
+            if speaks { startInterviewer(inputs: inputs, recorder: recorder, session: sessionID, captureStart: captureStart) }
             arc = SessionArc(kind: kind, config: deps.arcConfig, startedAt: startedAt)
             persistLog()
             try? deps.promptLog.record(promptID: opening.main.logID, session: sessionID)
@@ -150,15 +155,18 @@ final class SessionViewModel: Identifiable {
     }
 
     /// The loop hears the session's inputs in order, and the Quiet control follows its state.
-    private func startInterviewer(inputs: AsyncStream<InterviewerInput>, recorder: SessionRecorder, captureStart: ContinuousClock.Instant) {
-        // No interviewer yet: no calls, so only the opening and the arc's answers are spoken.
+    private func startInterviewer(inputs: AsyncStream<InterviewerInput>, recorder: SessionRecorder, session: SessionID,
+                                  captureStart: ContinuousClock.Instant) {
+        // No key: no calls, so only the opening and the arc's answers are spoken.
         let loop = InterviewerLoop(kind: kind, config: deps.arcConfig,
-                                   service: nil,
-                                   context: { throw ExtractionError.noKey },
+                                   service: deps.interviewer,
+                                   context: deps.makeInterviewerContext(for: session, snapshot: snapshot),
                                    speak: { await recorder.speak($0) },
                                    cut: { await recorder.interruptTurn() },
                                    now: { ContinuousClock.now - captureStart },
-                                   sleep: { try? await Task.sleep(for: $0) })
+                                   sleep: { try? await Task.sleep(for: $0) },
+                                   // Every line starts "[interviewer]"; the device run reads them from the console.
+                                   log: { print($0) })
         // Ends once the stream is finished at the end of the session and its last inputs are delivered.
         Task { [weak self] in
             for await input in inputs {
@@ -348,9 +356,11 @@ final class SessionViewModel: Identifiable {
             case .network, .server, .rateLimited: extractionStatus = "Not sorting right now"
             default: break
             }
-        case .candidates:
+        case .candidates(_, let segment):
             extractionStatus = nil
             cardQueue.cards.forEach { cards.shown($0) }
+            // After the segment's flags, which the queue reports first: a success with none means clean flags.
+            interviewer?.yield(.extracted(segment))
         case .flags(let flags, let segment):
             interviewer?.yield(.flags(flags, segment: segment))
             apply(arc.apply(.flags(flags), now: .now))
