@@ -38,8 +38,20 @@ private func reply(_ kind: ReplyKind, _ text: String?, askedAboutApp: Bool = fal
         == .speak(.reflection, "So I'm hearing the garden, and I'd like to know."))
 }
 
-@Test func spelledNumbersAreNotCounted() {
+@Test func aSpelledNumberThePersonDidNotSayIsDropped() {
+    #expect(TurnChecks.validate(reply(.reflection, "Your three sisters kept bees."), sessionWords: said) == .dropped("not said: three"))
+}
+
+@Test func aSpelledNumberPassesWhenThePersonSaidTheDigits() {
+    let session = said + ["3", "sisters"]
+    #expect(TurnChecks.validate(reply(.reflection, "Your three sisters kept bees."), sessionWords: session) == .speak(.reflection, "Your three sisters kept bees."))
     #expect(TurnChecks.validate(reply(.reflection, "Seven is a lucky tree."), sessionWords: said) == .speak(.reflection, "Seven is a lucky tree."))
+}
+
+@Test func digitsPassWhenThePersonSpelledTheNumber() {
+    let session = said + ["three", "sisters"]
+    #expect(TurnChecks.validate(reply(.reflection, "Your 3 sisters kept bees."), sessionWords: session) == .speak(.reflection, "Your 3 sisters kept bees."))
+    #expect(TurnChecks.validate(reply(.reflection, "Your 4 sisters kept bees."), sessionWords: session) == .dropped("not said: 4"))
 }
 
 @Test func textWithNoneIsDropped() {

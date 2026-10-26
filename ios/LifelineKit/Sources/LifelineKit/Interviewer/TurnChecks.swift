@@ -21,8 +21,8 @@ public enum TurnChecks {
         let words = Self.dashSeparated(text).split(whereSeparator: \.isWhitespace).map(String.init)
         if words.count > maxWords { return .dropped("too long") }
 
-        let said = Set(TurnText.tokens(sessionWords.joined(separator: " ")))
-        for token in countedTokens(text.split(whereSeparator: \.isWhitespace).map(String.init)) where !said.contains(token) {
+        let said = Set(TurnText.tokens(sessionWords.joined(separator: " ")).map(canonical))
+        for token in countedTokens(text.split(whereSeparator: \.isWhitespace).map(String.init)) where !said.contains(canonical(token)) {
             return .dropped("not said: \(token)")
         }
         return .speak(reply.kind == .reflection ? .reflection : .question, text)
@@ -33,8 +33,19 @@ public enum TurnChecks {
         text.replacingOccurrences(of: "[\u{2014}\u{2013}]|(?<=\\p{L})-(?=\\p{L})", with: " ", options: .regularExpression)
     }
 
+    /// The digit form of a number word from the closed set, so "three" and "3" match. Any other token is unchanged.
+    private static let numberWords: [String: String] = [
+        "zero": "0", "one": "1", "two": "2", "three": "3", "four": "4", "five": "5", "six": "6", "seven": "7",
+        "eight": "8", "nine": "9", "ten": "10", "eleven": "11", "twelve": "12", "thirteen": "13", "fourteen": "14",
+        "fifteen": "15", "sixteen": "16", "seventeen": "17", "eighteen": "18", "nineteen": "19", "twenty": "20",
+        "thirty": "30", "forty": "40", "fifty": "50", "sixty": "60", "seventy": "70", "eighty": "80", "ninety": "90",
+        "hundred": "100", "thousand": "1000",
+    ]
+
+    private static func canonical(_ token: String) -> String { numberWords[token] ?? token }
+
     /// Tokens of the words that carry a detail: a capitalized piece that does not open a sentence and is not "I"
-    /// or a form of it, and any piece with a digit. Spelled numbers do not count. A word is cut into pieces at
+    /// or a form of it, any piece with a digit, and any number word from the closed set. A word is cut into pieces at
     /// anything but a letter, digit or apostrophe, so "garden,Maya" and "ex-Navy" are checked piece by piece.
     /// Known gap, accepted: a later sentence may open with a name the person never said.
     private static func countedTokens(_ words: [String]) -> [String] {
@@ -44,7 +55,7 @@ public enum TurnChecks {
             let pieces = word.split(whereSeparator: { !($0.isLetter || $0.isNumber || $0 == "'" || $0 == "\u{2019}") }).map(String.init)
             for (index, piece) in pieces.enumerated() {
                 let tokens = TurnText.tokens(piece)
-                if tokens.contains(where: { $0.contains(where: \.isNumber) }) {
+                if tokens.contains(where: { $0.contains(where: \.isNumber) || numberWords[$0] != nil }) {
                     counted += tokens
                 } else if !(index == 0 && opensSentence), !isI(piece), let first = piece.first(where: \.isLetter), first.isUppercase {
                     counted += tokens
