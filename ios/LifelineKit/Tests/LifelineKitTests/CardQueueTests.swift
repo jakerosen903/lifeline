@@ -313,9 +313,9 @@ private func ids(_ candidates: Candidate...) -> [String] { candidates.map(\.id.r
     let s = SegmentID()
     let pendingMemory = try memory(s, 0), keptMemory = try memory(s, 1, title: "Kept one", people: ["Theo"], status: .accepted)
     let hp = try hint(s, 2, for: pendingMemory), hk = try hint(s, 3, for: keptMemory), p = try person(s, 4, "Theo"), orphan = try person(s, 5, "Zed")
-    let statuses = Dictionary(uniqueKeysWithValues: [pendingMemory, keptMemory].map { ($0.id, $0.status) })
+    let byID = Dictionary(uniqueKeysWithValues: [pendingMemory, keptMemory].map { ($0.id, $0) })
     var queue = CardQueue.waiting(pending: [pendingMemory, hp, hk, p, orphan], segmentMemories: { $0 == s ? [pendingMemory, keptMemory] : [] },
-                                  statusOf: { statuses[$0] })
+                                  candidate: { byID[$0] })
     #expect(queue.cards.map(\.id) == ids(pendingMemory, keptMemory))
     guard case .memory = queue.cards[0] else { Issue.record("expected a memory card"); return }
     #expect(kept(queue, keptMemory)?.title == "Kept one" && kept(queue, keptMemory)?.followUps.map(\.id) == ids(hk, p))
@@ -328,8 +328,48 @@ private func ids(_ candidates: Candidate...) -> [String] { candidates.map(\.id.r
     let gone = try memory(s, 0, people: ["Theo", "Zed"], status: .dismissed), kept1 = try memory(s, 1, people: ["Theo"], status: .accepted)
     let h = try hint(s, 2, for: gone), theo = try person(s, 3, "Theo"), zed = try person(s, 4, "Zed")
     let missing = StoreFixtures.candidate(s, ordinal: 5, kind: .hint, payload: try CandidatePayload.encode(HintOut(kind: .chapter, phrase: "x", memoryCandidateID: "gone")))
-    let statuses = Dictionary(uniqueKeysWithValues: [gone, kept1].map { ($0.id, $0.status) })
-    let queue = CardQueue.waiting(pending: [h, theo, zed, missing], segmentMemories: { _ in [gone, kept1] }, statusOf: { statuses[$0] })
+    let byID = Dictionary(uniqueKeysWithValues: [gone, kept1].map { ($0.id, $0) })
+    let queue = CardQueue.waiting(pending: [h, theo, zed, missing], segmentMemories: { _ in [gone, kept1] }, candidate: { byID[$0] })
     #expect(queue.cards.map(\.id) == ids(kept1), "Theo passes to the next memory; Zed and the hints have none")
     #expect(kept(queue, kept1)?.followUps.map(\.id) == ids(theo))
+}
+
+@Test func waitingTitlesAKeptCardWhoseSegmentHasNothingPending() throws {
+    // A continuation's hint sits in a later segment than its accepted memory.
+    let first = SegmentID(), later = SegmentID()
+    let a = try memory(first, 0, title: "The pomegranate tree", status: .accepted)
+    let h = try hint(later, 0, for: a)
+    let queue = CardQueue.waiting(pending: [h], segmentMemories: { $0 == first ? [a] : [] }, candidate: { $0 == a.id ? a : nil })
+    #expect(kept(queue, a)?.title == "The pomegranate tree" && kept(queue, a)?.followUps.map(\.id) == ids(h))
+    let unknown = CardQueue.waiting(pending: [h], segmentMemories: { _ in [] }, candidate: { _ in nil })
+    #expect(unknown.cards.isEmpty, "an owner the queue cannot see never gets a blank kept card")
+}
+
+@Test func continuationOfAKeptMemoryIsNotReappended() throws {
+    let s = SegmentID()
+    let a = try memory(s, 0, title: "Old"), b = try memory(s, 1, title: "Old")
+    var queue = CardQueue()
+    queue.apply(.candidates([a, b, try hint(s, 2, for: b)], segment: s))
+    queue.memoryAccepted(a.id.rawValue)
+    queue.memoryAccepted(b.id.rawValue)
+    #expect(queue.cards.map(\.id) == ids(b))
+    for c in [a, b] {
+        var out = try #require(CandidatePayload.memory(c))
+        out.title = "New"
+        var changed = c
+        changed.payload = try CandidatePayload.encode(out)
+        queue.apply(.candidates([changed], segment: SegmentID()))
+    }
+    #expect(queue.cards.map(\.id) == ids(b), "A left on Keep and stays gone")
+    #expect(kept(queue, b)?.title == "New", "the open kept card takes the new title")
+}
+
+@Test func continuationOfADismissedMemoryIsNotReappended() throws {
+    let s = SegmentID()
+    let a = try memory(s, 0)
+    var queue = CardQueue()
+    queue.apply(.candidates([a], segment: s))
+    queue.memoryDismissed(a.id.rawValue)
+    queue.apply(.candidates([a], segment: SegmentID()))
+    #expect(queue.cards.isEmpty)
 }

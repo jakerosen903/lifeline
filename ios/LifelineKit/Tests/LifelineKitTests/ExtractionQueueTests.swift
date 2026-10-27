@@ -365,9 +365,10 @@ private func firstCard(_ events: [ExtractionEvent]) -> Candidate? {
     _ = try actions.acceptMemory(try #require(emitted.first { $0.id == a.id }))
     let waiting = CardQueue.waiting(pending: try env.store.candidates.pending(in: env.session),
                                     segmentMemories: { (try? env.store.candidates.candidates(for: $0)) ?? [] },
-                                    statusOf: { (try? env.store.candidates.fetch($0))?.status })
-    #expect(waiting.cards.contains { if case .kept(let k) = $0 { k.memoryCandidateID == a.id.rawValue && k.followUps.contains { if case .hint = $0 { true } else { false } } } else { false } },
-            "the continuation's hint waits under the first card, kept")
+                                    candidate: { try? env.store.candidates.fetch($0) })
+    guard case .kept(let kept)? = waiting.cards.first(where: { $0.id == a.id.rawValue }) else { Issue.record("expected a kept card, got \(waiting.cards)"); return }
+    #expect(kept.followUps.contains { if case .hint = $0 { true } else { false } }, "the continuation's hint waits under the first card, kept")
+    #expect(kept.title == CandidatePayload.memory(a)?.title && !kept.title.isEmpty)
 }
 
 // MARK: - M5 stories

@@ -88,18 +88,23 @@ public struct CardQueue: Equatable, Sendable {
     /// The cards waiting after a session, as a queue the app keeps and closes with the same calls as
     /// the live session. A pending memory shows with its pending follow-ups held; follow-ups whose
     /// memory was already kept show as one kept card for it; those whose memory was dismissed, or
-    /// that have none, do not show. `segmentMemories` gives a segment's candidates of any status.
+    /// that have none, do not show. `segmentMemories` gives a segment's candidates of any status;
+    /// `candidate` looks one up by id (a continuation's hint names a memory from another segment).
     public static func waiting(pending: [Candidate], segmentMemories: (SegmentID) -> [Candidate],
-                               statusOf: (CandidateID) -> CandidateStatus?) -> CardQueue {
+                               candidate: (CandidateID) -> Candidate?) -> CardQueue {
         var queue = CardQueue()
         var segments = Set<SegmentID>()
         for segment in pending.map(\.segmentID) where segments.insert(segment).inserted {
-            for candidate in segmentMemories(segment) { queue.remember(candidate) }
+            for memory in segmentMemories(segment) { queue.remember(memory) }
         }
-        queue.dismissed = Set(queue.memories.keys.filter { statusOf(CandidateID(rawValue: $0)) == .dismissed })
         let cards = pending.compactMap(Card.init)
+        for case .hint(_, let hint) in cards where queue.memories[hint.memoryCandidateID] == nil {
+            if let memory = candidate(CandidateID(rawValue: hint.memoryCandidateID)) { queue.remember(memory) }
+        }
+        func status(_ id: String) -> CandidateStatus? { candidate(CandidateID(rawValue: id))?.status }
+        queue.dismissed = Set(queue.memories.keys.filter { status($0) == .dismissed })
         let owners = cards.filter(\.isFollowUp).compactMap(queue.owner)
-        queue.accepted = Set(owners.filter { statusOf(CandidateID(rawValue: $0)) == .accepted })
+        queue.accepted = Set(owners.filter { status($0) == .accepted })
         for card in cards {
             queue.take(card)
             queue.release()
@@ -180,6 +185,8 @@ public struct CardQueue: Equatable, Sendable {
             if case .kept(var k) = cards[i] { k.title = title(of: k.memoryCandidateID); cards[i] = .kept(k) } else { cards[i] = card }
             return
         }
+        // A memory already kept or dismissed is settled: a continuation never brings its card back.
+        if accepted.contains(card.id) || dismissed.contains(card.id) { return }
         // A heavy moment suppresses every organizational prompt.
         if !suppressed { cards.append(card) }
     }
@@ -190,7 +197,8 @@ public struct CardQueue: Equatable, Sendable {
         guard !suppressed else { return }
         var still: [Card] = []
         for followUp in held {
-            guard let owner = owner(of: followUp), accepted.contains(owner) else { still.append(followUp); continue }
+            // An owner the queue never saw has no title to show: the follow-up stays held.
+            guard let owner = owner(of: followUp), accepted.contains(owner), memories[owner] != nil else { still.append(followUp); continue }
             if let i = keptIndex(owner), case .kept(var k) = cards[i] {
                 k.followUps.append(followUp)
                 cards[i] = .kept(k)
@@ -222,7 +230,7 @@ public struct CardQueue: Equatable, Sendable {
         FollowUpOwner.owner(of: followUp, among: memories.values.map { ($0.candidate, $0.out) }, excluding: dismissed)
     }
 
-    /// A memory seen but not in this queue (a continuation's first card) has no title to show.
+    /// Only called for remembered memories; the empty fallback is never shown.
     private func title(of memoryCandidateID: String) -> String { memories[memoryCandidateID]?.out.title ?? "" }
 
     private func keptIndex(_ memoryCandidateID: String) -> Int? {
