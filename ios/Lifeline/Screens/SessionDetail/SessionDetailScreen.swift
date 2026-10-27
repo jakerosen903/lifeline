@@ -4,7 +4,13 @@ import SwiftUI
 /// One session: cards still waiting for an answer, the memories it produced, and every
 /// moment, each playable. The timeline proper is M3.
 struct SessionDetailScreen: View {
-    let viewModel: SessionDetailViewModel
+    /// Made once per navigation: a parent that re-renders (the landing polls while sorting) must
+    /// not swap the model, and with it the cards' touched state, under the person.
+    @State private var viewModel: SessionDetailViewModel
+
+    init(session: Session, deps: Dependencies) {
+        _viewModel = State(initialValue: SessionDetailViewModel(session: session, deps: deps))
+    }
 
     var body: some View {
         List {

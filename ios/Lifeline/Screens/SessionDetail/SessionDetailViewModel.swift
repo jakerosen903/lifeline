@@ -32,8 +32,8 @@ final class SessionDetailViewModel {
     init(session: Session, deps: Dependencies) {
         self.session = session
         self.deps = deps
+        // The screen's onAppear loads it: SwiftUI may build and discard a model on a parent's render, so init stays cheap.
         flow = CardFlow(deps: deps)
-        refresh()
         flow.onAutoClose = { [weak self] in self?.refresh() }
     }
 
