@@ -2,6 +2,16 @@
 
 A voice-first app: a person tells stories from their life, a timeline fills in, and over time it becomes a replayable autobiography. Phase 1 is a personal timeline for one person; family sharing comes later.
 
+## Non-engineer contributors
+
+This repo has non-engineer contributors who use Claude Code to assist. When they ask for help:
+
+- Be concrete: name the file, the line, and the exact command to run.
+- Avoid Swift internals unless the task needs them. Explain in plain words.
+- Point them at `CONTRIBUTING.md` and `docs/GOOD_FIRST_TASKS.md`.
+- Treat `docs/PRINCIPLES.md` as the source of truth. If a request conflicts with a principle, say so.
+- Show the change and run the tests before committing. Never push to `main`.
+
 ## Read these first
 
 - `docs/PRINCIPLES.md` — the grounding document. Nine principles, the literature behind them, the session arc and safety rules. Every prompt, feature and PR is checked against it.
