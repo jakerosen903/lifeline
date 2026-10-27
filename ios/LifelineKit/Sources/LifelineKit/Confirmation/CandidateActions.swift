@@ -477,7 +477,14 @@ public struct CandidateActions: Sendable {
     }
 
     func mention(for text: String, in segment: SegmentID, relation: String? = nil) throws -> Mention {
-        if let existing = try store.people.mentions(in: segment).first(where: { Self.same($0.text, text) }) { return existing }
+        if var existing = try store.people.mentions(in: segment).first(where: { Self.same($0.text, text) }) {
+            // Keep may have written the row without the phrase the person said with the name ("my sister").
+            if existing.relationText == nil, let relation = relation?.trimmingCharacters(in: .whitespacesAndNewlines), !relation.isEmpty {
+                try store.people.setRelationIfMissing(existing.id, relation)
+                existing.relationText = relation
+            }
+            return existing
+        }
         let row = Mention(id: .init(), segmentID: segment, text: text.trimmingCharacters(in: .whitespacesAndNewlines), status: .unresolved,
                           personID: nil, relationText: relation?.trimmingCharacters(in: .whitespacesAndNewlines))
         try store.people.insertMention(row)

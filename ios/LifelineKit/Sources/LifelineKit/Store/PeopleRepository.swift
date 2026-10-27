@@ -110,6 +110,15 @@ public struct PeopleRepository: Sendable {
         try db.writer.write { try mention.insert($0) }
     }
 
+    /// Sets the kin or role phrase on a mention that has none (Keep wrote the row before the chip's phrase arrived).
+    public func setRelationIfMissing(_ id: MentionID, _ relation: String) throws {
+        try db.writer.write { db in
+            guard var row = try Mention.fetchOne(db, key: id.rawValue), row.relationText == nil else { return }
+            row.relationText = relation
+            try row.update(db)
+        }
+    }
+
     public func mention(id: MentionID) throws -> Mention? {
         try db.writer.read { try Mention.fetchOne($0, key: id.rawValue) }
     }
