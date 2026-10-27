@@ -176,6 +176,13 @@ extension CuriosityItem: FetchableRecord, PersistableRecord {
     }
 }
 
+extension InterviewerTurn: FetchableRecord, PersistableRecord {
+    public static let databaseTableName = "interviewer_turn"
+    enum CodingKeys: String, CodingKey {
+        case id, sessionID = "session_id", kind, source, text, startMs = "start_ms", endMs = "end_ms", interrupted
+    }
+}
+
 extension MemorySpan: FetchableRecord, PersistableRecord {
     public static let databaseTableName = "memory_span"
     enum CodingKeys: String, CodingKey {

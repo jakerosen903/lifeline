@@ -9,6 +9,8 @@ public actor ScriptedVoiceSession: VoiceSession {
     private var continuation: AsyncStream<VoiceEvent>.Continuation?
     private var task: Task<Void, Never>?
     private var paused = false
+    /// The end of the last scripted segment: the file clock a turn is stamped with.
+    private var clockMs: Milliseconds = 0
 
     public init(script: [SegmentTranscript] = ScriptedVoiceSession.sampleScript, intervalMs: Int = 1_500) {
         self.script = script
@@ -32,7 +34,7 @@ public actor ScriptedVoiceSession: VoiceSession {
                 c.yield(.transcriptPartial(String(segment.text.prefix(segment.text.count / 2))))
                 try? await Task.sleep(for: .milliseconds(intervalMs / 3))
                 c.yield(.userPaused(afterMs: segment.range.end))
-                c.yield(.segmentClosed(segment))
+                await self?.close(segment)
             }
         }
         return stream
@@ -47,9 +49,22 @@ public actor ScriptedVoiceSession: VoiceSession {
     public func pause() async throws { paused = true; continuation?.yield(.paused) }
     public func resume() async throws { paused = false; continuation?.yield(.resumed) }
 
-    public func say(_ text: String) async {}
+    /// The turn starts and ends at once; timed playback comes later.
+    @discardableResult
+    public func say(_ turn: SpokenTurn) async -> Bool {
+        guard let continuation, !paused else { return false }
+        continuation.yield(.turnStarted(turn.id, atMs: clockMs))
+        continuation.yield(.turnEnded(turn.id, atMs: clockMs, interrupted: false))
+        return true
+    }
+
     public func acknowledge() async {}
     public func interrupt() async {}
+
+    private func close(_ segment: SegmentTranscript) {
+        clockMs = segment.range.end
+        continuation?.yield(.segmentClosed(segment))
+    }
 
     private static func writeTone(to url: URL, durationMs: Int) async throws {
         let writer = AudioFileWriter()

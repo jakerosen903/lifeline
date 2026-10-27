@@ -339,3 +339,22 @@ private func archives(in dir: URL) throws -> [URL] {
     }
     #expect(try archive.resourceValues(forKeys: [.isExcludedFromBackupKey]).isExcludedFromBackup == true, "every archive the app writes")
 }
+
+@Test func aTurnSurvivesBackupAndRestore() throws {
+    let source = try Root(sessions: 1, memories: 1)
+    let session = try #require(try source.store.sessions.listSessions().first).id
+    let turns = InterviewerTurnRepository(source.db)
+    let spoken = InterviewerTurn(id: .init(), sessionID: session, kind: .wrapUp, source: .fixed, text: "We can leave it here, or carry on.",
+                                 startMs: 4_000, endMs: 6_500, interrupted: true)
+    try turns.insert(spoken)
+    let archive = source.url.appending(path: "turns.lifeline")
+    _ = try Backup.export(root: source.url, appVersion: "1.0", to: archive, database: source.db)
+
+    let target = FileManager.default.temporaryDirectory.appending(path: "lifeline-restore-\(UUID().uuidString)")
+    _ = try AppDatabase.open(at: target.appending(path: "Lifeline/lifeline.sqlite"))
+    let documents = try docs()
+    _ = try Backup.stage(archive, root: target, appVersion: "1.0", safetyCopyDirectory: documents)
+    #expect(try Backup.applyPendingRestore(root: target, safetyCopyDirectory: documents))
+    let restored = InterviewerTurnRepository(try AppDatabase.open(at: target.appending(path: "Lifeline/lifeline.sqlite")))
+    #expect(try restored.turns(in: session) == [spoken])
+}

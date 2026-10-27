@@ -11,22 +11,40 @@ public struct RecorderState: Equatable, Sendable {
     /// True from speech start to the pause that ends it; drives the listening indicator.
     public var isSpeaking = false
     public var segments: [Segment] = []
+    /// What the interviewer said, in file order. A turn's `endMs` is nil while it plays.
+    public var turns: [InterviewerTurn] = []
+    /// The turn playing now.
+    public var speakingTurn: InterviewerTurnID?
     public var isInterrupted = false
     public var isPaused = false
     public var error: String?
     public init() {}
 }
 
-/// What happens around the recorder: a stored segment goes to extraction, and once the session
-/// has ended the caller may let sorting finish in the background. Finishing never waits for it.
+/// What happens around the recorder: a stored segment goes to extraction, every voice event
+/// reaches the interviewer, and once the session has ended the caller may let sorting finish in
+/// the background. Finishing never waits for it.
 public struct RecorderHooks: Sendable {
     public var onSegmentStored: @Sendable (SegmentID) -> Void
+    public var onVoiceEvent: @Sendable (VoiceEvent) -> Void
     public var onStopped: @Sendable () -> Void
 
     public init(onSegmentStored: @escaping @Sendable (SegmentID) -> Void = { _ in },
+                onVoiceEvent: @escaping @Sendable (VoiceEvent) -> Void = { _ in },
                 onStopped: @escaping @Sendable () -> Void = {}) {
         self.onSegmentStored = onSegmentStored
+        self.onVoiceEvent = onVoiceEvent
         self.onStopped = onStopped
+    }
+}
+
+/// A turn the interviewer wants spoken. The recorder gives it an id and stores it once it starts.
+public struct TurnDraft: Equatable, Sendable {
+    public var kind: TurnKind
+    public var source: TurnSource
+    public var text: String
+    public init(kind: TurnKind, source: TurnSource, text: String) {
+        self.kind = kind; self.source = source; self.text = text
     }
 }
 
@@ -41,18 +59,22 @@ public actor SessionRecorder {
 
     private let voice: any VoiceSession
     private let sessions: SessionRepository
+    private let turns: InterviewerTurnRepository
     private let audioURL: @Sendable (SessionID) throws -> URL
     private let now: @Sendable () -> Date
     private let hooks: RecorderHooks
     private var session: Session?
     private var eventTask: Task<Void, Never>?
+    /// Turns handed to the voice that have not started yet. A dropped turn never starts, so it gets no row.
+    private var drafts: [InterviewerTurnID: TurnDraft] = [:]
 
-    public init(voice: any VoiceSession, sessions: SessionRepository,
+    public init(voice: any VoiceSession, sessions: SessionRepository, turns: InterviewerTurnRepository,
                 audioURL: @escaping @Sendable (SessionID) throws -> URL,
                 now: @escaping @Sendable () -> Date = Date.init,
                 hooks: RecorderHooks = RecorderHooks()) {
         self.voice = voice
         self.sessions = sessions
+        self.turns = turns
         self.audioURL = audioURL
         self.now = now
         self.hooks = hooks
@@ -116,6 +138,19 @@ public actor SessionRecorder {
         try await voice.resume()
     }
 
+    /// Hands the turn to the voice. Its row is written when the voice reports that it started,
+    /// so a turn dropped while paused leaves no row, and a crash mid-turn leaves one with no end.
+    /// Returns false when the session has ended or the voice refused the turn.
+    @discardableResult
+    public func speak(_ draft: TurnDraft) async -> Bool {
+        guard let row = session, row.endedAt == nil else { return false }
+        let id = InterviewerTurnID()
+        drafts[id] = draft
+        let accepted = await voice.say(SpokenTurn(id: id, text: draft.text))
+        if !accepted { drafts[id] = nil }
+        return accepted
+    }
+
     /// After a crash: every session left open has its recording ended. One with words waits for
     /// its landing (the app opens it first); one with nothing said is closed quietly.
     /// Returns the sessions to resume, newest first.
@@ -158,7 +193,39 @@ public actor SessionRecorder {
             state.isPaused = false
         case .failed(let message):
             state.error = message
+        case .turnStarted(let id, let startMs):
+            storeTurn(id, startMs: startMs)
+        case .turnEnded(let id, let endMs, let interrupted):
+            endTurn(id, endMs: endMs, interrupted: interrupted)
         }
+        hooks.onVoiceEvent(event)
+    }
+
+    private func storeTurn(_ id: InterviewerTurnID, startMs: Milliseconds) {
+        guard let session, let draft = drafts.removeValue(forKey: id) else { return }
+        let turn = InterviewerTurn(id: id, sessionID: session.id, kind: draft.kind, source: draft.source, text: draft.text,
+                                   startMs: startMs, endMs: nil, interrupted: false)
+        do {
+            try turns.insert(turn)
+            state.turns.append(turn)
+            state.speakingTurn = id
+        } catch {
+            state.error = "could not save a turn: \(error)"
+        }
+    }
+
+    /// A turn cut before it started has no row: its end is ignored.
+    private func endTurn(_ id: InterviewerTurnID, endMs: Milliseconds, interrupted: Bool) {
+        drafts[id] = nil
+        guard let index = state.turns.firstIndex(where: { $0.id == id }) else { return }
+        do {
+            try turns.end(id, atMs: endMs, interrupted: interrupted)
+            state.turns[index].endMs = endMs
+            state.turns[index].interrupted = interrupted
+        } catch {
+            state.error = "could not end a turn: \(error)"
+        }
+        if state.speakingTurn == id { state.speakingTurn = nil }
     }
 
     /// A segment with no words (noise, music) is not worth a row.

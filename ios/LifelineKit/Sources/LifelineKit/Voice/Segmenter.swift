@@ -2,7 +2,7 @@
 public struct SegmenterConfig: Sendable, Equatable {
     /// Silence this long after speech closes the segment.
     public var pauseThresholdMs: Milliseconds
-    /// A segment with less accumulated speech than this is abandoned, not emitted.
+    /// A segment with less accumulated speech than this is abandoned, not closed.
     public var minSegmentSpeechMs: Milliseconds
     /// Level at or above this counts as speech.
     public var speechThresholdDb: Float
@@ -21,6 +21,8 @@ public struct SegmenterConfig: Sendable, Equatable {
 public enum SegmenterEvent: Equatable, Sendable {
     case speechStarted(atMs: Milliseconds)
     case segmentEnded(MsRange)
+    /// Speech too short to be a segment ended in a pause. Nothing is stored; the person did go quiet.
+    case abandoned(MsRange)
     /// A pause ended (speech resumed). Logged for calibrating the later end-of-thought model.
     case pauseObserved(ms: Milliseconds)
 }
@@ -69,6 +71,8 @@ public struct Segmenter: Sendable {
                 // The pause is long enough: close or abandon, then wait for speech.
                 if speechMs >= config.minSegmentSpeechMs {
                     events.append(.segmentEnded(MsRange(start: segmentStart, end: lastSpeechEnd)))
+                } else {
+                    events.append(.abandoned(MsRange(start: segmentStart, end: lastSpeechEnd)))
                 }
                 state = .idle
                 return events
@@ -87,12 +91,12 @@ public struct Segmenter: Sendable {
         }
     }
 
-    /// Closes an open segment (if it has enough speech) at `atMs` or at the last speech end,
-    /// whichever is earlier. Used at stop and at interruptions. Idempotent.
+    /// Closes an open segment at `atMs` or at the last speech end, whichever is earlier; a segment
+    /// with too little speech is abandoned instead. Used at stop and at interruptions. Idempotent.
     public mutating func flush(atMs: Milliseconds) -> [SegmenterEvent] {
         guard case .open(let segmentStart, let speechMs, let lastSpeechEnd, _) = state else { return [] }
         state = .idle
-        guard speechMs >= config.minSegmentSpeechMs else { return [] }
-        return [.segmentEnded(MsRange(start: segmentStart, end: min(atMs, lastSpeechEnd)))]
+        let range = MsRange(start: segmentStart, end: min(atMs, lastSpeechEnd))
+        return [speechMs >= config.minSegmentSpeechMs ? .segmentEnded(range) : .abandoned(range)]
     }
 }

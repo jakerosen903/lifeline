@@ -67,6 +67,9 @@ struct SessionScreen: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
                 promptCard(compact: false, chips: hasText)
+                if let turn = viewModel.latestTurn {
+                    TurnLine(turn: turn, font: .system(.headline, design: .serif), identifier: "session.turn")
+                }
                 Text("Take your time. Pauses are fine. I'm only listening.")
                     .font(.system(.body, design: .serif))
                     .foregroundStyle(Theme.stone)
@@ -99,12 +102,17 @@ struct SessionScreen: View {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 16) {
                     promptCard(compact: hasText)
-                    ForEach(viewModel.state.segments) { segment in
-                        Text(segment.text)
-                            .font(.system(.title3, design: .serif))
-                            .foregroundStyle(Theme.ink)
-                            .accessibilityIdentifier("session.segment")
-                            .id(segment.id)
+                    ForEach(viewModel.transcript) { item in
+                        switch item {
+                        case .segment(let segment):
+                            Text(segment.text)
+                                .font(.system(.title3, design: .serif))
+                                .foregroundStyle(Theme.ink)
+                                .accessibilityIdentifier("session.segment")
+                                .id(segment.id)
+                        case .turn(let turn):
+                            TurnLine(turn: turn, identifier: "transcript.turn")
+                        }
                     }
                     liveText
                     CardStack(cards: viewModel.visibleCards, handler: viewModel.cards,

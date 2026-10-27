@@ -55,24 +55,11 @@ struct SessionDetailScreen: View {
                                            description: Text("This session has no transcribed moments."))
                         .listRowBackground(Color.clear)
                 }
-                ForEach(viewModel.segments) { segment in
-                    Button { viewModel.toggle(segment) } label: {
-                        HStack(alignment: .top, spacing: 12) {
-                            Image(systemName: viewModel.isPlaying(segment) ? "stop.circle.fill" : "play.circle")
-                                .font(.title2)
-                                .foregroundStyle(Theme.olive)
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text(Format.duration(ms: segment.startMs))
-                                    .font(.caption.monospacedDigit())
-                                    .foregroundStyle(Theme.ochre)
-                                Text(segment.text)
-                                    .font(.system(.body, design: .serif))
-                                    .foregroundStyle(Theme.ink)
-                            }
-                        }
-                        .padding(.vertical, 4)
+                ForEach(viewModel.transcript) { item in
+                    switch item {
+                    case .segment(let segment): segmentRow(segment)
+                    case .turn(let turn): TurnLine(turn: turn, identifier: "transcript.turn").padding(.leading, 40)
                     }
-                    .accessibilityIdentifier("detail.segment")
                 }
             }
             if !viewModel.dismissed.isEmpty {
@@ -104,5 +91,26 @@ struct SessionDetailScreen: View {
         .sheet(item: Binding(get: { viewModel.changing }, set: { viewModel.changing = $0 })) { memory in
             ChangeSheet(memory: memory, deps: viewModel.deps) { viewModel.refresh() }
         }
+    }
+
+    /// Tap plays the moment's own span.
+    private func segmentRow(_ segment: Segment) -> some View {
+        Button { viewModel.toggle(segment) } label: {
+            HStack(alignment: .top, spacing: 12) {
+                Image(systemName: viewModel.isPlaying(segment) ? "stop.circle.fill" : "play.circle")
+                    .font(.title2)
+                    .foregroundStyle(Theme.olive)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(Format.duration(ms: segment.startMs))
+                        .font(.caption.monospacedDigit())
+                        .foregroundStyle(Theme.ochre)
+                    Text(segment.text)
+                        .font(.system(.body, design: .serif))
+                        .foregroundStyle(Theme.ink)
+                }
+            }
+            .padding(.vertical, 4)
+        }
+        .accessibilityIdentifier("detail.segment")
     }
 }

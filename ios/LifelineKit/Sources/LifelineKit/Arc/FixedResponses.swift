@@ -14,14 +14,28 @@ public enum FixedResponses {
     }
 
     public static func disclosure(locale: Locale = .current) throws -> String {
+        try resource("disclosure", locale: locale)
+    }
+
+    /// What the interviewer says aloud. Present danger speaks the whole card, crisis line included.
+    /// A past disclosure speaks the same opening without the number. Nil when nothing is disclosed.
+    public static func spokenDisclosure(_ kind: DisclosureKind, locale: Locale = .current) throws -> String? {
+        switch kind {
+        case .none: nil
+        case .past: try resource("disclosure-spoken-past", locale: locale)
+        case .present: try disclosure(locale: locale)
+        }
+    }
+
+    private static func resource(_ base: String, locale: Locale) throws -> String {
         let candidates = [locale.identifier.replacingOccurrences(of: "_", with: "-"), "en-US"]
         for name in candidates {
-            if let url = Bundle.module.url(forResource: "disclosure.\(name)", withExtension: "md", subdirectory: "FixedResponses"),
+            if let url = Bundle.module.url(forResource: "\(base).\(name)", withExtension: "md", subdirectory: "FixedResponses"),
                let text = try? String(contentsOf: url, encoding: .utf8) {
                 return text.hasSuffix("\n") ? String(text.dropLast()) : text
             }
         }
-        throw Error.missing("disclosure")
+        throw Error.missing(base)
     }
 
     public static func crisisLine(locale: Locale = .current) -> CrisisLine {

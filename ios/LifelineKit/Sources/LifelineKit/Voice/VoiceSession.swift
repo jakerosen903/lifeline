@@ -27,8 +27,16 @@ public struct SegmentTranscript: Equatable, Sendable {
     }
 }
 
+/// One turn for the voice session to speak. The recorder chooses the id, so the row it stores
+/// and the events the session reports name the same turn.
+public struct SpokenTurn: Equatable, Sendable {
+    public var id: InterviewerTurnID
+    public var text: String
+    public init(id: InterviewerTurnID, text: String) { self.id = id; self.text = text }
+}
+
 /// Events from a voice session. The first four are the technical design's interface;
-/// the rest are what a listen-only V1 needs to store segments and react to the audio session.
+/// the rest are what the session needs to store segments, store turns and react to the audio session.
 public enum VoiceEvent: Equatable, Sendable {
     case speechStarted(atMs: Milliseconds)
     case transcriptPartial(String)
@@ -41,17 +49,25 @@ public enum VoiceEvent: Equatable, Sendable {
     /// After an interruption or a pause, capture is running again.
     case resumed
     case failed(String)
+    /// The app began to speak a turn, at this point on the file clock.
+    case turnStarted(InterviewerTurnID, atMs: Milliseconds)
+    /// The turn stopped. `interrupted` is true when pause, an interruption, stop or the person cut it.
+    case turnEnded(InterviewerTurnID, atMs: Milliseconds, interrupted: Bool)
 }
 
-/// The voice pipeline behind one interface, so a speaking interviewer or a realtime
-/// speech model can replace the listen-only implementation later.
+/// The voice pipeline behind one interface, so a realtime speech model can replace the cascade later.
 public protocol VoiceSession: Actor {
     func start(writingTo audioURL: URL) async throws -> AsyncStream<VoiceEvent>
     func stop() async throws
     /// Closes what was said and stops capture; the next chunk after `resume` follows the last one on the file clock.
     func pause() async throws
     func resume() async throws
-    func say(_ text: String) async
+    /// Starts the turn and returns at once; `turnStarted` and `turnEnded` report it. Returns false
+    /// when the turn is refused (paused, interrupted, stopped, or superseded before it played):
+    /// a refused turn emits nothing. An accepted turn ends with exactly one `turnEnded`, even when
+    /// it is cut before `turnStarted`. A turn that is playing ends, interrupted, before the next one starts.
+    @discardableResult
+    func say(_ turn: SpokenTurn) async -> Bool
     func acknowledge() async
     func interrupt() async
 }

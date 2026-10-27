@@ -13,7 +13,7 @@ private func gardenMemoryOut() -> MemoryOut {
 
 @Test func stageLogWrittenDuringStopIsNotOverwritten() async throws {
     let db = try AppDatabase.inMemory(); let repo = SessionRepository(db); let voice = FakeVoiceSession()
-    let rec = SessionRecorder(voice: voice, sessions: repo, audioURL: { URL(fileURLWithPath: "/tmp/\($0.rawValue).m4a") })
+    let rec = SessionRecorder(voice: voice, sessions: repo, turns: InterviewerTurnRepository(db), audioURL: { URL(fileURLWithPath: "/tmp/\($0.rawValue).m4a") })
     let id = try await rec.start()
     async let stopping: Void = rec.stop()
     try await rec.record(stageLog: #"[{"reason":"finish"}]"#)
