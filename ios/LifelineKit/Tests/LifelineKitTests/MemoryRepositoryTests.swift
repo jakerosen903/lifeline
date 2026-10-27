@@ -48,3 +48,36 @@ private struct Env {
     #expect(try env.memories.spans(of: memory.id).count == 1)
     #expect(try env.memories.anchors(of: memory.id).map(\.phrase) == ["when I was six"])
 }
+
+@Test func excludedSegmentIDsFollowSpans() throws {
+    let db = try AppDatabase.inMemory()
+    let sessions = SessionRepository(db), candidates = CandidateRepository(db), memories = MemoryRepository(db)
+    let (session, segments) = try StoreFixtures.session(in: sessions, segments: ["one two", "three four", "five six"])
+    let (other, otherSegments) = try StoreFixtures.session(in: sessions, segments: ["seven eight"])
+    func tell(_ segment: Segment, excluded: Bool) throws {
+        let candidate = StoreFixtures.candidate(segment.id)
+        try candidates.insert(candidate)
+        let memory = StoreFixtures.memory(from: candidate.id)
+        let span = MemorySpan(memoryID: memory.id, segmentID: segment.id, startMs: 0, endMs: 1_000, order: 0)
+        try memories.insert(memory, spans: [span], people: [], places: [], anchors: [])
+        if excluded { try memories.setExcluded(memory.id, true) }
+    }
+    try tell(segments[0], excluded: true)
+    try tell(segments[1], excluded: false)
+    try tell(otherSegments[0], excluded: true)
+    #expect(try memories.excludedSegmentIDs(in: session) == [segments[0].id])
+    #expect(try memories.excludedSegmentIDs(in: other) == [otherSegments[0].id])
+}
+
+@Test func oneExcludedMemoryWithSpansInTwoSegmentsReturnsBoth() throws {
+    let db = try AppDatabase.inMemory()
+    let sessions = SessionRepository(db), candidates = CandidateRepository(db), memories = MemoryRepository(db)
+    let (session, segments) = try StoreFixtures.session(in: sessions, segments: ["one two", "three four", "five six"])
+    let candidate = StoreFixtures.candidate(segments[0].id)
+    try candidates.insert(candidate)
+    let memory = StoreFixtures.memory(from: candidate.id)
+    let spans = [0, 2].enumerated().map { MemorySpan(memoryID: memory.id, segmentID: segments[$1].id, startMs: 0, endMs: 1_000, order: $0) }
+    try memories.insert(memory, spans: spans, people: [], places: [], anchors: [])
+    try memories.setExcluded(memory.id, true)
+    #expect(try memories.excludedSegmentIDs(in: session) == [segments[0].id, segments[2].id])
+}

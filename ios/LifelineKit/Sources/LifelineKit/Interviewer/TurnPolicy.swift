@@ -13,7 +13,7 @@ public struct SafetyCheck: Equatable, Sendable {
     public var isClean: Bool { disclosure == .none && !wantsToStop }
 }
 
-/// What the policy hears. A nil check means the interviewer call failed.
+/// What the policy hears. A nil check means the interviewer call failed, or the segment was never asked about.
 public enum TurnInput: Equatable, Sendable {
     case speechStarted, partial, userPaused
     /// Only segments that keep words of the person's; a segment emptied of the app's words is never stored.
@@ -69,6 +69,9 @@ public struct TurnPolicy: Equatable, Sendable {
     private var heavy = false
     /// Rule 4: an interviewer check on some segment was not clean.
     private var uncleanCheck = false
+    /// Rule 4, "a failed or missing check is not clean": segments whose interviewer check failed and whose
+    /// extractor flags have not arrived. They hold the gate shut; their flags release it or latch it.
+    private var uncheckedSegments: Set<SegmentID> = []
     private var stage: Stage = .open
     private var quiet = false
     /// The last two spoken turns, newest last. Rule 7.
@@ -92,10 +95,14 @@ public struct TurnPolicy: Equatable, Sendable {
             newestSegment = id; newestSegmentPause = lastPause ?? now; segmentSinceLastTurn = true
         case .interviewerCheck(let id, let check):
             // A duplicate check for a segment keeps the first; the latch below never reopens anyway.
-            if checks[id] == nil { checks[id] = check.map(CheckResult.returned) ?? .failed }
+            if checks[id] == nil {
+                checks[id] = check.map(CheckResult.returned) ?? .failed
+                if check == nil, flags[id] == nil { uncheckedSegments.insert(id) }
+            }
             if let check, !check.isClean { uncleanCheck = true }
         case .extractorFlags(let id, let segmentFlags):
             flags[id] = segmentFlags
+            uncheckedSegments.remove(id)
             if segmentFlags.isHeavy { heavy = true }
         case .stage(let newStage):
             stage = newStage
@@ -134,7 +141,31 @@ public struct TurnPolicy: Equatable, Sendable {
     /// The newest stored segment, once `replyGrace` has passed since its pause with no speech and no turn
     /// since, and only if no check for it has come back yet (it was not asked about already).
     public func segmentAwaitingReply(at now: Duration) -> SegmentID? {
-        guard kind == .settleIn, !quiet, !heavy, !uncleanCheck, stage == .open,
+        segmentAwaiting(at: now, in: [.open])
+    }
+
+    /// As `segmentAwaitingReply`, and in `windDown` too: a waiting wrap-up needs the newest segment's check.
+    /// The loop asks for the check only there; a reply's words are never spoken.
+    public func segmentAwaitingCheck(at now: Duration) -> SegmentID? {
+        segmentAwaiting(at: now, in: [.open, .windDown])
+    }
+
+    /// The newest segment has no check yet, and nothing has closed the gate for good, so a call may still open it.
+    public var checkStillPossible: Bool {
+        guard kind == .settleIn, !quiet, !heavy, !uncleanCheck, let segment = newestSegment else { return false }
+        return checks[segment] == nil
+    }
+
+    /// The newest segment's check came back clean, and only the missing flags of a segment whose check
+    /// failed keep the gate shut: their arrival opens it, or latches it.
+    public var gateWaitsForFlags: Bool {
+        guard !heavy, !uncleanCheck, !uncheckedSegments.isEmpty, let segment = newestSegment,
+              case .returned(let check) = checks[segment], check.isClean else { return false }
+        return flags[segment].map { !$0.isHeavy } ?? true
+    }
+
+    private func segmentAwaiting(at now: Duration, in stages: Set<Stage>) -> SegmentID? {
+        guard kind == .settleIn, !quiet, !heavy, !uncleanCheck, stages.contains(stage),
               let segment = newestSegment, let pause = newestSegmentPause,
               segmentSinceLastTurn, checks[segment] == nil,
               !personSpeaking(at: now), !appSpeaking,
@@ -152,8 +183,9 @@ public struct TurnPolicy: Equatable, Sendable {
 
     /// Rule 4: a clean interviewer check of the newest segment, and clean extractor flags if they arrived.
     /// One unclean check or heavy flag on any segment closes the gate to every gated turn for good.
+    /// A failed check on any segment closes it until that segment's flags arrive.
     private var gateOpen: Bool {
-        if uncleanCheck || heavy { return false }
+        if uncleanCheck || heavy || !uncheckedSegments.isEmpty { return false }
         guard let segment = newestSegment, case .returned(let check) = checks[segment], check.isClean else { return false }
         return flags[segment].map { !$0.isHeavy } ?? true
     }

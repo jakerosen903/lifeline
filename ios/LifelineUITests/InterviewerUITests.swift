@@ -6,6 +6,7 @@ import XCTest
 final class InterviewerUITests: XCTestCase {
     private static let spokenPastDisclosure = "Thank you for telling me that. You can stop here, or keep going. It is your choice."
     private static let earlyWindDown = "We can leave this here and come back whenever you want."
+    private static let wrapUp = "We can leave it here, or carry on."
 
     @MainActor
     private func launchToTimeline(arguments: [String] = []) -> XCUIApplication {
@@ -15,6 +16,13 @@ final class InterviewerUITests: XCTestCase {
         app.skipFirstOpen()
         XCTAssertTrue(app.buttons["home.start"].waitForExistence(timeout: 5))
         return app
+    }
+
+    @MainActor
+    private func startSettleIn(_ app: XCUIApplication) {
+        XCTAssertTrue(app.waitHittable(app.buttons["home.settleIn"], timeout: 5))
+        app.buttons["home.settleIn"].tap()
+        XCTAssertTrue(app.buttons["session.finish"].waitForExistence(timeout: 5))
     }
 
     /// The text element with this identifier and exactly this label.
@@ -55,6 +63,7 @@ final class InterviewerUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["session.count"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.staticTexts["session.count"].wait(for: \.label, toEqual: "2 possible memories", timeout: 15))
         XCTAssertFalse(app.staticTexts["session.turn"].exists, "the opening is not shown as a turn")
+        XCTAssertEqual(app.staticTexts["session.listenCopy"].label, "Take your time. Pauses are fine. I'll stay quiet while you talk.")
         app.finishSession()
 
         openSessionDetail(app)
@@ -176,6 +185,7 @@ final class InterviewerUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["session.count"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.staticTexts["session.count"].wait(for: \.label, toEqual: "2 possible memories", timeout: 15))
         XCTAssertFalse(app.buttons["session.quiet"].exists, "no Quiet control when the app does not speak")
+        XCTAssertEqual(app.staticTexts["session.listenCopy"].label, "Take your time. Pauses are fine. I'm only listening.")
         app.finishSession()
 
         openSessionDetail(app)
@@ -188,5 +198,37 @@ final class InterviewerUITests: XCTestCase {
         }
         XCTAssertTrue(words.waitForExistence(timeout: 2), "the person's words are kept")
         XCTAssertFalse(app.staticTexts["transcript.turn"].exists, "no turn is kept, not even the opening")
+    }
+
+    /// Settling in, the scripted interviewer reflects the newest segment's last four words after a clean check.
+    /// Slow script, so the first story gets its reflection: its pause is at about 3.3 s, the reply grace
+    /// (0.3 s) and its partial's hold on the floor (1 s from 2.5 s) have passed by about 3.6 s, and the
+    /// reflection (4 words, 0.6 s) plays to its end long before the second segment starts at about 5.8 s.
+    /// With the 0.8 s script, each next segment starts inside the partial's hold and makes the reply stale.
+    /// The Listen view shows the first reflection only until the next one, so its words are checked in the
+    /// stored transcript; on the Listen view, a turn stays once one has played.
+    @MainActor
+    func testSettleInShowsAReflectionAfterAScriptedSegment() {
+        let app = launchToTimeline(arguments: ["-uiTesting-speaks", "-uiTesting-slow"])
+        startSettleIn(app)
+        XCTAssertTrue(app.staticTexts["session.turn"].waitForExistence(timeout: 15), "the Listen view shows a reflection")
+        app.finishSession()
+
+        openSessionDetail(app)
+        XCTAssertTrue(app.reveal(text(app, "transcript.turn", "Before Maya climbed it")), "the first story is reflected in its own words")
+    }
+
+    /// At the planned length (8 s under UI testing) the arc winds down, and the wrap-up waits for a check
+    /// of a segment stored after the last turn. Slow script: the second segment's reflection plays at about
+    /// 7 s; the planned length fires between 8 and 9 s on the arc's one-second tick; the third segment pauses
+    /// at about 10 s, its check-only call goes out after the 0.3 s grace, and the wrap-up is spoken then.
+    /// The margin is the planned length firing before about 10.3 s, when the third segment is asked about.
+    @MainActor
+    func testTheWrapUpIsSpokenAtThePlannedLength() {
+        let app = launchToTimeline(arguments: ["-uiTesting-speaks", "-uiTesting-slow"])
+        startSettleIn(app)
+        XCTAssertTrue(app.any("session.wrapUp").waitForExistence(timeout: 14), "the wrap-up is offered at the planned length")
+        XCTAssertTrue(text(app, "session.turn", Self.wrapUp).waitForExistence(timeout: 10), "and spoken after a clean check")
+        app.finishSession()
     }
 }
