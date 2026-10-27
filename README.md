@@ -68,7 +68,7 @@ Other launch arguments you can add next to `-uiTesting` (see `ios/Lifeline/Depen
 - In the app: Settings → paste the key → Save. It goes into the device Keychain. It is never in the repo.
 - Never put a key in a file, a commit, a screenshot or a PR. A CI guard blocks keys in the diff.
 
-<!-- TODO(Jake): decide which key Sarah uses for live mode (her own Console account, or a shared dev key with a spend limit) and write it here. -->
+<!-- TODO(Jake): decide which key Danielle uses for live mode (her own Console account, or a shared dev key with a spend limit) and write it here. -->
 <!-- TODO(Jake): confirm live mode works in the Simulator: mic input through the Mac, and on-device speech (SpeechAnalyzer) model download. If it does not, say "live mode needs a real iPhone". -->
 
 ### Run the tests

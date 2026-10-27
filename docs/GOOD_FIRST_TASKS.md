@@ -65,7 +65,7 @@ Before you change any string, search `ios/LifelineUITests/` for it. A few UI tes
 
 ## 3. Design plus code
 
-A bounded first real feature. Jake and Sarah pair on this one.
+A bounded first real feature. Jake and Danielle pair on this one.
 
 ### 3a. Onboarding · M
 
