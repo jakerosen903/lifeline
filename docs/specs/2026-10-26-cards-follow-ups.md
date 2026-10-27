@@ -25,6 +25,10 @@ After Keep, follow-up cards arrive as separate cards: "Sounds like it belongs to
 5. "First" means the lowest `ordinal`. When that memory is dismissed, the follow-up moves to the next memory that refers to it. When no memory in the segment refers to a follow-up, it has no owner memory.
 6. These rules must live in LifelineKit as pure code with unit tests.
 
+### Things, places and ideas
+
+Since M7, a thing, place or idea that a memory carries is a record, not a question: Keep links it with no chip ("Memory kinds and domains", `docs/DECISIONS.md`). A mention that no memory carries has no owner memory and does not show (rule 13 below). So in practice the chips are hints and people. The thing, place and idea chip rules below stay for a later extractor that sends a carried mention as a question. Extractor v7 (audit PR 3) decides whether it does.
+
 ### The live session
 
 1. A follow-up is never a card of its own. The queue holds each follow-up under its owner memory until that memory is kept.
