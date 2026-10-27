@@ -18,6 +18,8 @@ final class SessionDetailViewModel {
     private(set) var transcript: [TranscriptItem] = []
     private(set) var memories: [MemoryRow] = []
     private(set) var waiting: [Card] = []
+    /// The waiting cards as a queue, so a kept card closes with the same calls as the live session.
+    private var queue = CardQueue()
     private(set) var dismissed: [Candidate] = []
     private(set) var error: String?
     var changing: Memory?
@@ -45,10 +47,13 @@ final class SessionDetailViewModel {
                           anchors: try deps.extractionStore.memories.anchors(of: memory.id).map(\.phrase))
             }
             let candidates = deps.extractionStore.candidates
-            let pending = CardQueue.waitingCards(pending: try candidates.pending(in: session.id)) { (try? candidates.fetch($0))?.status }
+            queue = CardQueue.waiting(pending: try candidates.pending(in: session.id),
+                                      segmentMemories: { (try? candidates.candidates(for: $0)) ?? [] },
+                                      candidate: { try? candidates.fetch($0) })
+            let pending = queue.cards
             // Names a memory listed that never had their own card wait here as well.
             let segmentIDs = Set(segments.map(\.id))
-            let shownNames = Set(pending.compactMap { if case .whoIsThis(_, let text) = $0 { PeopleRepository.normalize(text) } else { nil } })
+            let shownNames = Set(pending.flatMap(\.withFollowUps).compactMap { if case .whoIsThis(_, let text) = $0 { PeopleRepository.normalize(text) } else { nil } })
             let openNames = try deps.extractionStore.people.mentions(status: .unresolved)
                 .filter { segmentIDs.contains($0.segmentID) && !shownNames.contains(PeopleRepository.normalize($0.text)) }
                 .map(Card.init)
@@ -65,7 +70,13 @@ final class SessionDetailViewModel {
     }
 
     func accept(_ card: Card) { if cards.accept(card) { refresh() } }
-    func keepEntity(_ card: Card, as type: EntityType?) { if cards.acceptEntity(card, as: type) != nil { refresh() } }
+    func followUp(_ kept: KeptCard, _ card: Card, as type: EntityType?) { if cards.acceptFollowUp(card, as: type) { refresh() } }
+    func resolveFollowUp(_ kept: KeptCard, _ card: Card, _ choice: MentionChoice) { if cards.resolve(card, choice) { refresh() } }
+    func declineFollowUp(_ kept: KeptCard, _ card: Card) { if cards.declineFollowUp(card) { refresh() } }
+    func keptDone(_ kept: KeptCard) {
+        cards.close(queue.closeKept(kept.memoryCandidateID))
+        refresh()
+    }
     func change(_ card: Card) { if let memory = cards.keep(card) { refresh(); changing = memory } }
     func dismiss(_ card: Card) { if cards.dismiss(card) { refresh() } }
     func undo() { if cards.undo() != nil { refresh() } }

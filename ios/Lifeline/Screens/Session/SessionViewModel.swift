@@ -248,26 +248,23 @@ final class SessionViewModel: Identifiable {
 
     // MARK: - Cards
 
+    /// Every memory action first closes the open kept card, as if "Done" was tapped: at most one
+    /// is open, and it always belongs to the memory acted on last.
     func accept(_ card: Card) {
+        closeAllKept()
         guard cards.accept(card) else { return }
-        cardQueue.remove(card.id)
-        if case .memory = card { cardQueue.memoryAccepted(card.id) }
-    }
-    /// Keep on an entity card as the type chosen (M7).
-    func keepEntity(_ card: Card, as type: EntityType?) {
-        guard cards.acceptEntity(card, as: type) != nil else { return }
-        cardQueue.remove(card.id)
+        settle(card)
     }
     func change(_ card: Card) {
+        closeAllKept()
         guard let memory = cards.keep(card) else { return }
-        cardQueue.remove(card.id)
         cardQueue.memoryAccepted(card.id)
         changing = memory
     }
     func dismiss(_ card: Card) {
+        if case .memory = card { closeAllKept() }
         guard cards.dismiss(card) else { return }
-        cardQueue.remove(card.id)
-        if case .memory = card { cardQueue.memoryDismissed(card.id) }
+        if case .memory = card { cardQueue.memoryDismissed(card.id) } else { cardQueue.remove(card.id) }
     }
     func undo() {
         if let card = cards.undo() { cardQueue.restore(card) }
@@ -275,13 +272,69 @@ final class SessionViewModel: Identifiable {
     func undoMerge() {
         if let card = cards.undoMerge() { cardQueue.restore(card) }
     }
-    /// "Same story": the card joins an earlier memory; its hints follow as if it were kept.
+    /// "Same story": the card joins an earlier memory; its follow-ups follow as if it were kept.
     func sameStory(_ card: Card, into targets: [MemoryID]) {
+        closeAllKept()
         guard cards.sameStory(card, into: targets) else { return }
-        cardQueue.remove(card.id)
         cardQueue.memoryAccepted(card.id)
     }
     func resolve(_ card: Card, _ choice: MentionChoice) { if cards.resolve(card, choice) { cardQueue.remove(card.id) } }
+
+    /// A memory swaps for its kept card in place, or leaves; anything else leaves.
+    private func settle(_ card: Card) {
+        if case .memory = card { cardQueue.memoryAccepted(card.id) } else { cardQueue.remove(card.id) }
+    }
+
+    // MARK: - Kept cards
+
+    static let keptAutoClose: Duration = .milliseconds(1500)
+    /// One pending auto-close per kept card, after its last chip was answered.
+    private var autoClose: [String: Task<Void, Never>] = [:]
+
+    /// A hint, thing, place or idea chip: accepted as heard or as the type chosen. Never leaves
+    /// the session for the entity's page.
+    func followUp(_ kept: KeptCard, _ card: Card, as type: EntityType?) {
+        guard cards.acceptFollowUp(card, as: type) else { return }
+        answered(card, in: kept)
+    }
+    /// A person chip answered in its "Who's this?" sheet.
+    func resolveFollowUp(_ kept: KeptCard, _ card: Card, _ choice: MentionChoice) {
+        guard cards.resolve(card, choice) else { return }
+        answered(card, in: kept)
+    }
+    /// "Not any of these" on an entity chip.
+    func declineFollowUp(_ kept: KeptCard, _ card: Card) {
+        guard cards.declineFollowUp(card) else { return }
+        answered(card, in: kept)
+    }
+    /// "Done": unanswered hints and entities are dismissed, unanswered people wait in People.
+    func keptDone(_ kept: KeptCard) { closeKept(kept.memoryCandidateID) }
+
+    /// The last chip answered closes the card 1.5 s later, unless Done or another memory action
+    /// closed it first, or a late follow-up joined it meanwhile.
+    private func answered(_ card: Card, in kept: KeptCard) {
+        let id = kept.memoryCandidateID
+        guard cardQueue.answered(card.id, in: id) else { return }
+        autoClose[id]?.cancel()
+        autoClose[id] = Task { [weak self] in
+            try? await Task.sleep(for: Self.keptAutoClose)
+            guard !Task.isCancelled, let self else { return }
+            self.autoClose[id] = nil
+            guard case .kept(let current)? = self.cardQueue.cards.first(where: { $0.id == id }), current.isComplete else { return }
+            self.closeKept(id)
+        }
+    }
+
+    private func closeKept(_ id: String) {
+        autoClose.removeValue(forKey: id)?.cancel()
+        cards.close(cardQueue.closeKept(id))
+    }
+
+    private func closeAllKept() {
+        autoClose.values.forEach { $0.cancel() }
+        autoClose.removeAll()
+        cards.close(cardQueue.closeAllKept())
+    }
 
     // MARK: - The arc
 

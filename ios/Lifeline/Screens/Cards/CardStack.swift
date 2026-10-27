@@ -3,7 +3,7 @@ import SwiftUI
 
 /// Cards in arrival order, then the undo notice while a dismiss can still be taken back. The
 /// same component serves the live session, the session detail and the timeline. Pair cards
-/// (M5) sit after the memory and hint cards and before the questions.
+/// (M5) sit after the memory and kept cards and before the questions.
 struct CardStack: View {
     let cards: [Card]
     let handler: CardHandler
@@ -21,8 +21,17 @@ struct CardStack: View {
     var pairs: [PairRow] = []
     var onPair: (PairRow, Bool) -> Void = { _, _ in }
     var onUndoPair: () -> Void = {}
-    /// Keep on an entity card, as what it heard (nil) or the type chosen under Not quite (M7).
-    var onKeepEntity: (Card, EntityType?) -> Void = { _, _ in }
+    /// A hint, thing, place or idea chip on a kept card: accepted as heard (nil) or as the type
+    /// chosen from its menu.
+    var onFollowUp: (KeptCard, Card, EntityType?) -> Void = { _, _, _ in }
+    /// A person chip's "Who's this?" answered in its sheet.
+    var onResolveFollowUp: (KeptCard, Card, MentionChoice) -> Void = { _, _, _ in }
+    /// "Not any of these" on an entity chip.
+    var onDeclineFollowUp: (KeptCard, Card) -> Void = { _, _ in }
+    /// "Done" on a kept card.
+    var onKeptDone: (KeptCard) -> Void = { _ in }
+    /// A checked entity or person chip opens its page. Nil in the live session, which never leaves.
+    var onOpenEntity: ((Card) -> Void)?
 
     @State private var picking: Card?
 
@@ -72,10 +81,13 @@ struct CardStack: View {
         case .whoIsThis(_, let text):
             WhoIsThisCard(text: text, people: handler.peopleChoices(for: text)) { onResolve(card, $0) }
                 .onAppear { handler.shown(card) }
-        case .hint(_, let hint):
-            HintCard(hint: hint, onAccept: { onAccept(card) }, onDismiss: { onDismiss(card) })
-        case .entity(_, let mention):
-            EntityCard(mention: mention, onKeep: { type in onKeepEntity(card, type) }, onNotAny: { onDismiss(card) })
+        case .kept(let kept):
+            KeptCardView(kept: kept, declined: handler.declined, peopleChoices: { handler.peopleChoices(for: $0) },
+                         onFollowUp: { onFollowUp(kept, $0, $1) }, onResolve: { onResolveFollowUp(kept, $0, $1) },
+                         onNotAny: { onDeclineFollowUp(kept, $0) }, onDone: { onKeptDone(kept) }, onOpenEntity: onOpenEntity)
+        case .hint, .entity:
+            // A follow-up is never a card of its own: it shows as a chip on its memory's kept card.
+            EmptyView()
         }
     }
 

@@ -90,7 +90,7 @@ final class CardHandler {
             return attempt("Could not file that") { _ = try deps.actions.acceptHint(candidate) }
         case .entity:
             return acceptEntity(card, as: nil) != nil
-        case .whoIsThis:
+        case .whoIsThis, .kept:
             return false
         }
     }
@@ -104,6 +104,47 @@ final class CardHandler {
         return kept
     }
 
+    // MARK: - Follow-ups on a kept card
+
+    /// Follow-ups answered with "Not any of these", so their chips read as declined, not checked.
+    private(set) var declined: Set<String> = []
+
+    /// One tap on a hint, thing, place or idea chip: accepted as "Yes" or "Keep" did, or as the
+    /// type chosen from its menu. Never opens a page. Returns true when the chip is answered.
+    func acceptFollowUp(_ card: Card, as type: EntityType?) -> Bool {
+        switch card {
+        case .hint(let candidate, _):
+            return attempt("Could not file that") { _ = try deps.actions.acceptHint(candidate) }
+        case .entity:
+            return acceptEntity(card, as: type) != nil
+        case .memory, .whoIsThis, .kept:
+            return false
+        }
+    }
+
+    /// "Not any of these" on a chip: the follow-up is let go, with no undo notice.
+    func declineFollowUp(_ card: Card) -> Bool {
+        guard case .entity(let candidate, _) = card else { return false }
+        let done = attempt("Could not dismiss that") { try deps.actions.dismiss(candidate) }
+        if done { declined.insert(card.id) }
+        return done
+    }
+
+    /// A kept card closed: the hints and entities nobody answered are dismissed, as "Not quite"
+    /// did, without the "Suggestion dismissed" notice; a person nobody answered becomes an open
+    /// mention for the People queue.
+    func close(_ closing: KeptClose) {
+        for card in closing.dismiss {
+            switch card {
+            case .hint(let candidate, _), .entity(let candidate, _):
+                _ = attempt("Could not dismiss that") { try deps.actions.dismiss(candidate) }
+            case .memory, .whoIsThis, .kept:
+                break
+            }
+        }
+        for card in closing.openAsMention { shown(card) }
+    }
+
     /// Dismiss never touches the recording; for a few seconds it can be undone.
     func dismiss(_ card: Card) -> Bool {
         let done = attempt("Could not dismiss that") {
@@ -112,6 +153,9 @@ final class CardHandler {
                 try deps.actions.dismiss(candidate)
             case .whoIsThis:
                 try deps.actions.resolveMention(try mention(for: card).id, to: .notAPerson)
+            case .kept:
+                // A kept card closes with Done; it is never dismissed.
+                throw CandidateActions.Error.wrongKind
             }
         }
         if done {
@@ -138,6 +182,8 @@ final class CardHandler {
                 try deps.actions.restore(candidate)
             case .whoIsThis:
                 try deps.actions.restoreMention(try mention(for: card).id)
+            case .kept:
+                throw CandidateActions.Error.wrongKind
             }
         }
         return done ? card : nil

@@ -237,14 +237,20 @@ final class TimelineViewModel {
         return parts.joined(separator: " · ")
     }
 
+    /// The waiting cards of each session as queues, so a kept card closes as in the live session.
+    private var waitingQueues: [CardQueue] = []
+
     /// Every pending card across sessions, newest session first, plus names still open.
     private func waitingCards() throws -> [Card] {
         let store = deps.extractionStore
-        var cards: [Card] = []
-        for session in try store.sessions.listSessions() {
-            cards += CardQueue.waitingCards(pending: try store.candidates.pending(in: session.id)) { (try? store.candidates.fetch($0))?.status }
+        let candidates = store.candidates
+        waitingQueues = try store.sessions.listSessions().map { session in
+            CardQueue.waiting(pending: try candidates.pending(in: session.id),
+                              segmentMemories: { (try? candidates.candidates(for: $0)) ?? [] },
+                              candidate: { try? candidates.fetch($0) })
         }
-        let shown = Set(cards.compactMap { if case .whoIsThis(_, let text) = $0 { PeopleRepository.normalize(text) } else { nil } })
+        var cards = waitingQueues.flatMap(\.cards)
+        let shown = Set(cards.flatMap(\.withFollowUps).compactMap { if case .whoIsThis(_, let text) = $0 { PeopleRepository.normalize(text) } else { nil } })
         var seen = shown
         cards += try store.people.mentions(status: .unresolved)
             .filter { seen.insert(PeopleRepository.normalize($0.text)).inserted }
@@ -330,10 +336,14 @@ final class TimelineViewModel {
     func accept(_ card: Card) { if cards.accept(card) { refresh() } }
     func change(_ card: Card) { if let memory = cards.keep(card) { refresh(); changing = memory } }
     func dismiss(_ card: Card) { if cards.dismiss(card) { refresh() } }
-    /// Keep on an entity card (M7): the page opens with what was just kept.
+    /// The entity page opened from the waiting cards (M7).
     var openedEntity: Entity?
-    func keepEntity(_ card: Card, as type: EntityType?) {
-        if let entity = cards.acceptEntity(card, as: type) { refresh(); openedEntity = entity }
+    func followUp(_ kept: KeptCard, _ card: Card, as type: EntityType?) { if cards.acceptFollowUp(card, as: type) { refresh() } }
+    func resolveFollowUp(_ kept: KeptCard, _ card: Card, _ choice: MentionChoice) { if cards.resolve(card, choice) { refresh() } }
+    func declineFollowUp(_ kept: KeptCard, _ card: Card) { if cards.declineFollowUp(card) { refresh() } }
+    func keptDone(_ kept: KeptCard) {
+        for i in waitingQueues.indices { cards.close(waitingQueues[i].closeKept(kept.memoryCandidateID)) }
+        refresh()
     }
     func undo() { if cards.undo() != nil { refresh() } }
     func undoMerge() { if cards.undoMerge() != nil { refresh() } }
