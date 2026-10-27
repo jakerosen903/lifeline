@@ -16,14 +16,13 @@ private func mentionCandidate(_ segment: SegmentID, ordinal: Int = 1) throws -> 
     let segment = SegmentID()
     let a = try memoryCandidate(segment, ordinal: 0), b = try mentionCandidate(segment, ordinal: 1)
     var queue = CardQueue()
-    queue.apply(.candidates([a, b], segment: segment))
-    #expect(queue.cards.map(\.id) == [a.id.rawValue, b.id.rawValue])
+    let c2 = try memoryCandidate(segment, ordinal: 2)
+    queue.apply(.candidates([a, b, c2], segment: segment))
+    #expect(queue.cards.map(\.id) == [a.id.rawValue, c2.id.rawValue], "a who-is-this is a follow-up, never a card")
     guard case .memory(let c, let out) = queue.cards[0] else { Issue.record("expected memory card"); return }
     #expect(c.id == a.id && out.title == "T")
-    guard case .whoIsThis(.candidate(let who), let text) = queue.cards[1] else { Issue.record("expected who-is-this card"); return }
-    #expect(who.id == b.id && text == "Maya")
     queue.remove(a.id.rawValue)
-    #expect(queue.cards.map(\.id) == [b.id.rawValue])
+    #expect(queue.cards.map(\.id) == [c2.id.rawValue])
     queue.apply(.candidates([a], segment: segment))
     queue.apply(.candidates([a], segment: segment))
     #expect(queue.cards.count == 2, "the same candidate is never shown twice")
@@ -58,20 +57,6 @@ private func mentionCandidate(_ segment: SegmentID, ordinal: Int = 1) throws -> 
     #expect(queue.cards.isEmpty)
 }
 
-@Test func waitingCardsHoldHintsUntilTheirMemoryIsAccepted() throws {
-    let segment = SegmentID()
-    let memory = try memoryCandidate(segment, ordinal: 0)
-    let hintOut = HintOut(kind: .collection, phrase: "every summer", memoryCandidateID: memory.id.rawValue)
-    let hint = StoreFixtures.candidate(segment, ordinal: 1, kind: .hint, payload: try CandidatePayload.encode(hintOut))
-    let orphan = StoreFixtures.candidate(segment, ordinal: 2, kind: .hint, payload: try CandidatePayload.encode(HintOut(kind: .chapter, phrase: "x", memoryCandidateID: "gone")))
-    let pendingMemory = CardQueue.waitingCards(pending: [memory, hint, orphan], statusOf: { id in id == memory.id ? .pending : nil })
-    #expect(pendingMemory.map(\.id) == [memory.id.rawValue], "a hint waits for its memory; an orphan hint is never shown")
-    let accepted = CardQueue.waitingCards(pending: [hint, orphan], statusOf: { id in id == memory.id ? .accepted : nil })
-    #expect(accepted.map(\.id) == [hint.id.rawValue])
-    let dismissed = CardQueue.waitingCards(pending: [hint], statusOf: { _ in .dismissed })
-    #expect(dismissed.isEmpty)
-}
-
 @Test func possibleMemoryCountCountsMemoryCardsOnly() throws {
     let segment = SegmentID()
     var queue = CardQueue()
@@ -96,7 +81,255 @@ private func mentionCandidate(_ segment: SegmentID, ordinal: Int = 1) throws -> 
     var changed = a
     changed.payload = try CandidatePayload.encode(out)
     queue.apply(.candidates([changed], segment: segment))
-    #expect(queue.cards.map(\.id) == [a.id.rawValue, b.id.rawValue], "same position, still one card")
+    #expect(queue.cards.map(\.id) == [a.id.rawValue], "same position, still one card")
     guard case .memory(_, let shown) = queue.cards[0] else { Issue.record("expected memory card"); return }
     #expect(shown.extraSpans.count == 1)
+}
+
+// MARK: - Follow-ups under their memory
+
+private func memory(_ s: SegmentID, _ ordinal: Int, title: String = "T", people: [String] = [], things: [String] = [],
+                    status: CandidateStatus = .pending) throws -> Candidate {
+    let out = MemoryOut(ref: "m\(ordinal)", title: title, quote: "q", segmentSpan: WordSpan(startWord: 0, endWord: 0), peopleRefs: people, placeText: nil,
+                        anchors: [], collectionHint: nil, chapterHint: nil, confidence: 0.9,
+                        entityRefs: things.map { EntityRefOut(text: $0, kind: .thing, likelyEntityID: nil) })
+    var c = StoreFixtures.candidate(s, ordinal: ordinal, kind: .memory, payload: try CandidatePayload.encode(out))
+    c.status = status
+    return c
+}
+private func hint(_ s: SegmentID, _ ordinal: Int, for memory: Candidate, phrase: String = "family") throws -> Candidate {
+    StoreFixtures.candidate(s, ordinal: ordinal, kind: .hint,
+                            payload: try CandidatePayload.encode(HintOut(kind: .domain, phrase: phrase, memoryCandidateID: memory.id.rawValue)))
+}
+private func person(_ s: SegmentID, _ ordinal: Int, _ text: String) throws -> Candidate {
+    StoreFixtures.candidate(s, ordinal: ordinal, kind: .person,
+                            payload: try CandidatePayload.encode(MentionOut(text: text, kind: .person, likelyAliasOfPersonID: nil, confidence: 0.8)))
+}
+private func thing(_ s: SegmentID, _ ordinal: Int, _ text: String) throws -> Candidate {
+    StoreFixtures.candidate(s, ordinal: ordinal, kind: .entity,
+                            payload: try CandidatePayload.encode(MentionOut(text: text, kind: .thing, likelyAliasOfPersonID: nil, confidence: 0.8)))
+}
+private func kept(_ queue: CardQueue, _ memory: Candidate) -> KeptCard? {
+    for case .kept(let k) in queue.cards where k.memoryCandidateID == memory.id.rawValue { return k }
+    return nil
+}
+private func ids(_ candidates: Candidate...) -> [String] { candidates.map(\.id.rawValue) }
+
+@Test func followUpsNeverBecomeCards() throws {
+    let s = SegmentID()
+    let a = try memory(s, 0, people: ["Maya"], things: ["the shed"])
+    var queue = CardQueue()
+    queue.apply(.candidates([a, try hint(s, 1, for: a), try person(s, 2, "Maya"), try thing(s, 3, "the shed"), try person(s, 4, "Zed")], segment: s))
+    #expect(queue.cards.map(\.id) == ids(a), "follow-ups wait under their memory; one with no owner never shows")
+}
+
+@Test func keepWithFollowUpsLeavesAKeptCardInPlace() throws {
+    let s = SegmentID()
+    let a = try memory(s, 0), b = try memory(s, 1, title: "The steak dinner"), c = try memory(s, 2)
+    let h = try hint(s, 3, for: b)
+    var queue = CardQueue()
+    queue.apply(.candidates([a, b, c, h], segment: s))
+    queue.memoryAccepted(b.id.rawValue)
+    #expect(queue.cards.map(\.id) == ids(a, b, c), "same place, same id")
+    let k = try #require(kept(queue, b))
+    #expect(k.title == "The steak dinner" && k.followUps.map(\.id) == ids(h) && k.answered.isEmpty && !k.isComplete)
+    #expect(queue.possibleMemoryCount == 2, "a kept card is no longer a possible memory")
+}
+
+@Test func keepWithoutFollowUpsRemovesTheCard() throws {
+    let s = SegmentID()
+    let a = try memory(s, 0), b = try memory(s, 1)
+    var queue = CardQueue()
+    queue.apply(.candidates([a, b, try hint(s, 2, for: b)], segment: s))
+    queue.memoryAccepted(a.id.rawValue)
+    #expect(queue.cards.map(\.id) == ids(b))
+}
+
+@Test func dismissHidesFollowUpsAndUndoRestoresThem() throws {
+    let s = SegmentID()
+    let a = try memory(s, 0, people: ["Theo"])
+    let h = try hint(s, 1, for: a), p = try person(s, 2, "Theo")
+    var queue = CardQueue()
+    queue.apply(.candidates([a, h, p], segment: s))
+    let card = queue.cards[0]
+    queue.memoryDismissed(a.id.rawValue)
+    #expect(queue.cards.isEmpty, "dismiss takes the card and hides its follow-ups with it")
+    queue.restore(card)
+    #expect(queue.cards == [card])
+    queue.memoryAccepted(a.id.rawValue)
+    #expect(kept(queue, a)?.followUps.map(\.id) == ids(h, p), "undo brought the follow-ups back, in emitted order")
+}
+
+@Test func dismissPassesEntityToNextMemory() throws {
+    let s = SegmentID()
+    let a = try memory(s, 0, people: ["Theo"]), b = try memory(s, 1, people: ["Theo"])
+    let p = try person(s, 2, "Theo")
+    var queue = CardQueue()
+    queue.apply(.candidates([a, b, p], segment: s))
+    queue.memoryDismissed(a.id.rawValue)
+    queue.memoryAccepted(b.id.rawValue)
+    #expect(kept(queue, b)?.followUps.map(\.id) == ids(p))
+}
+
+@Test func answeredReportsCompletion() throws {
+    let s = SegmentID()
+    let a = try memory(s, 0, people: ["Theo"])
+    let h = try hint(s, 1, for: a), p = try person(s, 2, "Theo")
+    var queue = CardQueue()
+    queue.apply(.candidates([a, h, p], segment: s))
+    queue.memoryAccepted(a.id.rawValue)
+    let first = queue.answered(h.id.rawValue, in: a.id.rawValue)
+    #expect(!first && kept(queue, a)?.answered == [h.id.rawValue])
+    let second = queue.answered(p.id.rawValue, in: a.id.rawValue)
+    #expect(second && kept(queue, a)?.isComplete == true, "the card stays until the app closes it")
+    let unknown = queue.answered("nope", in: "nothing")
+    #expect(!unknown)
+}
+
+@Test func closeKeptSortsDismissAndMention() throws {
+    let s = SegmentID()
+    let a = try memory(s, 0, people: ["Theo"], things: ["the shed"])
+    let h = try hint(s, 1, for: a), h2 = try hint(s, 2, for: a, phrase: "work"), t = try thing(s, 3, "the shed"), p = try person(s, 4, "Theo")
+    var queue = CardQueue()
+    queue.apply(.candidates([a, h, h2, t, p], segment: s))
+    queue.memoryAccepted(a.id.rawValue)
+    _ = queue.answered(h.id.rawValue, in: a.id.rawValue)
+    let close = queue.closeKept(a.id.rawValue)
+    #expect(close.dismiss.map(\.id) == ids(h2, t) && close.openAsMention.map(\.id) == ids(p))
+    #expect(queue.cards.isEmpty)
+    let again = queue.closeKept(a.id.rawValue)
+    #expect(again == KeptClose(dismiss: [], openAsMention: []), "closed once")
+}
+
+@Test func closeKeptOfACompleteCardIsEmpty() throws {
+    let s = SegmentID()
+    let a = try memory(s, 0)
+    let h = try hint(s, 1, for: a)
+    var queue = CardQueue()
+    queue.apply(.candidates([a, h], segment: s))
+    queue.memoryAccepted(a.id.rawValue)
+    let complete = queue.answered(h.id.rawValue, in: a.id.rawValue)
+    #expect(complete)
+    let close = queue.closeKept(a.id.rawValue)
+    #expect(close == KeptClose(dismiss: [], openAsMention: []))
+    #expect(queue.cards.isEmpty)
+}
+
+@Test func closeAllKeptClosesEveryOpenCard() throws {
+    // Review focus 4: Keep on B while A's kept card is open closes A first, exactly once.
+    let s = SegmentID()
+    let a = try memory(s, 0, people: ["Theo"]), b = try memory(s, 1)
+    let p = try person(s, 2, "Theo"), hb = try hint(s, 3, for: b)
+    var queue = CardQueue()
+    queue.apply(.candidates([a, b, p, hb], segment: s))
+    queue.memoryAccepted(a.id.rawValue)
+    let first = queue.closeAllKept()
+    queue.memoryAccepted(b.id.rawValue)
+    #expect(first.dismiss.isEmpty && first.openAsMention.map(\.id) == ids(p))
+    #expect(queue.cards.map(\.id) == ids(b) && kept(queue, b) != nil)
+    let late = try hint(SegmentID(), 0, for: a)
+    queue.apply(.candidates([late], segment: late.segmentID))
+    #expect(queue.cards.map(\.id) == ids(b, a), "a late follow-up for A opens a kept card of its own")
+    let second = queue.closeAllKept()
+    #expect(second.dismiss.map(\.id) == ids(hb, late) && second.openAsMention.isEmpty, "A's person was reported once, not again")
+    #expect(queue.cards.isEmpty)
+}
+
+@Test func lateFollowUpJoinsOpenKeptCard() throws {
+    // Review focus 1.
+    let s = SegmentID(), later = SegmentID()
+    let a = try memory(s, 0)
+    let h1 = try hint(s, 1, for: a), h2 = try hint(later, 0, for: a, phrase: "work")
+    var queue = CardQueue()
+    queue.apply(.candidates([a, h1], segment: s))
+    queue.memoryAccepted(a.id.rawValue)
+    queue.apply(.candidates([h2], segment: later))
+    #expect(queue.cards.map(\.id) == ids(a))
+    #expect(kept(queue, a)?.followUps.map(\.id) == ids(h1, h2))
+}
+
+@Test func lateFollowUpAfterCloseMakesNewKeptCard() throws {
+    let s = SegmentID(), later = SegmentID()
+    let a = try memory(s, 0, title: "The shed"), b = try memory(s, 1)
+    let h1 = try hint(s, 2, for: b)
+    var queue = CardQueue()
+    queue.apply(.candidates([a, b, h1], segment: s))
+    queue.memoryAccepted(a.id.rawValue)
+    #expect(queue.cards.map(\.id) == ids(b), "no follow-ups yet: the card left")
+    queue.memoryAccepted(b.id.rawValue)
+    _ = queue.closeKept(b.id.rawValue)
+    let ha = try hint(later, 0, for: a), hb = try hint(later, 1, for: b)
+    queue.apply(.candidates([ha, hb], segment: later))
+    #expect(queue.cards.map(\.id) == ids(a, b))
+    #expect(kept(queue, a)?.title == "The shed" && kept(queue, a)?.followUps.map(\.id) == ids(ha))
+    #expect(kept(queue, b)?.followUps.map(\.id) == ids(hb))
+}
+
+@Test func suppressedKeepShowsNoChips() throws {
+    // Review focus 3.
+    let s = SegmentID()
+    let a = try memory(s, 0)
+    var queue = CardQueue()
+    queue.apply(.candidates([a, try hint(s, 1, for: a)], segment: s))
+    queue.apply(.flags(Flags(disclosure: .past, wantsToStop: false, wantsToChangeSubject: false), segment: s))
+    queue.memoryAccepted(a.id.rawValue)
+    #expect(queue.cards.isEmpty, "the card leaves as if it had no follow-ups")
+    queue.apply(.candidates([try hint(SegmentID(), 0, for: a)], segment: s))
+    #expect(queue.cards.isEmpty)
+}
+
+@Test func continuationKeepsHeldFollowUps() throws {
+    let s = SegmentID()
+    let a = try memory(s, 0, title: "Old")
+    let h = try hint(s, 1, for: a)
+    var queue = CardQueue()
+    queue.apply(.candidates([a, h], segment: s))
+    var out = try #require(CandidatePayload.memory(a))
+    out.title = "New"
+    var changed = a
+    changed.payload = try CandidatePayload.encode(out)
+    queue.apply(.candidates([changed], segment: SegmentID()))
+    queue.memoryAccepted(a.id.rawValue)
+    #expect(kept(queue, a)?.title == "New" && kept(queue, a)?.followUps.map(\.id) == ids(h))
+}
+
+@Test func restoreTakesFollowUpsBackFromKeptCard() throws {
+    // Undo of "Same story": the kept card turns back into the memory card, its follow-ups held again.
+    let s = SegmentID()
+    let a = try memory(s, 0)
+    let h = try hint(s, 1, for: a)
+    var queue = CardQueue()
+    queue.apply(.candidates([a, h], segment: s))
+    let card = queue.cards[0]
+    queue.memoryAccepted(a.id.rawValue)
+    queue.restore(card)
+    #expect(queue.cards == [card])
+    queue.memoryAccepted(a.id.rawValue)
+    #expect(kept(queue, a)?.followUps.map(\.id) == ids(h))
+}
+
+@Test func waitingGroupsFollowUpsUnderAcceptedMemory() throws {
+    // Review focus 5: the app was closed after Keep; the follow-ups wait as one kept card.
+    let s = SegmentID()
+    let pendingMemory = try memory(s, 0), keptMemory = try memory(s, 1, title: "Kept one", people: ["Theo"], status: .accepted)
+    let hp = try hint(s, 2, for: pendingMemory), hk = try hint(s, 3, for: keptMemory), p = try person(s, 4, "Theo"), orphan = try person(s, 5, "Zed")
+    let statuses = Dictionary(uniqueKeysWithValues: [pendingMemory, keptMemory].map { ($0.id, $0.status) })
+    var queue = CardQueue.waiting(pending: [pendingMemory, hp, hk, p, orphan], segmentMemories: { $0 == s ? [pendingMemory, keptMemory] : [] },
+                                  statusOf: { statuses[$0] })
+    #expect(queue.cards.map(\.id) == ids(pendingMemory, keptMemory))
+    guard case .memory = queue.cards[0] else { Issue.record("expected a memory card"); return }
+    #expect(kept(queue, keptMemory)?.title == "Kept one" && kept(queue, keptMemory)?.followUps.map(\.id) == ids(hk, p))
+    queue.memoryAccepted(pendingMemory.id.rawValue)
+    #expect(kept(queue, pendingMemory)?.followUps.map(\.id) == ids(hp), "a pending memory held its follow-ups")
+}
+
+@Test func waitingDropsFollowUpsOfDismissedMemory() throws {
+    let s = SegmentID()
+    let gone = try memory(s, 0, people: ["Theo", "Zed"], status: .dismissed), kept1 = try memory(s, 1, people: ["Theo"], status: .accepted)
+    let h = try hint(s, 2, for: gone), theo = try person(s, 3, "Theo"), zed = try person(s, 4, "Zed")
+    let missing = StoreFixtures.candidate(s, ordinal: 5, kind: .hint, payload: try CandidatePayload.encode(HintOut(kind: .chapter, phrase: "x", memoryCandidateID: "gone")))
+    let statuses = Dictionary(uniqueKeysWithValues: [gone, kept1].map { ($0.id, $0.status) })
+    let queue = CardQueue.waiting(pending: [h, theo, zed, missing], segmentMemories: { _ in [gone, kept1] }, statusOf: { statuses[$0] })
+    #expect(queue.cards.map(\.id) == ids(kept1), "Theo passes to the next memory; Zed and the hints have none")
+    #expect(kept(queue, kept1)?.followUps.map(\.id) == ids(theo))
 }

@@ -363,9 +363,11 @@ private func firstCard(_ events: [ExtractionEvent]) -> Candidate? {
     #expect(hint.memoryCandidateID == a.id.rawValue && hint.phrase == "every summer")
     let actions = CandidateActions(store: env.store)
     _ = try actions.acceptMemory(try #require(emitted.first { $0.id == a.id }))
-    let waiting = CardQueue.waitingCards(pending: try env.store.candidates.pending(in: env.session),
-                                         statusOf: { (try? env.store.candidates.fetch($0))?.status })
-    #expect(waiting.contains { if case .hint = $0 { true } else { false } })
+    let waiting = CardQueue.waiting(pending: try env.store.candidates.pending(in: env.session),
+                                    segmentMemories: { (try? env.store.candidates.candidates(for: $0)) ?? [] },
+                                    statusOf: { (try? env.store.candidates.fetch($0))?.status })
+    #expect(waiting.cards.contains { if case .kept(let k) = $0 { k.memoryCandidateID == a.id.rawValue && k.followUps.contains { if case .hint = $0 { true } else { false } } } else { false } },
+            "the continuation's hint waits under the first card, kept")
 }
 
 // MARK: - M5 stories

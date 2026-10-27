@@ -26,23 +26,22 @@ private struct Env {
     }
 }
 
-@Test func hintCardWaitsForItsMemory() throws {
+@Test func hintWaitsForItsMemoryAndShowsAsAChip() throws {
     let env = try Env()
     let memory = try env.memoryCandidate(collection: "every August")
     let hint = try env.hintCandidate(for: memory, kind: .collection, phrase: "every August", ordinal: 1)
     var queue = CardQueue()
     queue.apply(.candidates([memory, hint], segment: env.segment.id))
     #expect(queue.cards.map(\.id) == [memory.id.rawValue], "the hint waits until the memory is accepted")
-    queue.remove(memory.id.rawValue)
     queue.memoryAccepted(memory.id.rawValue)
-    guard case .hint(let c, let out)? = queue.cards.first else { Issue.record("expected a hint card, got \(queue.cards)"); return }
+    guard case .kept(let kept)? = queue.cards.first, case .hint(let c, let out)? = kept.followUps.first else {
+        Issue.record("expected a kept card with a hint chip, got \(queue.cards)"); return
+    }
     #expect(c.id == hint.id && out.phrase == "every August" && out.kind == .collection)
-    queue.remove(memory.id.rawValue)   // dismissing the memory instead drops its hint
     var other = CardQueue()
     other.apply(.candidates([memory, hint], segment: env.segment.id))
-    other.remove(memory.id.rawValue)
     other.memoryDismissed(memory.id.rawValue)
-    #expect(other.cards.isEmpty && other.heldHintCount == 0)
+    #expect(other.cards.isEmpty, "dismissing the memory hides its hint")
 }
 
 @Test func acceptingACollectionHintCreatesAndFillsTheCollection() throws {

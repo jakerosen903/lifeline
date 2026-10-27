@@ -7,7 +7,7 @@ extension Card {
     public var isFollowUp: Bool {
         switch self {
         case .hint, .entity, .whoIsThis(.candidate, _): true
-        case .memory, .whoIsThis(.mention, _): false
+        case .memory, .whoIsThis(.mention, _), .kept: false
         }
     }
 }

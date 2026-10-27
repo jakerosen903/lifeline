@@ -13,6 +13,8 @@ public enum FollowUpLabel {
             "\(text): who's this?"
         case .memory(_, let out):
             out.title
+        case .kept(let k):
+            k.title
         }
     }
 
@@ -28,6 +30,7 @@ public enum FollowUpLabel {
         case .entity(_, let m): m.kind == .idea ? (m.title ?? m.text) : m.text
         case .whoIsThis(_, let text): text
         case .memory(_, let out): out.title
+        case .kept(let k): k.title
         }
     }
 
