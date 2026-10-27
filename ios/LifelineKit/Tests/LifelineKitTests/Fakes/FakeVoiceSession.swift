@@ -31,7 +31,8 @@ actor FakeVoiceSession: VoiceSession {
     }
     func setAcceptsTurns(_ accepts: Bool) { acceptsTurns = accepts }
     func acknowledge() async {}
-    func interrupt() async {}
+    private(set) var interruptCalls = 0
+    func interrupt() async { interruptCalls += 1 }
 
     func emit(_ event: VoiceEvent) { continuation?.yield(event) }
     func setFailOnStart() { shouldFailOnStart = true }

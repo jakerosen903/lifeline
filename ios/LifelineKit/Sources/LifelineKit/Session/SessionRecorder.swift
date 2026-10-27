@@ -39,7 +39,7 @@ public struct RecorderHooks: Sendable {
 }
 
 /// A turn the interviewer wants spoken. The recorder gives it an id and stores it once it starts.
-public struct TurnDraft: Equatable, Sendable {
+public struct TurnDraft: Hashable, Sendable {
     public var kind: TurnKind
     public var source: TurnSource
     public var text: String
@@ -138,6 +138,12 @@ public actor SessionRecorder {
         try await voice.resume()
     }
 
+    /// Cuts the turn that is playing, if any: the person asked for quiet. The voice reports its end, interrupted.
+    public func interruptTurn() async {
+        guard let row = session, row.endedAt == nil else { return }
+        await voice.interrupt()
+    }
+
     /// Hands the turn to the voice. Its row is written when the voice reports that it started,
     /// so a turn dropped while paused leaves no row, and a crash mid-turn leaves one with no end.
     /// Returns false when the session has ended or the voice refused the turn.
@@ -197,6 +203,8 @@ public actor SessionRecorder {
             storeTurn(id, startMs: startMs)
         case .turnEnded(let id, let endMs, let interrupted):
             endTurn(id, endMs: endMs, interrupted: interrupted)
+        case .heard:
+            break   // the interviewer loop acts on commands; the recorder stores nothing for them
         }
         hooks.onVoiceEvent(event)
     }

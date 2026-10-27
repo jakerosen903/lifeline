@@ -46,6 +46,14 @@ public actor InterviewerLoop {
     private var floorRetryArmed = false
     /// Offers waiting out the reply grace or a partial's hold.
     private var retries: [UUID: Task<Void, Never>] = [:]
+    /// How often each draft ended before its playback started. A voice that keeps failing must
+    /// not hold the queue for the whole session. Only voice failures count: a pause or an
+    /// interruption, and a turn that starts, reset the count.
+    private var unstartedEnds: [TurnDraft: Int] = [:]
+    /// The draft whose unstarted end came last. The session reports the end before the
+    /// `.paused` or `.interrupted` that caused it, so that event clears this draft's count.
+    private var lastUnstarted: TurnDraft?
+    private static let maxUnstartedEnds = 3
 
     public init(kind: SessionKind, config: ArcConfig,
                 speak: @escaping @Sendable (TurnDraft) async -> Bool,
@@ -81,20 +89,25 @@ public actor InterviewerLoop {
             // A start with no draft handed out is not one of this loop's turns.
             guard let playing else { return }
             started = true
+            unstartedEnds[playing] = nil
             observe(.turnStarted(playing.kind))
         case .turnEnded:
             observe(.turnEnded)
-            // Cut before it started (a pause, an interruption, barge-in): it was never heard.
-            // A started turn that was cut is not spoken again.
-            if let draft = playing, !started { requeue(draft) }
+            let unstarted = started ? nil : playing
             playing = nil; started = false
-            await offerPending()
+            // A started turn that was cut is not spoken again.
+            guard let unstarted else { await offerPending(); return }
+            // Cut before it started (a pause, an interruption, barge-in, a voice that failed): it was
+            // never heard. It waits at the front for the next resume, pause's grace or floor retry;
+            // an offer now would feed a failing voice the same draft in a loop.
+            endedUnstarted(unstarted)
         case .paused, .interrupted:
             suspended = true
+            if let draft = lastUnstarted { unstartedEnds[draft] = nil }
         case .resumed:
             suspended = false
             await offerPending()
-        case .transcriptFinal, .segmentClosed, .failed:
+        case .transcriptFinal, .segmentClosed, .failed, .heard:
             break
         }
     }
@@ -163,6 +176,18 @@ public actor InterviewerLoop {
         pending.insert(draft, at: 0)
     }
 
+    /// Requeues a draft that was never heard, until it has ended unstarted `maxUnstartedEnds` times.
+    private func endedUnstarted(_ draft: TurnDraft) {
+        let count = unstartedEnds[draft, default: 0] + 1
+        unstartedEnds[draft] = count
+        lastUnstarted = draft
+        guard count < Self.maxUnstartedEnds else {
+            print("[interviewer] dropped a \(draft.kind.rawValue) turn: it ended \(count) times before playback started")
+            return
+        }
+        requeue(draft)
+    }
+
     /// The disclosure text goes before a wind-down line that is still waiting, so a later present
     /// danger's crisis line is not held behind it. The wind-down line follows, once per session.
     /// After present danger, a past disclosure adds nothing: the 988 text already covers it.
@@ -221,6 +246,7 @@ public actor InterviewerLoop {
         handCount += 1
         let hand = handCount
         playing = draft; started = false; playingHand = hand
+        lastUnstarted = nil
         guard !(await speak(draft)), playingHand == hand, playing != nil else { return }
         playing = nil
         requeue(draft)

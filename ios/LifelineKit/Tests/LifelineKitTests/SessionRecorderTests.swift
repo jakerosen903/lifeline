@@ -342,3 +342,16 @@ private func waitUntil(_ cond: @escaping () async -> Bool, timeoutMs: Int = 2_00
     try await rec.stop()
     #expect(await rec.speak(TurnDraft(kind: .disclosure, source: .fixed, text: "Invented words.")) == false, "the session ended")
 }
+
+@Test func interruptTurnCutsThePlayingTurnOnlyWhileTheSessionRuns() async throws {
+    let db = try AppDatabase.inMemory(); let repo = SessionRepository(db); let voice = FakeVoiceSession()
+    let rec = makeRecorder(voice: voice, repo: repo, db: db)
+    await rec.interruptTurn()
+    #expect(await voice.interruptCalls == 0, "no session yet")
+    _ = try await rec.start()
+    await rec.interruptTurn()
+    #expect(await voice.interruptCalls == 1)
+    try await rec.stop()
+    await rec.interruptTurn()
+    #expect(await voice.interruptCalls == 1, "an ended session has no turn to cut")
+}

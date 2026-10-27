@@ -68,8 +68,10 @@ struct SessionScreen: View {
             VStack(alignment: .leading, spacing: 20) {
                 promptCard(compact: false, chips: hasText)
                 if let turn = viewModel.latestTurn {
-                    TurnLine(turn: turn, font: .system(.headline, design: .serif), identifier: "session.turn")
+                    // A cut turn is marked in the transcripts; here it would change while the person speaks.
+                    TurnLine(turn: turn, font: .system(.headline, design: .serif), identifier: "session.turn", marksCutOff: false)
                 }
+                if viewModel.interviewerRuns { quietControl }
                 Text("Take your time. Pauses are fine. I'm only listening.")
                     .font(.system(.body, design: .serif))
                     .foregroundStyle(Theme.stone)
@@ -93,6 +95,21 @@ struct SessionScreen: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(24)
         }
+    }
+
+    /// One tap makes the interviewer quiet for the session; one tap asks it back (spec M8, "Quiet, by tap").
+    private var quietControl: some View {
+        Button { viewModel.toggleQuiet() } label: {
+            Label(viewModel.isQuiet ? "Ask me again" : "Quiet",
+                  systemImage: viewModel.isQuiet ? "text.bubble" : "speaker.slash")
+                .font(.subheadline)
+                .padding(.horizontal, 14).padding(.vertical, 8)
+                .background(Capsule().fill(Theme.sand))
+                .foregroundStyle(Theme.ink)
+        }
+        .buttonStyle(.plain)
+        .accessibilityHint(viewModel.isQuiet ? "Lifeline may ask you questions again." : "Lifeline stops asking questions for this session.")
+        .accessibilityIdentifier("session.quiet")
     }
 
     // MARK: - Transcript & memories (R3)

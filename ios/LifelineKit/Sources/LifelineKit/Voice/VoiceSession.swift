@@ -53,6 +53,16 @@ public enum VoiceEvent: Equatable, Sendable {
     case turnStarted(InterviewerTurnID, atMs: Milliseconds)
     /// The turn stopped. `interrupted` is true when pause, an interruption, stop or the person cut it.
     case turnEnded(InterviewerTurnID, atMs: Milliseconds, interrupted: Bool)
+    /// The person asked for something by voice. It follows the final that carried it, at most once per utterance.
+    case heard(VoiceCommand)
+}
+
+/// A request the person makes by voice, heard in a live partial.
+public enum VoiceCommand: Equatable, Sendable {
+    /// "Let me talk", "shh": the app stops offering turns.
+    case quiet
+    /// "Keep going", "a bit more": the session carries on past a wrap-up offer.
+    case keepGoing
 }
 
 /// The voice pipeline behind one interface, so a realtime speech model can replace the cascade later.

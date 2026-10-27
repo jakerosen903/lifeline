@@ -4,6 +4,8 @@ import Foundation
 /// One actor owns the file clock and feeds every chunk to the sink, the transcriber and the
 /// segmenter, in that order. The app's own words never reach a segment: while a turn plays the
 /// segmenter hears silence, and words that echo a turn are removed when a segment closes.
+/// The person always wins: a partial with words the turn does not have cuts the turn. Requests
+/// ("shh", "keep going") are heard in finals, in the person's words only.
 public actor CascadeVoiceSession: VoiceSession {
     public struct Timing: Sendable {
         /// After asking the transcriber to finalize, close the segment once this long passes with no new final.
@@ -44,6 +46,11 @@ public actor CascadeVoiceSession: VoiceSession {
     private var played: [PlaybackWindow] = []
     /// Counts `say` calls, so one that waited while a turn was cut knows a newer one superseded it.
     private var sayGeneration = 0
+    /// A request was heard in the utterance in progress. The utterance ends when the person
+    /// pauses (`userPaused`), at a pause of the session and at an interruption.
+    private var commandHeard = false
+    /// The output's stop after a cut, while it runs. `say` waits for it, so a late stop cannot cut the next turn.
+    private var stopping: Task<Void, Never>?
 
     public init(source: any AudioSource, sink: any AudioSink, transcriber: any Transcriber,
                 output: any VoiceOutput = SilentVoiceOutput(), echo: EchoConfig = .init(),
@@ -82,6 +89,7 @@ public actor CascadeVoiceSession: VoiceSession {
     public func stop() async throws {
         isStopping = true
         await cutTurn()
+        await waitForOutputStop()
         await source.stop()
         await sourceTask?.value
         var closing: [MsRange] = []
@@ -108,6 +116,7 @@ public actor CascadeVoiceSession: VoiceSession {
     public func pause() async throws {
         guard !isPaused, !isStopping else { return }
         isPaused = true
+        commandHeard = false
         await cutTurn()
         await source.pause()
         await closeSegments(segmenter.flush(atMs: lastChunkEndMs))
@@ -132,6 +141,7 @@ public actor CascadeVoiceSession: VoiceSession {
         sayGeneration += 1
         let generation = sayGeneration
         await cutTurn()
+        await waitForOutputStop()
         // While the last turn was cut, a pause, an interruption, stop or a newer `say` may have come.
         // `cutTurn` leaves `playing` nil and only a newer `say` sets it, so with no newer `say` nothing plays.
         guard canSpeak, generation == sayGeneration else {
@@ -173,6 +183,7 @@ public actor CascadeVoiceSession: VoiceSession {
             await closeSegments(segmenter.observe(levelDb: level, startMs: chunk.startMs, durationMs: chunk.durationMs))
         case .interrupted:
             isInterrupted = true
+            commandHeard = false
             await cutTurn()
             await closeSegments(segmenter.flush(atMs: lastChunkEndMs))
             emit(.interrupted)
@@ -192,8 +203,10 @@ public actor CascadeVoiceSession: VoiceSession {
                 log("pause \(ms)")
             case .abandoned(let range):
                 log("abandoned blip \(range.start)-\(range.end) ms")
+                commandHeard = false
                 emit(.userPaused(afterMs: range.end))
             case .segmentEnded(let range):
+                commandHeard = false
                 emit(.userPaused(afterMs: range.end))
                 // Not awaited: a finalize that never returns must not block capture or stop().
                 let transcriber = self.transcriber
@@ -251,10 +264,35 @@ public actor CascadeVoiceSession: VoiceSession {
     /// Stops the turn that is playing, if any. The turn ends first, so a late report from the
     /// output finds no turn. A cut turn is not resumed.
     private func cutTurn() async {
-        guard let current = playing else { return }
+        guard endPlayingTurn() else { return }
+        await stopOutput().value
+    }
+
+    /// Stops `output` after any stop already running, and returns the task.
+    @discardableResult
+    private func stopOutput() -> Task<Void, Never> {
+        let output = self.output
+        let previous = stopping
+        let task = Task { await previous?.value; await output.stop() }
+        stopping = task
+        return task
+    }
+
+    /// Returns once no stop of `output` is running.
+    private func waitForOutputStop() async {
+        while let pending = stopping {
+            await pending.value
+            if stopping == pending { stopping = nil }
+        }
+    }
+
+    /// The first half of `cutTurn`: the turn ends, and the segmenter hears real levels again at
+    /// once. The caller stops `output` when this returns true.
+    private func endPlayingTurn() -> Bool {
+        guard let current = playing else { return false }
         current.task.cancel()
         endTurn(interrupted: true)
-        await output.stop()
+        return true
     }
 
     /// Every accepted turn ends once. A turn cut before playback began has no window, and its end
@@ -278,9 +316,9 @@ public actor CascadeVoiceSession: VoiceSession {
         log("transcriber results ended before stop")
         emit(.failed("The transcriber stopped. Audio is still being recorded."))
     }
-    private func handle(_ result: TranscriptResult) {
+    private func handle(_ result: TranscriptResult) async {
         guard result.isFinal else {
-            emit(.transcriptPartial(result.text))
+            handlePartial(result)
             return
         }
         pendingWords.append(contentsOf: result.words)
@@ -293,6 +331,45 @@ public actor CascadeVoiceSession: VoiceSession {
                 restartGraceTimer()
             }
         }
+        hearCommand(in: result)
+    }
+
+    /// Inside a turn's echo window a partial is the person's only when it has `bargeInWords` words
+    /// the turn does not have. It then cuts the turn and is emitted. Any other partial there is
+    /// the app's own voice, or too little to tell: it is dropped, so it does not hold the floor.
+    /// Outside the window every partial is emitted. Partials carry no requests: a partial grows
+    /// word by word, so "let me talk about my mother" passes through "let me talk".
+    private func handlePartial(_ partial: TranscriptResult) {
+        if let window = echoWindow(for: partial) {
+            guard EchoFilter.nonMatchingCount(partial.text, turnText: window.text) >= echo.bargeInWords else { return }
+            log("barge-in at \(lastChunkEndMs) ms")
+            // The output stops in the background: the person's words reach the caller at once.
+            if endPlayingTurn() { stopOutput() }
+        }
+        emit(.transcriptPartial(partial.text))
+    }
+
+    /// The turn whose echo `partial` can carry: the partial arrives, or its audio starts, before
+    /// `padMs` after the turn's end, and its audio does not end before the turn's start minus
+    /// `padMs`. The audio test catches an echo the transcriber reports late.
+    private func echoWindow(for partial: TranscriptResult) -> PlaybackWindow? {
+        playbackWindows.last { window in
+            let low = window.range.start - echo.padMs, high = window.range.end + echo.padMs
+            return lastChunkEndMs <= high || (partial.range.start <= high && partial.range.end >= low)
+        }
+    }
+
+    /// A request in the person's words of a final: at most one per utterance, after the final's
+    /// event. "Quiet" also cuts a turn that plays; it is emitted first, so the caller is quiet
+    /// before it hears that the turn ended.
+    private func hearCommand(in final: TranscriptResult) {
+        guard !commandHeard else { return }
+        let persons = EchoFilter.personsWords(final.words, windows: playbackWindows, config: echo)
+        guard let command = QuietMatcher.command(in: persons.map(\.text).joined(separator: " ")) else { return }
+        commandHeard = true
+        log("heard \(command)")
+        emit(.heard(command))
+        if command == .quiet, endPlayingTurn() { stopOutput() }
     }
 
     private func waitForFinals(throughMs: Milliseconds) async {
