@@ -349,7 +349,6 @@ final class SessionViewModel: Identifiable {
             }
         case .candidates(_, let segment):
             extractionStatus = nil
-            cardQueue.cards.forEach { cards.shown($0) }
             // After the segment's flags, which the queue reports first: a success with none means clean flags.
             interviewer?.yield(.extracted(segment))
         case .flags(let flags, let segment):
