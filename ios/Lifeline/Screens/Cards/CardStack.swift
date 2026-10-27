@@ -88,7 +88,7 @@ struct CardStack: View {
                          onFollowUp: { onFollowUp(kept, $0, $1) }, onResolve: { onResolveFollowUp(kept, $0, $1) },
                          onNotAny: { onDeclineFollowUp(kept, $0) }, onDone: { onKeptDone(kept) }, onOpenEntity: onOpenEntity, hasPage: hasPage)
         case .hint, .entity:
-            // A follow-up is never a card of its own: it shows as a chip on its memory's kept card.
+            // Never reached: CardQueue holds every follow-up as a chip under its memory, never as a card.
             EmptyView()
         }
     }

@@ -81,19 +81,8 @@ final class CardHandler {
 
     func notPartOfStory(_ card: Card) { optedOutOfStory.insert(card.id) }
 
-    /// Returns true when the card is done with.
-    func accept(_ card: Card) -> Bool {
-        switch card {
-        case .memory:
-            return keep(card) != nil
-        case .hint(let candidate, _):
-            return attempt("Could not file that") { _ = try deps.actions.acceptHint(candidate) }
-        case .entity:
-            return acceptEntity(card, as: nil) != nil
-        case .whoIsThis, .kept:
-            return false
-        }
-    }
+    /// Keep on a memory card, the only card with one. Returns true when the card is done with.
+    func accept(_ card: Card) -> Bool { keep(card) != nil }
 
     /// Keep on an entity card, as what it heard or as the type the person chose (M7).
     /// Returns the entity so the caller can open its page.

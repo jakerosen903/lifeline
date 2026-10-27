@@ -40,11 +40,11 @@ final class CardFlow {
 
     // MARK: - Memory and question cards
 
-    /// Returns true when the card is done with.
+    /// Keep: the memory swaps for its kept card in place. Returns true when the card is done with.
     func accept(_ card: Card) -> Bool {
         closeAllKept()
         guard handler.accept(card) else { return false }
-        settle(card)
+        queue.memoryAccepted(card.id)
         return true
     }
 
@@ -88,11 +88,6 @@ final class CardFlow {
         guard handler.resolve(card, choice) else { return false }
         queue.remove(card.id)
         return true
-    }
-
-    /// A memory swaps for its kept card in place, or leaves; anything else leaves.
-    private func settle(_ card: Card) {
-        if case .memory = card { queue.memoryAccepted(card.id) } else { queue.remove(card.id) }
     }
 
     // MARK: - Kept cards
