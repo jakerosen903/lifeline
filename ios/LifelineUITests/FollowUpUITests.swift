@@ -65,6 +65,13 @@ final class FollowUpUITests: XCTestCase {
         let gone = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: app.any("card.kept"))
         XCTAssertEqual(XCTWaiter().wait(for: [gone], timeout: 5), .completed, "Done closes the kept card")
         XCTAssertEqual(app.buttons.matching(identifier: "card.followUp").count, 0, "no chip is left on the session")
+        // The name nobody answered is not lost: it waits in the People queue.
+        app.finishSession()
+        XCTAssertTrue(app.waitHittable(app.buttons["home.people"], timeout: 5))
+        app.buttons["home.people"].tap()
+        let who = app.any("card.whoIsThis")
+        XCTAssertTrue(who.waitForExistence(timeout: 5), "an open mention waits in the People queue")
+        XCTAssertTrue(who.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "Dara")).firstMatch.exists, "the unanswered name is Dara")
     }
 
     @MainActor
@@ -72,6 +79,11 @@ final class FollowUpUITests: XCTestCase {
         let app = keepTheMemory()
         chip(app, "Dara: who's this?").tap()
         XCTAssertTrue(app.any("card.whoIsThis").waitForExistence(timeout: 5), "the Who's this? choices open in a sheet")
-        XCTAssertTrue(app.staticTexts["Dara"].firstMatch.exists || app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "Dara")).firstMatch.exists)
+        let new = app.buttons["card.newPerson"].firstMatch
+        XCTAssertTrue(new.waitForExistence(timeout: 5))
+        new.tap()
+        XCTAssertTrue(chip(app, "Dara, done").waitForExistence(timeout: 5), "the answered person chip is checked")
+        XCTAssertFalse(chip(app, "Dara: who's this?").exists)
+        XCTAssertTrue(app.any("card.kept").exists, "the card stays while the domain chip is open")
     }
 }
