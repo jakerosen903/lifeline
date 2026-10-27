@@ -408,3 +408,61 @@ private func ids(_ candidates: Candidate...) -> [String] { candidates.map(\.id.r
     fresh.memoryAccepted(b.id.rawValue)
     #expect(fresh.cards.map(\.id) == ids(a), "the rebuilt queue still settles memories")
 }
+
+@Test func answeredElsewhereIsNotResurrected() throws {
+    // A store-built kept card nobody touched here, answered and closed on another screen.
+    let s = SegmentID()
+    let a = try memory(s, 0, status: .accepted), b = try memory(s, 1)
+    let h = try hint(s, 2, for: a)
+    let byID = Dictionary(uniqueKeysWithValues: [a, b].map { ($0.id, $0) })
+    let old = CardQueue.waiting(pending: [b, h], segmentMemories: { _ in [a, b] }, candidate: { byID[$0] })
+    #expect(old.cards.map(\.id) == ids(b, a) && old.touched.isEmpty)
+    var fresh = CardQueue.waiting(pending: [b], segmentMemories: { _ in [a, b] }, candidate: { byID[$0] })
+    fresh.keepOpen(from: old)
+    #expect(fresh.cards.map(\.id) == ids(b))
+}
+
+@Test func untouchedKeptCardFollowsTheStore() throws {
+    let s = SegmentID()
+    let a = try memory(s, 0, status: .accepted)
+    let h1 = try hint(s, 1, for: a), h2 = try hint(s, 2, for: a, phrase: "work")
+    let byID = [a.id: a]
+    let old = CardQueue.waiting(pending: [h1, h2], segmentMemories: { _ in [a] }, candidate: { byID[$0] })
+    var fresh = CardQueue.waiting(pending: [h2], segmentMemories: { _ in [a] }, candidate: { byID[$0] })
+    fresh.keepOpen(from: old)
+    #expect(kept(fresh, a)?.followUps.map(\.id) == ids(h2) && kept(fresh, a)?.answered.isEmpty == true)
+    #expect(!fresh.touched.contains(a.id.rawValue))
+}
+
+@Test func touchedCardDropsAChipAnsweredElsewhere() throws {
+    let s = SegmentID()
+    let a = try memory(s, 0, status: .accepted)
+    let h1 = try hint(s, 1, for: a), h2 = try hint(s, 2, for: a, phrase: "work"), h3 = try hint(s, 3, for: a, phrase: "home")
+    let byID = [a.id: a]
+    var old = CardQueue.waiting(pending: [h1, h2, h3], segmentMemories: { _ in [a] }, candidate: { byID[$0] })
+    _ = old.answered(h1.id.rawValue, in: a.id.rawValue)
+    // h1 answered here; h2 answered on another screen; h3 still pending.
+    var fresh = CardQueue.waiting(pending: [h3], segmentMemories: { _ in [a] }, candidate: { byID[$0] })
+    fresh.keepOpen(from: old)
+    #expect(kept(fresh, a)?.followUps.map(\.id) == ids(h1, h3) && kept(fresh, a)?.answered == [h1.id.rawValue])
+    // Then h3 too is answered elsewhere: nothing is left to ask, so the card does not come back.
+    var later = CardQueue.waiting(pending: [], segmentMemories: { _ in [a] }, candidate: { byID[$0] })
+    later.keepOpen(from: fresh)
+    #expect(later.cards.isEmpty)
+}
+
+@Test func waitingQueueClosesOnlyTouchedKeptCards() throws {
+    let s = SegmentID()
+    let a = try memory(s, 0, status: .accepted), b = try memory(s, 1), c = try memory(s, 2)
+    let ha = try hint(s, 3, for: a), hb = try hint(s, 4, for: b)
+    let byID = Dictionary(uniqueKeysWithValues: [a, b, c].map { ($0.id, $0) })
+    var queue = CardQueue.waiting(pending: [b, c, ha, hb], segmentMemories: { _ in [a, b, c] }, candidate: { byID[$0] })
+    queue.memoryAccepted(b.id.rawValue)
+    #expect(queue.closeAllKept() == KeptClose(dismiss: [Card(hb)!]), "b was kept here; a came from the store")
+    #expect(queue.cards.map(\.id) == ids(c, a))
+    var live = CardQueue()
+    live.apply(.candidates([b, hb], segment: s))
+    live.memoryAccepted(b.id.rawValue)
+    live.apply(.candidates([a], segment: s))
+    #expect(live.closeAllKept().dismiss.count == 1 && live.cards.map(\.id) == ids(a), "the live session closes every kept card")
+}

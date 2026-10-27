@@ -65,6 +65,11 @@ public struct CardQueue: Equatable, Sendable {
     private var held: [Card] = []
     private var accepted: Set<String> = []
     private var dismissed: Set<String> = []
+    /// Kept cards the person worked on in this queue: opened by Keep here, or a chip answered here.
+    public private(set) var touched: Set<String> = []
+    /// A waiting queue (session detail, timeline) closes only touched kept cards on a memory
+    /// action; the ones built from the store wait for their own answer. The live session closes all.
+    private var closesTouchedOnly = false
 
     public init() {}
 
@@ -93,6 +98,7 @@ public struct CardQueue: Equatable, Sendable {
     public static func waiting(pending: [Candidate], segmentMemories: (SegmentID) -> [Candidate],
                                candidate: (CandidateID) -> Candidate?) -> CardQueue {
         var queue = CardQueue()
+        queue.closesTouchedOnly = true
         var segments = Set<SegmentID>()
         for segment in pending.map(\.segmentID) where segments.insert(segment).inserted {
             for memory in segmentMemories(segment) { queue.remember(memory) }
@@ -117,6 +123,7 @@ public struct CardQueue: Equatable, Sendable {
     /// held and pending in the store.
     public mutating func memoryAccepted(_ memoryCandidateID: String) {
         accepted.insert(memoryCandidateID)
+        touched.insert(memoryCandidateID)
         release()
         if let i = cards.firstIndex(where: { $0.id == memoryCandidateID }), case .memory = cards[i] { cards.remove(at: i) }
     }
@@ -133,7 +140,7 @@ public struct CardQueue: Equatable, Sendable {
     /// follow-ups back; one that had become a kept card turns back into the memory card in place.
     public mutating func restore(_ card: Card) {
         if case .memory(let candidate, let out) = card {
-            accepted.remove(card.id); dismissed.remove(card.id)
+            accepted.remove(card.id); dismissed.remove(card.id); touched.remove(card.id)
             memories[card.id] = RememberedMemory(candidate: candidate, out: out)
             if let i = keptIndex(card.id), case .kept(let k) = cards[i] {
                 held = k.unanswered + held
@@ -149,6 +156,7 @@ public struct CardQueue: Equatable, Sendable {
     public mutating func answered(_ followUpID: String, in memoryCandidateID: String) -> Bool {
         guard let i = keptIndex(memoryCandidateID), case .kept(var k) = cards[i] else { return false }
         k.answered.insert(followUpID)
+        touched.insert(memoryCandidateID)
         cards[i] = .kept(k)
         return k.isComplete
     }
@@ -156,30 +164,43 @@ public struct CardQueue: Equatable, Sendable {
     /// "Done", or every chip answered: the kept card leaves; what was left unanswered comes back.
     public mutating func closeKept(_ memoryCandidateID: String) -> KeptClose {
         guard let i = keptIndex(memoryCandidateID), case .kept(let k) = cards.remove(at: i) else { return KeptClose() }
+        touched.remove(memoryCandidateID)
         return KeptClose(closing: k)
     }
 
-    /// Another memory card was acted on: every open kept card closes as if "Done" was tapped.
+    /// Another memory card was acted on: every open kept card closes as if "Done" was tapped. In a
+    /// waiting queue only the touched ones do.
     public mutating func closeAllKept() -> KeptClose {
         var close = KeptClose()
-        while let k = cards.first(where: { if case .kept = $0 { true } else { false } }) { close.append(closeKept(k.id)) }
+        while let k = cards.first(where: { card in
+            guard case .kept = card else { return false }
+            return !closesTouchedOnly || touched.contains(card.id)
+        }) { close.append(closeKept(k.id)) }
         return close
     }
 
-    /// A waiting queue rebuilt from the store keeps the kept cards that were open on screen, where
-    /// they were (after the same cards as before), with the chips answered so far plus any
-    /// follow-up the store added meanwhile. An answered chip is no longer pending, so without this a
-    /// refresh would drop it, or the whole card.
+    /// A waiting queue rebuilt from the store keeps the touched kept cards that were open on
+    /// screen, where they were (after the same cards as before): the chips answered here, the
+    /// chips the store still has pending, and any follow-up the store added meanwhile. A chip
+    /// answered elsewhere leaves; a card with nothing left to ask that was not already complete
+    /// here leaves too. An untouched kept card is whatever the store says.
     public mutating func keepOpen(from old: CardQueue) {
         for (index, card) in old.cards.enumerated() {
-            guard case .kept(var k) = card else { continue }
+            guard case .kept(var k) = card, old.touched.contains(k.memoryCandidateID) else { continue }
+            let wasComplete = k.isComplete
+            var pending: [Card] = []
             if let i = cards.firstIndex(where: { $0.id == k.memoryCandidateID }) {
                 // The store says the memory is pending again: it wins.
                 guard case .kept(let fresh) = cards[i] else { continue }
-                k.followUps += fresh.followUps.filter { f in !k.followUps.contains { $0.id == f.id } }
+                pending = fresh.followUps
                 cards.remove(at: i)
             }
+            k.followUps = k.followUps.filter { f in k.answered.contains(f.id) || pending.contains { $0.id == f.id } }
+                + pending.filter { f in !k.followUps.contains { $0.id == f.id } }
+            k.answered = k.answered.filter { a in k.followUps.contains { $0.id == a } }
+            if k.followUps.isEmpty || (k.isComplete && !wasComplete) { continue }
             accepted.insert(k.memoryCandidateID)
+            touched.insert(k.memoryCandidateID)
             let before = Set(old.cards[..<index].map(\.id))
             cards.insert(.kept(k), at: cards.lastIndex { before.contains($0.id) }.map { $0 + 1 } ?? 0)
         }

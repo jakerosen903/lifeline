@@ -18,7 +18,7 @@ struct SessionDetailScreen: View {
                               onResolveFollowUp: { viewModel.resolveFollowUp($0, $1, $2) },
                               onDeclineFollowUp: { viewModel.declineFollowUp($0, $1) },
                               onKeptDone: { viewModel.keptDone($0) },
-                              onOpenEntity: { viewModel.open($0) })
+                              onOpenEntity: { viewModel.open($0) }, hasPage: { viewModel.flow.hasPage($0) })
                         .listRowBackground(Color.clear)
                         .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
                 }

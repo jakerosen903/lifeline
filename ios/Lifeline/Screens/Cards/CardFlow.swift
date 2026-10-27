@@ -129,6 +129,9 @@ final class CardFlow {
     /// "Done": unanswered hints and entities are dismissed, unanswered people wait in People.
     func keptDone(_ kept: KeptCard) { closeKept(kept.memoryCandidateID) }
 
+    /// Whether a checked chip has a page: an entity kept or a person named on this screen.
+    func hasPage(_ followUp: Card) -> Bool { pages[followUp.id] != nil }
+
     /// The page of a checked entity or person chip, or nil (a hint, "Not a person", or a chip
     /// answered before this screen opened).
     func page(for followUp: Card) -> Entity? {

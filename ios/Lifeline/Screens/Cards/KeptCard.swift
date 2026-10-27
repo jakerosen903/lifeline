@@ -15,6 +15,8 @@ struct KeptCardView: View {
     let onDone: () -> Void
     /// Opens a checked entity or person chip's page; nil in the live session.
     var onOpenEntity: ((Card) -> Void)?
+    /// Whether a checked chip has a page; one without (a hint, "Not a person") is not tappable.
+    var hasPage: (Card) -> Bool = { _ in false }
 
     @State private var asking: Card?
 
@@ -33,7 +35,7 @@ struct KeptCardView: View {
                                  onTap: { tap(followUp) },
                                  onRetype: { onFollowUp(followUp, $0) },
                                  onNotAny: { onNotAny(followUp) },
-                                 onOpen: onOpenEntity.flatMap { open in isEntity(followUp) ? { open(followUp) } : nil })
+                                 onOpen: onOpenEntity.flatMap { open in hasPage(followUp) ? { open(followUp) } : nil })
                 }
             }
             HStack {
@@ -67,13 +69,6 @@ struct KeptCardView: View {
 
     private func tap(_ followUp: Card) {
         if case .whoIsThis = followUp { asking = followUp } else { onFollowUp(followUp, nil) }
-    }
-
-    private func isEntity(_ card: Card) -> Bool {
-        switch card {
-        case .entity, .whoIsThis: true
-        default: false
-        }
     }
 }
 

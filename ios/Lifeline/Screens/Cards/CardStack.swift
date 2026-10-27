@@ -32,6 +32,8 @@ struct CardStack: View {
     var onKeptDone: (KeptCard) -> Void = { _ in }
     /// A checked entity or person chip opens its page. Nil in the live session, which never leaves.
     var onOpenEntity: ((Card) -> Void)?
+    /// Whether a checked chip has a page to open.
+    var hasPage: (Card) -> Bool = { _ in false }
 
     @State private var picking: Card?
 
@@ -84,7 +86,7 @@ struct CardStack: View {
         case .kept(let kept):
             KeptCardView(kept: kept, declined: handler.declined, peopleChoices: { handler.peopleChoices(for: $0) },
                          onFollowUp: { onFollowUp(kept, $0, $1) }, onResolve: { onResolveFollowUp(kept, $0, $1) },
-                         onNotAny: { onDeclineFollowUp(kept, $0) }, onDone: { onKeptDone(kept) }, onOpenEntity: onOpenEntity)
+                         onNotAny: { onDeclineFollowUp(kept, $0) }, onDone: { onKeptDone(kept) }, onOpenEntity: onOpenEntity, hasPage: hasPage)
         case .hint, .entity:
             // A follow-up is never a card of its own: it shows as a chip on its memory's kept card.
             EmptyView()
