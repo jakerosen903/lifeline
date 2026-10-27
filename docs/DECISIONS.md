@@ -2,6 +2,30 @@
 
 One entry per decision. Newest first. Status is Decided, Open, or Superseded.
 
+## 2026-10-26 · Filler words are hidden in quotes on lists and pages
+
+**Status:** Decided by the owner. Source: `docs/specs/2026-10-26-ui-audit.md`, call 1 and finding F12.
+
+Quotes on lists, entity pages and About hide filler words ("um", "uh", "like", "you know") and repeated words. The stored transcript does not change. The memory page and the audio keep every word (PRINCIPLES 1).
+
+## 2026-10-26 · The timeline groups moments into computed life periods
+
+**Status:** Decided by the owner. Source: `docs/specs/2026-10-26-ui-audit.md`, call 2 and findings F2–F3.
+
+The timeline reads life periods from the dates and the owner's age, for example "Growing up · 2004–2012". Each computed period shows as a guess (PRINCIPLES 5). A chapter the person names replaces the period it covers. "Outside any chapter" goes away.
+
+## 2026-10-26 · Extractor v7 changes to existing memories are suggestions
+
+**Status:** Decided by the owner. Source: `docs/specs/2026-10-26-ui-audit.md`, call 3.
+
+Extractor v7 re-reads the existing memories. Each change it finds (a new title, a link to a person, "about you" in place of the owner's name) is a suggestion the person approves. No change is applied silently (PRINCIPLES 9).
+
+## 2026-10-26 · A labeled tab bar replaces the floating icons
+
+**Status:** Decided by the owner. Source: `docs/specs/2026-10-26-ui-audit.md`, call 4 and finding F7.
+
+The app's top level is a tab bar with labels: Timeline, People, Sessions, Settings. The six unlabeled floating icons go away.
+
 ## 2026-10-26 · Follow-ups stay on the memory card
 
 **Status:** Decided by the owner after a month of use. Source: `docs/specs/2026-10-26-ui-audit.md`, finding F1.
