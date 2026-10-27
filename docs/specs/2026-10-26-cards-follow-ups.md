@@ -63,6 +63,8 @@ After Keep, follow-up cards arrive as separate cards: "Sounds like it belongs to
 ### Session detail and the timeline
 
 1. The cards waiting after a session follow the same rules. A pending memory card keeps its follow-ups and becomes a kept card on Keep.
+   Exception to rule 11: here a memory action closes only kept cards the person touched on this screen (opened by Keep here, or with a chip answered here). A kept card built from the store (rule 2) stays until the person answers it or taps Done. The timeline holds cards from many sessions, so closing them all on one Keep would dismiss follow-ups the person never saw.
+   A refresh shows an untouched kept card exactly as the store has it. A touched card keeps the chips answered here and drops a chip answered on another screen.
 2. Pending follow-ups whose owner memory was already accepted (for example, the app was closed before the person answered) show as one kept card for that memory: "Kept" and the memory's title, then the chips. They never show as separate cards.
 3. Pending follow-ups whose owner memory was dismissed, or that have no owner memory, do not show.
 
