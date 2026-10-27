@@ -61,7 +61,7 @@ Since M7, a thing, place or idea that a memory carries is a record, not a questi
 10. When every chip is answered, the kept card closes by itself after 1.5 s.
 11. When the person keeps, dismisses or merges ("Same story") another memory card, every open kept card closes as if "Done" was tapped. At most one kept card is open.
 12. Dismiss on a memory card hides its follow-ups with it. Undo brings the memory card back with its follow-ups still held.
-13. A follow-up with no owner memory never shows in the session. It stays pending in the store.
+13. A follow-up with no owner memory never shows in the session. A hint stays pending in the store. A person mention with no owner memory becomes an open mention at once, so the name waits in the People queue as before. A name is about a person, not about a memory, and must not be lost (PRINCIPLES 1).
 14. After a heavy moment, kept cards show no chips: the card leaves on Keep as if it had no follow-ups. The follow-ups stay pending (the existing suppression rule).
 
 ### Session detail and the timeline
