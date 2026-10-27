@@ -2,6 +2,12 @@
 
 One entry per decision. Newest first. Status is Decided, Open, or Superseded.
 
+## 2026-10-26 · Follow-ups stay on the memory card
+
+**Status:** Decided by the owner after a month of use. Source: `docs/specs/2026-10-26-ui-audit.md`, finding F1.
+
+A follow-up (a domain tag, a story hint, a collection hint, an entity) never appears as its own card. After Keep, the memory card stays and shows its follow-ups as optional chips. A separate card read as random because nothing tied it to its memory (PRINCIPLES 9).
+
 ## 2026-10-25 · The interviewer speaks briefly, never over the person, and never improvises on safety (M8)
 
 The app speaks its fixed lines and short model reflections in a settle-in session. A quick story stays nearly silent. Any speech from the person stops the app at once. The app's own words are kept apart from the person's in the transcript and never become a memory.
