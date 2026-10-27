@@ -104,6 +104,6 @@ final class EntitiesUITests: XCTestCase {
         app.buttons["entities.tagFilter"].tap()
         app.buttons["entities.tag.home"].tap()
         XCTAssertTrue(rows.matching(NSPredicate(format: "label == %@", "the house")).firstMatch.waitForExistence(timeout: 5))
-        XCTAssertEqual(rows.count, 1, "only what was heard as home")
+        XCTAssertEqual(rows.count, 1, "only what was tagged home")
     }
 }
