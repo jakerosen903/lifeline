@@ -373,3 +373,38 @@ private func ids(_ candidates: Candidate...) -> [String] { candidates.map(\.id.r
     queue.apply(.candidates([a], segment: SegmentID()))
     #expect(queue.cards.isEmpty)
 }
+
+@Test func keepOpenCarriesAnsweredChipsAcrossARebuild() throws {
+    // Session detail and the timeline rebuild from the store; a kept card being answered stays put.
+    let s = SegmentID()
+    let a = try memory(s, 0, title: "The shed", status: .accepted), b = try memory(s, 1), c = try memory(s, 2, title: "All done", status: .accepted)
+    let h1 = try hint(s, 3, for: a), h2 = try hint(s, 4, for: a, phrase: "work"), hc = try hint(s, 5, for: c), late = try hint(s, 6, for: a, phrase: "home")
+    let byID = Dictionary(uniqueKeysWithValues: [a, b, c].map { ($0.id, $0) })
+    var old = CardQueue.waiting(pending: [b, h1, h2, hc], segmentMemories: { _ in [a, b, c] }, candidate: { byID[$0] })
+    #expect(old.cards.map(\.id) == ids(b, a, c))
+    _ = old.answered(h1.id.rawValue, in: a.id.rawValue)
+    _ = old.answered(hc.id.rawValue, in: c.id.rawValue)
+    // The store now: h1 and hc answered, a late follow-up for a.
+    var fresh = CardQueue.waiting(pending: [b, h2, late], segmentMemories: { _ in [a, b, c] }, candidate: { byID[$0] })
+    fresh.keepOpen(from: old)
+    #expect(fresh.cards.map(\.id) == ids(b, a, c), "same places; the complete card is not dropped")
+    #expect(kept(fresh, a)?.followUps.map(\.id) == ids(h1, h2, late) && kept(fresh, a)?.answered == [h1.id.rawValue])
+    #expect(kept(fresh, c)?.isComplete == true)
+    #expect(fresh.closeKept(c.id.rawValue) == KeptClose(), "a complete card closes with nothing left")
+}
+
+@Test func keepOpenHoldsTheCardsPlaceWhenTheStoreOrdersItLater() throws {
+    // Kept on screen in place of its memory; rebuilt, its follow-up comes after the next memory.
+    let s = SegmentID()
+    let a = try memory(s, 0, title: "First"), b = try memory(s, 1)
+    let h = try hint(s, 2, for: a)
+    let accepted = { var m = a; m.status = .accepted; return m }()
+    var old = CardQueue.waiting(pending: [a, b, h], segmentMemories: { _ in [a, b] }, candidate: { $0 == a.id ? a : $0 == b.id ? b : nil })
+    old.memoryAccepted(a.id.rawValue)
+    #expect(old.cards.map(\.id) == ids(a, b))
+    var fresh = CardQueue.waiting(pending: [b, h], segmentMemories: { _ in [accepted, b] }, candidate: { $0 == a.id ? accepted : $0 == b.id ? b : nil })
+    fresh.keepOpen(from: old)
+    #expect(fresh.cards.map(\.id) == ids(a, b), "the kept card stays first")
+    fresh.memoryAccepted(b.id.rawValue)
+    #expect(fresh.cards.map(\.id) == ids(a), "the rebuilt queue still settles memories")
+}

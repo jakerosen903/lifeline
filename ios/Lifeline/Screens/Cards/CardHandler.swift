@@ -317,11 +317,15 @@ final class CardHandler {
         return done ? recent.card : nil
     }
 
-    func resolve(_ card: Card, _ choice: MentionChoice) -> Bool {
-        guard case .whoIsThis = card else { return false }
-        let done = attempt("Could not save that") { try deps.actions.resolveMention(try mention(for: card).id, to: choice) }
+    func resolve(_ card: Card, _ choice: MentionChoice) -> Bool { resolvePerson(card, choice).done }
+
+    /// Resolve, and who the name turned out to be: nobody for "Not a person".
+    func resolvePerson(_ card: Card, _ choice: MentionChoice) -> (done: Bool, person: Person?) {
+        guard case .whoIsThis = card else { return (false, nil) }
+        var person: Person?
+        let done = attempt("Could not save that") { person = try deps.actions.resolveMention(try mention(for: card).id, to: choice) }
         if done { rankedChoices.removeAll() }
-        return done
+        return (done, person)
     }
 
     /// Everyone but the owner, closest names first, so a known person is always reachable.

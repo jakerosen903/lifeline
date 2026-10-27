@@ -17,7 +17,8 @@ struct SessionDetailScreen: View {
                               onFollowUp: { viewModel.followUp($0, $1, as: $2) },
                               onResolveFollowUp: { viewModel.resolveFollowUp($0, $1, $2) },
                               onDeclineFollowUp: { viewModel.declineFollowUp($0, $1) },
-                              onKeptDone: { viewModel.keptDone($0) })
+                              onKeptDone: { viewModel.keptDone($0) },
+                              onOpenEntity: { viewModel.open($0) })
                         .listRowBackground(Color.clear)
                         .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
                 }
@@ -91,6 +92,9 @@ struct SessionDetailScreen: View {
         .navigationBarTitleDisplayMode(.inline)
         .onAppear { viewModel.refresh() }
         .onDisappear { viewModel.stop() }
+        .navigationDestination(item: Binding(get: { viewModel.openedEntity }, set: { viewModel.openedEntity = $0 })) { entity in
+            EntityScreen(viewModel: EntityViewModel(entity: entity, deps: viewModel.deps)) { viewModel.refresh() }
+        }
         .sheet(item: Binding(get: { viewModel.changing }, set: { viewModel.changing = $0 })) { memory in
             ChangeSheet(memory: memory, deps: viewModel.deps) { viewModel.refresh() }
         }

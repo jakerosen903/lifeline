@@ -95,14 +95,17 @@ final class TimelineViewModel {
     private var skippedQuestions: Set<MemoryID> = []
 
     let home: HomeViewModel
-    let cards: CardHandler
+    /// The waiting cards of every session as one queue, acted on with the same calls as the live session.
+    let flow: CardFlow
+    var cards: CardHandler { flow.handler }
     let deps: Dependencies
 
     init(deps: Dependencies) {
         self.deps = deps
         home = HomeViewModel(deps: deps)
-        cards = CardHandler(deps: deps)
+        flow = CardFlow(deps: deps)
         refresh()
+        flow.onAutoClose = { [weak self] in self?.refresh() }
         // New pairs from the pass become cards without a relaunch.
         Task { [weak self] in
             await deps.duplicates.setOnFinished { written in
@@ -237,19 +240,16 @@ final class TimelineViewModel {
         return parts.joined(separator: " · ")
     }
 
-    /// The waiting cards of each session as queues, so a kept card closes as in the live session.
-    private var waitingQueues: [CardQueue] = []
-
-    /// Every pending card across sessions, newest session first, plus names still open.
+    /// Every pending card across sessions, newest session first, plus names still open. A kept
+    /// card open on screen stays as it is.
     private func waitingCards() throws -> [Card] {
         let store = deps.extractionStore
         let candidates = store.candidates
-        waitingQueues = try store.sessions.listSessions().map { session in
-            CardQueue.waiting(pending: try candidates.pending(in: session.id),
-                              segmentMemories: { (try? candidates.candidates(for: $0)) ?? [] },
-                              candidate: { try? candidates.fetch($0) })
-        }
-        var cards = waitingQueues.flatMap(\.cards)
+        let pending = try store.sessions.listSessions().flatMap { try candidates.pending(in: $0.id) }
+        flow.reload(CardQueue.waiting(pending: pending,
+                                      segmentMemories: { (try? candidates.candidates(for: $0)) ?? [] },
+                                      candidate: { try? candidates.fetch($0) }))
+        var cards = flow.cards
         let shown = Set(cards.flatMap(\.withFollowUps).compactMap { if case .whoIsThis(_, let text) = $0 { PeopleRepository.normalize(text) } else { nil } })
         var seen = shown
         cards += try store.people.mentions(status: .unresolved)
@@ -333,21 +333,22 @@ final class TimelineViewModel {
     var changing: Memory?
     var deleteTarget: MemoryRow?
 
-    func accept(_ card: Card) { if cards.accept(card) { refresh() } }
-    func change(_ card: Card) { if let memory = cards.keep(card) { refresh(); changing = memory } }
-    func dismiss(_ card: Card) { if cards.dismiss(card) { refresh() } }
-    /// The entity page opened from the waiting cards (M7).
+    // Each action changes the queue as the live session does, then re-reads the store; the
+    // rebuilt queue keeps the open kept card as it is on screen.
+    func accept(_ card: Card) { if flow.accept(card) { refresh() } }
+    func change(_ card: Card) { if let memory = flow.change(card) { refresh(); changing = memory } }
+    func dismiss(_ card: Card) { if flow.dismiss(card) { refresh() } }
+    /// The page a checked entity or person chip opened (M7).
     var openedEntity: Entity?
-    func followUp(_ kept: KeptCard, _ card: Card, as type: EntityType?) { if cards.acceptFollowUp(card, as: type) { refresh() } }
-    func resolveFollowUp(_ kept: KeptCard, _ card: Card, _ choice: MentionChoice) { if cards.resolve(card, choice) { refresh() } }
-    func declineFollowUp(_ kept: KeptCard, _ card: Card) { if cards.declineFollowUp(card) { refresh() } }
-    func keptDone(_ kept: KeptCard) {
-        for i in waitingQueues.indices { cards.close(waitingQueues[i].closeKept(kept.memoryCandidateID)) }
-        refresh()
-    }
-    func undo() { if cards.undo() != nil { refresh() } }
-    func undoMerge() { if cards.undoMerge() != nil { refresh() } }
-    func sameStory(_ card: Card, into targets: [MemoryID]) { if cards.sameStory(card, into: targets) { refresh() } }
+    func followUp(_ kept: KeptCard, _ card: Card, as type: EntityType?) { if flow.followUp(kept, card, as: type) { refresh() } }
+    func resolveFollowUp(_ kept: KeptCard, _ card: Card, _ choice: MentionChoice) { if flow.resolveFollowUp(kept, card, choice) { refresh() } }
+    func declineFollowUp(_ kept: KeptCard, _ card: Card) { if flow.declineFollowUp(kept, card) { refresh() } }
+    func keptDone(_ kept: KeptCard) { flow.keptDone(kept); refresh() }
+    /// A checked entity or person chip, tapped again: its page.
+    func open(_ followUp: Card) { openedEntity = flow.page(for: followUp) }
+    func undo() { if flow.undo() { refresh() } }
+    func undoMerge() { if flow.undoMerge() { refresh() } }
+    func sameStory(_ card: Card, into targets: [MemoryID]) { if flow.sameStory(card, into: targets) { refresh() } }
 
     /// A pair answered: Same story / One story (true) or Keep separate (false).
     func answerPair(_ row: PairRow, same: Bool) {
@@ -405,7 +406,7 @@ final class TimelineViewModel {
     private func attempt(_ message: String, _ work: () throws -> Void) {
         do { try work(); error = nil; refresh() } catch { self.error = "\(message): \(error.localizedDescription)" }
     }
-    func resolve(_ card: Card, _ choice: MentionChoice) { if cards.resolve(card, choice) { refresh() } }
+    func resolve(_ card: Card, _ choice: MentionChoice) { if flow.resolve(card, choice) { refresh() } }
 
     func newChapter(for memory: MemoryID, title: String?) {
         do { _ = try deps.actions.createChapter(title: title, containing: memory); refresh() }

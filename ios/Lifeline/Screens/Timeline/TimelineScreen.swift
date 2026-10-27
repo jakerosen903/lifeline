@@ -160,7 +160,8 @@ struct TimelineScreen: View {
                           onFollowUp: { viewModel.followUp($0, $1, as: $2) },
                           onResolveFollowUp: { viewModel.resolveFollowUp($0, $1, $2) },
                           onDeclineFollowUp: { viewModel.declineFollowUp($0, $1) },
-                          onKeptDone: { viewModel.keptDone($0) })
+                          onKeptDone: { viewModel.keptDone($0) },
+                          onOpenEntity: { viewModel.open($0) })
                     .listRowBackground(Color.clear)
                     .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
             } header: {

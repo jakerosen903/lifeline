@@ -166,6 +166,25 @@ public struct CardQueue: Equatable, Sendable {
         return close
     }
 
+    /// A waiting queue rebuilt from the store keeps the kept cards that were open on screen, where
+    /// they were (after the same cards as before), with the chips answered so far plus any
+    /// follow-up the store added meanwhile. An answered chip is no longer pending, so without this a
+    /// refresh would drop it, or the whole card.
+    public mutating func keepOpen(from old: CardQueue) {
+        for (index, card) in old.cards.enumerated() {
+            guard case .kept(var k) = card else { continue }
+            if let i = cards.firstIndex(where: { $0.id == k.memoryCandidateID }) {
+                // The store says the memory is pending again: it wins.
+                guard case .kept(let fresh) = cards[i] else { continue }
+                k.followUps += fresh.followUps.filter { f in !k.followUps.contains { $0.id == f.id } }
+                cards.remove(at: i)
+            }
+            accepted.insert(k.memoryCandidateID)
+            let before = Set(old.cards[..<index].map(\.id))
+            cards.insert(.kept(k), at: cards.lastIndex { before.contains($0.id) }.map { $0 + 1 } ?? 0)
+        }
+    }
+
     public mutating func remove(_ id: String) {
         cards.removeAll { $0.id == id }
     }

@@ -19,7 +19,6 @@ final class SessionViewModel: Identifiable {
     private(set) var landed = false
     private(set) var startError: String?
     private(set) var stopError: String?
-    private(set) var cardQueue = CardQueue()
     private(set) var extractionStatus: String?
     private(set) var opening: Opening { didSet { snapshot.opening = opening.main.text } }
     private(set) var arc: SessionArc { didSet { snapshot.stage = arc.stage } }
@@ -37,7 +36,10 @@ final class SessionViewModel: Identifiable {
     private(set) var isQuiet = false
     var view: ViewMode = .listen
     var changing: Memory?
-    let cards: CardHandler
+    /// The card queue and what a tap does to it, shared with the session detail and the timeline.
+    let flow: CardFlow
+    var cards: CardHandler { flow.handler }
+    var cardQueue: CardQueue { flow.queue }
 
     let deps: Dependencies
     private var recorder: SessionRecorder?
@@ -55,7 +57,7 @@ final class SessionViewModel: Identifiable {
     init(deps: Dependencies, kind: SessionKind = .quick) {
         self.deps = deps
         self.kind = kind
-        cards = CardHandler(deps: deps)
+        flow = CardFlow(deps: deps)
         let opening = deps.opening()
         let arc = SessionArc(kind: kind, config: deps.arcConfig, startedAt: .now)
         self.opening = opening
@@ -248,93 +250,29 @@ final class SessionViewModel: Identifiable {
 
     // MARK: - Cards
 
-    /// Every memory action first closes the open kept card, as if "Done" was tapped: at most one
-    /// is open, and it always belongs to the memory acted on last.
-    func accept(_ card: Card) {
-        closeAllKept()
-        guard cards.accept(card) else { return }
-        settle(card)
-    }
+    /// Every memory action first closes the open kept card, as if "Done" was tapped (CardFlow).
+    func accept(_ card: Card) { _ = flow.accept(card) }
     func change(_ card: Card) {
-        closeAllKept()
-        guard let memory = cards.keep(card) else { return }
-        cardQueue.memoryAccepted(card.id)
-        changing = memory
+        if let memory = flow.change(card) { changing = memory }
     }
-    func dismiss(_ card: Card) {
-        if case .memory = card { closeAllKept() }
-        guard cards.dismiss(card) else { return }
-        if case .memory = card { cardQueue.memoryDismissed(card.id) } else { cardQueue.remove(card.id) }
-    }
-    func undo() {
-        if let card = cards.undo() { cardQueue.restore(card) }
-    }
-    func undoMerge() {
-        if let card = cards.undoMerge() { cardQueue.restore(card) }
-    }
+    func dismiss(_ card: Card) { _ = flow.dismiss(card) }
+    func undo() { _ = flow.undo() }
+    func undoMerge() { _ = flow.undoMerge() }
     /// "Same story": the card joins an earlier memory; its follow-ups follow as if it were kept.
-    func sameStory(_ card: Card, into targets: [MemoryID]) {
-        closeAllKept()
-        guard cards.sameStory(card, into: targets) else { return }
-        cardQueue.memoryAccepted(card.id)
-    }
-    func resolve(_ card: Card, _ choice: MentionChoice) { if cards.resolve(card, choice) { cardQueue.remove(card.id) } }
-
-    /// A memory swaps for its kept card in place, or leaves; anything else leaves.
-    private func settle(_ card: Card) {
-        if case .memory = card { cardQueue.memoryAccepted(card.id) } else { cardQueue.remove(card.id) }
-    }
+    func sameStory(_ card: Card, into targets: [MemoryID]) { _ = flow.sameStory(card, into: targets) }
+    func resolve(_ card: Card, _ choice: MentionChoice) { _ = flow.resolve(card, choice) }
 
     // MARK: - Kept cards
 
-    static let keptAutoClose: Duration = .milliseconds(1500)
-    /// One pending auto-close per kept card, after its last chip was answered.
-    private var autoClose: [String: Task<Void, Never>] = [:]
-
     /// A hint, thing, place or idea chip: accepted as heard or as the type chosen. Never leaves
     /// the session for the entity's page.
-    func followUp(_ kept: KeptCard, _ card: Card, as type: EntityType?) {
-        guard cards.acceptFollowUp(card, as: type) else { return }
-        answered(card, in: kept)
-    }
+    func followUp(_ kept: KeptCard, _ card: Card, as type: EntityType?) { _ = flow.followUp(kept, card, as: type) }
     /// A person chip answered in its "Who's this?" sheet.
-    func resolveFollowUp(_ kept: KeptCard, _ card: Card, _ choice: MentionChoice) {
-        guard cards.resolve(card, choice) else { return }
-        answered(card, in: kept)
-    }
+    func resolveFollowUp(_ kept: KeptCard, _ card: Card, _ choice: MentionChoice) { _ = flow.resolveFollowUp(kept, card, choice) }
     /// "Not any of these" on an entity chip.
-    func declineFollowUp(_ kept: KeptCard, _ card: Card) {
-        guard cards.declineFollowUp(card) else { return }
-        answered(card, in: kept)
-    }
+    func declineFollowUp(_ kept: KeptCard, _ card: Card) { _ = flow.declineFollowUp(kept, card) }
     /// "Done": unanswered hints and entities are dismissed, unanswered people wait in People.
-    func keptDone(_ kept: KeptCard) { closeKept(kept.memoryCandidateID) }
-
-    /// The last chip answered closes the card 1.5 s later, unless Done or another memory action
-    /// closed it first, or a late follow-up joined it meanwhile.
-    private func answered(_ card: Card, in kept: KeptCard) {
-        let id = kept.memoryCandidateID
-        guard cardQueue.answered(card.id, in: id) else { return }
-        autoClose[id]?.cancel()
-        autoClose[id] = Task { [weak self] in
-            try? await Task.sleep(for: Self.keptAutoClose)
-            guard !Task.isCancelled, let self else { return }
-            self.autoClose[id] = nil
-            guard case .kept(let current)? = self.cardQueue.cards.first(where: { $0.id == id }), current.isComplete else { return }
-            self.closeKept(id)
-        }
-    }
-
-    private func closeKept(_ id: String) {
-        autoClose.removeValue(forKey: id)?.cancel()
-        cards.close(cardQueue.closeKept(id))
-    }
-
-    private func closeAllKept() {
-        autoClose.values.forEach { $0.cancel() }
-        autoClose.removeAll()
-        cards.close(cardQueue.closeAllKept())
-    }
+    func keptDone(_ kept: KeptCard) { flow.keptDone(kept) }
 
     // MARK: - The arc
 
@@ -400,7 +338,7 @@ final class SessionViewModel: Identifiable {
     private func apply(_ status: TranscriberAvailability) { transcriberStatus = status }
 
     private func apply(_ event: ExtractionEvent) {
-        cardQueue.apply(event)
+        flow.apply(event)
         switch event {
         case .failed(_, let error):
             switch error {
