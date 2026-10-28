@@ -2,6 +2,28 @@
 
 A voice-first app: a person tells stories from their life, a timeline fills in, and over time it becomes a replayable autobiography. Phase 1 is a personal timeline for one person; family sharing comes later.
 
+## Non-engineer contributors
+
+This repo has non-engineer contributors who use Claude Code to assist. When they ask for help:
+
+- Be concrete: name the file, the line, and the exact command to run.
+- Avoid Swift internals unless the task needs them. Explain in plain words.
+- Point them at `CONTRIBUTING.md` and `docs/GOOD_FIRST_TASKS.md`.
+- Treat `docs/PRINCIPLES.md` as the source of truth. If a request conflicts with a principle, say so.
+- Show the change and run the tests before committing. Never push to `main`.
+
+## Keep the shared docs current
+
+Sessions and contributors share nothing but the files. Memory and transcripts do not carry over. The shared state is `docs/PRINCIPLES.md`, `docs/DECISIONS.md`, `docs/specs/`, `docs/plans/` and the SDD ledgers in `.superpowers/sdd/`.
+
+- Write each non-obvious decision in `DECISIONS.md` when you make it, not later. A ruling that is not written down is lost.
+- During SDD work, add each task's ruling to its ledger. M6 and M8 shipped without ledgers. Do not repeat that.
+- Update a spec or plan when the work moves away from it. A stale doc misleads more than a missing one.
+- Update `README.md` and `CONTRIBUTING.md` when setup or workflow changes.
+- If a later agent or a non-engineer could get confused without it, write it down.
+
+Ledgers in `.superpowers/sdd/<plan>/` are tracked (`progress.md` and `rulings.md` only). Commit yours as you work. When SDD finishes, keep them: delete only the scratch files, not the whole workspace.
+
 ## Read these first
 
 - `docs/PRINCIPLES.md` — the grounding document. Nine principles, the literature behind them, the session arc and safety rules. Every prompt, feature and PR is checked against it.
