@@ -22,7 +22,7 @@ Sessions and contributors share nothing but the files. Memory and transcripts do
 - Update `README.md` and `CONTRIBUTING.md` when setup or workflow changes.
 - If a later agent or a non-engineer could get confused without it, write it down.
 
-Note: `.superpowers/` is gitignored, so ledgers live only in the checkout where they were written. Copy any ruling that others need into `DECISIONS.md`.
+Ledgers in `.superpowers/sdd/<plan>/` are tracked (`progress.md` and `rulings.md` only). Commit yours as you work. When SDD finishes, keep them: delete only the scratch files, not the whole workspace.
 
 ## Read these first
 
