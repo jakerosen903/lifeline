@@ -100,9 +100,9 @@ final class TimelineViewModel {
     var cards: CardHandler { flow.handler }
     let deps: Dependencies
 
-    init(deps: Dependencies) {
+    init(deps: Dependencies, home: HomeViewModel) {
         self.deps = deps
-        home = HomeViewModel(deps: deps)
+        self.home = home
         flow = CardFlow(deps: deps)
         refresh()
         flow.onAutoClose = { [weak self] in self?.refresh() }
@@ -420,8 +420,4 @@ final class TimelineViewModel {
 
     var existingCollectionTitles: [String] { collections.map(\.collection.title) }
 
-    func sessionEnded() {
-        home.sessionEnded()
-        refresh()
-    }
 }

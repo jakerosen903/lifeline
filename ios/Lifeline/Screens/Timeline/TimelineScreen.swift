@@ -100,7 +100,7 @@ struct TimelineScreen: View {
             .fullScreenCover(item: $home.presented) { presented in
                 switch presented {
                 case .session(let session):
-                    SessionScreen(viewModel: session) { viewModel.sessionEnded() }
+                    SessionScreen(viewModel: session) { viewModel.home.sessionEnded() }
                 case .landing(let landing):
                     LandingScreen(viewModel: landing) { another in viewModel.home.landingClosed(tellAnother: another); viewModel.refresh() }
                 }

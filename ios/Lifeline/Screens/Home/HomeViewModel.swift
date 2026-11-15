@@ -28,6 +28,10 @@ final class HomeViewModel {
     private(set) var rows: [Row] = []
     private(set) var error: String?
     var presented: Presented?
+    /// The page on screen; nil on a tab root. A session started now is about it.
+    var context: SessionSubject?
+    /// Called after a session ends, so the timeline can refresh.
+    var onSessionEnded: (() -> Void)?
     var activeSession: SessionViewModel? {
         if case .session(let vm) = presented { return vm }
         return nil
@@ -58,6 +62,8 @@ final class HomeViewModel {
     /// A second tap while starting or recording does nothing.
     func startSession(kind: SessionKind = .quick) async {
         guard !isStarting, activeSession == nil else { return }
+        // Read once: a change while the microphone prompt is up does not change this session.
+        let subject = context
         isStarting = true
         defer { isStarting = false }
         error = nil
@@ -71,7 +77,7 @@ final class HomeViewModel {
             self.error = "Could not start audio: \(error.localizedDescription)"
             return
         }
-        let vm = SessionViewModel(deps: deps, kind: kind)
+        let vm = SessionViewModel(deps: deps, kind: kind, subject: subject)
         presented = .session(vm)
         await vm.start()
     }
@@ -81,6 +87,7 @@ final class HomeViewModel {
         let ended = activeSession
         deps.deactivateAudio()
         refresh()
+        onSessionEnded?()
         guard let ended, let id = ended.state.sessionID, let session = try? deps.sessions.fetch(id),
               !((try? deps.sessions.segments(in: id)) ?? []).isEmpty else {
             if let id = ended?.state.sessionID { try? deps.sessions.markLanded(id) }

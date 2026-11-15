@@ -13,7 +13,7 @@ struct LifelineApp: App {
         .onChange(of: scenePhase) { _, phase in
             // Back in the foreground with moments still waiting: sorting starts again (M6). Not while a
             // session is live or landing: its own queue is sorting those segments.
-            guard phase == .active, let deps = model.deps, model.timeline?.home.presented == nil, !deps.sortingStatus().pending.isEmpty else { return }
+            guard phase == .active, let deps = model.deps, model.home?.presented == nil, !deps.sortingStatus().pending.isEmpty else { return }
             deps.worker.requestStart()
         }
     }
@@ -26,6 +26,8 @@ struct LifelineApp: App {
 @Observable
 final class AppModel {
     private(set) var deps: Dependencies?
+    /// The one live session or landing. Owned here so any tab can start a session.
+    private(set) var home: HomeViewModel?
     private(set) var timeline: TimelineViewModel?
     private(set) var loadError: String?
     private(set) var hasProfile = false
@@ -35,12 +37,15 @@ final class AppModel {
             let deps = CommandLine.arguments.contains("-uiTesting") ? try Dependencies.uiTesting() : try Dependencies.live()
             self.deps = deps
             hasProfile = try deps.profile.fetch() != nil
-            let timeline = TimelineViewModel(deps: deps)
+            let home = HomeViewModel(deps: deps)
+            self.home = home
+            let timeline = TimelineViewModel(deps: deps, home: home)
             self.timeline = timeline
+            home.onSessionEnded = { [weak timeline] in timeline?.refresh() }
             let crashed = try SessionRecorder.recoverUnfinishedSessions(deps.sessions)
             if let session = try deps.sessions.unlandedSessions().first {
                 if crashed.contains(where: { $0.id == session.id }) { print("[lifeline] resuming a session cut short") }
-                timeline.home.present(landing: LandingViewModel(resuming: session, deps: deps))
+                home.present(landing: LandingViewModel(resuming: session, deps: deps))
             }
             // Off the main actor: the backfill loads the embedding model and walks every memory.
             Task.detached(priority: .utility) {
@@ -68,12 +73,12 @@ struct RootView: View {
     let model: AppModel
 
     var body: some View {
-        if let deps = model.deps, let timeline = model.timeline {
+        if let deps = model.deps, let timeline = model.timeline, let home = model.home {
             if model.hasProfile {
                 TimelineScreen(viewModel: timeline)
             } else {
                 FirstOpenScreen(deps: deps,
-                                onStart: { kind in model.profileSaved(); Task { await timeline.home.startSession(kind: kind) } },
+                                onStart: { kind in model.profileSaved(); Task { await home.startSession(kind: kind) } },
                                 onProfileSaved: { model.profileSaved() })
             }
         } else {
