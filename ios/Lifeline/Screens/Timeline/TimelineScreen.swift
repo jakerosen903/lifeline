@@ -200,11 +200,11 @@ struct TimelineScreen: View {
     @ViewBuilder private var footer: some View {
         if viewModel.memoryCount == 0 && viewModel.waiting.isEmpty {
             ContentUnavailableView("Your story so far", systemImage: "book.closed",
-                                   description: Text("Tap Start and tell me about the house you grew up in."))
+                                   description: Text("Tap “Tell a story” and tell me about the house you grew up in."))
                 .listRowBackground(Color.clear)
         }
-        // A start error shows on the record bar, under the same identifier.
-        if let error = viewModel.error ?? viewModel.cards.error {
+        // A start error shows on the record bar instead, under the same identifier.
+        if let error = viewModel.error ?? viewModel.cards.error ?? viewModel.home.error {
             Text(error).foregroundStyle(.red).accessibilityIdentifier("timeline.error")
         }
     }

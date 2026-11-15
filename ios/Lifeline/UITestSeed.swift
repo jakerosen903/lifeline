@@ -1,14 +1,21 @@
 import Foundation
 import LifelineKit
 
-/// Under `-uiTesting-seed`: a kept person and a full timeline, written before the first screen,
-/// for tests about the shell rather than about recording. Invented content only.
+/// Fixtures written before the first screen, for tests about the shell rather than about recording.
+/// Invented content only.
 enum UITestSeed {
     static let person = "Maya"
     static let firstYear = 1980
     static let memoryCount = 12
 
-    /// One landed session with a segment per memory, each kept as a moment in its own year.
+    /// Under `-uiTesting-noOwner`: first open is done but the profile has no owner page. Every path
+    /// through first open saves one, so only this reaches the You tab's no-owner state.
+    static func writeProfileWithoutOwner(profile: ProfileRepository, store: ExtractionStore) throws {
+        try profile.save(Profile(displayName: nil, birthDate: nil, birthPlaceText: nil, freeText: nil, updatedAt: .now))
+        if let owner = try profile.owner() { try store.entities.delete(owner.entityID) }
+    }
+
+    /// Under `-uiTesting-seed`: one landed session with a segment per memory, each kept as a moment in its own year.
     /// The segments are already sorted, so the worker leaves them alone.
     static func write(sessions: SessionRepository, store: ExtractionStore) throws {
         _ = try store.people.insertPerson(displayName: person)

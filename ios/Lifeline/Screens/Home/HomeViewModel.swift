@@ -26,7 +26,10 @@ final class HomeViewModel {
     }
 
     private(set) var rows: [Row] = []
+    /// The sessions list could not load. Cleared by the next load that works.
     private(set) var error: String?
+    /// The last Start failed (microphone or audio). Shown on the record bar; cleared by the next Start.
+    private(set) var startError: String?
     var presented: Presented?
     /// The page on screen; nil on a tab root. A session started now is about it.
     private(set) var context: SessionSubject?
@@ -53,6 +56,7 @@ final class HomeViewModel {
                 return Row(session: session, segmentCount: segments.count, durationText: Self.durationText(session, segments),
                            pendingCount: segments.filter { $0.status == .pending }.count)
             }
+            error = nil
         } catch {
             self.error = "Could not load sessions: \(error.localizedDescription)"
         }
@@ -69,15 +73,15 @@ final class HomeViewModel {
         let subject = context
         isStarting = true
         defer { isStarting = false }
-        error = nil
+        startError = nil
         guard await deps.requestMicrophone() else {
-            error = "Lifeline needs the microphone to record. Allow it in Settings."
+            startError = "Lifeline needs the microphone to record. Allow it in Settings."
             return
         }
         do {
             try deps.activateAudio()
         } catch {
-            self.error = "Could not start audio: \(error.localizedDescription)"
+            startError = "Could not start audio: \(error.localizedDescription)"
             return
         }
         let vm = SessionViewModel(deps: deps, kind: kind, subject: subject)
@@ -116,6 +120,8 @@ final class HomeViewModel {
 
     func present(landing: LandingViewModel) { presented = .landing(landing) }
 
+    /// "Another" is about the same page: the page under the cover still holds `context`, so the new
+    /// session reads it as the first did (a page-started session's "Tell another" stays on that subject).
     func landingClosed(tellAnother: Bool) {
         presented = nil
         refresh()

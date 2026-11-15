@@ -9,7 +9,7 @@ struct SessionsScreen: View {
         List {
             if viewModel.rows.isEmpty {
                 ContentUnavailableView("No sessions yet", systemImage: "waveform",
-                                       description: Text("Tap Start on the timeline and tell me about the house you grew up in."))
+                                       description: Text("Tap “Tell a story” and tell me about the house you grew up in."))
                     .listRowBackground(Color.clear)
             }
             ForEach(viewModel.rows) { row in

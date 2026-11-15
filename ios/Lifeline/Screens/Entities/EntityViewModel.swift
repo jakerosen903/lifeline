@@ -39,7 +39,8 @@ final class EntityViewModel {
             let store = deps.extractionStore
             guard let current = try store.entities.entity(id: entity.id) else { isGone = true; return }
             entity = current
-            isOwner = try store.profile.owner()?.entityID == entity.id
+            // A failed owner lookup costs only the bar's wording, never the page.
+            isOwner = (try? store.profile.owner()?.entityID) == entity.id
             details = try store.entities.details(of: entity.id).filter { !$0.hiddenFromTimeline }
             moments = try store.entities.moments(of: entity.id).filter { !$0.hiddenFromTimeline }
             if entity.type == .idea {

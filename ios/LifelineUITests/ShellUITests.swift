@@ -87,8 +87,8 @@ final class ShellUITests: XCTestCase {
         XCTAssertTrue(app.buttons["home.start"].isHittable, "the session screen is not up yet")
         app.buttons["home.start"].tap()
         XCTAssertTrue(app.buttons["session.finish"].waitForExistence(timeout: 10))
-        XCTAssertTrue(app.staticTexts["session.segment"].firstMatch.waitForExistence(timeout: 15) || app.staticTexts["session.count"].exists)
-        RunLoop.current.run(until: Date().addingTimeInterval(2))
+        app.openReview()
+        XCTAssertTrue(app.staticTexts["session.segment"].firstMatch.waitForExistence(timeout: 15), "the session hears something, so it lands")
         app.finishSession()
 
         app.tabBars.buttons["Timeline"].tap()
@@ -110,7 +110,7 @@ final class ShellUITests: XCTestCase {
     @MainActor
     func testSessionsAndSettingsAreLabeled() {
         let app = launch()
-        XCTAssertTrue(app.buttons["Sessions"].exists)
+        XCTAssertTrue(app.buttons["Sessions"].waitForExistence(timeout: 5))
         app.tabBars.buttons["You"].tap()
         XCTAssertTrue(app.buttons["Settings"].waitForExistence(timeout: 5))
     }
@@ -128,6 +128,19 @@ final class ShellUITests: XCTestCase {
         XCTAssertTrue(app.buttons["entities.aboutYou"].waitForExistence(timeout: 5))
         waitForLabel(app.buttons["home.start"], "Tell a story about yourself")
         app.tabBars.buttons["Places"].tap()
+        waitForLabel(app.buttons["home.start"], "Tell a story")
+    }
+
+    /// A profile with no owner page: You has nothing to be about.
+    @MainActor
+    func testTheYouTabWithNoOwnerSaysTellAStory() {
+        let app = XCUIApplication()
+        app.launchArguments = ["-uiTesting", "-uiTesting-noOwner"]   // first open is already done
+        app.launch()
+        XCTAssertTrue(app.waitHittable(app.tabBars.buttons["You"], timeout: 10))
+        app.tabBars.buttons["You"].tap()
+        XCTAssertTrue(app.navigationBars["You"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["entities.aboutYou"].exists, "no owner, no About you")
         waitForLabel(app.buttons["home.start"], "Tell a story")
     }
 

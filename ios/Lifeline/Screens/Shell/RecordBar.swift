@@ -15,23 +15,26 @@ struct RecordBar: View {
 
     /// While a start error stands, the bar shows it in place of the label; tapping tries again.
     private var startButton: some View {
+        let error = home.startError
+        return
         Button { Task { await home.startSession(kind: .quick) } } label: {
             Label {
-                Text(home.error ?? SessionSubject.barLabel(home.context))
-                    .lineLimit(home.error == nil ? 1 : 2)
+                Text(error ?? SessionSubject.barLabel(home.context))
+                    .lineLimit(error == nil ? 1 : 2)
                     .minimumScaleFactor(0.8)
             } icon: {
-                Image(systemName: home.error == nil ? "mic.fill" : "exclamationmark.triangle.fill")
-                    .foregroundStyle(home.error == nil ? Theme.olive : .red)
+                Image(systemName: error == nil ? "mic.fill" : "exclamationmark.triangle.fill")
+                    .foregroundStyle(error == nil ? Theme.olive : .red)
             }
-            .font(home.error == nil ? .headline : .footnote)
-            .foregroundStyle(home.error == nil ? Color.primary : .red)
+            .font(error == nil ? .headline : .footnote)
+            .foregroundStyle(error == nil ? Color.primary : .red)
             .padding(.leading, 16)
             .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .accessibilityIdentifier(home.error == nil ? "home.start" : "timeline.error")
+        .accessibilityIdentifier(error == nil ? "home.start" : "timeline.error")
+        .accessibilityHint(error == nil ? "" : "Tries again")
     }
 
     private var moreMenu: some View {

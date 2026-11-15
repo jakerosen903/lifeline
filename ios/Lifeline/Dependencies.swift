@@ -238,6 +238,7 @@ struct Dependencies {
         if let i = args.firstIndex(of: "-uiTesting-restoreFrom"), i + 1 < args.count { deps.restoreFromPath = args[i + 1] }
         deps.exportWithoutShareSheet = true
         if args.contains("-uiTesting-seed") { try UITestSeed.write(sessions: deps.sessions, store: store) }
+        if args.contains("-uiTesting-noOwner") { try UITestSeed.writeProfileWithoutOwner(profile: deps.profile, store: store) }
         return deps
     }
 }
