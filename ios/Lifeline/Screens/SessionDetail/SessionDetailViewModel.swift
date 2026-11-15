@@ -79,6 +79,7 @@ final class SessionDetailViewModel {
     func dismiss(_ card: Card) { if flow.dismiss(card) { refresh() } }
     func undo() { if flow.undo() { refresh() } }
     func undoMerge() { if flow.undoMerge() { refresh() } }
+    func undoKeptClose() { if flow.undoKeptClose() { refresh() } }
     func sameStory(_ card: Card, into targets: [MemoryID]) { if flow.sameStory(card, into: targets) { refresh() } }
     func resolve(_ card: Card, _ choice: MentionChoice) { if flow.resolve(card, choice) { refresh() } }
     func followUp(_ kept: KeptCard, _ card: Card, as type: EntityType?) { if flow.followUp(kept, card, as: type) { refresh() } }

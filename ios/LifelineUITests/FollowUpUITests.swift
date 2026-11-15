@@ -75,6 +75,36 @@ final class FollowUpUITests: XCTestCase {
     }
 
     @MainActor
+    func testUndoAfterDoneBringsTheChipsBack() {
+        let app = keepTheMemory()
+        app.buttons["card.keptDone"].tap()
+        // Done let the domain suggestion go; the notice says so and offers Undo.
+        let notice = app.staticTexts["card.keptClosedNotice"]
+        XCTAssertTrue(notice.waitForExistence(timeout: 5), "closing with an unanswered suggestion shows a notice")
+        XCTAssertEqual(notice.label, "1 suggestion dismissed.")
+        XCTAssertFalse(app.any("card.kept").exists)
+        app.buttons["card.undoKeptClose"].tap()
+        XCTAssertTrue(app.any("card.kept").waitForExistence(timeout: 5), "Undo brings the kept card back")
+        XCTAssertTrue(chip(app, "Family?").exists, "the suggestion is open again")
+        XCTAssertTrue(chip(app, "Dara: who's this?").exists)
+        XCTAssertFalse(notice.exists, "the notice leaves with Undo")
+        // The suggestion is pending again, not dismissed: it can be answered.
+        chip(app, "Family?").tap()
+        XCTAssertTrue(chip(app, "Family, done").waitForExistence(timeout: 5))
+    }
+
+    @MainActor
+    func testDoneWithEverySuggestionAnsweredShowsNoNotice() {
+        let app = keepTheMemory()
+        chip(app, "Family?").tap()
+        XCTAssertTrue(chip(app, "Family, done").waitForExistence(timeout: 5))
+        app.buttons["card.keptDone"].tap()
+        let gone = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: app.any("card.kept"))
+        XCTAssertEqual(XCTWaiter().wait(for: [gone], timeout: 5), .completed)
+        XCTAssertFalse(app.staticTexts["card.keptClosedNotice"].exists, "only a name was left; nothing was dismissed, so nothing to undo")
+    }
+
+    @MainActor
     func testPersonChipOpensWhoIsThis() {
         let app = keepTheMemory()
         chip(app, "Dara: who's this?").tap()

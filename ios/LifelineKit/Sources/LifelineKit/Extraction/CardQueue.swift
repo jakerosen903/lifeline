@@ -168,6 +168,15 @@ public struct CardQueue: Equatable, Sendable {
         return KeptClose(closing: k)
     }
 
+    /// Undo of a close: the kept card comes back at the end of the stack, as it was, with the
+    /// chips answered so far still checked. It counts as touched: the person asked for it here.
+    /// A card already on screen under that memory is left alone.
+    public mutating func reopenKept(_ kept: KeptCard) {
+        guard !cards.contains(where: { $0.id == kept.memoryCandidateID }) else { return }
+        cards.append(.kept(kept))
+        touched.insert(kept.memoryCandidateID)
+    }
+
     /// Another memory card was acted on: every open kept card closes as if "Done" was tapped. In a
     /// waiting queue only the touched ones do.
     public mutating func closeAllKept() -> KeptClose {

@@ -458,11 +458,64 @@ private func ids(_ candidates: Candidate...) -> [String] { candidates.map(\.id.r
     let byID = Dictionary(uniqueKeysWithValues: [a, b, c].map { ($0.id, $0) })
     var queue = CardQueue.waiting(pending: [b, c, ha, hb], segmentMemories: { _ in [a, b, c] }, candidate: { byID[$0] })
     queue.memoryAccepted(b.id.rawValue)
-    #expect(queue.closeAllKept() == KeptClose(dismiss: [Card(hb)!]), "b was kept here; a came from the store")
+    #expect(queue.closeAllKept().dismiss == [Card(hb)!], "b was kept here; a came from the store")
     #expect(queue.cards.map(\.id) == ids(c, a))
     var live = CardQueue()
     live.apply(.candidates([b, hb], segment: s))
     live.memoryAccepted(b.id.rawValue)
     live.apply(.candidates([a], segment: s))
     #expect(live.closeAllKept().dismiss.count == 1 && live.cards.map(\.id) == ids(a), "the live session closes every kept card")
+}
+
+// MARK: - Undo of a kept card's close
+
+@Test func closeReportsTheCardsWhoseChipsItDismissed() throws {
+    let s = SegmentID()
+    let a = try memory(s, 0, people: ["Theo"])
+    let h = try hint(s, 1, for: a), p = try person(s, 2, "Theo")
+    var queue = CardQueue()
+    queue.apply(.candidates([a, h, p], segment: s))
+    queue.memoryAccepted(a.id.rawValue)
+    let open = try #require(kept(queue, a))
+    let close = queue.closeKept(a.id.rawValue)
+    #expect(close.undoable == [open], "the card closed with a hint dismissed, so Undo can reopen it")
+
+    // Only a name left: nothing is dismissed, so there is nothing to undo.
+    var names = CardQueue()
+    names.apply(.candidates([a, h, p], segment: s))
+    names.memoryAccepted(a.id.rawValue)
+    _ = names.answered(h.id.rawValue, in: a.id.rawValue)
+    let quiet = names.closeKept(a.id.rawValue)
+    #expect(quiet.dismiss.isEmpty && quiet.openAsMention.map(\.id) == ids(p) && quiet.undoable.isEmpty)
+}
+
+@Test func reopeningAClosedKeptCardBringsItsChipsBack() throws {
+    let s = SegmentID()
+    let a = try memory(s, 0, people: ["Theo"])
+    let h = try hint(s, 1, for: a), h2 = try hint(s, 2, for: a, phrase: "work"), p = try person(s, 3, "Theo")
+    var queue = CardQueue()
+    queue.apply(.candidates([a, h, h2, p], segment: s))
+    queue.memoryAccepted(a.id.rawValue)
+    _ = queue.answered(h.id.rawValue, in: a.id.rawValue)
+    let close = queue.closeKept(a.id.rawValue)
+    #expect(queue.cards.isEmpty)
+    for card in close.undoable { queue.reopenKept(card) }
+    let back = try #require(kept(queue, a))
+    #expect(back.followUps.map(\.id) == ids(h, h2, p) && back.answered == [h.id.rawValue], "every chip is back, the answered one still checked")
+    queue.reopenKept(back)
+    #expect(queue.cards.count == 1, "reopening twice shows one card")
+    // A reopened card is the person's own: the next memory action closes it, on a waiting screen too.
+    #expect(queue.closeAllKept().dismiss.map(\.id) == ids(h2))
+}
+
+@Test func aReopenedCardCountsAsTouchedOnAWaitingScreen() throws {
+    let s = SegmentID()
+    let a = try memory(s, 0, status: .accepted)
+    let ha = try hint(s, 1, for: a)
+    let byID = [a.id: a]
+    var queue = CardQueue.waiting(pending: [ha], segmentMemories: { _ in [a] }, candidate: { byID[$0] })
+    let close = queue.closeKept(a.id.rawValue)
+    #expect(close.undoable.count == 1 && queue.cards.isEmpty)
+    for card in close.undoable { queue.reopenKept(card) }
+    #expect(queue.closeAllKept().dismiss.map(\.id) == ids(ha), "untouched store cards stay on a memory action; a reopened one closes")
 }

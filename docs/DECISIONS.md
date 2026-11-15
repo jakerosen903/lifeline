@@ -2,6 +2,16 @@
 
 One entry per decision. Newest first. Status is Decided, Open, or Superseded.
 
+## 2026-11-15 · A kept card's close can be undone
+
+**Status:** Decided by the owner. Source: the review of PR #18 (`CardHandler.close`); `docs/specs/2026-10-26-cards-follow-ups.md`, rules 9 and 11.
+
+When a kept card closes, the follow-ups nobody answered are dismissed. A card closes on "Done" and also when the person acts on another memory card, so follow-ups could go with no tap on them. The app now shows "{n} suggestions dismissed." with Undo for 6 seconds whenever a close dismissed something. Undo makes the follow-ups pending again and brings the card back.
+
+**Why.** Unanswered follow-ups must not pile up in "Waiting for you": that backlog is what the UI audit removed. So the close still dismisses them. But a dismissal the person did not choose must be one they can take back (PRINCIPLES 9).
+
+**Not chosen.** Leaving unanswered follow-ups pending: one leftover card for each kept memory. Keeping the silent dismissal: no way back.
+
 ## 2026-10-26 · Filler words are hidden in quotes on lists and pages
 
 **Status:** Decided by the owner. Source: `docs/specs/2026-10-26-ui-audit.md`, call 1 and finding F12.

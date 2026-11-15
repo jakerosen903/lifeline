@@ -348,6 +348,7 @@ final class TimelineViewModel {
     func open(_ followUp: Card) { openedEntity = flow.page(for: followUp) }
     func undo() { if flow.undo() { refresh() } }
     func undoMerge() { if flow.undoMerge() { refresh() } }
+    func undoKeptClose() { if flow.undoKeptClose() { refresh() } }
     func sameStory(_ card: Card, into targets: [MemoryID]) { if flow.sameStory(card, into: targets) { refresh() } }
 
     /// A pair answered: Same story / One story (true) or Keep separate (false).

@@ -17,6 +17,8 @@ struct CardStack: View {
     var onSameStory: (Card, [MemoryID]) -> Void = { _, _ in }
     /// Undo under "Added to X." Its own action: it must never undo a dismiss made moments before.
     var onUndoMerge: () -> Void = {}
+    /// Undo under "n suggestions dismissed." after a kept card closed. Its own action, like the others.
+    var onUndoKeptClose: () -> Void = {}
     /// "Are these the same?" cards and their answers (M5): true means Same story / One story.
     var pairs: [PairRow] = []
     var onPair: (PairRow, Bool) -> Void = { _, _ in }
@@ -54,6 +56,9 @@ struct CardStack: View {
             if let merged = handler.mergedNotice {
                 UndoNotice(text: merged, identifier: "card.mergedNotice", undoIdentifier: "card.undoMerge", onUndo: onUndoMerge)
             }
+            if let closed = handler.keptClosedNotice {
+                UndoNotice(text: closed, identifier: "card.keptClosedNotice", undoIdentifier: "card.undoKeptClose", onUndo: onUndoKeptClose)
+            }
             if let pair = handler.pairNotice {
                 UndoNotice(text: pair, identifier: "pair.notice", undoIdentifier: "pair.undo", onUndo: onUndoPair)
             }
@@ -63,6 +68,7 @@ struct CardStack: View {
         .animation(.default, value: handler.undoCard?.id)
         .animation(.default, value: handler.mergedNotice)
         .animation(.default, value: handler.pairNotice)
+        .animation(.default, value: handler.keptClosedNotice)
         .sheet(item: $picking) { card in
             let named = handler.suggestions(for: card).filter { $0.source == .extractor }.map(\.memoryID)
             SameAsPicker(matches: handler.pickerMatches(for: card), preselected: named.count > 1 ? Set(named) : nil) { chosen in

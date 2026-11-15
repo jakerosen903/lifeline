@@ -155,7 +155,7 @@ struct TimelineScreen: View {
                 CardStack(cards: viewModel.waiting, handler: viewModel.cards,
                           onAccept: { viewModel.accept($0) }, onChange: { viewModel.change($0) }, onDismiss: { viewModel.dismiss($0) },
                           onResolve: { viewModel.resolve($0, $1) }, onUndo: { viewModel.undo() },
-                          onSameStory: { viewModel.sameStory($0, into: $1) }, onUndoMerge: { viewModel.undoMerge() },
+                          onSameStory: { viewModel.sameStory($0, into: $1) }, onUndoMerge: { viewModel.undoMerge() }, onUndoKeptClose: { viewModel.undoKeptClose() },
                           pairs: viewModel.pairs, onPair: { viewModel.answerPair($0, same: $1) }, onUndoPair: { viewModel.undoPair() },
                           onFollowUp: { viewModel.followUp($0, $1, as: $2) },
                           onResolveFollowUp: { viewModel.resolveFollowUp($0, $1, $2) },

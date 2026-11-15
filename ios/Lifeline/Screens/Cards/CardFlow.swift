@@ -75,6 +75,13 @@ final class CardFlow {
         return true
     }
 
+    /// Undo under "n suggestions dismissed.": the kept cards a close took away come back.
+    func undoKeptClose() -> Bool {
+        let cards = handler.undoKeptClose()
+        cards.forEach { queue.reopenKept($0) }
+        return !cards.isEmpty
+    }
+
     /// "Same story": the card joins an earlier memory; its follow-ups follow as if it were kept.
     func sameStory(_ card: Card, into targets: [MemoryID]) -> Bool {
         closeAllKept()
