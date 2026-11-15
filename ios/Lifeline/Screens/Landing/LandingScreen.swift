@@ -23,21 +23,21 @@ struct LandingScreen: View {
                     Text(viewModel.headline).titleStyle().accessibilityIdentifier("landing.headline")
                     if !viewModel.rows.isEmpty {
                         Text(viewModel.isFirst && !viewModel.heavy ? "Here it is, in your voice." : "A few moments from today.")
-                            .font(.system(.body, design: .serif)).foregroundStyle(Theme.stone)
+                            .font(.system(.body, design: .serif)).foregroundStyle(Theme.secondaryText)
                     }
                     if viewModel.stillSorting != nil {
                         Text("Sorting them is still going on in the background. You don't have to do anything now.")
-                            .font(.footnote).foregroundStyle(Theme.stone)
+                            .font(.footnote).foregroundStyle(Theme.secondaryText)
                     }
                     ForEach(viewModel.rows) { row in
                         momentRow(row)
                     }
                     if let more = viewModel.moreText {
-                        Text(more).font(.footnote).foregroundStyle(Theme.stone)
+                        Text(more).font(.footnote).foregroundStyle(Theme.secondaryText)
                     }
                     if let sorting = viewModel.stillSorting {
                         Label(sorting, systemImage: "arrow.triangle.2.circlepath")
-                            .font(.footnote).foregroundStyle(Theme.ochre)
+                            .font(.footnote).foregroundStyle(Theme.ochreText)
                             .accessibilityIdentifier("landing.stillSorting")
                     }
                     VStack(alignment: .leading, spacing: 6) {
@@ -47,7 +47,7 @@ struct LandingScreen: View {
                             .accessibilityIdentifier("landing.closing")
                         if viewModel.heavy {
                             Text("If you ever want to talk to a person, I can show you who to call.")
-                                .font(.footnote).foregroundStyle(Theme.stone)
+                                .font(.footnote).foregroundStyle(Theme.secondaryText)
                         }
                     }
                     .padding(.top, 8)
@@ -93,10 +93,10 @@ struct LandingScreen: View {
                 HStack(spacing: 6) {
                     Text(row.title).font(.system(.headline, design: .serif)).foregroundStyle(Theme.ink)
                     if !row.isKept {
-                        Text("possible").font(.caption2.weight(.semibold)).foregroundStyle(Theme.ochre)
+                        Text("possible").font(.caption2.weight(.semibold)).foregroundStyle(Theme.ochreText)
                     }
                 }
-                Text("“\(row.quote)”").font(.system(.subheadline, design: .serif)).foregroundStyle(Theme.stone).lineLimit(3)
+                Text("“\(row.quote)”").font(.system(.subheadline, design: .serif)).foregroundStyle(Theme.secondaryText).lineLimit(3)
             }
         }
         .padding(14)
@@ -128,7 +128,7 @@ struct LandingScreen: View {
             HStack(spacing: 20) {
                 Button("Hide today from the timeline") { viewModel.hideToday() }
                     .buttonStyle(.borderless)
-                    .foregroundStyle(Theme.stone)
+                    .foregroundStyle(Theme.secondaryText)
                     .accessibilityIdentifier("landing.hide")
                 Button("Delete today's recording…", role: .destructive) { viewModel.confirmingDelete = true }
                     .buttonStyle(.borderless)

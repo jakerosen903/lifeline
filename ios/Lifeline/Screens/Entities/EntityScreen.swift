@@ -27,7 +27,7 @@ struct EntityScreen: View {
                     Text(viewModel.entity.type.singular)
                         .font(.caption.weight(.semibold)).foregroundStyle(Theme.olive)
                     Text(viewModel.entity.title).titleStyle().accessibilityIdentifier("entity.title")
-                    Text(viewModel.spanText).font(.subheadline.weight(.semibold)).foregroundStyle(Theme.ochre)
+                    Text(viewModel.spanText).font(.subheadline.weight(.semibold)).foregroundStyle(Theme.ochreText)
                         .accessibilityIdentifier("entity.span")
                     if viewModel.firstTelling != nil {
                         Button { viewModel.togglePlayback() } label: {
@@ -43,17 +43,17 @@ struct EntityScreen: View {
             if viewModel.entity.type == .idea {
                 Section("Over time") {
                     ForEach(viewModel.ideaLines) { memory in line(memory) }
-                    if viewModel.ideaLines.isEmpty { Text("Nothing told about it yet.").foregroundStyle(Theme.stone) }
+                    if viewModel.ideaLines.isEmpty { Text("Nothing told about it yet.").foregroundStyle(Theme.secondaryText) }
                 }
             } else {
                 // Details first, moments below (owner's decision 6).
                 Section("What you said about it") {
                     ForEach(viewModel.details) { memory in line(memory) }
-                    if viewModel.details.isEmpty { Text("Nothing said about it yet.").foregroundStyle(Theme.stone) }
+                    if viewModel.details.isEmpty { Text("Nothing said about it yet.").foregroundStyle(Theme.secondaryText) }
                 }
                 Section("Moments") {
                     ForEach(viewModel.moments) { memory in line(memory) }
-                    if viewModel.moments.isEmpty { Text("No moments yet.").foregroundStyle(Theme.stone) }
+                    if viewModel.moments.isEmpty { Text("No moments yet.").foregroundStyle(Theme.secondaryText) }
                 }
             }
 
@@ -79,7 +79,7 @@ struct EntityScreen: View {
                         Button { viewModel.removeTag(tag) } label: {
                             Label(tag, systemImage: "xmark").font(.caption)
                         }
-                        .buttonStyle(.bordered).tint(Theme.stone)
+                        .buttonStyle(.bordered).tint(Theme.secondaryText)
                         .accessibilityIdentifier("entity.tag")
                     }
                     Button("Add a tag", systemImage: "tag") { draftTag = ""; addingTag = true }
@@ -130,7 +130,7 @@ struct EntityScreen: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text("“\(memory.summaryQuote)”").font(.system(.body, design: .serif)).foregroundStyle(Theme.ink).lineLimit(2)
                 if memory.isMoment, memory.range.isPlaced {
-                    Text(memory.range.displayText).font(.caption).foregroundStyle(Theme.ochre)
+                    Text(memory.range.displayText).font(.caption).foregroundStyle(Theme.ochreText)
                 }
             }
             .accessibilityElement(children: .ignore)

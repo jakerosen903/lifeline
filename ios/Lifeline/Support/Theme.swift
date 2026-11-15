@@ -1,14 +1,26 @@
+import LifelineKit
 import SwiftUI
 
 /// Palette and type from docs/design. Fraunces is not bundled in M1; the serif system
 /// design stands in for titles.
 enum Theme {
-    static let linen = Color(red: 0xF6 / 255, green: 0xF0 / 255, blue: 0xE4 / 255)
-    static let sand = Color(red: 0xEC / 255, green: 0xE3 / 255, blue: 0xD2 / 255)
-    static let ink = Color(red: 0x33 / 255, green: 0x2A / 255, blue: 0x23 / 255)
-    static let stone = Color(red: 0xA8 / 255, green: 0x9A / 255, blue: 0x85 / 255)
-    static let olive = Color(red: 0x5F / 255, green: 0x70 / 255, blue: 0x46 / 255)
-    static let ochre = Color(red: 0xC8 / 255, green: 0x89 / 255, blue: 0x3F / 255)
+    static let linen = color(Palette.linen)
+    static let sand = color(Palette.sand)
+    static let card = color(Palette.card)
+    static let ink = color(Palette.ink)
+    /// Secondary text and meaningful symbols. Passes 4.5:1 on linen, sand and card.
+    static let secondaryText = color(Palette.secondaryText)
+    /// Dividers, borders, strokes and decorative shapes. Too light for text.
+    static let hairline = color(Palette.stone)
+    static let olive = color(Palette.olive)
+    /// Ochre marks that are not text: bands, lines, dots.
+    static let ochre = color(Palette.ochre)
+    /// Ochre for text. Passes 4.5:1 on linen, sand and card.
+    static let ochreText = color(Palette.ochreText)
+
+    private static func color(_ hex: Int) -> Color {
+        Color(red: Double((hex >> 16) & 0xFF) / 255, green: Double((hex >> 8) & 0xFF) / 255, blue: Double(hex & 0xFF) / 255)
+    }
 }
 
 extension View {

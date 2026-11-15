@@ -13,7 +13,7 @@ struct FirstOpenScreen: View {
             Spacer()
             Text("Tell me one story.").titleStyle()
             Text("I'll keep it safe, in your voice, and sort it into your timeline as you go.")
-                .font(.system(.body, design: .serif)).foregroundStyle(Theme.stone)
+                .font(.system(.body, design: .serif)).foregroundStyle(Theme.secondaryText)
             Button { begin(.quick) } label: {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Tell a quick story").font(.headline)
@@ -34,7 +34,7 @@ struct FirstOpenScreen: View {
             .accessibilityIdentifier("firstOpen.settleIn")
             Button("Add a little context") { context = true }
                 .buttonStyle(.borderless)
-                .foregroundStyle(Theme.stone)
+                .foregroundStyle(Theme.secondaryText)
                 .accessibilityIdentifier("firstOpen.context")
             Spacer()
         }

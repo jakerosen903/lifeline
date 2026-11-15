@@ -30,7 +30,7 @@ struct TrimSheet: View {
                         .accessibilityIdentifier("trim.part")
                     }
                     if let part {
-                        Text(rangeText(part)).font(.subheadline).foregroundStyle(Theme.ochre).accessibilityIdentifier("trim.range")
+                        Text(rangeText(part)).font(.subheadline).foregroundStyle(Theme.ochreText).accessibilityIdentifier("trim.range")
                         FlowLayout(spacing: 6) {
                             ForEach(Array(part.words.enumerated()), id: \.offset) { i, word in
                                 Button(word.text) { selected = i }

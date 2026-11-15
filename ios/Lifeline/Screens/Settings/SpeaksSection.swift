@@ -21,7 +21,7 @@ struct SpeaksSection: View {
             if speaks && onlyCompact {
                 Text("A more natural voice can be downloaded in iOS Settings → Accessibility → Spoken Content → Voices.")
                     .font(.footnote)
-                    .foregroundStyle(Theme.stone)
+                    .foregroundStyle(Theme.secondaryText)
                     .accessibilityIdentifier("settings.voiceHint")
             }
         } header: {

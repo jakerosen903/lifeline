@@ -45,7 +45,7 @@ struct FollowUpChip: View {
                 .padding(.horizontal, 12)
                 .padding(.vertical, 6)
                 .background(Capsule().fill(Theme.linen))
-                .foregroundStyle(answered ? Theme.stone : Theme.olive)
+                .foregroundStyle(answered ? Theme.secondaryText : Theme.olive)
         }
         .buttonStyle(.plain)
         .disabled(answered && (declined || onOpen == nil))

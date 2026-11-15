@@ -22,7 +22,7 @@ struct AboutYouFields: View {
             Section {
                 Text("About you").titleStyle()
                 Text("Everything here is optional. You can change it in Settings.")
-                    .foregroundStyle(Theme.stone)
+                    .foregroundStyle(Theme.secondaryText)
             }
             .listRowBackground(Color.clear)
 
@@ -56,7 +56,7 @@ struct AboutYouFields: View {
                     .accessibilityIdentifier("aboutYou.continue")
                 if viewModel.mode == .firstOpen {
                     Button("Skip for now") { viewModel.skip() }
-                        .foregroundStyle(Theme.stone)
+                        .foregroundStyle(Theme.secondaryText)
                         .accessibilityIdentifier("aboutYou.skip")
                 }
             }

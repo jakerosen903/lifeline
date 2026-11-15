@@ -38,11 +38,11 @@ struct SessionScreen: View {
         HStack {
             Text("You chose \(viewModel.kindText)")
                 .font(.caption)
-                .foregroundStyle(Theme.stone)
+                .foregroundStyle(Theme.secondaryText)
                 .accessibilityIdentifier("session.kind")
             Spacer()
             if let line = viewModel.statusLine {
-                Text(line).font(.subheadline).foregroundStyle(Theme.ochre)
+                Text(line).font(.subheadline).foregroundStyle(Theme.ochreText)
                     .accessibilityIdentifier("session.status")
             }
             ListeningIndicator(mode: indicatorMode)
@@ -77,10 +77,10 @@ struct SessionScreen: View {
                      : "Take your time. Pauses are fine. I'm only listening.")
                     .accessibilityIdentifier("session.listenCopy")
                     .font(.system(.body, design: .serif))
-                    .foregroundStyle(Theme.stone)
+                    .foregroundStyle(Theme.secondaryText)
                 HStack(spacing: 8) {
                     Image(systemName: viewModel.isPaused ? "pause.circle" : "record.circle")
-                        .foregroundStyle(viewModel.isPaused ? Theme.stone : Theme.ochre)
+                        .foregroundStyle(viewModel.isPaused ? Theme.secondaryText : Theme.ochreText)
                     Text(viewModel.isPaused ? "Paused. Nothing is lost." : "Recording, saved as you go")
                         .font(.subheadline)
                         .foregroundStyle(Theme.ink)
@@ -93,7 +93,7 @@ struct SessionScreen: View {
                     .accessibilityIdentifier("session.count")
                 Text("The screen can lock. Recording keeps going.")
                     .font(.caption)
-                    .foregroundStyle(Theme.stone)
+                    .foregroundStyle(Theme.secondaryText)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(24)
@@ -164,7 +164,7 @@ struct SessionScreen: View {
             if compact {
                 Text(viewModel.prompt)
                     .font(.system(.headline, design: .serif))
-                    .foregroundStyle(Theme.stone)
+                    .foregroundStyle(Theme.secondaryText)
                     .accessibilityIdentifier("session.prompt")
             } else {
                 Text(viewModel.prompt).titleStyle().accessibilityIdentifier("session.prompt")
@@ -184,7 +184,7 @@ struct SessionScreen: View {
                 } else {
                     ForEach(Array(viewModel.alternates.enumerated()), id: \.offset) { index, text in
                         Button { viewModel.swapIn(alternate: index) } label: {
-                            Text(text).font(.footnote).foregroundStyle(Theme.stone).multilineTextAlignment(.leading)
+                            Text(text).font(.footnote).foregroundStyle(Theme.secondaryText).multilineTextAlignment(.leading)
                         }
                         .buttonStyle(.plain)
                         .accessibilityIdentifier("session.alternate")
@@ -204,7 +204,7 @@ struct SessionScreen: View {
         if !state.spoken.isEmpty || !state.partial.isEmpty {
             (Text(state.spoken).foregroundStyle(Theme.ink)
                 + Text(state.spoken.isEmpty || state.partial.isEmpty ? "" : " ")
-                + Text(state.partial).foregroundStyle(Theme.stone))
+                + Text(state.partial).foregroundStyle(Theme.secondaryText))
                 .font(.system(.title3, design: .serif))
                 .accessibilityIdentifier("session.live")
                 .id("live")

@@ -60,13 +60,13 @@ struct TellMeWhenSheet: View {
                 case .between:
                     HStack {
                         yearPicker($year, id: "when.year")
-                        Text("to").foregroundStyle(Theme.stone)
+                        Text("to").foregroundStyle(Theme.secondaryText)
                         yearPicker($year2, id: "when.year2")
                     }
                 case .age:
                     if birthDate == nil {
                         Text("Add your birthday in Settings to place memories by age.")
-                            .font(.footnote).foregroundStyle(Theme.stone)
+                            .font(.footnote).foregroundStyle(Theme.secondaryText)
                             .accessibilityIdentifier("when.needsBirthday")
                     } else {
                         Picker("Age", selection: $age) {
@@ -78,7 +78,7 @@ struct TellMeWhenSheet: View {
                 }
 
                 if let range {
-                    Text("Shown as “\(range.displayText)”").font(.footnote).foregroundStyle(Theme.stone)
+                    Text("Shown as “\(range.displayText)”").font(.footnote).foregroundStyle(Theme.secondaryText)
                 }
                 Spacer()
             }

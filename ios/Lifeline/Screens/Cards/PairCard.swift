@@ -64,7 +64,7 @@ struct PairCard: View {
                 if let recordedAt {
                     Text("recorded " + recordedAt.formatted(.dateTime.month(.abbreviated).day()))
                         .font(.caption)
-                        .foregroundStyle(Theme.stone)
+                        .foregroundStyle(Theme.secondaryText)
                 }
             }
         }

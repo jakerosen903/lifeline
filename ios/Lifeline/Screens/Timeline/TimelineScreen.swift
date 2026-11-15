@@ -143,7 +143,7 @@ struct TimelineScreen: View {
 
     @ViewBuilder private var summarySection: some View {
         Section {
-            Text(viewModel.summary).font(.subheadline).foregroundStyle(Theme.stone)
+            Text(viewModel.summary).font(.subheadline).foregroundStyle(Theme.secondaryText)
                 .listRowBackground(Color.clear)
                 .accessibilityIdentifier("timeline.summary")
         }
@@ -194,9 +194,9 @@ struct TimelineScreen: View {
                 }
             } header: {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Collection").font(.caption).foregroundStyle(Theme.stone)
+                    Text("Collection").font(.caption).foregroundStyle(Theme.secondaryText)
                     Text(collection.collection.title).font(.system(.title3, design: .serif)).foregroundStyle(Theme.ink).textCase(nil)
-                    Text(collection.span.isPlaced ? collection.span.displayText : "no dates yet").font(.caption).foregroundStyle(Theme.ochre)
+                    Text(collection.span.isPlaced ? collection.span.displayText : "no dates yet").font(.caption).foregroundStyle(Theme.ochreText)
                 }
                 .accessibilityIdentifier("timeline.collection")
             }
@@ -217,7 +217,7 @@ struct TimelineScreen: View {
                     .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
             } header: {
                 let n = viewModel.shelf.count + viewModel.floatingCount
-                Text("\(n) \(n == 1 ? "memory" : "memories") waiting for a place").font(.caption).foregroundStyle(Theme.stone).textCase(nil)
+                Text("\(n) \(n == 1 ? "memory" : "memories") waiting for a place").font(.caption).foregroundStyle(Theme.secondaryText).textCase(nil)
             }
         }
     }

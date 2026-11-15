@@ -10,7 +10,7 @@ struct StoryLine: View {
         HStack(spacing: 10) {
             Text(text)
                 .font(.subheadline)
-                .foregroundStyle(Theme.stone)
+                .foregroundStyle(Theme.secondaryText)
                 .accessibilityIdentifier("card.storyLine")
             Spacer(minLength: 0)
             Button("Not part of it", action: onNotPartOfIt)

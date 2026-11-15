@@ -43,12 +43,12 @@ struct MemoryCard: View {
                 .accessibilityIdentifier("card.title")
             Text("“\(memory.quote)”")
                 .font(.system(.body, design: .serif))
-                .foregroundStyle(Theme.stone)
+                .foregroundStyle(Theme.secondaryText)
                 .lineLimit(4)
             if !memory.anchors.isEmpty {
                 Label(memory.anchors.map(\.phrase).joined(separator: " · "), systemImage: "clock")
                     .font(.subheadline)
-                    .foregroundStyle(Theme.ochre)
+                    .foregroundStyle(Theme.ochreText)
             }
             if !memory.peopleRefs.isEmpty || memory.placeText != nil {
                 FlowChips(items: memory.peopleRefs + (memory.placeText.map { [$0] } ?? []))
@@ -57,13 +57,13 @@ struct MemoryCard: View {
                 // Told across a pause: the card stands for every segment, the quote is the first's.
                 Text(memory.extraSpans.count == 1 ? "+ 1 segment" : "+ \(memory.extraSpans.count) segments")
                     .font(.caption)
-                    .foregroundStyle(Theme.stone)
+                    .foregroundStyle(Theme.secondaryText)
                     .accessibilityIdentifier("card.segments")
             }
             if let match {
-                (Text("Same as ").foregroundStyle(Theme.stone) + Text(match.title).bold().foregroundStyle(Theme.ink)
-                 + Text(matches.count > 1 ? " and \(matches.count - 1) more" : "").foregroundStyle(Theme.stone) + Text("?").foregroundStyle(Theme.stone)
-                 + Text(match.recordedAt.map { " · recorded " + $0.formatted(.dateTime.month(.abbreviated).day()) } ?? "").foregroundStyle(Theme.stone))
+                (Text("Same as ").foregroundStyle(Theme.secondaryText) + Text(match.title).bold().foregroundStyle(Theme.ink)
+                 + Text(matches.count > 1 ? " and \(matches.count - 1) more" : "").foregroundStyle(Theme.secondaryText) + Text("?").foregroundStyle(Theme.secondaryText)
+                 + Text(match.recordedAt.map { " · recorded " + $0.formatted(.dateTime.month(.abbreviated).day()) } ?? "").foregroundStyle(Theme.secondaryText))
                     .font(.subheadline)
                     .accessibilityLabel(sameAsText)
                     .accessibilityIdentifier("card.sameAs")
@@ -89,7 +89,7 @@ struct MemoryCard: View {
                 Spacer(minLength: 0)
                 Button("Dismiss", action: onDismiss)
                     .buttonStyle(.borderless)
-                    .foregroundStyle(Theme.stone)
+                    .foregroundStyle(Theme.secondaryText)
                     .accessibilityIdentifier("card.dismiss")
             }
             .padding(.top, 4)
@@ -122,7 +122,7 @@ struct CheckThisTag: View {
             Text(tag.label)
         }
         .font(.caption.weight(.semibold))
-        .foregroundStyle(Theme.ochre)
+        .foregroundStyle(Theme.ochreText)
         .fixedSize()
             .accessibilityElement(children: .combine)
             .accessibilityLabel(tag.label)
@@ -159,7 +159,7 @@ struct UndoNotice: View {
         HStack(spacing: 12) {
             Text(text)
                 .font(.footnote)
-                .foregroundStyle(Theme.stone)
+                .foregroundStyle(Theme.secondaryText)
                 .accessibilityIdentifier(identifier)
             Spacer(minLength: 0)
             Button("Undo", action: onUndo)

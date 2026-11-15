@@ -14,11 +14,11 @@ struct YourCopySection: View {
                 .disabled(viewModel.progressText != nil)
                 .accessibilityIdentifier("settings.export")
             if let progress = viewModel.progressText {
-                Label(progress, systemImage: "arrow.triangle.2.circlepath").font(.footnote).foregroundStyle(Theme.stone)
+                Label(progress, systemImage: "arrow.triangle.2.circlepath").font(.footnote).foregroundStyle(Theme.secondaryText)
                     .accessibilityIdentifier("settings.exportProgress")
             }
             if let last = viewModel.lastExportText {
-                Text(last).font(.footnote).foregroundStyle(Theme.stone).accessibilityIdentifier("settings.lastExport")
+                Text(last).font(.footnote).foregroundStyle(Theme.secondaryText).accessibilityIdentifier("settings.lastExport")
             }
             Button("Restore from a copy…") {
                 if let path = viewModel.testRestorePath { viewModel.chose(URL(fileURLWithPath: path)) } else { picking = true }
@@ -28,7 +28,7 @@ struct YourCopySection: View {
                 VStack(alignment: .leading, spacing: 8) {
                     Text(summary).font(.footnote).foregroundStyle(Theme.ink).accessibilityIdentifier("restore.summary")
                     Text("Replace everything on this phone with this copy?").font(.subheadline)
-                    Text("A copy of what is on the phone now is saved to Files first.").font(.footnote).foregroundStyle(Theme.stone)
+                    Text("A copy of what is on the phone now is saved to Files first.").font(.footnote).foregroundStyle(Theme.secondaryText)
                     HStack {
                         Button("Replace", role: .destructive) { viewModel.confirmRestore() }
                             .buttonStyle(.borderedProminent)

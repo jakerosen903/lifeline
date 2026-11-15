@@ -27,11 +27,11 @@ struct MemoryScreen: View {
                     HStack(spacing: 8) {
                         Text([viewModel.rangeText, viewModel.ageText].compactMap { $0 }.joined(separator: " · "))
                             .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(Theme.ochre)
+                            .foregroundStyle(Theme.ochreText)
                         if let chapter = viewModel.chapterTitle {
-                            Text("· \(chapter)").font(.subheadline).foregroundStyle(Theme.stone)
+                            Text("· \(chapter)").font(.subheadline).foregroundStyle(Theme.secondaryText)
                         }
-                        Image(systemName: "chevron.right").font(.caption).foregroundStyle(Theme.stone)
+                        Image(systemName: "chevron.right").font(.caption).foregroundStyle(Theme.secondaryText)
                     }
                 }
                 .accessibilityIdentifier("memory.range")
@@ -53,7 +53,7 @@ struct MemoryScreen: View {
                 if viewModel.place != nil || !viewModel.people.isEmpty {
                     Text([viewModel.place?.nameText, viewModel.people.isEmpty ? nil : "with " + viewModel.people.map(\.displayName).joined(separator: " and ")]
                             .compactMap { $0 }.joined(separator: " · "))
-                        .font(.subheadline).foregroundStyle(Theme.stone)
+                        .font(.subheadline).foregroundStyle(Theme.secondaryText)
                 }
 
                 VStack(alignment: .leading, spacing: 10) {
@@ -70,13 +70,13 @@ struct MemoryScreen: View {
                                 .tint(Theme.olive)
                                 .accessibilityIdentifier("memory.play")
                                 Spacer()
-                                Text("recorded " + telling.session.startedAt.formatted(.dateTime.month().day().year())).font(.caption).foregroundStyle(Theme.stone)
+                                Text("recorded " + telling.session.startedAt.formatted(.dateTime.month().day().year())).font(.caption).foregroundStyle(Theme.secondaryText)
                                 if telling.span.order > 0 {
                                     Menu {
                                         Button("Separate this telling", systemImage: "arrow.triangle.branch") { viewModel.separate(order: telling.span.order); onChange() }
                                             .accessibilityIdentifier("telling.separate")
                                     } label: {
-                                        Image(systemName: "ellipsis.circle").foregroundStyle(Theme.stone)
+                                        Image(systemName: "ellipsis.circle").foregroundStyle(Theme.secondaryText)
                                     }
                                     .buttonStyle(.borderless)
                                     .accessibilityIdentifier("telling.more")
@@ -121,7 +121,7 @@ struct MemoryScreen: View {
                 if viewModel.memory.isMoment, let evidence = viewModel.evidence {
                     Text("you said: “\(evidence)”")
                         .font(.footnote)
-                        .foregroundStyle(Theme.stone)
+                        .foregroundStyle(Theme.secondaryText)
                         .accessibilityIdentifier("memory.evidence")
                 }
 

@@ -44,10 +44,10 @@ struct SessionDetailScreen: View {
                                 .foregroundStyle(Theme.ink)
                             Text("“\(row.memory.summaryQuote)”")
                                 .font(.system(.subheadline, design: .serif))
-                                .foregroundStyle(Theme.stone)
+                                .foregroundStyle(Theme.secondaryText)
                                 .lineLimit(3)
                             if !row.anchors.isEmpty {
-                                Text(row.anchors.joined(separator: " · ")).font(.caption).foregroundStyle(Theme.ochre)
+                                Text(row.anchors.joined(separator: " · ")).font(.caption).foregroundStyle(Theme.ochreText)
                             }
                             if !row.people.isEmpty {
                                 Text(row.people.joined(separator: ", ")).font(.caption).foregroundStyle(Theme.olive)
@@ -78,7 +78,7 @@ struct SessionDetailScreen: View {
                         HStack {
                             Text(CandidatePayload.memory(candidate)?.title ?? CandidatePayload.mention(candidate)?.text ?? "")
                                 .font(.system(.subheadline, design: .serif))
-                                .foregroundStyle(Theme.stone)
+                                .foregroundStyle(Theme.secondaryText)
                             Spacer()
                             Button("Bring back") { viewModel.bringBack(candidate) }
                                 .buttonStyle(.bordered)
@@ -116,7 +116,7 @@ struct SessionDetailScreen: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(Format.duration(ms: segment.startMs))
                         .font(.caption.monospacedDigit())
-                        .foregroundStyle(Theme.ochre)
+                        .foregroundStyle(Theme.ochreText)
                     Text(segment.text)
                         .font(.system(.body, design: .serif))
                         .foregroundStyle(Theme.ink)

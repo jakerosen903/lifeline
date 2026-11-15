@@ -26,7 +26,7 @@ struct ChapterSection: View {
             }
         } header: {
             VStack(alignment: .leading, spacing: 2) {
-                if let rangeText { Text(rangeText).font(.caption).foregroundStyle(Theme.ochre) }
+                if let rangeText { Text(rangeText).font(.caption).foregroundStyle(Theme.ochreText) }
                 Text(title).font(.system(.title3, design: .serif)).foregroundStyle(Theme.ink).textCase(nil)
             }
             .accessibilityIdentifier("timeline.chapter")

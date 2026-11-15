@@ -33,7 +33,7 @@ struct SortingLine: View {
                 }
             }
             .font(.footnote)
-            .foregroundStyle(status.needsKey || status.canRetry ? Theme.ochre : Theme.stone)
+            .foregroundStyle(status.needsKey || status.canRetry ? Theme.ochreText : Theme.secondaryText)
         }
     }
 }

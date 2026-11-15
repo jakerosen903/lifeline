@@ -33,7 +33,7 @@ struct EntitiesScreen: View {
             Section {
                 if viewModel.rows.isEmpty {
                     Text(viewModel.tagFilter == nil ? "Nothing yet. They appear as you tell stories." : "Nothing tagged “\(viewModel.tagFilter!)”.")
-                        .foregroundStyle(Theme.stone)
+                        .foregroundStyle(Theme.secondaryText)
                 }
                 ForEach(viewModel.rows) { row in
                     NavigationLink {
@@ -41,7 +41,7 @@ struct EntitiesScreen: View {
                     } label: {
                         VStack(alignment: .leading, spacing: 2) {
                             Text(row.entity.title).font(.system(.headline, design: .serif)).foregroundStyle(Theme.ink)
-                            Text(row.spanText).font(.caption).foregroundStyle(Theme.ochre)
+                            Text(row.spanText).font(.caption).foregroundStyle(Theme.ochreText)
                         }
                         .padding(.vertical, 2)
                         .accessibilityElement(children: .ignore)
