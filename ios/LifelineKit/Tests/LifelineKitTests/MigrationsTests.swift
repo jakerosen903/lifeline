@@ -111,7 +111,7 @@ import GRDB
 }
 
 @Test func schemaVersionsOrderByMigrationPosition() {
-    #expect(Migrations.currentSchemaVersion == "v11")
+    #expect(Migrations.currentSchemaVersion == "v12")
     #expect(Migrations.isNewer("v9", than: "v8") && !Migrations.isNewer("v8", than: "v9") && Migrations.isNewer("v10", than: "v9"))
     #expect(Migrations.isNewer("v8", than: "v7") && !Migrations.isNewer("v7", than: "v8") && !Migrations.isNewer("v8", than: "v8"))
     #expect(Migrations.isNewer("v99", than: "v8"), "an unknown version is from the future")
@@ -145,4 +145,18 @@ import GRDB
     }
     try queue.write { try $0.execute(sql: "delete from session where id = 's1'") }
     #expect(try queue.read { try Int.fetchOne($0, sql: "select count(*) from interviewer_turn") } == 0, "the turn goes with its session")
+}
+
+@Test func v12AddsSubjectAndOriginAndOldSessionsReadAsTab() throws {
+    var config = Configuration()
+    config.foreignKeysEnabled = true
+    let queue = try DatabaseQueue(configuration: config)
+    try Migrations.migrator.migrate(queue, upTo: "v11")
+    try queue.write { db in
+        try db.execute(sql: "insert into session (id, started_at, ended_at, audio_path, stage_log, landing_choice_made) values ('s1', '2026-10-01', '2026-10-01', 'a.m4a', '[]', 1)")
+    }
+    try Migrations.migrator.migrate(queue)
+    let session = try #require(try queue.read { try Session.fetchOne($0, sql: "select * from session where id = 's1'") })
+    #expect(session.subjectEntityID == nil)
+    #expect(session.startedFrom == .tab)
 }

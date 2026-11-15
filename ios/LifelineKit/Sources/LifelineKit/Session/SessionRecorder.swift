@@ -84,11 +84,13 @@ public actor SessionRecorder {
     /// Inserts the session row, then starts capture. If capture fails to start, the row is removed.
     /// The caller may choose the id so collaborators (the extraction queue) can be built first.
     @discardableResult
-    public func start(id: SessionID = SessionID(), kind: SessionKind = .quick) async throws -> SessionID {
+    public func start(id: SessionID = SessionID(), kind: SessionKind = .quick,
+                      subject: EntityID? = nil, startedFrom: SessionOrigin = .tab) async throws -> SessionID {
         precondition(session == nil, "SessionRecorder is single-use")
         let url = try audioURL(id)
         let row = Session(id: id, startedAt: now(), endedAt: nil, audioPath: url.lastPathComponent,
-                          stageLog: "[]", landingChoiceMade: false, kind: kind)
+                          stageLog: "[]", landingChoiceMade: false, kind: kind,
+                          subjectEntityID: subject, startedFrom: startedFrom)
         try sessions.insert(row)
         session = row
         state.sessionID = id

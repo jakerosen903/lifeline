@@ -47,3 +47,24 @@ private func makeSession(startedAt: TimeInterval = 1_000) -> Session {
     }
     #expect(try repo.segments(in: s.id).map(\.index) == [0, 1, 2])
 }
+
+@Test func aSessionKeepsItsSubjectAndOrigin() throws {
+    let db = try AppDatabase.inMemory(); let repo = SessionRepository(db)
+    let maya = try EntityRepository(db).insert(type: .person, title: "Maya")
+    let s = Session(id: .init(), startedAt: .init(timeIntervalSince1970: 1_000), endedAt: nil, audioPath: "a.m4a",
+                    stageLog: "[]", landingChoiceMade: false, subjectEntityID: maya.id, startedFrom: .page)
+    try repo.insert(s)
+    let fetched = try #require(try repo.fetch(s.id))
+    #expect(fetched.subjectEntityID == maya.id && fetched.startedFrom == .page)
+}
+
+@Test func deletingTheSubjectKeepsTheSession() throws {
+    let db = try AppDatabase.inMemory(); let repo = SessionRepository(db); let entities = EntityRepository(db)
+    let maya = try entities.insert(type: .person, title: "Maya")
+    let s = Session(id: .init(), startedAt: .init(timeIntervalSince1970: 1_000), endedAt: nil, audioPath: "a.m4a",
+                    stageLog: "[]", landingChoiceMade: false, subjectEntityID: maya.id, startedFrom: .page)
+    try repo.insert(s)
+    try entities.delete(maya.id)
+    let fetched = try #require(try repo.fetch(s.id))
+    #expect(fetched.subjectEntityID == nil, "the session outlives its subject")
+}
