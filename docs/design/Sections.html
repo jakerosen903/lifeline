@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Lifeline: five sections</title>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{--linen:#F6F0E4;--sand:#ECE3D2;--ink:#332A23;--meta:#6D6153;--line:rgba(51,42,35,.14);--olive:#5F7046;--ochre:#C8893F;--ochre-ink:#8F5A1C;--water:#CFDAD6;--card:#FBF7EE}
+*{box-sizing:border-box}
+body{margin:0;background:#E4DCCB;color:var(--ink);font-family:Inter,system-ui,sans-serif;font-size:15px;line-height:1.45}
+.page{padding:36px 40px 80px;max-width:2400px;margin:0 auto}
+h1{font-family:Fraunces,serif;font-weight:500;font-size:34px;margin:0 0 6px;letter-spacing:-.01em}
+.lede{max-width:72ch;margin:0 0 26px;color:#4b4037}
+.row{display:flex;flex-wrap:wrap;gap:36px 30px;align-items:flex-start}
+.col{width:312px}
+.col h2{font-family:Fraunces,serif;font-weight:500;font-size:21px;margin:16px 0 4px}
+.col ul{margin:0;padding-left:18px;color:#4b4037;font-size:13.5px}
+.col li{margin:3px 0}
+.phone{width:390px;height:844px;zoom:.8;background:var(--linen);border-radius:46px;position:relative;overflow:hidden;box-shadow:0 0 0 9px #2a2420,0 24px 50px rgba(51,42,35,.28)}
+.scr{position:absolute;inset:0;padding:62px 20px 170px;overflow:hidden}
+.kicker{font-size:13px;color:var(--meta)}
+.title{font-family:Fraunces,serif;font-weight:500;font-size:34px;line-height:1.1;margin:2px 0 0;letter-spacing:-.01em}
+.sub{font-size:13.5px;color:var(--meta);margin-top:4px}
+.top{display:flex;justify-content:space-between;align-items:flex-start;gap:8px}
+.tools{display:flex;gap:8px;align-items:center}
+.pill{height:44px;padding:0 15px;border-radius:22px;background:var(--card);border:1px solid var(--line);display:flex;align-items:center;font-size:15px;font-weight:500;color:var(--olive)}
+.you{width:44px;height:44px;border-radius:50%;background:var(--sand);display:grid;place-items:center;font-weight:600;font-size:15px;border:1px solid var(--line)}
+
+.strip{position:relative;height:16px}
+.strip:before{content:"";position:absolute;left:0;right:0;top:7.5px;height:1px;background:rgba(51,42,35,.4)}
+.strip i{position:absolute;top:2px;width:3px;height:12px;border-radius:2px;background:var(--ochre-ink)}
+.strip b{position:absolute;top:5.5px;height:5px;border-radius:2.5px;background:var(--olive)}
+.years{display:flex;justify-content:space-between;font-size:12px;color:var(--meta);font-variant-numeric:tabular-nums}
+.stripsay{font-size:13px;color:var(--meta);margin-top:4px}
+
+.dock{position:absolute;left:14px;right:14px;bottom:22px}
+.rec{display:flex;align-items:center;gap:10px;height:50px;padding:0 8px 0 16px;border-radius:25px;background:rgba(255,253,248,.86);backdrop-filter:blur(18px);border:1px solid rgba(51,42,35,.08);box-shadow:0 6px 18px rgba(51,42,35,.12);margin-bottom:8px;font-size:15px}
+.rec .dot{width:10px;height:10px;border-radius:50%;background:var(--olive)}
+.rec span{flex:1;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rec em{font-style:normal;font-size:14px;color:#fff;background:var(--olive);padding:8px 16px;border-radius:18px;font-weight:600}
+.bar{display:flex;gap:8px}
+.tabs{flex:1;display:flex;height:62px;border-radius:31px;background:rgba(255,253,248,.86);backdrop-filter:blur(18px);border:1px solid rgba(51,42,35,.08);box-shadow:0 6px 18px rgba(51,42,35,.12);padding:5px}
+.tab{flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;font-size:11px;font-weight:500;color:var(--meta);border-radius:26px}
+.tab svg,.find svg{width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.tab.on{color:#4E5E38;background:rgba(95,112,70,.14)}
+.find{width:62px;height:62px;border-radius:50%;display:grid;place-items:center;color:var(--meta);background:rgba(255,253,248,.86);backdrop-filter:blur(18px);border:1px solid rgba(51,42,35,.08);box-shadow:0 6px 18px rgba(51,42,35,.12)}
+
+.ph{background:linear-gradient(135deg,var(--a,#b9a58a),var(--b,#7d6a55));position:relative;overflow:hidden}
+.ph:after{content:"";position:absolute;inset:0;background:radial-gradient(circle at 30% 25%,rgba(255,255,255,.35),transparent 55%)}
+.p1{--a:#c9b08a;--b:#8a6a4a}.p2{--a:#9fb0a2;--b:#55695c}.p3{--a:#d6b9a0;--b:#a3745a}.p4{--a:#b3b7c4;--b:#6b7186}.p5{--a:#cdbf8f;--b:#8b7d45}.p6{--a:#c4a3a0;--b:#84605f}
+.mono{display:grid;place-items:center;font-family:Fraunces,serif;color:var(--ink);background:var(--sand)}
+.t1{background:#E3DCC6}.t2{background:#DDE2D3}.t3{background:#EADBCB}
+
+.axis{margin:14px 0 2px}
+.axis .win{position:absolute;top:0;height:16px;border:1.5px solid var(--olive);border-radius:5px;background:rgba(95,112,70,.1)}
+.period{display:flex;align-items:baseline;gap:8px;margin:18px 0 6px}
+.period h3{font-family:Fraunces,serif;font-weight:500;font-size:21px;margin:0}
+.period span{font-size:13px;color:var(--meta);font-variant-numeric:tabular-nums}
+.guesstag{font-size:12px;color:var(--ochre-ink)!important;border:1px solid var(--ochre);border-radius:9px;padding:1px 8px;margin-left:auto}
+.spine{position:relative;padding-left:18px}
+.spine:before{content:"";position:absolute;left:4px;top:8px;bottom:8px;width:2px;background:var(--ochre);opacity:.55;border-radius:1px}
+.m{position:relative;padding:5px 0 8px}
+.m:before{content:"";position:absolute;left:-18px;top:9px;width:10px;height:10px;border-radius:50%;background:var(--linen);border:2px solid var(--ochre-ink)}
+.m .when{font-size:13px;color:var(--ochre-ink);font-variant-numeric:tabular-nums}
+.m .t{font-family:Fraunces,serif;font-size:17px;line-height:1.25}
+.m .who{display:flex;align-items:center;font-size:13px;color:var(--meta);margin-top:4px}
+.av{width:20px;height:20px;border-radius:50%;font-size:10px;margin-right:-6px;border:1.5px solid var(--linen)}
+.who span:last-child{margin-left:12px}
+.story{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:9px 12px;margin-top:3px}
+.story .n{font-size:13px;color:var(--meta)}
+.story .shot{height:70px;border-radius:10px;margin-top:7px}
+.band{background:var(--sand);border-radius:14px;padding:11px 14px;margin-top:16px}
+.band b{font-family:Fraunces,serif;font-weight:500;font-size:17px;display:block}
+.band span{font-size:13px;color:var(--meta)}
+.quiet{font-size:13px;color:var(--meta);margin-top:10px}
+
+.faces{display:grid;grid-template-columns:repeat(3,1fr);gap:14px 10px;margin-top:16px}
+.f .img{aspect-ratio:1;border-radius:22px;font-size:40px}
+.f b{font-family:Fraunces,serif;font-weight:500;font-size:17px;display:block;margin-top:5px;line-height:1.15}
+.f span{font-size:13px;color:var(--meta);display:block;line-height:1.25}
+
+.map{position:absolute;inset:0;background:var(--water)}
+.glass{background:rgba(255,253,248,.88);backdrop-filter:blur(18px);border:1px solid rgba(51,42,35,.08);box-shadow:0 6px 18px rgba(51,42,35,.12)}
+.maptop{position:absolute;left:14px;right:14px;top:58px;display:flex;justify-content:space-between;align-items:center}
+.maptop h3{font-family:Fraunces,serif;font-weight:500;font-size:26px;margin:0;padding:6px 16px;border-radius:22px}
+.maptop .pill{background:rgba(255,253,248,.92)}
+.callout{position:absolute;left:14px;right:14px;bottom:160px;border-radius:22px;padding:12px;display:grid;grid-template-columns:56px 1fr;gap:0 12px;align-items:center;background:rgba(251,247,238,.97)}
+.callout .th{width:56px;height:56px;border-radius:12px}
+.callout b{font-family:Fraunces,serif;font-weight:500;font-size:18px;display:block}
+.callout span{font-size:13px;color:var(--meta)}
+
+.shelfh{display:flex;align-items:baseline;gap:8px;margin:16px 0 8px}
+.shelfh h3{font-family:Fraunces,serif;font-weight:500;font-size:18px;margin:0}
+.shelfh span{font-size:13px;color:var(--meta)}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.tile{border-radius:14px;overflow:hidden;background:var(--card);border:1px solid var(--line);height:176px;display:flex;flex-direction:column}
+.tile .img{flex:1}
+.tile .cap{padding:8px 10px 9px}
+.tile b{font-family:Fraunces,serif;font-weight:500;font-size:16px;line-height:1.2;display:block}
+.tile span{font-size:12.5px;color:var(--meta);font-variant-numeric:tabular-nums}
+.tile.words{padding:14px 12px 10px;justify-content:space-between;background:var(--sand);border:none}
+.tile.words b{font-size:20px;line-height:1.15}
+.tile.words q{font-family:Fraunces,serif;font-style:italic;font-size:14px;color:#4b4037;display:block}
+
+.hero{position:absolute;left:0;right:0;top:0;height:280px}
+.hero .fade{position:absolute;inset:0;background:linear-gradient(180deg,rgba(51,42,35,.2),transparent 35%,rgba(51,42,35,.72));z-index:1}
+.hero .txt{position:absolute;left:20px;right:20px;bottom:14px;color:#fff;z-index:2}
+.hero .txt .title{color:#fff;font-size:38px}
+.hero .txt div+div{font-size:15px;margin-top:3px}
+.back{position:absolute;top:54px;left:16px;z-index:3;width:44px;height:44px;border-radius:50%;display:grid;place-items:center;font-size:22px}
+.body{position:absolute;top:280px;left:0;right:0;bottom:0;padding:14px 20px 0}
+.plain{padding-top:110px}
+.sec{font-size:13px;color:var(--meta);margin:14px 0 6px}
+.fact{font-family:Fraunces,serif;font-size:16.5px;line-height:1.3;margin:0 0 5px}
+.thumbs{display:flex;gap:8px}
+.thumbs .ph{width:76px;height:76px;border-radius:10px}
+.chips{display:flex;flex-wrap:wrap;gap:7px}
+.chip{display:flex;align-items:center;gap:7px;background:var(--card);border:1px solid var(--line);border-radius:22px;padding:0 13px 0 8px;height:44px;font-size:14px}
+.chip .c{width:26px;height:26px;border-radius:50%;font-size:12px}
+.chip .sq{border-radius:7px}
+.chip small{color:var(--meta);font-size:13px}
+.group{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:4px 14px;margin-bottom:6px}
+.group div{padding:10px 0;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;font-size:15.5px}
+.group div:last-child{border:none}
+.group small{color:var(--meta);font-size:13.5px}
+.note{margin-top:34px;max-width:80ch;background:var(--linen);border-radius:14px;padding:18px 22px}
+.note h2{font-family:Fraunces,serif;font-weight:500;font-size:21px;margin:0 0 8px}
+.note ul{margin:0;padding-left:20px}.note li{margin:6px 0}
+</style>
+<script>
+var ICON={Timeline:'<path d="M6 3v18"/><circle cx="6" cy="7" r="2" fill="currentColor"/><circle cx="6" cy="16" r="2" fill="currentColor"/><path d="M11 7h8M11 16h6"/>',People:'<circle cx="9" cy="8" r="3.2"/><path d="M3 20c.6-3.6 3-5.5 6-5.5s5.4 1.9 6 5.5"/><circle cx="17.5" cy="9" r="2.4"/><path d="M17 14.5c2.3.2 3.700 1.8 4.2 4.5"/>',Places:'<path d="M12 21s-6.5-6.2-6.5-11a6.5 6.5 0 0 1 13 0c0 4.8-6.5 11-6.5 11z"/><circle cx="12" cy="10" r="2.3"/>',Things:'<path d="M4 8l8-4 8 4v8l-8 4-8-4z"/><path d="M4 8l8 4 8-4M12 12v8"/>',You:'<circle cx="12" cy="8" r="3.6"/><path d="M5 20c.8-4 3.4-6 7-6s6.2 2 7 6"/>'};
+function dock(on,label){var h='<div class="dock"><div class="rec"><i class="dot"></i><span>'+(label||'Tell a story')+'</span><em>Start</em></div><div class="bar"><div class="tabs">';for(var k in ICON)h+='<div class="tab'+(k==on?' on':'')+'"><svg viewBox="0 0 24 24">'+ICON[k]+'</svg>'+k+'</div>';h+='</div><div class="find"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.500"/><path d="M16 16l4.500 4.500"/></svg></div></div></div>';document.write(h)}
+</script>
+<style>
+.gear{position:absolute;top:54px;right:16px;height:44px;padding:0 15px;border-radius:22px;display:flex;align-items:center;font-size:15px;font-weight:500;color:var(--olive);z-index:3}
+.yscr{position:absolute;inset:0;padding:112px 20px 170px;overflow:hidden}
+.ages{position:relative;height:104px;margin:18px 0 0}
+.ages:before{content:"";position:absolute;left:0;right:0;bottom:22px;height:1px;background:rgba(51,42,35,.4)}
+.age{position:absolute;bottom:0;width:66px;margin-left:-33px;text-align:center;font-size:12px;color:var(--meta);font-variant-numeric:tabular-nums}
+.age .ph{width:66px;height:66px;border-radius:50%;border:3px solid var(--linen);margin-bottom:4px}
+.age:after{content:"";position:absolute;left:31px;bottom:18px;width:3px;height:9px;border-radius:2px;background:var(--ochre-ink)}
+.lead{font-family:Fraunces,serif;font-size:27px;line-height:1.2;margin:22px 0 8px;letter-spacing:-.01em}
+.play{display:inline-flex;align-items:center;gap:8px;height:44px;padding:0 14px 0 6px;border-radius:22px;background:var(--card);border:1px solid var(--line);font-size:13.5px;color:var(--meta)}
+.play i{width:32px;height:32px;border-radius:50%;background:var(--olive);position:relative;flex:none}
+.play i:after{content:"";position:absolute;left:12px;top:9px;border-left:11px solid #fff;border-top:7px solid transparent;border-bottom:7px solid transparent}
+.facet{font-family:Fraunces,serif;font-weight:500;font-size:21px;margin:24px 0 2px}
+.facet+.sub{margin:0 0 8px}
+.said{display:grid;grid-template-columns:1fr 32px;gap:10px;align-items:center;padding:10px 0;border-bottom:1px solid var(--line)}
+.said p{font-family:Fraunces,serif;font-size:17px;line-height:1.3;margin:0}
+.said small{font-size:13px;color:var(--meta);display:block;margin-top:2px;font-family:Inter,sans-serif}
+.said i{width:32px;height:32px;border-radius:50%;border:1.5px solid var(--olive);position:relative}
+.said i:after{content:"";position:absolute;left:11px;top:8px;border-left:10px solid var(--olive);border-top:6.5px solid transparent;border-bottom:6.5px solid transparent}
+.felt{background:var(--sand);border-radius:16px;padding:14px 16px;margin-bottom:8px}
+.felt p{font-family:Fraunces,serif;font-style:italic;font-size:18px;line-height:1.3;margin:0 0 4px}
+.felt small{font-size:13px;color:var(--meta)}
+.think{border-left:3px solid var(--ochre-ink);padding:2px 0 2px 14px;margin:12px 0}
+.think p{font-family:Fraunces,serif;font-size:21px;line-height:1.22;margin:0}
+.think small{font-size:13px;color:var(--meta)}
+.tags{display:flex;gap:7px;margin:8px 0 2px}
+.tags span{height:36px;padding:0 13px;border-radius:18px;border:1px solid var(--line);background:var(--card);display:flex;align-items:center;font-size:14px}
+.tags .on{background:var(--ink);color:var(--linen);border-color:var(--ink)}
+</style>
+</head>
+<body>
+<div class="page">
+<h1>Five sections</h1>
+<p class="lede">Revised after the four reviews. Names, places and dates are invented; tinted blocks stand in for photos. Each screen is drawn at the data level it needs to look like this, and the captions say what it shows with less.</p>
+
+<div class="row">
+
+<div class="col">
+<div class="phone"><div class="scr">
+  <div class="top"><div><div class="kicker">Your story so far</div><div class="title">Jake</div></div>
+    <div class="tools"><div class="pill">Sessions</div></div></div>
+  <div class="axis">
+    <div class="strip"><i style="left:8%"></i><i style="left:14%"></i><i style="left:16%"></i><i style="left:19%"></i><i style="left:27%"></i><i style="left:33%"></i><i style="left:41%"></i><i style="left:55%"></i><i style="left:57%"></i><i style="left:59%"></i><i style="left:61%"></i><i style="left:64%"></i><i style="left:78%"></i><i style="left:92%"></i><span class="win" style="left:4%;width:34%"></span></div>
+    <div class="years"><span>1994</span><span>2004</span><span>2014</span><span>now</span></div>
+  </div>
+  <div class="period"><h3>Childhood</h3><span>1994–2006</span><span class="guesstag">by age</span></div>
+  <div class="spine">
+    <div class="m"><div class="when">around 1999</div><div class="t">The blue house on Alder Street</div>
+      <div class="who"><span class="av mono">D</span><span class="av ph p2"></span><span>Dad, Maya, at Alder Street</span></div></div>
+    <div class="m"><div class="when">2001 to 2003</div>
+      <div class="story"><div class="t">The summers at the lake</div><div class="n">A story in 3 moments</div><div class="ph p2 shot"></div></div></div>
+    <div class="m"><div class="when">around 2003</div><div class="t">Learning to ride the red bike</div></div>
+  </div>
+  <div class="period"><h3>The Boston years</h3><span>2012–2014</span></div>
+  <div class="spine">
+    <div class="m"><div class="when">June 2012</div><div class="t">Moved into Hemenway Street</div></div>
+  </div>
+  <div class="band"><b>Not placed in time yet</b><span>14 memories, kept and waiting</span></div>
+  <div class="quiet">3 dates to check</div>
+  <script>dock('Timeline')</script>
+</div></div>
+<h2>Timeline</h2>
+<ul>
+  <li>Sessions is its own labeled button. You is the fifth tab.</li>
+  <li>The date sits above each title, so long dates and large text fit.</li>
+  <li>Uncertain dates say "around". One quiet line at the end counts dates to check.</li>
+  <li>"Not placed in time yet" holds undated memories as one band, with no buttons on the rows inside.</li>
+  <li>The edge year scrubber is gone; the axis at the top does that job.</li>
+</ul>
+</div>
+
+<div class="col">
+<div class="phone"><div class="scr">
+  <div class="top"><div><div class="title">People</div><div class="sub">14 people in your story</div></div><div class="tools"><div class="pill">Most told</div></div></div>
+  <div class="faces">
+    <div class="f"><div class="img mono t1">D</div><b>Dad</b><span>Robert</span></div>
+    <div class="f"><div class="img ph p2"></div><b>Maya</b><span>my sister</span></div>
+    <div class="f"><div class="img ph p3"></div><b>Mom</b><span>&nbsp;</span></div>
+    <div class="f"><div class="img mono t2">P</div><b>Priya</b><span>from Boston</span></div>
+    <div class="f"><div class="img mono t3">S</div><b>Sam</b><span>my roommate</span></div>
+    <div class="f"><div class="img mono t1">A</div><b>Mr. Alvarez</b><span>my teacher</span></div>
+    <div class="f"><div class="img ph p5"></div><b>Theo</b><span>&nbsp;</span></div>
+    <div class="f"><div class="img mono t2">G</div><b>Grandma</b><span>Dad's mom</span></div>
+    <div class="f"><div class="img mono t3">L</div><b>Lena</b><span>&nbsp;</span></div>
+  </div>
+  <script>dock('People')</script>
+</div></div>
+<h2>People</h2>
+<ul>
+  <li>A grid of faces, as you chose. A photo tile and a letter tile have the same shape, and the letter tiles take one of three quiet tints, so a grid with few photos still looks finished.</li>
+  <li>The name and your own words for the person always show.</li>
+  <li>No "add photo" marks and no queue of names to introduce. You add a photo from the person's page.</li>
+  <li>The sort menu offers "Most told", "First in your story" and "By name".</li>
+</ul>
+</div>
+
+<div class="col">
+<div class="phone">
+  <div class="map">
+    <svg viewBox="0 0 390 844" width="390" height="844">
+      <path d="M-10 0h270c20 60-10 110 30 170s80 60 70 130-70 90-60 160-20 120-90 150-120 20-220 10z" fill="#EFE7D6"/>
+      <path d="M40 120c50 40 90 30 130 80s20 110 70 150" stroke="#DCD0BA" stroke-width="5" fill="none"/>
+      <path d="M-10 300c70-10 140 20 200 0s90-60 130-50" stroke="#DCD0BA" stroke-width="4" fill="none"/>
+      <ellipse cx="70" cy="215" rx="26" ry="15" fill="#CFDAD6"/>
+      <circle cx="176" cy="430" r="36" fill="rgba(200,137,63,.16)" stroke="#8F5A1C" stroke-width="1.800" stroke-dasharray="5 5"/>
+      <rect x="128" y="420" width="96" height="22" rx="11" fill="#FBF7EE"/>
+      <text x="176" y="435" text-anchor="middle" font-family="Inter" font-size="12.500" fill="#8F5A1C">about here?</text>
+      <circle cx="118" cy="262" r="27" fill="none" stroke="#332A23" stroke-width="2"/>
+      <g font-family="Inter" font-weight="600" font-size="13" text-anchor="middle" fill="#fff">
+        <circle cx="118" cy="262" r="20" fill="#4E5E38" stroke="#fff" stroke-width="2.500"/><text x="118" y="267">6</text>
+        <circle cx="258" cy="348" r="17" fill="#5F7046" stroke="#fff" stroke-width="2.500"/><text x="258" y="353">5</text>
+        <circle cx="70" cy="215" r="14" fill="#5F7046" stroke="#fff" stroke-width="2.500"/><text x="70" y="220">3</text>
+      </g>
+      <g font-family="Fraunces" font-size="14" fill="#332A23">
+        <text x="150" y="252">Alder Street</text><text x="214" y="384">Hemenway Street</text><text x="30" y="192">The lake</text>
+      </g>
+    </svg>
+  </div>
+  <div class="maptop"><h3 class="glass">Places</h3><div class="tools"><div class="pill">All years</div><div class="pill">List</div></div></div>
+  <div class="callout glass"><div class="th ph p1"></div><div><b>Alder Street</b><span>6 moments, 1994 to 2008. You set this pin.</span></div></div>
+  <script>dock('Places')</script>
+</div>
+<h2>Places</h2>
+<ul>
+  <li>The map has two controls: a menu of life periods, and List.</li>
+  <li>List shows every place, including ones with no spot on the map. It is also how VoiceOver reads the section.</li>
+  <li>Tapping a pin selects it and shows one card. No sheet sits over the map all the time.</li>
+  <li>A pin appears only where you put it. A place the app looked up is a dashed area that says "about here?" until you confirm it.</li>
+  <li>The line joining homes is gone until the app knows which places were homes.</li>
+  <li>With fewer than three located places, this tab opens on the list.</li>
+</ul>
+</div>
+
+<div class="col">
+<div class="phone"><div class="scr">
+  <div class="top"><div><div class="title">Things</div><div class="sub">11 things you've talked about</div></div><div class="tools"><div class="pill">By when</div></div></div>
+  <div class="shelfh"><h3>From childhood</h3><span>1994–2006</span></div>
+  <div class="grid">
+    <div class="tile"><div class="img ph p6"></div><div class="cap"><b>The red bike</b><span>3 moments</span></div></div>
+    <div class="tile words"><b>Dad's Volvo</b><q>"It smelled like oranges and wet dog."</q><span>4 moments</span></div>
+  </div>
+  <div class="shelfh"><h3>From the Boston years</h3><span>2012–2014</span></div>
+  <div class="grid">
+    <div class="tile words"><b>The radiator named Gerald</b><q>"He clanked all night."</q><span>2 moments</span></div>
+    <div class="tile"><div class="img ph p5"></div><div class="cap"><b>That terrible futon</b><span>2 moments</span></div></div>
+  </div>
+  <div class="shelfh"><h3>Not placed in time yet</h3></div>
+  <div class="grid">
+    <div class="tile words"><b>Grandpa's watch</b><span>1 moment</span></div>
+    <div class="tile words"><b>The guitar</b><span>&nbsp;</span></div>
+  </div>
+  <script>dock('Things')</script>
+</div></div>
+<h2>Things</h2>
+<ul>
+  <li>Tiles are one height, so rows stay even.</li>
+  <li>A thing joins a period only through its dated moments. The rest sit under "Not placed in time yet". With no periods at all, the shelf is one flat grid.</li>
+  <li>Year ranges and "Still with you" are gone: nothing in your words states them.</li>
+  <li>A quote shows only when a memory is about the thing, with filler words removed.</li>
+</ul>
+</div>
+
+<div class="col">
+<div class="phone">
+  <div class="hero ph p2"><div class="fade"></div><div class="txt"><div class="title">Maya</div><div>my sister, also "Maya-bird"</div></div></div>
+  <div class="back glass">‹</div>
+  <div class="body">
+    <div class="strip"><i style="left:14%"></i><i style="left:16%"></i><i style="left:19%"></i><i style="left:27%"></i><i style="left:33%"></i><i style="left:78%"></i></div>
+    <div class="years"><span>1994</span><span>2004</span><span>2014</span><span>now</span></div>
+    <div class="stripsay">In 12 moments, most between 1999 and 2003</div>
+    <div class="sec">What you've said about her</div>
+    <p class="fact">Two years younger than me.</p>
+    <p class="fact">She was always the brave one.</p>
+    <div class="sec">Often with</div>
+    <div class="chips">
+      <span class="chip"><span class="c mono">D</span>Dad <small>7</small></span>
+      <span class="chip"><span class="c ph p3"></span>Mom <small>6</small></span>
+      <span class="chip"><span class="c sq ph p1"></span>Alder Street <small>5</small></span>
+      <span class="chip"><span class="c sq ph p6"></span>The red bike <small>2</small></span>
+    </div>
+    <div class="sec">Photos</div>
+    <div class="thumbs"><div class="ph p2"></div><div class="ph p6"></div><div class="ph p1"></div></div>
+  </div>
+  <script>dock('People','Tell a story about Maya')</script>
+</div>
+<h2>A page, with a photo</h2>
+<ul>
+  <li>The record bar names the page you are on. It replaces the separate button.</li>
+  <li>The life strip shows moments only, with a sentence that says the same thing in words. A span bar appears only when you stated the span.</li>
+  <li>"Often with" lists who and what share two or more moments with her.</li>
+  <li>The photo header and the Photos row appear only when a photo exists. "Add a photo" is in the ⋯ menu.</li>
+  <li>Moments follow below, in order.</li>
+</ul>
+</div>
+
+<div class="col">
+<div class="phone"><div class="scr plain">
+  <div class="back glass" style="top:54px">‹</div>
+  <div class="title">Sam</div><div class="sub" style="font-size:15px">my roommate</div>
+  <div class="stripsay" style="margin-top:12px">In 4 moments, 2012 to 2013</div>
+  <div class="sec">What you've said about him</div>
+  <p class="fact">We shared that terrible futon for most of 2012.</p>
+  <div class="sec">Moments with Sam</div>
+  <div class="spine">
+    <div class="m"><div class="when">June 2012</div><div class="t">Moved into Hemenway Street</div></div>
+    <div class="m"><div class="when">Winter 2012</div><div class="t">The radiator named Gerald</div></div>
+  </div>
+  <script>dock('People','Tell a story about Sam')</script>
+</div></div>
+<h2>The same page, with little</h2>
+<ul>
+  <li>No photo, so no header image and no empty frame.</li>
+  <li>Fewer than two dated moments would hide the strip; here the sentence carries it.</li>
+  <li>No shared moments yet, so "Often with" is absent, not empty.</li>
+</ul>
+</div>
+
+
+
+<div class="col">
+<div class="phone">
+  <div class="back glass">‹</div><div class="gear glass">Settings</div>
+  <div class="yscr">
+    <div class="title" style="font-size:40px">Jake</div>
+    <div class="sub" style="font-size:15px">born 1994 in Dayton</div>
+    <div class="ages">
+      <div class="age" style="left:14%"><div class="ph p1"></div>1999</div>
+      <div class="age" style="left:46%"><div class="ph p4"></div>2012</div>
+      <div class="age" style="left:88%"><div class="ph p2"></div>2026</div>
+    </div>
+    <div class="lead">"I was always the kid who took things apart."</div>
+    <div class="play"><i></i>Hear yourself say it, 0:14</div>
+
+    <div class="facet">Who you are</div>
+    <div class="tags"><span class="on">All</span><span>Family</span><span>School</span><span>Work</span></div>
+    <div class="said"><p>The oldest of two.<small>Family</small></p><i></i></div>
+    <div class="said"><p>First one in the family to leave Ohio.<small>Family</small></p><i></i></div>
+    <div class="said"><p>Never could sit still in a classroom.<small>School</small></p><i></i></div>
+  </div>
+  <script>dock('You','Tell a story about yourself')</script>
+</div>
+<h2>You, at the top</h2>
+<ul>
+  <li>Photos of you sit on your life strip at their years. With no photos, the strip shows alone.</li>
+  <li>One line of yours leads the page. It changes each time you open it.</li>
+  <li>Every line has a play button: it plays the part of the recording where you said it.</li>
+  <li>"Who you are" holds the facts, filtered by your own tags.</li>
+  <li>Settings is one labeled button, not a section of the page.</li>
+</ul>
+</div>
+
+<div class="col">
+<div class="phone">
+  <div class="back glass">‹</div><div class="gear glass">Settings</div>
+  <div class="yscr" style="padding-top:104px">
+    <div class="facet" style="margin-top:0">How it felt</div>
+    <div class="felt"><p>"Leaving Boston felt like closing a book before the last chapter."</p><small>about 2014</small></div>
+    <div class="felt"><p>"I was never scared at the lake. Not once."</p><small>about the summers at the lake</small></div>
+
+    <div class="facet">What you think</div>
+    <div class="think"><p>You only regret the trips you didn't take.</p></div>
+    <div class="think"><p>Dogs know who's kind.</p></div>
+
+    <div class="facet">What you're hoping for</div>
+    <div class="said"><p>Take Maya to Lisbon someday.<small>said in October</small></p><i></i></div>
+    <div class="said"><p>Learn to fix the guitar myself.<small>said in November</small></p><i></i></div>
+  </div>
+  <script>dock('You','Tell a story about yourself')</script>
+</div>
+<h2>You, further down</h2>
+<ul>
+  <li>Four parts, each drawn differently: who you are (facts), how it felt (feelings), what you think (ideas), what you're hoping for (goals).</li>
+  <li>A feeling says what it is about, and links there.</li>
+  <li>Ideas are large and plain, in your exact words.</li>
+  <li>A part with nothing in it does not show.</li>
+</ul>
+</div>
+
+</div>
+
+<div class="note">
+<h2>What changed from the first pass</h2>
+<ul>
+  <li>Small grey text is darker and larger; every control is at least 44 points.</li>
+  <li>Search is the round button beside the tabs and covers every section.</li>
+  <li>The record bar is on every tab, Places included.</li>
+  <li>Nothing on any screen asks you to fill something in: no introduce queue, no add-photo slots, no "couldn't find" count on the map.</li>
+  <li>Still to design: dark appearance, and the photo picker flow.</li>
+</ul>
+</div>
+</div>
+</body>
+</html>
