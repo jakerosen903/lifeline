@@ -4,11 +4,14 @@ import Foundation
 public enum OpeningPrompt: Equatable, Sendable {
     case curiosity(CuriosityItem, text: String)
     case scene(ScenePrompt)
+    /// A session about a page: it asks about the subject and nothing else.
+    case subject(SessionSubject, text: String)
 
     public var text: String {
         switch self {
         case .curiosity(_, let text): text
         case .scene(let prompt): prompt.text
+        case .subject(_, let text): text
         }
     }
 
@@ -17,6 +20,7 @@ public enum OpeningPrompt: Equatable, Sendable {
         switch self {
         case .curiosity(let item, _): "curiosity:\(item.id.rawValue)"
         case .scene(let prompt): prompt.id
+        case .subject(let subject, _): "subject:\(subject.entityID.rawValue)"
         }
     }
 }
@@ -34,9 +38,17 @@ public struct Opening: Equatable, Sendable {
 public enum OpeningChooser {
     public static let curiosityCooldown: TimeInterval = 7 * 86_400
 
-    public static func choose(curiosity: [CuriosityItem], bank: [ScenePrompt], lastUsed: [String: Date], now: Date,
+    public static func choose(subject: SessionSubject? = nil, curiosity: [CuriosityItem], bank: [ScenePrompt], lastUsed: [String: Date], now: Date,
                               alternateCount: Int = 3) -> Opening {
         let scenes = orderedScenes(bank, lastUsed: lastUsed)
+        if let subject {
+            let main = curiosity
+                .filter { $0.status == .open && $0.entityID == subject.entityID }
+                .min { a, b in a.payoffCount != b.payoffCount ? a.payoffCount > b.payoffCount : a.text < b.text }
+                .map { OpeningPrompt.curiosity($0, text: phrase(for: $0)) }
+                ?? .subject(subject, text: subject.openingText)
+            return Opening(main: main, alternates: scenes.prefix(alternateCount).map(OpeningPrompt.scene))
+        }
         let lead = curiosity
             .filter { $0.status == .open }
             .sorted { a, b in
