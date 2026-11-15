@@ -207,7 +207,12 @@ struct Dependencies {
             activateAudio: {},
             activatePlayback: {},
             deactivateAudio: {},
-            requestMicrophone: { true },
+            // `-uiTesting-denyMicrophone`: the person said no. `-uiTesting-slowMicrophone`: the answer takes five seconds,
+            // for a test that taps Start again while the first start waits.
+            requestMicrophone: {
+                if args.contains("-uiTesting-slowMicrophone") { try? await Task.sleep(for: .seconds(5)) }
+                return !args.contains("-uiTesting-denyMicrophone")
+            },
             secrets: secrets,
             extraction: extraction,
             // A reflection of each segment's last four words, always clean; with `-uiTesting-noKey` there is no interviewer.
@@ -232,6 +237,7 @@ struct Dependencies {
             reporter: reporter)
         if let i = args.firstIndex(of: "-uiTesting-restoreFrom"), i + 1 < args.count { deps.restoreFromPath = args[i + 1] }
         deps.exportWithoutShareSheet = true
+        if args.contains("-uiTesting-seed") { try UITestSeed.write(sessions: deps.sessions, store: store) }
         return deps
     }
 }

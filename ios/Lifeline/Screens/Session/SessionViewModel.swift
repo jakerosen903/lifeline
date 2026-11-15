@@ -321,6 +321,7 @@ final class SessionViewModel: Identifiable {
 
     private func offerNextPrompt() {
         guard kind == .settleIn, !arc.heavy, !state.isSpeaking, nextPrompt == nil, !isStopping else { return }
+        // No subject on purpose: the page the session started from shapes only its opening question.
         let next = deps.opening().main
         guard next != opening.main else { return }
         nextPrompt = next

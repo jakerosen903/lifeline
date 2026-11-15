@@ -29,7 +29,10 @@ final class HomeViewModel {
     private(set) var error: String?
     var presented: Presented?
     /// The page on screen; nil on a tab root. A session started now is about it.
-    var context: SessionSubject?
+    private(set) var context: SessionSubject?
+    /// The screen that set `context`. Pushing and popping can report the new screen's appearance
+    /// before the old one's disappearance, so a screen that leaves clears only what it set itself.
+    private var contextScreen: UUID?
     /// Called after a session ends, so the timeline can refresh.
     var onSessionEnded: (() -> Void)?
     var activeSession: SessionViewModel? {
@@ -82,19 +85,33 @@ final class HomeViewModel {
         await vm.start()
     }
 
+    /// A screen comes into view and names what a session started now would be about (nil: nothing).
+    func show(_ subject: SessionSubject?, from screen: UUID) {
+        context = subject
+        contextScreen = screen
+    }
+
+    /// A screen leaves view. The context goes only if that screen set it.
+    func leave(_ screen: UUID) {
+        guard contextScreen == screen else { return }
+        context = nil
+        contextScreen = nil
+    }
+
     /// Finish: the cover swaps to the landing. A session with no words lands quietly.
+    /// The timeline refreshes last, so it reads the landed state and the cover's final state.
     func sessionEnded() {
         let ended = activeSession
         deps.deactivateAudio()
-        refresh()
-        onSessionEnded?()
-        guard let ended, let id = ended.state.sessionID, let session = try? deps.sessions.fetch(id),
-              !((try? deps.sessions.segments(in: id)) ?? []).isEmpty else {
+        if let ended, let id = ended.state.sessionID, let session = try? deps.sessions.fetch(id),
+           !((try? deps.sessions.segments(in: id)) ?? []).isEmpty {
+            presented = .landing(LandingViewModel(session: session, heavy: ended.heavy, presentDanger: ended.presentDanger, deps: deps))
+        } else {
             if let id = ended?.state.sessionID { try? deps.sessions.markLanded(id) }
             presented = nil
-            return
         }
-        presented = .landing(LandingViewModel(session: session, heavy: ended.heavy, presentDanger: ended.presentDanger, deps: deps))
+        refresh()
+        onSessionEnded?()
     }
 
     func present(landing: LandingViewModel) { presented = .landing(landing) }

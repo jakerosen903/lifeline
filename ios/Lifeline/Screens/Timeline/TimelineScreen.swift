@@ -1,11 +1,10 @@
 import LifelineKit
 import SwiftUI
 
-/// Your story so far. The home screen: waiting cards, chapters with bands, collections, the
-/// shelf, the one open question, and Start.
+/// Your story so far. The Timeline tab's root: waiting cards, chapters with bands, collections,
+/// the shelf, the one open question, and the About section.
 struct TimelineScreen: View {
     let viewModel: TimelineViewModel
-    @Bindable private var home: HomeViewModel
     @State private var showSettings = false
     @State private var openMemory: MemoryRow?
     @State private var collectionTarget: MemoryRow?
@@ -15,11 +14,6 @@ struct TimelineScreen: View {
     @State private var storyTitle = ""
     @State private var splitTarget: StoryRow?
     @State private var moveTarget: MemoryRow?
-
-    init(viewModel: TimelineViewModel) {
-        self.viewModel = viewModel
-        _home = Bindable(viewModel.home)
-    }
 
     private var rowActions: MemoryRowActions {
         MemoryRowActions(open: { openMemory = $0 },
@@ -38,13 +32,8 @@ struct TimelineScreen: View {
     }
 
     var body: some View {
-        NavigationStack {
-            ZStack(alignment: .bottom) {
-                timelineList
-                .scrollContentBackground(.hidden)
-
-                startButtons
-            }
+        timelineList
+            .scrollContentBackground(.hidden)
             .linenBackground()
             .navigationTitle("Your story so far")
             .storyDialogs(rename: $renameTarget, title: $storyTitle, split: $splitTarget, move: $moveTarget, viewModel: viewModel)
@@ -55,30 +44,25 @@ struct TimelineScreen: View {
                 MemoryScreen(viewModel: MemoryViewModel(memory: row.memory, deps: viewModel.deps), deps: viewModel.deps) { viewModel.refresh() }
             }
             .toolbar {
-                Button { viewModel.showHidden.toggle() } label: { Image(systemName: viewModel.showHidden ? "eye" : "eye.slash") }
-                    .accessibilityLabel(viewModel.showHidden ? "Showing hidden memories" : "Hidden memories are not shown")
-                    .accessibilityIdentifier("timeline.showHidden")
-                if !viewModel.allTags.isEmpty {
-                    Menu {
-                        Button("Everything") { viewModel.tagFilter = nil }
-                        ForEach(viewModel.allTags, id: \.self) { tag in
-                            Button { viewModel.tagFilter = tag } label: {
-                                if viewModel.tagFilter == tag { Label(tag, systemImage: "checkmark") } else { Text(tag) }
-                            }
-                        }
-                    } label: { Image(systemName: viewModel.tagFilter == nil ? "tag" : "tag.fill") }
-                        .accessibilityLabel(viewModel.tagFilter.map { "Showing \($0)" } ?? "Filter by tag")
-                        .accessibilityIdentifier("timeline.tagFilter")
-                }
-                NavigationLink { SessionsScreen(viewModel: viewModel.home) } label: { Image(systemName: "waveform") }
+                NavigationLink("Sessions") { SessionsScreen(viewModel: viewModel.home) }
                     .accessibilityIdentifier("timeline.sessions")
-                NavigationLink { EntitiesScreen(deps: viewModel.deps) } label: { Image(systemName: "square.grid.2x2") }
-                    .accessibilityLabel("People, places, things and ideas")
-                    .accessibilityIdentifier("timeline.entities")
-                NavigationLink { PeopleScreen(viewModel: PeopleViewModel(deps: viewModel.deps)) } label: { Image(systemName: "person.2") }
-                    .accessibilityIdentifier("home.people")
-                Button { showSettings = true } label: { Image(systemName: "gearshape") }
-                    .accessibilityIdentifier("home.settings")
+                Menu {
+                    Toggle("Show hidden memories", isOn: Binding(get: { viewModel.showHidden }, set: { viewModel.showHidden = $0 }))
+                        .accessibilityIdentifier("timeline.showHidden")
+                    if !viewModel.allTags.isEmpty {
+                        Menu {
+                            Button("Everything") { viewModel.tagFilter = nil }
+                            ForEach(viewModel.allTags, id: \.self) { tag in
+                                Button { viewModel.tagFilter = tag } label: {
+                                    if viewModel.tagFilter == tag { Label(tag, systemImage: "checkmark") } else { Text(tag) }
+                                }
+                            }
+                        } label: { Label(viewModel.tagFilter.map { "Showing \($0)" } ?? "Filter by tag", systemImage: viewModel.tagFilter == nil ? "tag" : "tag.fill") }
+                            .accessibilityIdentifier("timeline.tagFilter")
+                    }
+                } label: { Image(systemName: "ellipsis") }
+                    .accessibilityLabel("More")
+                    .accessibilityIdentifier("timeline.more")
             }
             .sheet(isPresented: $showSettings, onDismiss: { viewModel.refresh() }) {
                 SettingsScreen(deps: viewModel.deps, isSessionLive: { viewModel.home.presented != nil })
@@ -97,14 +81,6 @@ struct TimelineScreen: View {
             } message: { _ in
                 Text("The memory, its people and its dates go. Your recording stays in Sessions.")
             }
-            .fullScreenCover(item: $home.presented) { presented in
-                switch presented {
-                case .session(let session):
-                    SessionScreen(viewModel: session) { viewModel.home.sessionEnded() }
-                case .landing(let landing):
-                    LandingScreen(viewModel: landing) { another in viewModel.home.landingClosed(tellAnother: another); viewModel.refresh() }
-                }
-            }
             .alert("Add to a collection", isPresented: Binding(get: { collectionTarget != nil }, set: { if !$0 { collectionTarget = nil } }), presenting: collectionTarget) { row in
                 TextField("Collection name", text: $collectionTitle)
                 Button("Add") {
@@ -118,7 +94,6 @@ struct TimelineScreen: View {
                 Text(viewModel.existingCollectionTitles.isEmpty ? "In your own words." : "Existing: " + viewModel.existingCollectionTitles.joined(separator: ", "))
             }
             .onAppear { viewModel.refresh() }
-        }
     }
 
     private var timelineList: some View {
@@ -228,39 +203,10 @@ struct TimelineScreen: View {
                                    description: Text("Tap Start and tell me about the house you grew up in."))
                 .listRowBackground(Color.clear)
         }
-        if let error = viewModel.error ?? viewModel.cards.error ?? viewModel.home.error {
+        // A start error shows on the record bar, under the same identifier.
+        if let error = viewModel.error ?? viewModel.cards.error {
             Text(error).foregroundStyle(.red).accessibilityIdentifier("timeline.error")
         }
-        Color.clear.frame(height: 120).listRowBackground(Color.clear)
-    
-    }
-
-    private var startButtons: some View {
-        HStack(spacing: 12) {
-            Button {
-                Task { await viewModel.home.startSession(kind: .quick) }
-            } label: {
-                Label("Tell a quick story", systemImage: "mic.fill")
-                    .font(.headline)
-                    .frame(maxWidth: .infinity)
-                    .padding()
-                    .background(RoundedRectangle(cornerRadius: 18).fill(Theme.olive))
-                    .foregroundStyle(.white)
-            }
-            .accessibilityIdentifier("home.start")
-            Button {
-                Task { await viewModel.home.startSession(kind: .settleIn) }
-            } label: {
-                Text("Settle in")
-                    .font(.headline)
-                    .padding()
-                    .background(RoundedRectangle(cornerRadius: 18).fill(Theme.sand))
-                    .foregroundStyle(Theme.ink)
-            }
-            .accessibilityIdentifier("home.settleIn")
-        }
-        .padding(.horizontal, 24)
-        .padding(.bottom, 24)
     }
 }
 

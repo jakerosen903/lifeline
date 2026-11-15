@@ -120,6 +120,7 @@ struct EntityScreen: View {
         }
         .onAppear { viewModel.refresh() }
         .onDisappear { viewModel.stop() }
+        .sessionContext(viewModel.subject)
         .onChange(of: viewModel.isGone) { if viewModel.isGone { onChange(); dismiss() } }
     }
 

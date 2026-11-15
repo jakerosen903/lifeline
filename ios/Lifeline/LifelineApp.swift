@@ -73,9 +73,9 @@ struct RootView: View {
     let model: AppModel
 
     var body: some View {
-        if let deps = model.deps, let timeline = model.timeline, let home = model.home {
+        if let deps = model.deps, model.timeline != nil, let home = model.home {
             if model.hasProfile {
-                TimelineScreen(viewModel: timeline)
+                SectionsScreen(model: model)
             } else {
                 FirstOpenScreen(deps: deps,
                                 onStart: { kind in model.profileSaved(); Task { await home.startSession(kind: kind) } },
