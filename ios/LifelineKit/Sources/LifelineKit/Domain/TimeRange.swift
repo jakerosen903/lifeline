@@ -41,6 +41,19 @@ public struct TimeRange: Codable, Sendable, Equatable {
     }
 
     public var isPlaced: Bool { earliest != nil || latest != nil || likelyStart != nil || likelyEnd != nil }
+    /// The date reads as a fact ("in 1998", a filled mark): the person stated or confirmed it,
+    /// and its evidence is neither their own hedge ("around 1998", "about 8") nor a relation
+    /// ("before Graduation (2004)"), whose far edge is the builder's slack. `displayText` makes
+    /// the same distinction.
+    public var readsAsSaid: Bool {
+        guard isSettled else { return false }
+        guard let evidenceText else { return true }
+        return !Self.isAsSaidEvidence(evidenceText) && !Self.isRelationEvidence(evidenceText)
+    }
+
+    /// Both ends of the possible band are known. A half-open range (only earliest or only latest)
+    /// is placed but not dated: it has no year to show or to mark.
+    public var isDated: Bool { earliest != nil && latest != nil }
     public var isConfirmed: Bool { origin == .confirmed }
     /// Stated by the person or confirmed by them: the resolver and the questions leave it alone.
     public var isSettled: Bool { origin == .confirmed || origin == .stated }

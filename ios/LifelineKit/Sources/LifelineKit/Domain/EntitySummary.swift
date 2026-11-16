@@ -52,7 +52,8 @@ public enum OwnWords {
     /// A relation alias ("my ...", "our ...") first. Else the role text said most often, never
     /// the name itself or a bare pronoun. Else nil: the tile keeps an empty line.
     public static func choose(title: String, aliases: [String], roleTexts: [String]) -> String? {
-        if let relation = PeopleRepository.relationLabel(texts: aliases) { return relation }
+        let trimmed = aliases.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+        if let relation = PeopleRepository.relationLabel(texts: trimmed) { return relation }
         let name = PeopleRepository.normalize(title)
         var counts: [String: (count: Int, text: String)] = [:]
         for raw in roleTexts {

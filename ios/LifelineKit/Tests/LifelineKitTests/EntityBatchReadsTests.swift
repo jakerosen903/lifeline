@@ -271,3 +271,21 @@ private extension Person {
     }
     #expect(try f.store.entities.coOccurrences(of: maya.id).isEmpty)
 }
+
+// Final review: only told, visible memories give a tile its words.
+
+@Test func aHiddenOrUntoldMemoryNeverGivesOwnWords() throws {
+    var f = try Fixture()
+    let sam = try f.person("Sam"), ines = try f.person("Ines")
+    // Said twice, but hidden: without the rule it would win on count.
+    try f.link(try f.memory("A", hidden: true), sam, roleText: "my secret friend")
+    try f.link(try f.memory("A2", hidden: true), sam, roleText: "my secret friend")
+    try f.link(try f.memory("B"), sam, roleText: "my neighbour")
+    try f.link(try f.floating("C"), ines, roleText: "the woman next door")
+    #expect(try f.store.entities.ownWords(of: sam.id) == "my neighbour", "a hidden memory's words never label a tile")
+    #expect(try f.store.entities.ownWords(of: ines.id) == nil, "a floating stand-in is not told")
+}
+
+@Test func anAliasIsTrimmedLikeARoleText() {
+    #expect(OwnWords.choose(title: "Maya", aliases: ["  my sister "], roleTexts: []) == "my sister")
+}

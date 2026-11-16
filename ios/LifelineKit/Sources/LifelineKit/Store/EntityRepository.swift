@@ -207,7 +207,8 @@ public struct EntityRepository: Sendable {
     // MARK: - Batched reads
 
     /// A told moment: an event or other, not hidden, with a candidate (a floating stand-in is not told).
-    private static let toldMoment = "memory.kind in ('event', 'other') and memory.hidden_from_timeline = 0 and memory.created_from_candidate_id is not null"
+    private static let toldAndVisible = "memory.hidden_from_timeline = 0 and memory.created_from_candidate_id is not null"
+    private static let toldMoment = "memory.kind in ('event', 'other') and \(toldAndVisible)"
     private static let ownerEntity = "select entity_id from person where is_owner = 1"
 
     /// Every linked memory of every entity of a type, in one query. An entity with no linked
@@ -257,7 +258,8 @@ public struct EntityRepository: Sendable {
         }
     }
 
-    /// The words the person used for each entity of a type, where they used any.
+    /// The words the person used for each entity of a type, where they used any. A role text
+    /// counts only from a told memory that is not hidden.
     public func ownWords(type: EntityType) throws -> [EntityID: String] {
         try db.writer.read { try Self.ownWords(where: "entity.type = ?", arguments: [type.rawValue], in: $0) }
     }
@@ -283,7 +285,8 @@ public struct EntityRepository: Sendable {
         for row in try Row.fetchAll(db, sql: """
             select entity.id, entity.title, me.role_text from moment_entity me
             join entity on entity.id = me.entity_id
-            where \(condition) and me.role_text is not null
+            join memory on memory.id = me.memory_id
+            where \(condition) and me.role_text is not null and \(Self.toldAndVisible)
             """, arguments: arguments) {
             let id = EntityID(rawValue: row["id"])
             titles[id] = row["title"]
@@ -327,7 +330,7 @@ public struct EntityRepository: Sendable {
         var span = ChapterRepository.span(over: ranges)
         // Its uncertainty is the weakest of its members': said only when every member was said.
         let placed = ranges.filter(\.isPlaced)
-        if span.isPlaced { span.origin = placed.allSatisfy { $0.origin == .stated || $0.origin == .confirmed } ? .stated : .inferred }
+        if span.isPlaced { span.origin = placed.allSatisfy(\.readsAsSaid) ? .stated : .inferred }
         return span
     }
 

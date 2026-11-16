@@ -14,6 +14,9 @@ private func range(_ a: Int, _ b: Int, _ origin: RangeOrigin) -> TimeRange {
     #expect(EntityPage.spanText(range(1993, 1998, .derived)) == "between 1993 and 1998")
     #expect(EntityPage.spanText(range(1998, 1998, .inferred)) == "around 1998")
     #expect(EntityPage.spanText(range(1998, 1998, .stated)) == "in 1998")
+    // A hedge or a relation the person settled still reads as a guess.
+    #expect(EntityPage.spanText(.stated(around: 1998)) == "around 1998")
+    #expect(EntityPage.spanText(.span(d("1996-01-01"), d("2004-12-31"), granularity: .year, origin: .confirmed, evidence: "before Graduation (2004)")) == "between 1996 and 2004")
 }
 
 @Test func anIdeasMomentsOrderByDate() {
@@ -65,7 +68,7 @@ private func page(_ title: String, kind: MemoryKind = .event, year: Int? = nil, 
 @Test func thePageCountsWhatTheGridCounts() throws {
     let db = try AppDatabase.inMemory()
     let store = ExtractionStore(db)
-    let (_, segments) = try StoreFixtures.session(in: store.sessions, segments: (1...5).map { "we were at the house, time \($0)" })
+    let (_, segments) = try StoreFixtures.session(in: store.sessions, segments: (1...6).map { "we were at the house, time \($0)" })
     let maya = try store.people.insertPerson(displayName: "Maya")
     let mayaEntity = try #require(try store.entities.entity(id: maya.entityID))
     func memory(_ n: Int, kind: MemoryKind = .event, year: Int? = nil, hidden: Bool = false) throws -> Memory {
@@ -82,6 +85,9 @@ private func page(_ title: String, kind: MemoryKind = .event, year: Int? = nil, 
     _ = try memory(2, kind: .fact)
     _ = try memory(3, hidden: true)
     _ = try memory(4)
+    // A floating stand-in linked by mention is not told: neither the page nor the grid counts it.
+    let floating = try memory(5)
+    try db.writer.write { try $0.execute(sql: "update memory set created_from_candidate_id = null where id = ?", arguments: [floating.id.rawValue]) }
     let sections = EntityPage.sections(details: try store.entities.details(of: mayaEntity.id), mentions: try store.entities.moments(of: mayaEntity.id))
     let summary = try #require(try store.entities.summaries(type: .person).first { $0.id == mayaEntity.id })
     #expect(sections.moments.count == 3)
@@ -98,4 +104,24 @@ private func page(_ title: String, kind: MemoryKind = .event, year: Int? = nil, 
     #expect(EntityPage.momentsHeading(title: "Jordan", isOwner: true) == "Your moments")
     #expect(EntityPage.invitation(title: "Lena", isOwner: false) == "Stories you tell about Lena will show here.")
     #expect(EntityPage.invitation(title: "Jordan", isOwner: true) == "Stories you tell about yourself will show here.")
+}
+
+// Final review: a quote made only of fillers never shows an empty row.
+
+@Test func aQuoteOfOnlyFillersFallsBackToTheTitle() {
+    let fillers = page("Rainy afternoons", kind: .fact, told: 1)
+    var onlyFillers = fillers
+    onlyFillers.summaryQuote = "um, uh"
+    #expect(EntityPage.readableQuote(of: onlyFillers) == "Rainy afternoons")
+    var spoken = fillers
+    spoken.summaryQuote = "um, it rained, you know, every day"
+    #expect(EntityPage.readableQuote(of: spoken) == "It rained, every day")
+    #expect(EntityPage.readableQuote(of: spoken, maxWords: 2) == "It rained…")
+}
+
+@Test func aHedgedMemberMakesTheDerivedSpanAGuess() {
+    #expect(EntityRepository.derivedSpan(over: [said(1999), said(2003)]).origin == .stated)
+    #expect(EntityRepository.derivedSpan(over: [said(1999), .stated(around: 2003)]).origin == .inferred)
+    let before = TimeRange.span(d("1996-01-01"), d("2004-12-31"), granularity: .year, origin: .confirmed, evidence: "before Graduation (2004)")
+    #expect(EntityRepository.derivedSpan(over: [said(1999), before]).origin == .inferred)
 }

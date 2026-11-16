@@ -36,7 +36,8 @@ public struct LifeStrip: Sendable, Equatable {
         self.endYear = currentYear
         self.marks = dated.map { Mark(position: position($0.middle), isGuess: $0.isGuess) }
         if let from = (stated.earliest ?? stated.likelyStart)?.year, let to = (stated.latest ?? stated.likelyEnd)?.year {
-            self.statedSpan = position(Double(from))...position(Double(to + 1))
+            // A stored span may run backwards; a range must never.
+            self.statedSpan = position(Double(min(from, to)))...position(Double(max(from, to) + 1))
         } else {
             self.statedSpan = nil
         }
@@ -45,7 +46,8 @@ public struct LifeStrip: Sendable, Equatable {
 
     // MARK: - Dated moments
 
-    /// A moment that has a year: its band runs from its likely start (or earliest) to its likely end (or latest).
+    /// A moment with both ends of its band known (`TimeRange.isDated`): its band runs from its
+    /// likely start (or earliest) to its likely end (or latest). A half-open range is not dated.
     private struct Dated {
         let startYear: Int
         let endYear: Int
@@ -53,11 +55,12 @@ public struct LifeStrip: Sendable, Equatable {
         let range: TimeRange
 
         init?(_ range: TimeRange) {
-            guard let start = (range.likelyStart ?? range.earliest ?? range.latest)?.year,
-                  let end = (range.likelyEnd ?? range.latest ?? range.earliest)?.year else { return nil }
+            guard range.isDated, let start = (range.likelyStart ?? range.earliest)?.year,
+                  let end = (range.likelyEnd ?? range.latest)?.year else { return nil }
             startYear = min(start, end)
             endYear = max(start, end)
-            isGuess = !range.isSettled
+            // A hedge ("around 1998") or a relation ("before Graduation") is still a guess.
+            isGuess = !range.readsAsSaid
             self.range = range
         }
 

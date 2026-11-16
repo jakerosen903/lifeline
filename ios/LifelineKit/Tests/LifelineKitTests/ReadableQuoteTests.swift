@@ -89,3 +89,20 @@ import Testing
     #expect(ReadableQuote.text("it was hard, you know?") == "It was hard.")
     #expect(ReadableQuote.text("Did she know, you know.") == "Did she know.")
 }
+
+// Final review fixes.
+
+@Test func aRepeatKeepsTheFirstCopysClosingMark() {
+    #expect(ReadableQuote.text("he said (no) no") == "He said (no)")
+    #expect(ReadableQuote.text("he said (no) no.") == "He said (no).")
+}
+
+@Test func aRepeatNeverCrossesASentenceEnd() {
+    #expect(ReadableQuote.text("it was big. big") == "It was big. big")
+    #expect(ReadableQuote.text("we stayed! stayed all night") == "We stayed! stayed all night")
+}
+
+@Test func aQuoteThatEndsInYouKnowLosesIt() {
+    #expect(ReadableQuote.text("Well, you know.") == "Well.")
+    #expect(ReadableQuote.text("so, um, you know?") == "So.")
+}

@@ -58,4 +58,37 @@ private func guess(_ y: Int) -> TimeRange { .year(y, origin: .inferred, evidence
         let future = LifeStrip(moments: [said(2030)], birthYear: 2030, currentYear: 2025)
         #expect(future.marks[0].position >= 0 && future.marks[0].position <= 1)
     }
+
+    // Final review fixes.
+    @Test func aRelativeOrHedgedAnswerReadsAsAGuess() {
+        let before = TimeRange.span(.firstOfYear(1996), .lastOfYear(2004), granularity: .year, origin: .confirmed, evidence: "before Graduation (2004)")
+        let strip = LifeStrip(moments: [before], birthYear: 1990, currentYear: 2026)
+        #expect(strip.marks.map(\.isGuess) == [true], "a relation's far edge is slack: the mark is hollow")
+        #expect(strip.sentence == "In one moment, between 1996 and 2004")
+        let around = LifeStrip(moments: [.stated(around: 1998)], birthYear: 1990, currentYear: 2026)
+        #expect(around.marks.map(\.isGuess) == [true])
+        #expect(around.sentence == "In one moment, around 1998")
+        #expect(LifeStrip(moments: [said(1999), .stated(around: 2001)], birthYear: 1990, currentYear: 2026).sentence == "In 2 moments, between 1999 and 2001")
+    }
+    @Test func fiveSpreadOutMomentsSayTheirRange() {
+        let years = [1990, 1998, 2006, 2014, 2022]
+        #expect(LifeStrip(moments: years.map(said), birthYear: 1990, currentYear: 2026).sentence == "In 5 moments, from 1990 to 2022")
+        #expect(LifeStrip(moments: years.map(guess), birthYear: 1990, currentYear: 2026).sentence == "In 5 moments, between 1990 and 2022")
+    }
+    @Test func aFewMomentsWithAnyGuessReadBetween() {
+        #expect(LifeStrip(moments: [said(1999), guess(2001)], birthYear: 1990, currentYear: 2026).sentence == "In 2 moments, between 1999 and 2001")
+        #expect(LifeStrip(moments: [said(1999), guess(2001), said(2003), said(2004)], birthYear: 1990, currentYear: 2026).sentence == "In 4 moments, between 1999 and 2004")
+    }
+    @Test func aStatedSpanInReverseOrderStillDrawsABar() {
+        let reversed = TimeRange(earliest: .firstOfYear(2004), latest: .lastOfYear(1995), likelyStart: nil, likelyEnd: nil, granularity: .year, origin: .stated, evidenceText: nil)
+        let bar = LifeStrip(moments: [said(1999), said(2001)], stated: reversed, birthYear: 1990, currentYear: 2025).statedSpan
+        #expect(bar.map { abs($0.lowerBound - 5.0 / 36) < 0.0001 && abs($0.upperBound - 15.0 / 36) < 0.0001 } == true)
+    }
+    @Test func aHalfOpenRangeIsNotDated() {
+        let onlyEarliest = TimeRange(earliest: .firstOfYear(1999), latest: nil, likelyStart: nil, likelyEnd: nil, granularity: .year, origin: .inferred, evidenceText: nil)
+        let alone = LifeStrip(moments: [onlyEarliest], birthYear: 1990, currentYear: 2026)
+        #expect(alone.marks.isEmpty)
+        #expect(alone.sentence == "In one moment")
+        #expect(LifeStrip(moments: [said(2001), onlyEarliest], birthYear: 1990, currentYear: 2026).sentence == "In 2 moments, in 2001")
+    }
 }

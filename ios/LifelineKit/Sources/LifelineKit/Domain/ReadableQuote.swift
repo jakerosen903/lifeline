@@ -13,7 +13,8 @@ import Foundation
 ///   the word before, never doubled. A "?" or "!" it carried becomes ".", so a statement never
 ///   turns into a question or an exclamation.
 /// - A word said twice or more in a row keeps one copy: the first as written, without its comma,
-///   plus the end marks and closing quotes of the last. "had had" and "that that" stay.
+///   plus the end marks and closing quotes of the last that the first lacks. "had had" and
+///   "that that" stay. A repeat never runs across a sentence end ("big. big" stays).
 /// - Only a letter is capitalised, and only the first character after opening quotes.
 /// - `maxWords` cuts at a word and ends with "…". A value below 1 acts as 1.
 public enum ReadableQuote {
@@ -76,9 +77,14 @@ public enum ReadableQuote {
         while i < tokens.count {
             let word = core(tokens[i])
             var j = i + 1
-            while !word.isEmpty, j < tokens.count, core(tokens[j]) == word { j += 1 }
+            // A repeat never crosses a sentence end: "big. big" is two sentences.
+            while !word.isEmpty, j < tokens.count, core(tokens[j]) == word, !endsSentence(tokens[j - 1]) { j += 1 }
             if j - i > 1, !repeatable.contains(word) {
-                kept.append(withoutEnding(tokens[i]) + ending(of: tokens[j - 1]))
+                // The first copy keeps its own closing marks ("(no) no" stays "(no)"); the last
+                // copy adds the end marks and closers the first does not already have.
+                let first = tokens[i].withoutTrailingCommas()
+                let firstEnding = ending(of: first)
+                kept.append(first + ending(of: tokens[j - 1]).filter { !firstEnding.contains($0) })
             } else {
                 kept.append(contentsOf: tokens[i..<j])
             }
@@ -104,10 +110,9 @@ public enum ReadableQuote {
         String(token.withoutTrailingCommas().reversed().prefix { endMarks.contains($0) || closers.contains($0) }.reversed())
     }
 
-    /// The token as written, without its trailing commas, end marks and closing quotes.
-    private static func withoutEnding(_ token: String) -> String {
-        let bare = token.withoutTrailingCommas()
-        return String(bare.dropLast(ending(of: bare).count))
+    /// The token closes a sentence: its ending holds ".", "?", "!" or "…".
+    private static func endsSentence(_ token: String) -> Bool {
+        ending(of: token).contains { endMarks.contains($0) }
     }
 
     private static let openers: Set<Character> = ["\"", "\u{201C}", "'", "\u{2018}", "\u{00AB}", "(", "["]
