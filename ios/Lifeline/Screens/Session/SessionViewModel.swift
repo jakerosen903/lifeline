@@ -261,6 +261,7 @@ final class SessionViewModel: Identifiable {
     func dismiss(_ card: Card) { _ = flow.dismiss(card) }
     func undo() { _ = flow.undo() }
     func undoMerge() { _ = flow.undoMerge() }
+    func undoKeptClose() { _ = flow.undoKeptClose() }
     /// "Same story": the card joins an earlier memory; its follow-ups follow as if it were kept.
     func sameStory(_ card: Card, into targets: [MemoryID]) { _ = flow.sameStory(card, into: targets) }
     func resolve(_ card: Card, _ choice: MentionChoice) { _ = flow.resolve(card, choice) }

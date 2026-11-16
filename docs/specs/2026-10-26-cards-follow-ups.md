@@ -58,8 +58,10 @@ Since M7, a thing, place or idea that a memory carries is a record, not a questi
 9. "Done" closes the kept card:
    - unanswered hint and entity follow-ups are dismissed, as "Not quite" did;
    - an unanswered person follow-up becomes an open mention, so it waits in the People queue, as an unanswered "Who's this?" card did.
+   - when the close dismissed one or more follow-ups, a notice shows for 6 s: "1 suggestion dismissed." or "{n} suggestions dismissed.", with "Undo". Undo makes those follow-ups pending again and brings the kept card back at the end of the stack, with the chips answered before still checked. A close that dismissed nothing shows no notice. (Owner's decision, 2026-11-15, after the review of PR #18.)
+   - the notice has its own Undo action. It must not undo a dismiss or a "Same story" made moments before.
 10. When every chip is answered, the kept card closes by itself after 1.5 s.
-11. When the person keeps, dismisses or merges ("Same story") another memory card, every open kept card closes as if "Done" was tapped. At most one kept card is open.
+11. When the person keeps, dismisses or merges ("Same story") another memory card, every open kept card closes as if "Done" was tapped. At most one kept card is open. The notice of rule 9 shows here too, because the person did not tap the chips that went. A kept card that Undo brings back can sit beside the open one until the next memory action or "Done".
 12. Dismiss on a memory card hides its follow-ups with it. Undo brings the memory card back with its follow-ups still held.
 13. A follow-up with no owner memory never shows in the session. A hint stays pending in the store. A person mention with no owner memory becomes an open mention at once, so the name waits in the People queue as before. A name is about a person, not about a memory, and must not be lost (PRINCIPLES 1).
 14. After a heavy moment, kept cards show no chips: the card leaves on Keep as if it had no follow-ups. The follow-ups stay pending (the existing suppression rule).
@@ -78,7 +80,7 @@ The People queue is unchanged. It lists open mentions, which are about people, s
 
 ### Accessibility and identifiers
 
-1. Kept card: `card.kept`. Chip: `card.followUp`, with the chip text as its label. Done: `card.keptDone`.
+1. Kept card: `card.kept`. Chip: `card.followUp`, with the chip text as its label. Done: `card.keptDone`. Notice after a close: `card.keptClosedNotice`. Its Undo: `card.undoKeptClose`.
 2. The identifiers `card.hint`, `card.hintYes`, `card.hintNo`, `card.entity`, `card.entityKeep`, `card.entityNotQuite` and `card.entityNotAny` are no longer on the session, session detail or timeline screens. `HintCard` and `EntityCard` are deleted if nothing else uses them.
 3. A chip is a button. VoiceOver reads its text; a checked chip reads "{text}, done".
 
@@ -101,8 +103,8 @@ The cause must be found before any fix (systematic debugging). When the cause is
 ## Tests
 
 1. LifelineKit unit tests for the ownership rules: hint by id, entity by `about_ref`, entity by entity ref text and kind, place from `placeText`, person by `peopleRefs`, first by ordinal, moving to the next memory after a dismiss, no owner.
-2. LifelineKit unit tests for the queue: follow-ups never become cards; Keep exposes them; dismiss hides them and undo restores them; "Done" reports what to dismiss and what to open as a mention; a late follow-up joins its kept card; waiting cards group pending follow-ups under an accepted memory.
-3. UI tests (fixture extractor): keep a memory, see its chips on the same card; accept a domain chip; accept a thing chip and stay on the session screen; "Done" closes the card; a person chip opens the "Who's this?" sheet.
+2. LifelineKit unit tests for the queue: follow-ups never become cards; Keep exposes them; dismiss hides them and undo restores them; "Done" reports what to dismiss, what to open as a mention and which cards Undo can reopen; a reopened card keeps its checked chips and counts as touched; a late follow-up joins its kept card; waiting cards group pending follow-ups under an accepted memory.
+3. UI tests (fixture extractor): keep a memory, see its chips on the same card; accept a domain chip; accept a thing chip and stay on the session screen; "Done" closes the card; "Done" with a suggestion open shows the notice and Undo brings the chips back; "Done" with only a name open shows no notice; a person chip opens the "Who's this?" sheet.
 4. The full UI suite passes, including both `EntitiesUITests`.
 
 ## Out of scope
