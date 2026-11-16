@@ -62,6 +62,60 @@ private func inferred(_ year: Int) -> TimeRange { .year(year, origin: .inferred,
     #expect(stop.qualifier == nil)
 }
 
+// Ruling R17: an age guess with a mid-year birthday crosses two calendar years.
+@Test func anAgeGuessOverTwoCalendarYearsKeepsItsAround() throws {
+    let birth = try #require(CivilDate(year: 1990, month: 6, day: 15))
+    let range = Resolver.ageRange(.years(from: 9, to: 9), birth: birth, config: .default, evidence: "when I was 9")
+    #expect(range.displayText == "around 1999–2000", "the range the app builds for this guess")
+    let stop = stops([range])[0]
+    #expect(stop.mark == .dashedCapsule)
+    #expect(stop.years == "1999–2000")
+    #expect(stop.qualifier == "around")
+    #expect(stop.rowDateText == nil, "the margin says it now")
+}
+
+@Test func aProbablyRangeKeepsItsFullTextInTheRow() {
+    let range = TimeRange(earliest: .firstOfYear(1998), latest: .lastOfYear(2002),
+                          likelyStart: .firstOfYear(1999), likelyEnd: .lastOfYear(2000),
+                          granularity: .year, origin: .inferred, evidenceText: nil)
+    #expect(range.displayText == "probably 1999–2000")
+    let stop = stops([range])[0]
+    #expect(stop.mark == .dashedCapsule)
+    #expect(stop.years == "1999–2000", "the likely band")
+    #expect(stop.qualifier == nil)
+    #expect(stop.rowDateText == "probably 1999–2000")
+}
+
+// Ruling R18: the edge of a relation's band is the builder's slack, so no gap next to it is labelled.
+@Test func aGapNextToARelationHasNoLabel() {
+    let relation = TimeRange.span(.firstOfYear(2000), .lastOfYear(2004), granularity: .year, origin: .confirmed, evidence: "before Graduation (2004)")
+    let result = stops([.stated(year: 1990), relation, .stated(year: 2012)])
+    let into = result[1].gapAbove, outOf = result[2].gapAbove
+    #expect(into?.years == 10)
+    #expect(into?.units == 4)
+    #expect(into?.label == nil)
+    #expect(into?.isDashed == false)
+    #expect(outOf?.years == 8)
+    #expect(outOf?.units == 3)
+    #expect(outOf?.label == nil)
+    #expect(outOf?.isDashed == false)
+}
+
+@Test func aStatedEndLevelWithARelationsEndKeepsTheLabel() {
+    let relation = TimeRange.span(.firstOfYear(2000), .lastOfYear(2004), granularity: .year, origin: .confirmed, evidence: "before Graduation (2004)")
+    let result = stops([relation, .stated(year: 2004), .stated(year: 2010)])
+    #expect(result[2].gapAbove?.label == "6 years", "2004 is also a stated year, so the gap from it is a fact")
+}
+
+@Test func aRelationUnderARelationShowsNoYears() {
+    let first = TimeRange.span(.firstOfYear(2000), .lastOfYear(2004), granularity: .year, origin: .confirmed, evidence: "before Graduation (2004)")
+    let second = TimeRange.span(.firstOfYear(2004), .lastOfYear(2008), granularity: .year, origin: .confirmed, evidence: "after Graduation (2004)")
+    let result = stops([first, second, .stated(year: 2010)])
+    #expect(!result[0].showsYears)
+    #expect(!result[1].showsYears)
+    #expect(result[2].showsYears)
+}
+
 @Test func theMomentUnderARelationShowsItsYears() {
     let relation = TimeRange.year(2004, origin: .confirmed, evidence: "during the move (2004)")
     let result = stops([relation, .stated(year: 2004)])
