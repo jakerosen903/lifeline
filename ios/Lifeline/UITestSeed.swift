@@ -58,10 +58,13 @@ enum UITestSeed {
         let session = Session(id: .init(), startedAt: .now, endedAt: .now, audioPath: "seed.m4a", stageLog: "[]", landingChoiceMade: true)
         try sessions.insert(session)
         var index = 0
+        let start = Date.now
         func keep(_ title: String, kind: MemoryKind, year: Int?, relation: EntityRelation, quote: String? = nil, links: [(EntityID, String?)]) throws {
             let text = quote ?? "\(title), as told"
             let segment = Segment(id: .init(), sessionID: session.id, index: index, startMs: index * 5_000, endMs: index * 5_000 + 4_000,
                                   text: text, status: .extracted)
+            // A second apart, so "oldest told first" has one answer.
+            let told = start.addingTimeInterval(Double(index))
             index += 1
             try sessions.insert(segment, words: [])
             let candidate = Candidate(id: .init(), segmentID: segment.id, extractorVersion: "seed", ordinal: 0, kind: .memory, payload: "{}",
@@ -69,7 +72,7 @@ enum UITestSeed {
             try store.candidates.insert(candidate)
             let range = year.map { TimeRange.year($0, origin: .stated, evidence: "in \($0)") } ?? .unplaced
             let memory = Memory(id: .init(), title: title, summaryQuote: text, visibility: .timeline, chapterID: nil,
-                                createdFromCandidateID: candidate.id, createdAt: .now, range: range, kind: kind)
+                                createdFromCandidateID: candidate.id, createdAt: told, range: range, kind: kind)
             try store.memories.insert(memory, spans: [MemorySpan(memoryID: memory.id, segmentID: segment.id, startMs: segment.startMs, endMs: segment.endMs, order: 0)],
                                       people: [], places: [],
                                       links: links.map { MomentEntity(memoryID: memory.id, entityID: $0.0, relation: relation, roleText: $0.1) },

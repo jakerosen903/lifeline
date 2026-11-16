@@ -11,7 +11,9 @@ struct FlowLayout: Layout {
     }
 
     func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
-        let positions = arrange(subviews, in: bounds.width).positions
+        // Arrange at the width that was measured, not at `bounds.width`: the bounds are the reported
+        // content width after rounding, and a hair less can push the last chip onto a row nobody measured.
+        let positions = arrange(subviews, in: proposal.width ?? bounds.width).positions
         for (subview, position) in zip(subviews, positions) {
             let size = subview.sizeThatFits(.unspecified)
             subview.place(at: CGPoint(x: bounds.minX + position.x, y: bounds.minY + position.y), proposal: ProposedViewSize(size))
