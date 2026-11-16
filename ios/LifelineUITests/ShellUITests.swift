@@ -144,7 +144,8 @@ final class ShellUITests: XCTestCase {
     /// The You root and the owner's own page are both about yourself, also after going back.
     @MainActor
     func testTheYouTabIsAboutYourself() {
-        let app = launch()
+        // The owner's page is reached through the strip, which shows only with an owner moment: Jordan has two.
+        let app = XCUIApplication.launchWithPeople()
         app.tabBars.buttons["You"].tap()
         waitForLabel(app.buttons["home.start"], "Tell a story about yourself")
         app.buttons["entities.aboutYou"].tap()

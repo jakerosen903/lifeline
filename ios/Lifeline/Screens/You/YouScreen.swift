@@ -1,54 +1,175 @@
 import LifelineKit
 import SwiftUI
 
-/// You: your own page, what you think (ideas), and Settings. A story told from here is about yourself.
+/// You (S3): a portrait of the person in their own words. The header and strip, one line of theirs in
+/// large type, then "Who you are", "How it felt", "What you think" and "What you're hoping for".
+/// A part with nothing in it does not show; with nothing told, one line says where stories will go.
+/// A story told from here is about yourself.
 struct YouScreen: View {
     /// Created once per presentation: a parent re-render must not reload it.
-    @State private var viewModel: EntitiesViewModel
+    @State private var viewModel: YouViewModel
     @State private var showSettings = false
+    /// Absent outside the shell (a preview): then nothing watches the session cover.
+    @Environment(HomeViewModel.self) private var home: HomeViewModel?
+    /// The root of its stack, on screen. The session cover sends no onDisappear, so the root stays visible under it.
+    @State private var isVisible = false
     let isSessionLive: () -> Bool
 
     init(deps: Dependencies, isSessionLive: @escaping () -> Bool) {
-        _viewModel = State(initialValue: EntitiesViewModel(deps: deps, type: .idea))
+        _viewModel = State(initialValue: YouViewModel(deps: deps))
         self.isSessionLive = isSessionLive
     }
 
-    /// The owner, when the profile has one; with none, the bar says "Tell a story".
-    private var ownerSubject: SessionSubject? {
-        viewModel.aboutYou.map { SessionSubject(entityID: $0.id, title: $0.title, isOwner: true, excludedFromAI: $0.excludedFromAI) }
-    }
-
     var body: some View {
-        List {
-            if let you = viewModel.aboutYou {
-                Section {
-                    NavigationLink {
-                        EntityScreen(viewModel: EntityViewModel(entity: you, deps: viewModel.deps)) { viewModel.refresh() }
-                    } label: {
-                        Text("About you").font(.system(.headline, design: .serif)).foregroundStyle(Theme.ink)
+        // A plain stack, not a List or a lazy stack: tens of lines, each there for VoiceOver without scrolling (decision 19).
+        ScrollView {
+            VStack(alignment: .leading, spacing: 28) {
+                if let portrait = viewModel.portrait {
+                    PortraitHeader(portrait: portrait, deps: viewModel.deps, onChange: changed)
+                    if let lead = viewModel.lead {
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text(lead.drawnText).font(.system(.title, design: .serif)).foregroundStyle(Theme.ink)
+                                .fixedSize(horizontal: false, vertical: true)
+                                .accessibilityLabel(lead.text)
+                                .lineMenu(lead, viewModel)
+                                .accessibilityIdentifier("you.lead")
+                            PortraitLeadPlayButton(line: lead, viewModel: viewModel)
+                        }
                     }
-                    .accessibilityIdentifier("entities.aboutYou")
+                    parts
+                    if viewModel.isLoaded, portrait.isEmpty {
+                        Text(EntityPage.invitation(title: "", isOwner: true))
+                            .font(.body).foregroundStyle(Theme.secondaryText)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .accessibilityIdentifier("you.invite")
+                    }
                 }
+                if let error = viewModel.error { ErrorLine(text: error).accessibilityIdentifier("you.error") }
             }
-            Section("What you think") {
-                if viewModel.rows.isEmpty {
-                    Text("Nothing yet. They appear as you tell stories.").foregroundStyle(Theme.secondaryText)
-                }
-                EntityRows(rows: viewModel.rows, deps: viewModel.deps) { viewModel.refresh() }
-            }
-            if let error = viewModel.error { Text(error).foregroundStyle(.red) }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
         }
-        .scrollContentBackground(.hidden)
+        // One slot, pinned above the record bar: "Hidden." with Undo, or why something failed. Wherever the line
+        // was on the page, its message is on screen, and the page does not jump.
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            if let notice = viewModel.notice {
+                YouNoticeSlot(notice: notice, canUndo: viewModel.hiddenID != nil, onUndo: { viewModel.undoHide() })
+                    .padding(.horizontal, 16).padding(.bottom, 8)
+            }
+        }
+        .animation(.default, value: viewModel.notice)
         .linenBackground()
         .navigationTitle("You")
+        .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             Button("Settings") { showSettings = true }
                 .accessibilityIdentifier("home.settings")
         }
-        .sheet(isPresented: $showSettings, onDismiss: { viewModel.refresh() }) {
+        .sheet(isPresented: $showSettings, onDismiss: changed) {
             SettingsScreen(deps: viewModel.deps, isSessionLive: isSessionLive)
         }
-        .onAppear { viewModel.refresh() }
-        .sessionContext(ownerSubject)
+        // The root appeared (tab selected, or back from a pushed page): a fresh lead (decision 8).
+        // While a tag is chosen the lead stays (decisions 8 and 12): a new lead must not take the only fact with that tag.
+        .onAppear { isVisible = true; viewModel.refresh(newLead: viewModel.tag == nil) }
+        .onDisappear { isVisible = false; viewModel.stop(); viewModel.clearSlot() }
+        // A recording starting under the cover must not talk over this page's player.
+        .onChange(of: home?.presented != nil) { _, covered in if covered { viewModel.stop() } }
+        .confirmationDialog("Delete this memory?", isPresented: Binding(get: { viewModel.deleteTarget != nil }, set: { if !$0 { viewModel.deleteTarget = nil } }),
+                            titleVisibility: .visible, presenting: viewModel.deleteTarget) { line in
+            Button("Delete “\(line.memory?.title ?? line.text)”", role: .destructive) { viewModel.delete(line) }
+                .accessibilityIdentifier("row.confirmDelete")
+            Button("Cancel", role: .cancel) { viewModel.deleteTarget = nil }
+        } message: { _ in
+            Text("The memory, its people and its dates go. Your recording stays in Sessions.")
+        }
+        // A story told from here lands under a cover; when it closes, read what it added and keep the lead.
+        .onChange(of: home?.coverClosings) { if isVisible { viewModel.refresh(newLead: false) } }
+        .sessionContext(viewModel.ownerSubject)
+    }
+
+    /// Something changed elsewhere (Settings, a pushed page): read again, keeping the lead.
+    private func changed() { viewModel.refresh(newLead: false) }
+
+    @ViewBuilder private var parts: some View {
+        let deps = viewModel.deps
+        let who = viewModel.lines(.whoYouAre)
+        if !who.isEmpty {
+            PortraitPart(heading: "Who you are") {
+                if !viewModel.tags.isEmpty {
+                    PortraitChips(tags: viewModel.tags, chosen: $viewModel.tag)
+                }
+                ForEach(who) { line in
+                    PortraitSaidRow(line: line, note: line.tags.isEmpty ? nil : line.tags.joined(separator: ", "), viewModel: viewModel, onChange: changed)
+                }
+            }
+        }
+        let felt = viewModel.lines(.howItFelt)
+        if !felt.isEmpty {
+            PortraitPart(heading: "How it felt") {
+                ForEach(felt) { line in PortraitFeelingCard(line: line, viewModel: viewModel, onChange: changed) }
+            }
+        }
+        let ideas = viewModel.lines(.whatYouThink)
+        if !ideas.isEmpty {
+            PortraitPart(heading: "What you think") {
+                ForEach(ideas) { line in PortraitIdeaRow(line: line, viewModel: viewModel, onChange: changed) }
+            }
+        }
+        let hopes = viewModel.lines(.hopingFor)
+        if !hopes.isEmpty {
+            PortraitPart(heading: "What you're hoping for") {
+                ForEach(hopes) { line in
+                    PortraitSaidRow(line: line, note: viewModel.saidWhen(line), viewModel: viewModel, onChange: changed)
+                }
+            }
+        }
+    }
+}
+
+/// The slot's one message. "Hidden." is not an error: ink text, no red. An error says what failed. Undo shows
+/// while the hide can still be taken back, also beside an error, so a failure never takes the way back with it.
+private struct YouNoticeSlot: View {
+    let notice: YouNotice
+    let canUndo: Bool
+    let onUndo: () -> Void
+
+    var body: some View {
+        HStack(spacing: 12) {
+            switch notice {
+            case .hidden:
+                Text(notice.text).font(.footnote).foregroundStyle(Theme.ink)
+                    .accessibilityIdentifier("you.hidden")
+            case .error(let message):
+                ErrorLine(text: message).font(.footnote).accessibilityIdentifier("you.error")
+            }
+            Spacer(minLength: 0)
+            if canUndo {
+                Button("Undo", action: onUndo)
+                    .buttonStyle(.bordered)
+                    .controlSize(.large)
+                    .tint(Theme.oliveOnFill)
+                    .accessibilityIdentifier("you.undo")
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .frame(minHeight: 44)
+        .background(RoundedRectangle(cornerRadius: 14).fill(Theme.sand))
+        .transition(.opacity)
+    }
+}
+
+/// An error that says what failed: ink text, with the red only in the symbol, as on the record bar.
+private struct ErrorLine: View {
+    let text: String
+
+    var body: some View {
+        Label {
+            Text(text).foregroundStyle(Theme.ink).fixedSize(horizontal: false, vertical: true)
+        } icon: {
+            Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.red)
+        }
+        .accessibilityElement(children: .combine)
     }
 }

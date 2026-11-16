@@ -55,6 +55,24 @@ extension XCUIApplication {
         return element.waitForExistence(timeout: 2)
     }
 
+    /// Timeline is a lazy List: scrolls until `last`, the row known to be its last, is on screen and stays there
+    /// after one more swipe. Anything below it would then be in the tree, so its absence can be asserted.
+    func scrollTimelineToItsEnd(last: XCUIElement, file: StaticString = #filePath, line: UInt = #line) {
+        XCTAssertTrue(reveal(last, swipes: 8), "the Timeline's last row exists", file: file, line: line)
+        swipeUp()
+        XCTAssertTrue(waitHittable(last, timeout: 5), "the last row stays on screen: this is the end of the list", file: file, line: line)
+    }
+
+    /// A plain ScrollView holds every element, so existing says nothing about being on screen: swipes up until
+    /// the element is hittable.
+    func scrollIntoView(_ element: XCUIElement, swipes: Int = 6) -> Bool {
+        for _ in 0..<swipes {
+            if element.exists, waitHittable(element, timeout: 1) { return true }
+            swipeUp()
+        }
+        return waitHittable(element, timeout: 2)
+    }
+
     /// Any element with this identifier, whatever its type.
     func any(_ identifier: String) -> XCUIElement {
         descendants(matching: .any).matching(identifier: identifier).firstMatch
@@ -80,6 +98,29 @@ extension XCUIApplication {
         app.launch()
         XCTAssertTrue(app.waitHittable(app.buttons["home.start"], timeout: 15), "the seeded app lands on the timeline")
         return app
+    }
+
+    /// Launches with `-uiTesting-seedPortrait`: the invented family, then Jordan's own facts, feelings and a goal
+    /// (born 1990 in Dayton). First open is done; do not call `skipFirstOpen()`.
+    static func launchWithPortrait(_ extra: [String] = []) -> XCUIApplication {
+        let app = XCUIApplication()
+        app.launchArguments += ["-uiTesting", "-uiTesting-seedPortrait"] + extra
+        app.launch()
+        XCTAssertTrue(app.waitHittable(app.buttons["home.start"], timeout: 15), "the seeded app lands on the timeline")
+        return app
+    }
+
+    /// The You tab, once its header is up.
+    func openYou() {
+        openTab("You")
+        XCTAssertTrue(staticTexts["you.name"].waitForExistence(timeout: 10), "the portrait's header is up")
+    }
+
+    /// The `you.line` labels on You, top to bottom. A fact or a goal is a button; a feeling is its text.
+    func youLineLabels() -> [String] {
+        let lines = (buttons.matching(identifier: "you.line").allElementsBoundByIndex + staticTexts.matching(identifier: "you.line").allElementsBoundByIndex)
+            .filter { $0.exists && !$0.frame.isEmpty }
+        return lines.sorted { $0.frame.minY < $1.frame.minY }.map(\.label)
     }
 
     /// The `entities.row` labels, top to bottom, then leading to trailing.

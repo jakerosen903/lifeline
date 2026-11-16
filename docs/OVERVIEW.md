@@ -20,7 +20,7 @@ Most journaling tools ask you to write. Most family-history tools ask you to fil
 4. **Kept.** Keep, change or dismiss a card whenever you like, or never. Nothing merges, groups or gets a title without your tap.
 5. **Placed.** Moments land on a timeline as honest ranges (“during the Boston years”), inside stories and chapters, or on the shelf until a date turns up. Things that are not moments (a first car, a grandmother, a belief) become details on pages for the people, places, things and ideas they are about.
 
-**The shape of the app.** The app opens on five tabs: Timeline, People, Places, Things and You. A record bar sits above the tab bar on every tab. Its label names the page: “Tell a story”, “Tell a story about Maya” or “Tell a story about yourself”. Tap the bar to start a quick story. Its menu holds “Settle in”. A session started from a page records that page as its subject and opens with a question about it. Sessions is a labeled button on Timeline. Settings is on You. “Names you mentioned” is in the overflow menu on People. People is a grid of letter tiles. Each tile shows the name and the person’s own words, such as “my sister”. A labeled row above the grid sorts it: “Most told”, “First in your story” or “By name”. The sort starts on “Most told” at each launch. The pages for people, places and things open from their tabs.
+**The shape of the app.** The app opens on five tabs: Timeline, People, Places, Things and You. A record bar sits above the tab bar on every tab. Its label names the page: “Tell a story”, “Tell a story about Maya” or “Tell a story about yourself”. Tap the bar to start a quick story. Its menu holds “Settle in”. A session started from a page records that page as its subject and opens with a question about it. Sessions is a labeled button on Timeline. Settings is a labeled button on You, and You is a portrait of the person in their own words (see “You as a portrait”). “Names you mentioned” is in the overflow menu on People. People is a grid of letter tiles. Each tile shows the name and the person’s own words, such as “my sister”. A labeled row above the grid sorts it: “Most told”, “First in your story” or “By name”. The sort starts on “Most told” at each launch. The pages for people, places and things open from their tabs.
 
 The result is three things at once: a **journal** for revisiting fond memories, an **autobiography** you can replay in your own voice, and, later, a **family record** where several people’s versions of the same Christmas sit side by side.
 
@@ -96,7 +96,7 @@ A session is when you recorded. A moment is a scene you described, with its own 
 
 ### Not everything is a moment
 
-Much of a life story is not an event at a time: the house with the blue door, a grandmother who was Portuguese, a belief about hard work. These are kept as details of an entity, one of four kinds: People, Places, Things and Ideas. Each entity has a page. The page shows, from top to bottom: the type, the title, the person’s own words, a span only when the person gave dates, and Play. Then it shows the life strip, “What you’ve said about them”, “Often with”, the moments in date order, and Tags. A section with nothing in it does not show. A page with nothing told shows one line: “Stories you tell about {title} will show here.” An idea keeps its moments in order, so “I used to think X” and “now I think Y” sit together, and the app never judges the change. Statements about the person themself collect under “About you”. Nothing is reclassified without a tap.
+Much of a life story is not an event at a time: the house with the blue door, a grandmother who was Portuguese, a belief about hard work. These are kept as details of an entity, one of four kinds: People, Places, Things and Ideas. Each entity has a page. The page shows, from top to bottom: the type, the title, the person’s own words, a span only when the person gave dates, and Play. Then it shows the life strip, “What you’ve said about them”, “Often with”, the moments in date order, and Tags. A section with nothing in it does not show. A page with nothing told shows one line: “Stories you tell about {title} will show here.” An idea keeps its moments in order, so “I used to think X” and “now I think Y” sit together, and the app never judges the change. Statements about the person themself show on You, in the parts described under “You as a portrait”. Nothing is reclassified without a tap.
 
 ### People are resolved, not guessed
 
@@ -129,7 +129,7 @@ These words have specific meanings in the app, the designs and the code.
 | Shelf | Where a memory with no date and no collection waits. It counts just as much as a dated one. |
 | Kind | What a memory is: a moment (an event, or other), or a fact, feeling or goal. Only moments go on the timeline. |
 | Entity | A person, place, thing or idea with a page of its own. |
-| Detail | A standing statement attached to an entity (“the house had a blue door”). “About you” holds the details about the person. |
+| Detail | A standing statement attached to an entity (“the house had a blue door”). The details about the person show on You, under “Who you are”. |
 | Turn | Something the app says out loud (M8). Stored apart from the person’s words, never made into a memory. |
 | Stated date | A date the person gave with “Tell me when”, shown exactly as said. The app never invents one. |
 
@@ -202,6 +202,23 @@ The resolver must never ask for a date. It can ask one relative question, a choi
 “Tell me when” lets the person state a year, around a year, a range of years or an age. The app stores the value with origin “stated” and shows it as said. The app never makes up a date.
 
 A memory with no range and no collection goes to the shelf. The shelf offers “Add a date” and “Add to a collection”.
+
+### You as a portrait
+
+The You tab shows the person, in their own words and voice. From top to bottom it shows these parts.
+
+- **Header.** The name and a birth line, both from what the person typed: “born 1990 in Dayton”, “born 1990” or “born in Dayton”. With no name, no name shows.
+- **Life strip.** The owner’s own strip. It opens the owner’s own page. With no moments linked to the owner, no strip shows.
+- **Lead line.** One line of the person’s own words in large type, with “Hear yourself say it, 0:04”. The app picks it from facts, feelings and goals that have own words and a recording. It picks a new one each time You appears, and it keeps the same one across a refresh. The lead never repeats in its own part. A tag chip other than “All” does not change it. A line first told in a heavy session (a disclosure, or a wish to stop) never leads. It still shows in its part, with its play control.
+- **Four parts.** “Who you are” holds facts, with tag chips (“All” and the person’s tags). “How it felt” holds feelings. Each feeling may say “about {title}”, and the line opens that page. “What you think” holds ideas. “What you’re hoping for” holds goals. Each goal says “said in {month}”, the month its session started. The year shows only when it is not this year: “said in {month} {year}”. A part with nothing in it does not show.
+
+Quotation marks go only around the person’s own words. A title that stands in shows without marks. Every line with a recording has a play control. It plays only the part of the recording where the person said that line. One line plays at a time. Playback stops when its line leaves the page: Hide, Delete, or a tag chip that filters it out. Hide and Delete… are on a long-press menu on each line. Hide shows “Hidden.” with Undo for 6 seconds. Delete asks first. “Hidden.” with Undo, a play error, and a failed hide, delete or undo show in one slot. The slot is pinned at the bottom of You, above the record bar, so it is on screen wherever the line was. One message shows at a time, and a newer one replaces the older. A play tap clears only an old error. It never ends Undo. VoiceOver announces each message when it appears. The slot clears when You disappears and when a new lead is picked.
+
+A fact shows under “Who you are” when it has a detail link to the owner, or no detail link. A fact detailed only to someone else shows on that page. A fact about only a hidden person or thing follows it and does not show on You. The app never names a hidden entity in “about”. A You page with nothing told shows the header and “Stories you tell about yourself will show here.”
+
+The About list left the Timeline. The Timeline summary still says “and N things about your life”, so a person who told only facts does not see the empty state. N counts the visible facts, feelings and goals. The tag filter and “Show hidden memories” do not change N. While a tag filter is on, the summary leaves out that part, and the tag menu offers only the tags that a moment carries.
+
+Limits. Real playback is checked only on the iPhone, because test seeds have no audio. A line hidden from You has no way back after its 6-second Undo, or after the person leaves the You root. No screen shows a hidden fact, feeling or goal again. “Show hidden memories” on Timeline shows hidden moments only, not hidden facts, feelings or goals. A hidden fact, feeling or goal cannot be deleted, because no screen shows it. Lines hidden before this change are in the same state. Most facts about other people stay on You until extractor v7 re-reads the archive and adds detail links. There is no dark palette yet.
 
 ### 6. Kinds and entities
 

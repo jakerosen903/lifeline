@@ -2,6 +2,40 @@
 
 One entry per decision. Newest first. Status is Decided, Open, or Superseded.
 
+## 2026-11-16 · You is a portrait, and About leaves the Timeline (S3)
+
+**Status:** Decided. Builds on the five-sections decision of 2026-11-15. Source: `docs/plans/2026-11-16-sections-you.md`, decisions 2, 4, 5, 8, 17 and 18, and the rulings made while building it.
+
+**Decision.** You shows the name and birth line, the owner's life strip, one lead line, then "Who you are", "How it felt", "What you think" and "What you're hoping for". Every line with a recording plays only its own span.
+
+- A fact shows on You when it has a detail link to the owner, or none. A fact detailed only to someone else shows on that page. A fact about only a hidden person or thing follows it and does not show on You. The app never names a hidden entity in "about". The app does not guess who a fact is about.
+- A feeling says "about {title}" from its first non-owner detail link, else its first mention link. With no link, no line shows. Feelings and facts show no date. A goal shows "said in {month}" or "said in {month} {year}", the month its session started.
+- The lead comes from facts, feelings and goals with own words and a recording. It changes each time You appears, stays across a refresh, never repeats in its part, and stays while a tag chip other than "All" is selected.
+- Hide and Delete... move to a long-press menu on each line. Hide shows "Hidden." with Undo for 6 seconds, because a long-press Hide is easy to trigger by mistake. Delete asks first.
+- A feeling's quote opens its memory page, and "about" is a separate link, so one kind of line behaves one way.
+- A play error shows in ink with a red icon, to keep 4.5:1 contrast. A missing file reads "Could not play this: the recording could not be found."
+- The About list leaves the Timeline. The summary keeps "and N things about your life".
+- No migration. The portrait reads in batches, reads nothing until it is on screen, and refreshes when a session closes.
+
+**Rulings from the final review (2026-11-16).** Each ruling has its cost.
+
+- **A line from a heavy session never leads.** A line whose first telling is in a session with a disclosure or a wish to stop is not in the lead pool. It still shows in its part, with its play control. The app reads the heavy sessions in one batch, as the landing reads one session. Why: a disclosure must not show at title size with a play button each time the person opens a tab (PRINCIPLES, session arc and safety). Cost: the check is per session, so an ordinary line from a heavy session never leads either.
+- **One slot for Undo and errors.** "Hidden." with Undo, a play error, and a failed hide, delete or undo show in one slot pinned at the bottom of You, above the record bar. It replaces "under the lead". One message shows at a time, and a newer one replaces the older. Undo stays in the slot while its 6 seconds last, also when an error replaces "Hidden.". A play tap clears only an old error. It never ends Undo. A second hide, or a delete that works, can replace an open Undo. VoiceOver announces each message when it appears, also when the same text appears again. The error for a page that could not be read keeps its own place. Why: an Undo the person cannot see is no safety net. Cost: one more floating element above the record bar while it shows.
+- **A stale play error goes.** The slot clears when You disappears and when a new lead is picked. Cost: none.
+- **Playback stops when its line leaves the page.** Hide, Delete and a tag chip that filters the line out each stop it. Cost: none.
+- **Sort order.** Facts, feelings and goals sort by when they were told (the session start), then by the start of the span, then by id. A line with no recording sorts after the others, by id. Why: one stable answer. Cost: two lines told in the same second sort by the span start, not by meaning.
+- **Chips come from listed facts only.** A tag only on a hidden, floating or unlisted memory makes no chip. Why: a chip must never lead to an empty part. Cost: none.
+- **"said in" uses the Gregorian calendar in English.** Only the time zone comes from the device. Why: the copy is English, and a Buddhist-calendar year in English copy reads as wrong. Cost: a person whose device uses another calendar sees Gregorian years.
+- **The owner is never an "about" target.** A feeling linked to the owner and to the lake reads "about The lake". Why: "about you" on your own page says nothing. Cost: none.
+- **Timeline count and tag menu.** "N things about your life" counts visible facts, feelings and goals. The tag filter and "Show hidden memories" do not change it. While a tag filter is on, the summary leaves out the "and N things" part. The tag menu offers only the tags that at least one moment carries. With a filter on and no moment that matches, the empty state shows. A Timeline tag filter turns itself off when no moment carries its tag any more. Why: Timeline must not claim content that it does not show. Cost: a tag used only on facts cannot filter the Timeline; it is a chip on You.
+- **Screens built before the owner answered.** The screen tasks were built on the plan's defaults before the owner answered the plan's open questions (dates under feelings, when the lead changes, the strip as the link to the owner's page, hidden lines one way, facts about others staying on You until extractor v7). Cost: rework of the affected views and tests if the owner overrules a default.
+
+**Why.** About held 62% of everything on one screen (audit F9), and the owner is a person too (F10). A portrait in the person's own words and voice serves P1 and P2. Showing only what the person said, with no guessed link, serves P5.
+
+**Costs.** Most facts about other people stay on You until extractor v7 re-reads the archive and adds detail links. A fact about a hidden entity shows nowhere until the entity shows again. The lead changes less often while a person filters. No dark palette exists yet.
+
+**Cost of Hide (read this before you hide a line).** Hide on You has no way back after its 6-second Undo, or after the person leaves the You root. No screen shows a hidden fact, feeling or goal again. "Show hidden memories" on Timeline shows only hidden moments. It does not show hidden facts, feelings or goals. A hidden fact, feeling or goal cannot be deleted, because no screen shows it. Lines hidden before this change are in the same state. A way back is a follow-up for the owner to place.
+
 ## 2026-11-15 · Five sections: Timeline, People, Places, Things, You
 
 **Status:** Decided. Supersedes owner's call 4 of the UI audit of 2026-10-26 (a tab bar of Timeline, People, Sessions, Settings). Source: the owner's approval of `docs/specs/2026-11-15-five-sections.md`.

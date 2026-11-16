@@ -30,6 +30,8 @@ struct Dependencies {
     let promptLog: PromptLogRepository
     /// The arc's numbers: short under `-uiTesting`.
     let arcConfig: ArcConfig
+    /// Which of `count` lines leads the You page: at random in the app, the first under `-uiTesting` (S3 decision 9).
+    let pickLead: @Sendable (_ count: Int) -> Int
     /// Durable sorting: started at launch, cancelled per session before a delete.
     let worker: SortingWorker
     /// "Same as X?": retrieval by on-device embeddings; the extractor decides, the person confirms.
@@ -77,6 +79,10 @@ struct Dependencies {
 
     func audioURL(for session: Session) throws -> URL {
         try AudioLocation.directory(under: audioRoot).appending(path: session.audioPath)
+    }
+
+    func audioURL(for telling: Telling) throws -> URL {
+        try AudioLocation.directory(under: audioRoot).appending(path: telling.audioPath)
     }
 
     /// The interviewer's context, read from the store at call time: this session's segments not excluded
@@ -164,6 +170,7 @@ struct Dependencies {
             actions: actions,
             promptLog: PromptLogRepository(db),
             arcConfig: .default,
+            pickLead: { Int.random(in: 0..<$0) },
             worker: SortingWorker(store: store, service: extraction, matcher: matcher, reporter: reporter, log: { print("[sorting] \($0)") }),
             matcher: matcher,
             reconcile: reconcile,
@@ -231,6 +238,7 @@ struct Dependencies {
             actions: actions,
             promptLog: PromptLogRepository(db),
             arcConfig: .uiTesting,
+            pickLead: { _ in 0 },
             worker: SortingWorker(store: store, service: extraction, matcher: matcher, reporter: reporter),
             matcher: matcher,
             reconcile: reconcile,
@@ -249,6 +257,8 @@ struct Dependencies {
         if args.contains("-uiTesting-seed") { try UITestSeed.write(sessions: deps.sessions, store: store) }
         if args.contains("-uiTesting-seedPerson") { try UITestSeed.writePersonOnly(store: store) }
         if args.contains("-uiTesting-seedPeople") { try UITestSeed.writePeople(store: store, profile: deps.profile, sessions: deps.sessions) }
+        if args.contains("-uiTesting-seedPortrait") { try UITestSeed.writePortrait(store: store, profile: deps.profile, sessions: deps.sessions) }
+        if args.contains("-uiTesting-seedTaggedMoment") { try UITestSeed.tagOneMoment(store: store) }
         if args.contains("-uiTesting-noOwner") { try UITestSeed.writeProfileWithoutOwner(profile: deps.profile, store: store) }
         return deps
     }

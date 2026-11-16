@@ -177,4 +177,29 @@ extension SessionRepository {
     public func fetchSegment(_ id: SegmentID) throws -> Segment? {
         try db.writer.read { try Segment.fetchOne($0, key: id.rawValue) }
     }
+    /// The sessions that had a heavy moment, read back from storage as the landing reads one session
+    /// (`SessionWeight`): a flag row that is heavy, or a stage log with a disclosure or a wish to stop.
+    /// One read for every session, never one per line. A row or a log that does not decode counts as not heavy.
+    public func heavySessionIDs() throws -> Set<SessionID> {
+        try db.writer.read { db in
+            let flags = try Row.fetchAll(db, sql: """
+                select segment.session_id, candidate.payload from candidate
+                join segment on segment.id = candidate.segment_id
+                where candidate.kind = ?
+                """, arguments: [CandidateKind.flag.rawValue])
+            // Only logs that can be heavy are decoded; the reasons are plain words in the JSON.
+            let logs = try Row.fetchAll(db, sql: """
+                select id, stage_log from session where stage_log like '%disclosure%' or stage_log like '%wantsToStop%'
+                """)
+            var heavy = Set<SessionID>()
+            for row in flags {
+                guard let flags = try? CandidatePayload.decode(Flags.self, from: row["payload"] as String), flags.isHeavy else { continue }
+                heavy.insert(SessionID(rawValue: row["session_id"]))
+            }
+            for row in logs where SessionWeight.of(log: (try? SessionArc.decode(row["stage_log"])) ?? []).heavy {
+                heavy.insert(SessionID(rawValue: row["id"]))
+            }
+            return heavy
+        }
+    }
 }
