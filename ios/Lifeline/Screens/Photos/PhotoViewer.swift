@@ -49,7 +49,7 @@ struct PhotoViewer: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
-                    Button { dismiss() } label: { Text("Done").frame(minWidth: 44, minHeight: 44).contentShape(Rectangle()) }
+                    Button { dismiss() } label: { Text("Done").foregroundStyle(Theme.ink).frame(minWidth: 44, minHeight: 44).contentShape(Rectangle()) }
                         .buttonStyle(.plain)
                         .accessibilityIdentifier("photo.done")
                 }
