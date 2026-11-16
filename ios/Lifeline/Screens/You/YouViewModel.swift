@@ -12,7 +12,10 @@ final class YouViewModel {
     var tag: String?
     /// False until the first `refresh(newLead:)`: the page says nothing about being empty before it has read.
     private(set) var isLoaded = false
+    /// Why the page could not be read. Apart from `playError`: a play tap never hides a failed read, nor the reverse.
     private(set) var error: String?
+    /// Why a line could not play. Cleared by the next tap.
+    private(set) var playError: String?
     let deps: Dependencies
     /// The one player: a line plays its own telling, and starting another stops the first.
     let player = SegmentPlayer()
@@ -61,22 +64,29 @@ final class YouViewModel {
         playingLineID == line.id && player.playingRange != nil
     }
 
-    /// Plays the line's telling; a second tap on the playing line stops it. A failure says so and changes nothing else.
+    /// Plays the line's telling; a second tap on the playing line stops it. A tap that cannot play says why
+    /// and changes nothing else. A telling is not checked to be non-empty when it is read, so an empty span reaches here.
     func togglePlayback(_ line: PortraitLine) {
+        playError = nil
         if isPlaying(line) { stop(); return }
         guard let telling = line.telling else { return }
         do {
             let url = try deps.audioURL(for: telling)
             // Say what failed: a missing file otherwise reads as an OSStatus number.
             guard FileManager.default.fileExists(atPath: url.path) else {
-                self.error = "Could not play this: the recording could not be found."
+                playError = "Could not play this: the recording could not be found."
                 return
             }
             try deps.activatePlayback()
             try player.play(url: url, range: telling.range)
+            // The player stops itself and returns when the span is empty or past the end of the file.
+            guard player.playingRange != nil else {
+                playError = "Could not play this: there is nothing to play at that point of the recording."
+                return
+            }
             playingLineID = line.id
         } catch {
-            self.error = "Could not play this: \(error.localizedDescription)"
+            playError = "Could not play this: \(error.localizedDescription)"
         }
     }
 

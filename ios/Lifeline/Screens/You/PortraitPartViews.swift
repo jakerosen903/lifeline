@@ -123,11 +123,13 @@ struct PortraitFeelingCard: View {
 /// An idea: its title large and plain beside an ochre rule. Opens its page, which keeps "Over time".
 struct PortraitIdeaRow: View {
     let line: PortraitLine
-    let deps: Dependencies
+    let viewModel: YouViewModel
     let onChange: () -> Void
 
     var body: some View {
+        let deps = viewModel.deps
         if let idea = line.idea {
+            HStack(alignment: .center, spacing: 0) {
             NavigationLink {
                 EntityScreen(viewModel: EntityViewModel(entity: idea, deps: deps), onChange: onChange)
             } label: {
@@ -145,6 +147,9 @@ struct PortraitIdeaRow: View {
             }
             .buttonStyle(.plain)
             .accessibilityIdentifier("entities.row")
+            // Its first telling, when it has one; beside the link, never inside it.
+            PlayLineButton(line: line, viewModel: viewModel)
+            }
         }
     }
 }
@@ -212,6 +217,8 @@ struct PlayLineButton: View {
             }
             .buttonStyle(.borderless)
             .accessibilityLabel(playing ? "Stop" : "Hear yourself say it")
+            // The controls are identical to the ear: the value says which line each one plays.
+            .accessibilityValue(line.text)
             .accessibilityIdentifier("you.play")
         }
     }

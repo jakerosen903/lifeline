@@ -71,6 +71,9 @@ enum UITestSeed {
         try seed.keep("Leaving Boston", kind: .feeling, quote: "leaving Boston felt like closing a book before the last chapter", links: [])
         try seed.keep("Never scared at the lake", kind: .feeling, quote: "I was never scared at the lake, not once", links: [(lake, nil)])
         try seed.keep("Lisbon", kind: .goal, quote: "I want to take Maya to Lisbon someday", links: [])
+        // "Saying yes to things" has spans (its moments), so it plays; this idea has none, so it shows no control.
+        // It sorts after "Saying yes to things" by title, so `entities.row` firstMatch stays the same.
+        _ = try store.entities.insert(type: .idea, title: "Telling the truth")
     }
 
     /// The family behind `writePeople`, and the session it was told in, for a seed that tells more after it.

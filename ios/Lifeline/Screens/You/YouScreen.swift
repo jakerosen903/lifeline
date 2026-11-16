@@ -27,8 +27,7 @@ struct YouScreen: View {
                 if let portrait = viewModel.portrait {
                     PortraitHeader(portrait: portrait, deps: viewModel.deps, onChange: changed)
                     if let lead = viewModel.lead {
-                        // 12.3333, not 12: at 12 the chips below land where the accessibility frame reads 43.99999999999994 high (float noise, not a layout fault).
-                        VStack(alignment: .leading, spacing: 12.3333) {
+                        VStack(alignment: .leading, spacing: 12) {
                             Text(lead.drawnText).font(.system(.title, design: .serif)).foregroundStyle(Theme.ink)
                                 .fixedSize(horizontal: false, vertical: true)
                                 .accessibilityLabel(lead.text)
@@ -36,6 +35,8 @@ struct YouScreen: View {
                             PortraitLeadPlayButton(line: lead, viewModel: viewModel)
                         }
                     }
+                    // Where the person is looking: under the lead and above the parts, not at the foot of a long page.
+                    if let playError = viewModel.playError { ErrorLine(text: playError).accessibilityIdentifier("you.error") }
                     parts
                     if viewModel.isLoaded, portrait.isEmpty {
                         Text(EntityPage.invitation(title: "", isOwner: true))
@@ -44,16 +45,7 @@ struct YouScreen: View {
                             .accessibilityIdentifier("you.invite")
                     }
                 }
-                if let error = viewModel.error {
-                    // Ink text for contrast; the red is only in the symbol, as on the record bar.
-                    Label {
-                        Text(error).foregroundStyle(Theme.ink).fixedSize(horizontal: false, vertical: true)
-                    } icon: {
-                        Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.red)
-                    }
-                    .accessibilityElement(children: .combine)
-                    .accessibilityIdentifier("you.error")
-                }
+                if let error = viewModel.error { ErrorLine(text: error).accessibilityIdentifier("you.error") }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 16)
@@ -76,6 +68,9 @@ struct YouScreen: View {
         // A recording starting under the cover must not talk over this page's player.
         .onChange(of: home?.presented != nil) { _, covered in if covered { viewModel.stop() } }
         // A story told from here lands under a cover; when it closes, read what it added and keep the lead.
+        .onChange(of: viewModel.playError) { _, message in
+            if let message { AccessibilityNotification.Announcement(message).post() }
+        }
         .onChange(of: home?.coverClosings) { if isVisible { viewModel.refresh(newLead: false) } }
         .sessionContext(viewModel.ownerSubject)
     }
@@ -105,7 +100,7 @@ struct YouScreen: View {
         let ideas = viewModel.lines(.whatYouThink)
         if !ideas.isEmpty {
             PortraitPart(heading: "What you think") {
-                ForEach(ideas) { line in PortraitIdeaRow(line: line, deps: deps, onChange: changed) }
+                ForEach(ideas) { line in PortraitIdeaRow(line: line, viewModel: viewModel, onChange: changed) }
             }
         }
         let hopes = viewModel.lines(.hopingFor)
@@ -116,5 +111,19 @@ struct YouScreen: View {
                 }
             }
         }
+    }
+}
+
+/// An error that says what failed: ink text, with the red only in the symbol, as on the record bar.
+private struct ErrorLine: View {
+    let text: String
+
+    var body: some View {
+        Label {
+            Text(text).foregroundStyle(Theme.ink).fixedSize(horizontal: false, vertical: true)
+        } icon: {
+            Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.red)
+        }
+        .accessibilityElement(children: .combine)
     }
 }

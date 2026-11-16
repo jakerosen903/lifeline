@@ -39,7 +39,8 @@ final class YouUITests: XCTestCase {
         XCTAssertTrue(all.isSelected, "the filter starts on All")
         XCTAssertFalse(family.isSelected)
         for chip in [all, family] {
-            XCTAssertGreaterThanOrEqual(chip.frame.height, 44, "a chip is a full-size control")
+            // The accessibility frame carries float noise (43.99999999999994 seen), so 0.01 of rounding is allowed.
+            XCTAssertGreaterThanOrEqual(chip.frame.height, 44 - 0.01, "a chip is a full-size control")
             XCTAssertLessThanOrEqual(chip.frame.height, 50, "a chip is not padded past its hit area")
         }
         family.tap()
@@ -104,8 +105,15 @@ final class YouUITests: XCTestCase {
     func testEveryLineWithARecordingHasAPlayControl() {
         let app = XCUIApplication.launchWithPortrait(); app.openYou()
         XCTAssertEqual(app.buttons["you.lead.play"].label, "Hear yourself say it, 0:04")
-        XCTAssertEqual(app.buttons.matching(identifier: "you.play").count, 6, "six lines with a recording; the idea has none")
-        XCTAssertEqual(app.buttons.matching(identifier: "you.play").firstMatch.label, "Hear yourself say it")
+        XCTAssertEqual(app.buttons.matching(identifier: "you.play").count, 7, "six lines and one idea with a recording; the other idea has none")
+        let first = app.buttons.matching(identifier: "you.play").firstMatch
+        XCTAssertEqual(first.label, "Hear yourself say it")
+        XCTAssertEqual(first.value as? String, "I'm the oldest of two", "the value tells identical controls apart")
+        let idea = { (title: String) in app.buttons.matching(identifier: "entities.row").matching(NSPredicate(format: "label == %@", title)).firstMatch }
+        let plays = app.buttons.matching(identifier: "you.play").allElementsBoundByIndex
+        let besides = { (title: String) in plays.filter { $0.frame.midY >= idea(title).frame.minY && $0.frame.midY <= idea(title).frame.maxY }.count }
+        XCTAssertEqual(besides("Saying yes to things"), 1, "an idea with a telling plays it, beside its link")
+        XCTAssertEqual(besides("Telling the truth"), 0, "an idea with no span has no control")
     }
 
     @MainActor
@@ -126,5 +134,16 @@ final class YouUITests: XCTestCase {
         XCTAssertTrue(error.label.hasPrefix("Could not play this: "))
         XCTAssertEqual(app.youLineLabels().count, 6, "the page stays as it was")
         XCTAssertEqual(app.buttons.matching(identifier: "you.play").firstMatch.label, "Hear yourself say it", "nothing is playing")
+        XCTAssertEqual(error.label, "Could not play this: the recording could not be found.")
+    }
+
+    @MainActor
+    func testAFailedLeadPlayShowsItsErrorWhereYouLook() {
+        let app = XCUIApplication.launchWithPortrait(); app.openYou()
+        app.buttons["you.lead.play"].tap()
+        let error = app.any("you.error")
+        XCTAssertTrue(error.waitForExistence(timeout: 5))
+        XCTAssertTrue(error.isHittable, "the error is on screen without scrolling")
+        XCTAssertLessThan(error.frame.minY, app.staticTexts["Who you are"].frame.minY, "it sits above the parts")
     }
 }
