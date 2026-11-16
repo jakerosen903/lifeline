@@ -215,7 +215,7 @@ A page shows the life strip below Play. The strip is an axis from the birth year
 
 “Often with” lists the other entities that share two or more told moments with this one. Each chip shows a count. A chip opens that entity’s page. The list never shows the owner. It creates no link. It shows only what the person told.
 
-A quote on a list or a page hides filler words: “um”, “uh” and “erm”; “like” between two commas; “you know” after a comma; and a word said twice in a row, once. The memory page and the audio keep every word. The stored text never changes.
+A quote on a list or a page hides filler words. It removes “um”, “uh” and “erm”. It removes “like” only between two commas. It removes “you know” when a comma follows it, or when it ends the quote after a comma. A word said twice in a row shows once, except “had had” and “that that”. A guessed date reads “around”, “between” or “about”. The memory page and the audio keep every word. The stored text never changes.
 
 Domains (home, family, work, travel, and anything else the person says) are free-text tags on any element. There is no fixed list.
 

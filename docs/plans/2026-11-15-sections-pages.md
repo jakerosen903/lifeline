@@ -599,4 +599,4 @@ Expected now: lines in the files above. Expected after Step 2: no output.
 
 ## After S2
 
-The umbrella plan's rule stands: watch two weeks of the owner's use before S6 to S9 are planned in detail. S3 (You), S4 (photos) and S5 (search) may start in any order. S3 takes decision 17 (facts about others leave About). S4 replaces `TileFace`'s content with the photo.
+The umbrella plan's rule stands: watch two weeks of the owner's use before S6 to S9 are planned in detail. S3 (You), S4 (photos) and S5 (search) may start in any order. S3 takes decision 17 (facts about others leave About). S4 replaces `TileFace`'s content with the photo. The dark and increased-contrast colour values still have no PR assigned.
