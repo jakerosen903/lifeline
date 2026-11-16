@@ -1,5 +1,6 @@
 import Foundation
 import LifelineKit
+import UIKit
 
 /// The composition root. Everything the screens need, wired once at launch.
 /// `live()` uses the microphone, on-device speech, the Keychain and the Messages API;
@@ -16,6 +17,8 @@ struct Dependencies {
     let activatePlayback: @Sendable () throws -> Void
     let deactivateAudio: @Sendable () -> Void
     let requestMicrophone: @Sendable () async -> Bool
+    /// Opens this app's page in system Settings. Under `-uiTesting` it does nothing, so the test stays in the app.
+    let openSettings: @Sendable () -> Void
     let secrets: any SecretStore
     let extraction: any ExtractionService
     /// Reflections and their safety checks during a session (M8). Used only while a key is stored: see `interviewer`.
@@ -147,6 +150,11 @@ struct Dependencies {
             activatePlayback: { try AudioSessionConfigurator.activateForPlayback() },
             deactivateAudio: { AudioSessionConfigurator.deactivate() },
             requestMicrophone: { await AudioSessionConfigurator.requestMicrophoneAccess() },
+            openSettings: {
+                Task { @MainActor in
+                    if let url = URL(string: UIApplication.openSettingsURLString) { await UIApplication.shared.open(url) }
+                }
+            },
             secrets: secrets,
             extraction: extraction,
             interviewerService: AnthropicInterviewerService(config: .interviewer, apiKey: { try? secrets.read(.anthropicAPIKey) },
@@ -213,6 +221,7 @@ struct Dependencies {
                 if args.contains("-uiTesting-slowMicrophone") { try? await Task.sleep(for: .seconds(5)) }
                 return !args.contains("-uiTesting-denyMicrophone")
             },
+            openSettings: {},
             secrets: secrets,
             extraction: extraction,
             // A reflection of each segment's last four words, always clean; with `-uiTesting-noKey` there is no interviewer.
@@ -238,6 +247,7 @@ struct Dependencies {
         if let i = args.firstIndex(of: "-uiTesting-restoreFrom"), i + 1 < args.count { deps.restoreFromPath = args[i + 1] }
         deps.exportWithoutShareSheet = true
         if args.contains("-uiTesting-seed") { try UITestSeed.write(sessions: deps.sessions, store: store) }
+        if args.contains("-uiTesting-seedPerson") { try UITestSeed.writePersonOnly(store: store) }
         if args.contains("-uiTesting-noOwner") { try UITestSeed.writeProfileWithoutOwner(profile: deps.profile, store: store) }
         return deps
     }

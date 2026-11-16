@@ -20,8 +20,9 @@ struct SectionsScreen: View {
             }
             .tabViewBottomAccessory { RecordBar(home: home) }
             // The app's action colour: the selected tab and the bar's controls.
-            .tint(Theme.olive)
+            .tint(Theme.oliveText)
             .tabBarMinimizeBehavior(.never)
+            .onChange(of: tab) { home.tabChanged() }
             // Pages name the bar's subject as they appear and clear it as they leave (see `sessionContext`).
             .environment(home)
             .fullScreenCover(item: Binding(get: { home.presented }, set: { home.presented = $0 })) { presented in

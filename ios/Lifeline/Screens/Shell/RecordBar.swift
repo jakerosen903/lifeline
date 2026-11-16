@@ -13,28 +13,49 @@ struct RecordBar: View {
         }
     }
 
-    /// While a start error stands, the bar shows it in place of the label; tapping tries again.
-    private var startButton: some View {
-        let error = home.startError
-        return
+    /// While a start error stands, the bar shows it in place of the label. A refused microphone offers
+    /// "Open Settings"; any other error is tried again by a tap.
+    @ViewBuilder private var startButton: some View {
+        if let error = home.startError {
+            let denied = error == .microphoneDenied
+            Button { Task { await home.startErrorTapped() } } label: {
+                Label {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(error.message).lineLimit(2).minimumScaleFactor(0.8)
+                        if denied { Text("Open Settings").fontWeight(.semibold).foregroundStyle(Theme.oliveText) }
+                    }
+                } icon: {
+                    Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.red)
+                }
+                .font(.footnote)
+                .foregroundStyle(Theme.ink)
+                .padding(.leading, 16)
+                .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier(denied ? "timeline.error.settings" : "timeline.error")
+            .accessibilityHint(denied ? "Opens Settings" : "Tries again")
+        } else {
+            startButton(label: SessionSubject.barLabel(home.context), icon: "mic.fill", iconStyle: Theme.olive, textStyle: .primary, font: .headline, lines: 1)
+                .accessibilityIdentifier("home.start")
+        }
+    }
+
+    private func startButton(label: String, icon: String, iconStyle: Color, textStyle: Color, font: Font, lines: Int) -> some View {
         Button { Task { await home.startSession(kind: .quick) } } label: {
             Label {
-                Text(error ?? SessionSubject.barLabel(home.context))
-                    .lineLimit(error == nil ? 1 : 2)
-                    .minimumScaleFactor(0.8)
+                Text(label).lineLimit(lines).minimumScaleFactor(0.8)
             } icon: {
-                Image(systemName: error == nil ? "mic.fill" : "exclamationmark.triangle.fill")
-                    .foregroundStyle(error == nil ? Theme.olive : .red)
+                Image(systemName: icon).foregroundStyle(iconStyle)
             }
-            .font(error == nil ? .headline : .footnote)
-            .foregroundStyle(error == nil ? Color.primary : .red)
+            .font(font)
+            .foregroundStyle(textStyle)
             .padding(.leading, 16)
             .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .accessibilityIdentifier(error == nil ? "home.start" : "timeline.error")
-        .accessibilityHint(error == nil ? "" : "Tries again")
     }
 
     private var moreMenu: some View {

@@ -110,7 +110,7 @@ private func entityItem(_ text: String, entity: EntityID?, payoff: Int = 1, stat
 
 @Test func theOwnerAsSubjectOpensWithThemself() throws {
     let bank = try PromptBank.load()
-    let owner = SessionSubject(entityID: .init(), title: "Jake", isOwner: true)
+    let owner = SessionSubject(entityID: .init(), title: "Ines", isOwner: true)
     let opening = OpeningChooser.choose(subject: owner, curiosity: [], bank: bank, lastUsed: [:], now: now)
     #expect(opening.main.text == "Tell me something about yourself.")
 }
@@ -120,4 +120,21 @@ private func entityItem(_ text: String, entity: EntityID?, payoff: Int = 1, stat
     let maya = SessionSubject(entityID: .init(), title: "Maya", isOwner: false)
     let opening = OpeningChooser.choose(subject: maya, curiosity: [], bank: bank, lastUsed: [:], now: now)
     #expect(opening.alternates == bank.prefix(3).map(OpeningPrompt.scene))
+}
+
+@Test func aSubjectsHigherPayoffQuestionLeads() throws {
+    let bank = try PromptBank.load()
+    let maya = SessionSubject(entityID: .init(), title: "Maya", isOwner: false)
+    let small = entityItem("What was Maya like?", entity: maya.entityID, payoff: 1)
+    let big = entityItem("Is there one time with Maya that stands out?", entity: maya.entityID, payoff: 4)
+    let opening = OpeningChooser.choose(subject: maya, curiosity: [small, big], bank: bank, lastUsed: [:], now: now)
+    #expect(opening.main == .curiosity(big, text: OpeningChooser.phrase(for: big)))
+}
+
+@Test func aSubjectExcludedFromAIDoesNotNameItselfInTheOpening() throws {
+    let bank = try PromptBank.load()
+    let secret = SessionSubject(entityID: .init(), title: "Maya", isOwner: false, excludedFromAI: true)
+    let opening = OpeningChooser.choose(subject: secret, curiosity: [], bank: bank, lastUsed: [:], now: now)
+    #expect(!opening.main.text.contains("Maya"))
+    #expect(opening.main == OpeningChooser.choose(curiosity: [], bank: bank, lastUsed: [:], now: now).main, "the plain tab opening")
 }

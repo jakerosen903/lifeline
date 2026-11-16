@@ -6,6 +6,7 @@ import Testing
         #expect(Palette.contrast(Palette.ink, surface) >= 4.5)
         #expect(Palette.contrast(Palette.secondaryText, surface) >= 4.5)
         #expect(Palette.contrast(Palette.ochreText, surface) >= 4.5)
+        #expect(Palette.contrast(Palette.oliveText, surface) >= 4.5)
     }
     #expect(Palette.contrast(0xFFFFFF, Palette.olive) >= 4.5)
 }

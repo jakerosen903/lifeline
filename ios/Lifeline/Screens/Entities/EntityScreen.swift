@@ -25,7 +25,7 @@ struct EntityScreen: View {
             Section {
                 VStack(alignment: .leading, spacing: 6) {
                     Text(viewModel.entity.type.singular)
-                        .font(.caption.weight(.semibold)).foregroundStyle(Theme.olive)
+                        .font(.caption.weight(.semibold)).foregroundStyle(Theme.oliveText)
                     Text(viewModel.entity.title).titleStyle().accessibilityIdentifier("entity.title")
                     Text(viewModel.spanText).font(.subheadline.weight(.semibold)).foregroundStyle(Theme.ochreText)
                         .accessibilityIdentifier("entity.span")
@@ -33,7 +33,7 @@ struct EntityScreen: View {
                         Button { viewModel.togglePlayback() } label: {
                             Label(viewModel.isPlaying ? "Stop" : "Play", systemImage: viewModel.isPlaying ? "stop.circle.fill" : "play.circle.fill")
                         }
-                        .buttonStyle(.borderless).tint(Theme.olive)
+                        .buttonStyle(.borderless).tint(Theme.oliveText)
                         .accessibilityIdentifier("entity.play")
                     }
                 }

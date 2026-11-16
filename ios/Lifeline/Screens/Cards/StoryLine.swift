@@ -16,7 +16,7 @@ struct StoryLine: View {
             Button("Not part of it", action: onNotPartOfIt)
                 .font(.subheadline)
                 .buttonStyle(.borderless)
-                .foregroundStyle(Theme.olive)
+                .foregroundStyle(Theme.oliveText)
                 .accessibilityIdentifier("card.notPartOfIt")
         }
     }

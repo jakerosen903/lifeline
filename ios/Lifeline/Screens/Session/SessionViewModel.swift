@@ -138,7 +138,7 @@ final class SessionViewModel: Identifiable {
         }
         do {
             let captureStart = ContinuousClock.now
-            try await recorder.start(id: sessionID, kind: kind, subject: subject?.entityID, startedFrom: subject == nil ? .tab : .page)
+            try await recorder.start(id: sessionID, kind: kind, subject: subject?.entityID, startedFrom: subject == nil ? .tab : .page)  // Rule: a session with a subject started on a page; none, on a tab.
             if speaks { startInterviewer(inputs: inputs, recorder: recorder, session: sessionID, captureStart: captureStart) }
             arc = SessionArc(kind: kind, config: deps.arcConfig, startedAt: startedAt)
             persistLog()

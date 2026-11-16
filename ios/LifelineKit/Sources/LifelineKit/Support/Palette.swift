@@ -11,6 +11,7 @@ public enum Palette {
     public static let ink = 0x332A23
     public static let secondaryText = 0x6D6153
     public static let ochreText = 0x8F5A1C
+    public static let oliveText = 0x56663F
     // Marks and lines. Stone is too light for text.
     public static let stone = 0xA89A85
     public static let olive = 0x5F7046

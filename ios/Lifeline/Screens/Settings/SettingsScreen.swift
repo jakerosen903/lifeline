@@ -74,7 +74,7 @@ private struct APIKeySection: View {
             }
             Text(key.statusText)
                 .font(.footnote)
-                .foregroundStyle(key.isSaved ? Theme.olive : Theme.secondaryText)
+                .foregroundStyle(key.isSaved ? Theme.oliveText : Theme.secondaryText)
                 .accessibilityIdentifier("settings.apiKeyStatus")
         } header: {
             Text("Sorting")

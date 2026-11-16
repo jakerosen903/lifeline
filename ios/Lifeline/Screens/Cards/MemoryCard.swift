@@ -31,7 +31,7 @@ struct MemoryCard: View {
             HStack {
                 Text(memory.kindOrDefault.cardLabel)
                     .font(.caption.weight(.semibold))
-                    .foregroundStyle(Theme.olive)
+                    .foregroundStyle(Theme.oliveText)
                 Spacer()
                 ForEach(CheckThisTags.tags(range: .unplaced, mentions: [], confidence: confidence), id: \.label) { tag in
                     CheckThisTag(tag: tag)

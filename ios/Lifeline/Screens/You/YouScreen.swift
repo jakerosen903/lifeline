@@ -15,7 +15,7 @@ struct YouScreen: View {
 
     /// The owner, when the profile has one; with none, the bar says "Tell a story".
     private var ownerSubject: SessionSubject? {
-        viewModel.aboutYou.map { SessionSubject(entityID: $0.id, title: $0.title, isOwner: true) }
+        viewModel.aboutYou.map { SessionSubject(entityID: $0.id, title: $0.title, isOwner: true, excludedFromAI: $0.excludedFromAI) }
     }
 
     var body: some View {

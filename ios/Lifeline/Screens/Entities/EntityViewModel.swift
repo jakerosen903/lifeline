@@ -32,7 +32,7 @@ final class EntityViewModel {
     var canAddDates: Bool { entity.type == .place || entity.type == .thing }
     var isPlaying: Bool { player.isPlaying }
     /// What a session started from this page is about.
-    var subject: SessionSubject { SessionSubject(entityID: entity.id, title: entity.title, isOwner: isOwner) }
+    var subject: SessionSubject { SessionSubject(entityID: entity.id, title: entity.title, isOwner: isOwner, excludedFromAI: entity.excludedFromAI) }
 
     func refresh() {
         do {

@@ -24,7 +24,7 @@ struct KeptCardView: View {
         VStack(alignment: .leading, spacing: 10) {
             Label("Kept", systemImage: "checkmark")
                 .font(.caption.weight(.semibold))
-                .foregroundStyle(Theme.olive)
+                .foregroundStyle(Theme.oliveText)
             Text(kept.title)
                 .font(.system(.title3, design: .serif).weight(.semibold))
                 .foregroundStyle(Theme.ink)

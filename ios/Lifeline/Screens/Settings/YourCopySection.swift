@@ -38,7 +38,7 @@ struct YourCopySection: View {
                 }
             }
             if let relaunch = viewModel.relaunchText {
-                Label(relaunch, systemImage: "checkmark.circle").font(.footnote).foregroundStyle(Theme.olive)
+                Label(relaunch, systemImage: "checkmark.circle").font(.footnote).foregroundStyle(Theme.oliveText)
                     .accessibilityIdentifier("restore.relaunch")
             }
             if let error = viewModel.error {

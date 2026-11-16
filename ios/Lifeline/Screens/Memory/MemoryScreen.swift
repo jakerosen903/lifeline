@@ -20,7 +20,7 @@ struct MemoryScreen: View {
                     // A fact, feeling or goal has no "when" to show or ask about (M7).
                     Text(viewModel.memory.kind.cardLabel)
                         .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(Theme.olive)
+                        .foregroundStyle(Theme.oliveText)
                         .accessibilityIdentifier("memory.kind")
                 } else {
                 Button { refining = true } label: {
@@ -57,7 +57,7 @@ struct MemoryScreen: View {
                 }
 
                 VStack(alignment: .leading, spacing: 10) {
-                    Text("In your voice").font(.caption.weight(.semibold)).foregroundStyle(Theme.olive)
+                    Text("In your voice").font(.caption.weight(.semibold)).foregroundStyle(Theme.oliveText)
                     // Every telling, first first; a retelling shows the words it was kept under (M4.1).
                     ForEach(viewModel.spans, id: \.span.order) { telling in
                         VStack(alignment: .leading, spacing: 6) {
@@ -102,7 +102,7 @@ struct MemoryScreen: View {
 
                 if !viewModel.entities.isEmpty {
                     VStack(alignment: .leading, spacing: 8) {
-                        Text(viewModel.memory.isMoment ? "In this memory" : "About").font(.caption.weight(.semibold)).foregroundStyle(Theme.olive)
+                        Text(viewModel.memory.isMoment ? "In this memory" : "About").font(.caption.weight(.semibold)).foregroundStyle(Theme.oliveText)
                         FlowLayout(spacing: 6) {
                             ForEach(viewModel.entities) { entity in
                                 NavigationLink {

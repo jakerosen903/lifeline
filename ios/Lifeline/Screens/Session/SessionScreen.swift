@@ -89,7 +89,7 @@ struct SessionScreen: View {
                 .accessibilityIdentifier("session.recording")
                 Text(viewModel.countText)
                     .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(Theme.olive)
+                    .foregroundStyle(Theme.oliveText)
                     .accessibilityIdentifier("session.count")
                 Text("The screen can lock. Recording keeps going.")
                     .font(.caption)

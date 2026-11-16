@@ -15,6 +15,12 @@ enum UITestSeed {
         if let owner = try profile.owner() { try store.entities.delete(owner.entityID) }
     }
 
+    /// Under `-uiTesting-seedPerson`: the person only, with no session, so the next session is the first
+    /// ("Tell another" is offered after a first session).
+    static func writePersonOnly(store: ExtractionStore) throws {
+        _ = try store.people.insertPerson(displayName: person)
+    }
+
     /// Under `-uiTesting-seed`: one landed session with a segment per memory, each kept as a moment in its own year.
     /// The segments are already sorted, so the worker leaves them alone.
     static func write(sessions: SessionRepository, store: ExtractionStore) throws {

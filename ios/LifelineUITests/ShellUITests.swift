@@ -74,8 +74,38 @@ final class ShellUITests: XCTestCase {
         let app = launch(["-uiTesting-denyMicrophone"])
         app.tabBars.buttons["Things"].tap()
         app.buttons["home.start"].tap()
-        XCTAssertTrue(app.any("timeline.error").waitForExistence(timeout: 5), "the start error shows on the bar")
+        XCTAssertTrue(app.any("timeline.error.settings").waitForExistence(timeout: 5), "the start error, with its Settings action, shows on the bar")
         XCTAssertFalse(app.buttons["session.finish"].exists, "no session started")
+    }
+
+    @MainActor
+    func testAStartErrorClearsWhenTheTabChanges() {
+        let app = launch(["-uiTesting-denyMicrophone"])
+        app.buttons["home.start"].tap()
+        XCTAssertTrue(app.any("timeline.error.settings").waitForExistence(timeout: 5))
+        app.any("timeline.error.settings").tap()   // Settings does not open under UI testing
+        XCTAssertTrue(app.any("timeline.error.settings").exists, "the bar still shows the error and the app stays up")
+        app.tabBars.buttons["Things"].tap()
+        XCTAssertTrue(app.waitHittable(app.buttons["home.start"], timeout: 5), "the bar shows its label again")
+        waitForLabel(app.buttons["home.start"], "Tell a story")
+        XCTAssertFalse(app.any("timeline.error.settings").exists)
+    }
+
+    @MainActor
+    func testTellAnotherKeepsThePagesSubject() {
+        // `-uiTesting-seedPerson`: no earlier session, so this is the first and its landing offers "Tell another".
+        let app = launch(["-uiTesting-seedPerson"])
+        openMaya(app)
+        waitForLabel(app.buttons["home.start"], "Tell a story about Maya")
+        app.buttons["home.start"].tap()
+        XCTAssertTrue(app.staticTexts["Tell me about Maya."].waitForExistence(timeout: 5))
+        app.openReview()
+        XCTAssertTrue(app.staticTexts["session.segment"].firstMatch.waitForExistence(timeout: 15))
+        app.buttons["session.finish"].tap()
+        XCTAssertTrue(app.buttons["landing.tellAnother"].waitForExistence(timeout: 15))
+        app.buttons["landing.tellAnother"].tap()
+        XCTAssertTrue(app.buttons["session.finish"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts["Tell me about Maya."].waitForExistence(timeout: 5), "the second session is about Maya too")
     }
 
     @MainActor

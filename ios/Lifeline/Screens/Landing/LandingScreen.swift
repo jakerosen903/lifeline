@@ -41,7 +41,7 @@ struct LandingScreen: View {
                             .accessibilityIdentifier("landing.stillSorting")
                     }
                     VStack(alignment: .leading, spacing: 6) {
-                        Text("Before you go").font(.caption.weight(.semibold)).foregroundStyle(Theme.olive)
+                        Text("Before you go").font(.caption.weight(.semibold)).foregroundStyle(Theme.oliveText)
                         Text(viewModel.closingLine)
                             .font(.system(.body, design: .serif)).foregroundStyle(Theme.ink)
                             .accessibilityIdentifier("landing.closing")

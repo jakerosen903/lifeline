@@ -37,7 +37,7 @@ struct SessionDetailScreen: View {
                         } label: {
                         VStack(alignment: .leading, spacing: 4) {
                             if row.kind != .event && row.kind != .other {
-                                Text(row.kind.cardLabel).font(.caption2.weight(.semibold)).foregroundStyle(Theme.olive)
+                                Text(row.kind.cardLabel).font(.caption2.weight(.semibold)).foregroundStyle(Theme.oliveText)
                             }
                             Text(row.memory.title)
                                 .font(.system(.headline, design: .serif))
@@ -50,7 +50,7 @@ struct SessionDetailScreen: View {
                                 Text(row.anchors.joined(separator: " · ")).font(.caption).foregroundStyle(Theme.ochreText)
                             }
                             if !row.people.isEmpty {
-                                Text(row.people.joined(separator: ", ")).font(.caption).foregroundStyle(Theme.olive)
+                                Text(row.people.joined(separator: ", ")).font(.caption).foregroundStyle(Theme.oliveText)
                             }
                         }
                         .padding(.vertical, 4)

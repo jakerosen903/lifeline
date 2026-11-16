@@ -13,6 +13,8 @@ enum Theme {
     /// Dividers, borders, strokes and decorative shapes. Too light for text.
     static let hairline = color(Palette.stone)
     static let olive = color(Palette.olive)
+    /// Olive for text. Passes 4.5:1 on linen, sand and card; `olive` is for fills and large marks.
+    static let oliveText = color(Palette.oliveText)
     /// Ochre marks that are not text: bands, lines, dots.
     static let ochre = color(Palette.ochre)
     /// Ochre for text. Passes 4.5:1 on linen, sand and card.
