@@ -54,8 +54,18 @@ struct YouScreen: View {
         // was on the page, its message is on screen, and the page does not jump.
         .safeAreaInset(edge: .bottom, spacing: 0) {
             if let notice = viewModel.notice {
-                YouNoticeSlot(notice: notice, canUndo: viewModel.hiddenID != nil, onUndo: { viewModel.undoHide() })
-                    .padding(.horizontal, 16).padding(.bottom, 8)
+                // "Hidden." is not an error. Undo shows while the hide can still be taken back, also beside an error,
+                // so a failure never takes the way back with it.
+                NoticeSlot(text: notice.text, isError: notice != .hidden, identifier: notice == .hidden ? "you.hidden" : "you.error") {
+                    if viewModel.hiddenID != nil {
+                        Button("Undo") { viewModel.undoHide() }
+                            .buttonStyle(.bordered)
+                            .controlSize(.large)
+                            .tint(Theme.oliveOnFill)
+                            .accessibilityIdentifier("you.undo")
+                    }
+                }
+                .padding(.horizontal, 16).padding(.bottom, 8)
             }
         }
         .animation(.default, value: viewModel.notice)
@@ -124,52 +134,5 @@ struct YouScreen: View {
                 }
             }
         }
-    }
-}
-
-/// The slot's one message. "Hidden." is not an error: ink text, no red. An error says what failed. Undo shows
-/// while the hide can still be taken back, also beside an error, so a failure never takes the way back with it.
-private struct YouNoticeSlot: View {
-    let notice: YouNotice
-    let canUndo: Bool
-    let onUndo: () -> Void
-
-    var body: some View {
-        HStack(spacing: 12) {
-            switch notice {
-            case .hidden:
-                Text(notice.text).font(.footnote).foregroundStyle(Theme.ink)
-                    .accessibilityIdentifier("you.hidden")
-            case .error(let message):
-                ErrorLine(text: message).font(.footnote).accessibilityIdentifier("you.error")
-            }
-            Spacer(minLength: 0)
-            if canUndo {
-                Button("Undo", action: onUndo)
-                    .buttonStyle(.bordered)
-                    .controlSize(.large)
-                    .tint(Theme.oliveOnFill)
-                    .accessibilityIdentifier("you.undo")
-            }
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 10)
-        .frame(minHeight: 44)
-        .background(RoundedRectangle(cornerRadius: 14).fill(Theme.sand))
-        .transition(.opacity)
-    }
-}
-
-/// An error that says what failed: ink text, with the red only in the symbol, as on the record bar.
-private struct ErrorLine: View {
-    let text: String
-
-    var body: some View {
-        Label {
-            Text(text).foregroundStyle(Theme.ink).fixedSize(horizontal: false, vertical: true)
-        } icon: {
-            Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.red)
-        }
-        .accessibilityElement(children: .combine)
     }
 }

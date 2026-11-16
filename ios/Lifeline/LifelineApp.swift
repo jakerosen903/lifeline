@@ -31,11 +31,14 @@ final class AppModel {
     private(set) var timeline: TimelineViewModel?
     private(set) var loadError: String?
     private(set) var hasProfile = false
+    /// What the launch repair did, said once by the shell.
+    private(set) var notice = ShellNotice(nil)
 
     init() {
         do {
             let deps = CommandLine.arguments.contains("-uiTesting") ? try Dependencies.uiTesting() : try Dependencies.live()
             self.deps = deps
+            notice = ShellNotice(deps.launchNotice)
             hasProfile = try deps.profile.fetch() != nil
             let home = HomeViewModel(deps: deps)
             self.home = home
