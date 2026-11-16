@@ -7,41 +7,55 @@ public actor PhotoLibrary {
     private let root: URL
     private let photos: PhotoRepository
     private let directory: URL
+    private let writeCopy: @Sendable (_ source: URL, _ destination: URL) throws -> (width: Int, height: Int)
 
     public init(root: URL, photos: PhotoRepository) {
-        self.root = root; self.photos = photos
+        self.init(root: root, photos: photos, writeCopy: { try PhotoImport.writeDownscaled(from: $0, to: $1) })
+    }
+
+    /// `writeCopy` is the write step; a test makes it fail part way.
+    init(root: URL, photos: PhotoRepository, writeCopy: @escaping @Sendable (URL, URL) throws -> (width: Int, height: Int)) {
+        self.root = root; self.photos = photos; self.writeCopy = writeCopy
         self.directory = PhotoLocation.path(under: root)
     }
 
-    /// Same photo already stored (decision 7): links it. Otherwise: writes `.<id>.partial`, renames it to `<id>.jpg`,
-    /// then inserts the row and link. A kill after the rename leaves a file with no row; the sweep removes it.
+    /// Same photo already stored (decision 7): links it, and writes its file again if that file is missing, so
+    /// picking a photo again repairs one that does not show. Otherwise: writes `.<id>.partial`, renames it to
+    /// `<id>.jpg`, then inserts the row and link. A kill after the rename leaves a file with no row; the sweep removes it.
     public func add(fileAt source: URL, assetLocalID: String?, to subject: PhotoSubject, now: Date = .now) throws -> Photo {
         let sha256 = try PhotoImport.sha256(of: source)
         if let stored = try photos.photo(sha256: sha256) {
+            if !FileManager.default.fileExists(atPath: url(for: stored).path) { _ = try writeFile(from: source, named: stored.fileName) }
             try photos.link(stored.id, to: subject)
             return stored
         }
         let metadata = try PhotoImport.metadata(of: source)
         let id = PhotoID()
-        let folder = try PhotoLocation.directory(under: root)
-        let partial = folder.appending(path: ".\(id.rawValue).partial"), final = folder.appending(path: Self.fileName(for: id))
-        let size: (width: Int, height: Int)
-        do {
-            size = try PhotoImport.writeDownscaled(from: source, to: partial)
-            try FileManager.default.moveItem(at: partial, to: final)
-        } catch {
-            try? FileManager.default.removeItem(at: partial)
-            throw error
-        }
-        let photo = Photo(id: id, fileName: final.lastPathComponent, assetLocalID: assetLocalID,
+        let fileName = Self.fileName(for: id)
+        let size = try writeFile(from: source, named: fileName)
+        let photo = Photo(id: id, fileName: fileName, assetLocalID: assetLocalID,
                           takenAt: metadata.takenAt, takenOrigin: metadata.takenAt == nil ? nil : .exif,
                           lat: metadata.lat, lon: metadata.lon, locationOrigin: metadata.lat == nil ? nil : .exif,
                           sha256: sha256, pixelWidth: size.width, pixelHeight: size.height, addedAt: now)
         do { try photos.insert(photo, linkingTo: subject) } catch {
-            try? FileManager.default.removeItem(at: final)
+            try? FileManager.default.removeItem(at: url(for: photo))
             throw error
         }
         return photo
+    }
+
+    /// Writes the downscaled copy to `.<name>.partial`, then renames it to `<name>`. A failure leaves no partial file.
+    private func writeFile(from source: URL, named fileName: String) throws -> (width: Int, height: Int) {
+        let folder = try PhotoLocation.directory(under: root)
+        let partial = folder.appending(path: ".\(fileName.dropLast(4)).partial")
+        do {
+            let size = try writeCopy(source, partial)
+            try FileManager.default.moveItem(at: partial, to: folder.appending(path: fileName))
+            return size
+        } catch {
+            try? FileManager.default.removeItem(at: partial)
+            throw error
+        }
     }
 
     /// Unlinks; when no page is left, deletes the row, then the file.
@@ -65,16 +79,18 @@ public actor PhotoLibrary {
 
     /// Decision 10: unlinked rows and their files; files with no row; `.partial` files. Never a row whose file is missing.
     /// Only `.jpg` and `.partial` names are the library's own; anything else in the folder stays.
+    /// It must run at launch, before any `add` can run: it is not serialised with `add`, and a sweep during an add
+    /// could remove the new file before its row exists.
     @discardableResult
     public static func sweep(root: URL, photos: PhotoRepository) throws -> Swept {
         let directory = try PhotoLocation.directory(under: root)
         let orphans = try photos.deleteUnlinked()
         var files = 0
-        for orphan in orphans where remove(directory.appending(path: orphan.fileName)) { files += 1 }
+        for orphan in orphans where deleteIfPresent(directory.appending(path: orphan.fileName)) { files += 1 }
         let known = try photos.fileNames()
         for name in try FileManager.default.contentsOfDirectory(atPath: directory.path)
         where (name.hasSuffix(".jpg") || name.hasSuffix(".partial")) && !known.contains(name) {
-            if remove(directory.appending(path: name)) { files += 1 }
+            if deleteIfPresent(directory.appending(path: name)) { files += 1 }
         }
         return Swept(rows: orphans.count, files: files)
     }
@@ -82,7 +98,7 @@ public actor PhotoLibrary {
     private static func fileName(for photo: PhotoID) -> String { "\(photo.rawValue).jpg" }
 
     /// True when a file was there and is now gone.
-    private static func remove(_ file: URL) -> Bool {
+    private static func deleteIfPresent(_ file: URL) -> Bool {
         guard FileManager.default.fileExists(atPath: file.path) else { return false }
         return (try? FileManager.default.removeItem(at: file)) != nil
     }

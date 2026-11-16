@@ -60,6 +60,8 @@ private func properties(of file: URL) throws -> [CFString: Any] {
     #expect((props[kCGImagePropertyExifDictionary] as? [CFString: Any])?[kCGImagePropertyExifDateTimeOriginal] == nil)
     #expect((props[kCGImagePropertyOrientation] as? Int ?? 1) == 1)
     #expect(props[kCGImagePropertyHasAlpha] as? Bool != true)
+    #expect(props[kCGImagePropertyProfileName] as? String == "Display P3", "decision 3: wide colour kept")
+    #expect((props[kCGImagePropertyTIFFDictionary] as? [CFString: Any])?[kCGImagePropertyTIFFDateTime] == nil, "no edit date either")
     #expect(photo.takenAt?.stored == "2012-06-14T15:32:10" && photo.takenOrigin == .exif)
     #expect(photo.lat == 0.5 && photo.lon == -30.0 && photo.locationOrigin == .exif)
     #expect(photo.assetLocalID == "invented/L0/001" && photo.sha256.count == 64)
@@ -119,6 +121,44 @@ private func properties(of file: URL) throws -> [CFString: Any] {
     #expect(try f.store.photos.photos(of: .entity(f.maya.id)).isEmpty)
     #expect(try f.store.photos.fileNames().isEmpty)
     #expect(f.photoFiles.isEmpty)
+}
+
+/// Fails after the folder is set up: the file is written and renamed, then the row cannot be inserted.
+@Test func aRowThatCannotBeInsertedLeavesNoFile() async throws {
+    let f = try Fixture()
+    let nobody = EntityID()   // no such entity: the link's foreign key fails
+    await #expect(throws: (any Error).self) { try await f.library.add(fileAt: try f.source(), assetLocalID: nil, to: .entity(nobody)) }
+    #expect(f.photoFiles.isEmpty, "no .jpg and no .partial")
+    #expect(try f.store.photos.fileNames().isEmpty)
+}
+
+/// Fails at the write step, after it has begun the `.partial` file.
+@Test func aCopyThatFailsHalfWayLeavesNoPartialFile() async throws {
+    struct Disk: Error {}
+    let f = try Fixture()
+    let library = PhotoLibrary(root: f.root, photos: f.store.photos, writeCopy: { _, destination in
+        try Data([1, 2, 3]).write(to: destination)
+        throw Disk()
+    })
+    await #expect(throws: Disk.self) { try await library.add(fileAt: try f.source(), assetLocalID: nil, to: .entity(f.maya.id)) }
+    #expect(f.photoFiles.isEmpty)
+    #expect(try f.store.photos.fileNames().isEmpty)
+    #expect(try f.store.photos.photos(of: .entity(f.maya.id)).isEmpty)
+}
+
+/// Picking the same photo again is the person's way to repair one that does not show.
+@Test func addingThePhotoAgainWritesAMissingFileBack() async throws {
+    let f = try Fixture()
+    let source = try f.source()
+    let first = try await f.library.add(fileAt: source, assetLocalID: nil, to: .entity(f.maya.id))
+    try FileManager.default.removeItem(at: f.library.url(for: first))
+    let again = try await f.library.add(fileAt: source, assetLocalID: nil, to: .entity(f.maya.id))
+    #expect(again.id == first.id && again.fileName == first.fileName)
+    #expect(f.photoFiles == [first.fileName], "the file is back, and no .partial is left")
+    #expect(try PhotoImport.thumbnail(at: f.library.url(for: first), maxPixel: 100).width > 0)
+    #expect(try f.store.photos.photos(of: .entity(f.maya.id)).map(\.id) == [first.id], "one row, one link")
+    let other = try await f.library.add(fileAt: source, assetLocalID: nil, to: .entity(f.dad.id))
+    #expect(other.id == first.id)
 }
 
 @Test func theSamePhotoTwiceKeepsOneCopy() async throws {
