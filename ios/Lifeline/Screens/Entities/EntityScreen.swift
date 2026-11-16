@@ -174,21 +174,7 @@ struct EntityScreen: View {
                         onMakeCover: { await viewModel.makeCover(placed.id); onChange() },
                         onRemove: { await viewModel.removePhoto(placed.id); onChange() })
         }
-        // The one slot pinned above the record bar (decision 21): wherever the page is scrolled, the message is on screen.
-        .safeAreaInset(edge: .bottom, spacing: 0) {
-            if let message = viewModel.photoError {
-                ErrorLine(text: message).font(.footnote).accessibilityIdentifier("photo.error")
-                    .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
-                    .padding(.horizontal, 16).padding(.vertical, 10)
-                    .background(RoundedRectangle(cornerRadius: 14).fill(Theme.sand))
-                    .padding(.horizontal, 16).padding(.bottom, 8)
-                    .transition(.opacity)
-            }
-        }
-        .animation(.default, value: viewModel.photoError)
-        .onChange(of: viewModel.photoError) { _, message in
-            if let message { AccessibilityNotification.Announcement(message).post() }
-        }
+        .photoErrorSlot(viewModel.photoError)
         .onAppear { isVisible = true; viewModel.refresh() }
         .onDisappear { isVisible = false; viewModel.stop(); viewModel.clearPhotoError() }
         // A session started here lands under a cover; when it closes, read what it added.
@@ -205,15 +191,7 @@ struct EntityScreen: View {
 
     /// The cover, or "Adding the photo…" where a first photo will go. Neither shows on a page without a photo.
     @ViewBuilder private var photoHeader: some View {
-        if viewModel.shelf.isAdding {
-            HStack(spacing: 10) {
-                ProgressView()
-                Text("Adding the photo…").font(.footnote).foregroundStyle(Theme.secondaryText)
-            }
-            .frame(minHeight: 44)
-            .accessibilityElement(children: .combine)
-            .accessibilityIdentifier("photo.adding")
-        }
+        if viewModel.shelf.isAdding { PhotoAddingLine() }
         if let cover = viewModel.shelf.cover {
             PhotoHeader(cover: cover, label: viewModel.photoLabel, cache: viewModel.deps.photoImages) {
                 viewing = viewModel.shelf.photos.first(where: \.isCover)

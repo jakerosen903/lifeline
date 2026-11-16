@@ -94,4 +94,57 @@ final class PhotosUITests: XCTestCase {
         // The page's own caption stays in the tree under the sheet: this is the viewer's.
         XCTAssertTrue(app.any("photo.viewer").staticTexts["photo.caption"].frame.height > 0, "the caption reads in full")
     }
+
+    // MARK: - A memory page and You
+
+    @MainActor
+    func testAMemoryShowsItsPhotos() {
+        let app = XCUIApplication.launchWithPhotos(); app.openEntityPage("Maya")
+        app.buttons.matching(identifier: "entity.moment").matching(NSPredicate(format: "label == %@", "The tree house")).firstMatch.tap()
+        XCTAssertTrue(app.any("memory.kind").waitForExistence(timeout: 5))
+        let thumb = app.buttons.matching(identifier: "photo.thumb").firstMatch
+        XCTAssertTrue(thumb.exists)
+        XCTAssertEqual(thumb.label, "Photo for The tree house")
+        XCTAssertEqual(thumb.value as? String, "taken 4 July 1999")
+    }
+
+    @MainActor
+    func testAPhotoAddedToAMemoryShowsThere() throws {
+        let app = XCUIApplication.launchWithPeople(["-uiTesting-pickPhoto", try XCUIApplication.fixturePath("photo-orange", ext: "jpg")])
+        app.openEntityPage("Sam")
+        app.buttons.matching(identifier: "entity.moment").firstMatch.tap()
+        XCTAssertFalse(app.buttons.matching(identifier: "photo.thumb").firstMatch.exists, "no photo, no frame")
+        app.addPhotoFromMenu("memory.more", "memory.addPhoto")
+        XCTAssertTrue(app.buttons.matching(identifier: "photo.thumb").firstMatch.waitForExistence(timeout: 10))
+        XCTAssertTrue(app.buttons["memory.change"].exists, "Change… stays a labeled button")
+    }
+
+    @MainActor
+    func testYouShowsYourCover() {
+        let app = XCUIApplication.launchWithPhotos(); app.openYou()
+        let header = app.buttons["photo.header"]
+        XCTAssertTrue(header.waitForExistence(timeout: 5))
+        XCTAssertEqual(header.label, "Photo of you")
+        XCTAssertLessThan(header.frame.maxY, app.staticTexts["you.name"].frame.minY)
+        XCTAssertTrue(app.buttons["home.settings"].exists)
+    }
+
+    @MainActor
+    func testAddingAPhotoOnYouGoesToYourPage() throws {
+        let app = XCUIApplication.launchWithPortrait(["-uiTesting-pickPhoto", try XCUIApplication.fixturePath("photo-orange", ext: "jpg")]); app.openYou()
+        XCTAssertFalse(app.buttons["photo.header"].exists)
+        app.addPhotoFromMenu("you.more", "you.addPhoto")
+        XCTAssertTrue(app.buttons["photo.header"].waitForExistence(timeout: 10))
+        app.buttons["entities.aboutYou"].tap()
+        XCTAssertTrue(app.buttons["photo.header"].waitForExistence(timeout: 5))
+        XCTAssertEqual(app.buttons["photo.header"].label, "Photo of you")
+    }
+
+    @MainActor
+    func testAnUnreadablePhotoOnYouUsesYourSlot() throws {
+        let app = XCUIApplication.launchWithPortrait(["-uiTesting-pickPhoto", try XCUIApplication.fixturePath("not-a-photo", ext: "jpg")]); app.openYou()
+        app.addPhotoFromMenu("you.more", "you.addPhoto")
+        XCTAssertTrue(app.any("you.error").waitForExistence(timeout: 10))
+        XCTAssertEqual(app.any("you.error").label, "Could not add this photo: Lifeline cannot read this file as a photo.")
+    }
 }
