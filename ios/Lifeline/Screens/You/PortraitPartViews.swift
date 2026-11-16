@@ -17,6 +17,21 @@ extension PortraitLine {
     }
 }
 
+extension View {
+    /// "Hide" and "Delete…" on a line that is a memory. A long press shows them; VoiceOver reads them as actions
+    /// on the element. Never on the play control, so its tap stays its own.
+    func lineMenu(_ line: PortraitLine, _ viewModel: YouViewModel) -> some View {
+        contextMenu {
+            if line.memory != nil {
+                Button("Hide", systemImage: "eye.slash") { viewModel.hide(line) }
+                    .accessibilityIdentifier("you.hide")
+                Button("Delete…", systemImage: "trash", role: .destructive) { viewModel.deleteTarget = line }
+                    .accessibilityIdentifier("you.delete")
+            }
+        }
+    }
+}
+
 /// A part's heading, then its lines. The caller shows a part only when it has lines.
 struct PortraitPart<Content: View>: View {
     let heading: String
@@ -64,6 +79,7 @@ struct PortraitSaidRow: View {
                 .accessibilityValue(note ?? "")
             }
             .buttonStyle(.plain)
+            .lineMenu(line, viewModel)
             .accessibilityIdentifier("you.line")
             // Beside the link, never inside it: nested controls swallow taps and merge for VoiceOver.
             PlayLineButton(line: line, viewModel: viewModel)
@@ -95,6 +111,7 @@ struct PortraitFeelingCard: View {
                         .accessibilityLabel(line.text)
                 }
                 .buttonStyle(.plain)
+                .lineMenu(line, viewModel)
                 .accessibilityIdentifier("you.line")
                 PlayLineButton(line: line, viewModel: viewModel)
                 }

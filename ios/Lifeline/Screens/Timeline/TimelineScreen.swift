@@ -2,7 +2,7 @@ import LifelineKit
 import SwiftUI
 
 /// Your story so far. The Timeline tab's root: waiting cards, chapters with bands, collections,
-/// the shelf, the one open question, and the About section.
+/// the shelf and the one open question. Facts, feelings and goals live on You.
 struct TimelineScreen: View {
     let viewModel: TimelineViewModel
     @State private var showSettings = false
@@ -104,7 +104,6 @@ struct TimelineScreen: View {
             chapterSections
             collectionSections
             shelfAndQuestion
-            if !viewModel.about.isEmpty { AboutSection(rows: viewModel.about, actions: rowActions) }
             footer
         }
     }

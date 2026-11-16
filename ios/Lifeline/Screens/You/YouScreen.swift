@@ -31,12 +31,18 @@ struct YouScreen: View {
                             Text(lead.drawnText).font(.system(.title, design: .serif)).foregroundStyle(Theme.ink)
                                 .fixedSize(horizontal: false, vertical: true)
                                 .accessibilityLabel(lead.text)
+                                .lineMenu(lead, viewModel)
                                 .accessibilityIdentifier("you.lead")
                             PortraitLeadPlayButton(line: lead, viewModel: viewModel)
                         }
                     }
                     // Where the person is looking: under the lead and above the parts, not at the foot of a long page.
                     if let playError = viewModel.playError { ErrorLine(text: playError).accessibilityIdentifier("you.error") }
+                    if viewModel.hiddenNotice != nil {
+                        // Not an error: ink text and no red. Its own tap takes the hide back.
+                        UndoNotice(text: "Hidden.", identifier: "you.hidden", undoIdentifier: "you.undo",
+                                   textColor: Theme.ink, buttonSize: .large, onUndo: { viewModel.undoHide() })
+                    }
                     parts
                     if viewModel.isLoaded, portrait.isEmpty {
                         Text(EntityPage.invitation(title: "", isOwner: true))
@@ -64,12 +70,24 @@ struct YouScreen: View {
         // The root appeared (tab selected, or back from a pushed page): a fresh lead (decision 8).
         // While a tag is chosen the lead stays (decisions 8 and 12): a new lead must not take the only fact with that tag.
         .onAppear { isVisible = true; viewModel.refresh(newLead: viewModel.tag == nil) }
-        .onDisappear { isVisible = false; viewModel.stop() }
+        .onDisappear { isVisible = false; viewModel.stop(); viewModel.clearHiddenNotice() }
         // A recording starting under the cover must not talk over this page's player.
         .onChange(of: home?.presented != nil) { _, covered in if covered { viewModel.stop() } }
         // A story told from here lands under a cover; when it closes, read what it added and keep the lead.
         .onChange(of: viewModel.playError) { _, message in
             if let message { AccessibilityNotification.Announcement(message).post() }
+        }
+        .onChange(of: viewModel.hiddenNotice) { _, notice in
+            if let notice { AccessibilityNotification.Announcement(notice).post() }
+        }
+        .animation(.default, value: viewModel.hiddenNotice)
+        .confirmationDialog("Delete this memory?", isPresented: Binding(get: { viewModel.deleteTarget != nil }, set: { if !$0 { viewModel.deleteTarget = nil } }),
+                            titleVisibility: .visible, presenting: viewModel.deleteTarget) { line in
+            Button("Delete “\(line.memory?.title ?? line.text)”", role: .destructive) { viewModel.delete(line) }
+                .accessibilityIdentifier("row.confirmDelete")
+            Button("Cancel", role: .cancel) { viewModel.deleteTarget = nil }
+        } message: { _ in
+            Text("The memory, its people and its dates go. Your recording stays in Sessions.")
         }
         .onChange(of: home?.coverClosings) { if isVisible { viewModel.refresh(newLead: false) } }
         .sessionContext(viewModel.ownerSubject)

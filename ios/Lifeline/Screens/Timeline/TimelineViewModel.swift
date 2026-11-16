@@ -65,8 +65,9 @@ final class TimelineViewModel {
     private(set) var collections: [CollectionRow] = []
     private(set) var unchaptered: [MemoryRow] = []
     private(set) var shelf: [MemoryRow] = []
-    /// Facts, feelings and goals: not moments, so never on the shelf or in a chapter (M7).
-    private(set) var about: [MemoryRow] = []
+    /// Facts, feelings and goals: not moments, so never on the shelf or in a chapter, and no rows here. They
+    /// live on You and on their own pages; Timeline only counts them for its summary and its empty state (S3).
+    private(set) var aboutCount = 0
     /// Stories outside any chapter with a dated member, and stories with none (M5).
     private(set) var unchapteredStories: [StoryRow] = []
     private(set) var shelfStories: [StoryRow] = []
@@ -142,7 +143,7 @@ final class TimelineViewModel {
 
     var memoryCount: Int {
         chapters.reduce(0) { $0 + $1.memories.count + $1.stories.reduce(0) { $0 + $1.members.count } } + collections.reduce(0) { $0 + $1.members.count }
-            + unchaptered.count + shelf.count + about.count + (unchapteredStories + shelfStories).reduce(0) { $0 + $1.members.count }
+            + unchaptered.count + shelf.count + aboutCount + (unchapteredStories + shelfStories).reduce(0) { $0 + $1.members.count }
     }
 
     // MARK: - Loading
@@ -154,11 +155,11 @@ final class TimelineViewModel {
             let tagged = try tagFilter.map { try store.tags.elements(.memory, tagged: $0) }
             let kept = try (showHidden ? store.memories.allMemories() : store.memories.visibleMemories())
                 .filter { !$0.isFloating && (tagged?.contains($0.id.rawValue) ?? true) }
-            // Only moments are on the timeline; the rest sit under About, their stored ranges unshown (M7).
+            // Only moments are on the timeline; the rest are counted, never drawn (M7, S3).
             let all = kept.filter(\.isMoment)
             let birth = try store.profile.ownerBirthDate()
             let rows = Dictionary(uniqueKeysWithValues: try all.map { ($0.id, try row(for: $0, birth: birth)) })
-            about = try kept.filter { !$0.isMoment }.map { try row(for: $0, birth: birth) }
+            aboutCount = kept.count - all.count
             let allCollections = try store.chapters.collections()
             var inCollection = Set<MemoryID>()
             collections = try allCollections.compactMap { collection in
@@ -196,7 +197,7 @@ final class TimelineViewModel {
             pairs = try openPairs()
             refreshSorting()
             (question, questionRow) = try firstQuestion(rows: rows, birth: birth)
-            summary = Self.summaryText(memories: all.count, chapters: chapters.count, firstYear: years.min(), about: about.count)
+            summary = Self.summaryText(memories: all.count, chapters: chapters.count, firstYear: years.min(), about: aboutCount)
             error = nil
         } catch {
             self.error = "Could not load your story: \(error.localizedDescription)"

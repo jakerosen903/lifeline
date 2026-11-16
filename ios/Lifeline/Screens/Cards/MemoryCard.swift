@@ -153,17 +153,20 @@ struct UndoNotice: View {
     var text = "Suggestion dismissed. Your recording is untouched."
     var identifier = "card.dismissedNotice"
     var undoIdentifier = "card.undo"
+    var textColor = Theme.secondaryText
+    var buttonSize = ControlSize.regular
     let onUndo: () -> Void
 
     var body: some View {
         HStack(spacing: 12) {
             Text(text)
                 .font(.footnote)
-                .foregroundStyle(Theme.secondaryText)
+                .foregroundStyle(textColor)
                 .accessibilityIdentifier(identifier)
             Spacer(minLength: 0)
             Button("Undo", action: onUndo)
                 .buttonStyle(.bordered)
+                .controlSize(buttonSize)
                 .tint(Theme.oliveOnFill)
                 .accessibilityIdentifier(undoIdentifier)
         }

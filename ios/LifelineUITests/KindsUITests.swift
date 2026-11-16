@@ -4,7 +4,7 @@ import XCTest
 /// this?" moves it back.
 final class KindsUITests: XCTestCase {
     @MainActor
-    func testFactKeptLandsUnderAbout() {
+    func testAFactAboutTheHouseLandsOnItsPage() {
         let app = XCUIApplication()
         app.launchArguments = ["-uiTesting", "-uiTesting-fact"]
         app.launch()
@@ -16,11 +16,22 @@ final class KindsUITests: XCTestCase {
         add.tap()
         app.finishSession()
 
-        XCTAssertTrue(app.reveal(app.any("timeline.about")), "a kept fact sits under About")
-        let row = app.buttons.matching(identifier: "about.row").matching(NSPredicate(format: "label CONTAINS %@", "The house had a blue door")).firstMatch
-        XCTAssertTrue(app.reveal(row))
+        // The fact is a detail of "the house" (S2 decision 17): not on Timeline, not on You, on the house's page.
+        XCTAssertTrue(app.any("timeline.summary").waitForExistence(timeout: 5))
+        for _ in 0..<4 { app.swipeUp() }   // the List is lazy: an About section below the fold would not exist yet
+        XCTAssertFalse(app.any("timeline.about").exists, "no About section on Timeline")
         XCTAssertFalse(app.buttons["row.addDate"].exists, "nobody asks when a fact happened")
         XCTAssertFalse(app.any("timeline.shelf").exists, "the shelf holds moments only")
+        app.openTab("You")
+        XCTAssertTrue(app.staticTexts["you.name"].waitForExistence(timeout: 10) || app.any("you.invite").waitForExistence(timeout: 5), "You is up")
+        XCTAssertFalse(app.buttons.matching(identifier: "you.line").matching(NSPredicate(format: "label CONTAINS %@", "The house had a blue door")).firstMatch.exists,
+                       "a fact about the house is not on You")
+        app.openTab("Things")
+        let house = app.buttons.matching(identifier: "entities.row").matching(NSPredicate(format: "label == %@", "the house")).firstMatch
+        XCTAssertTrue(house.waitForExistence(timeout: 5))
+        house.tap()
+        let row = app.buttons.matching(identifier: "entity.detail").matching(NSPredicate(format: "label CONTAINS %@", "The house had a blue door")).firstMatch
+        XCTAssertTrue(row.waitForExistence(timeout: 5), "the fact is a detail on the page of the house")
 
         row.tap()
         XCTAssertTrue(app.any("memory.kind").waitForExistence(timeout: 5), "the memory screen shows the kind, not a date")
@@ -41,6 +52,7 @@ final class KindsUITests: XCTestCase {
         app.buttons["change.done"].tap()
         app.navigationBars.buttons.firstMatch.tap()
 
+        app.openTab("Timeline")
         XCTAssertTrue(app.reveal(app.any("timeline.shelf")), "back as a moment, it sits on the shelf")
         XCTAssertTrue(app.reveal(app.buttons["row.addDate"].firstMatch), "and Add a date is offered")
         XCTAssertFalse(app.any("timeline.about").exists)

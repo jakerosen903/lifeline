@@ -16,6 +16,11 @@ final class YouViewModel {
     private(set) var error: String?
     /// Why a line could not play. Cleared by the next tap.
     private(set) var playError: String?
+    /// The line "Delete…" was chosen on, until the person confirms or cancels.
+    var deleteTarget: PortraitLine?
+    /// The memory just hidden, while "Hidden." offers Undo. Hiding is easy to do by mistake from a menu.
+    private(set) var hiddenID: MemoryID?
+    @ObservationIgnored private var hiddenTimer: Task<Void, Never>?
     let deps: Dependencies
     /// The one player: a line plays its own telling, and starting another stops the first.
     let player = SegmentPlayer()
@@ -60,6 +65,66 @@ final class YouViewModel {
         line.telling.map { Portrait.saidWhen($0.toldAt, now: .now, calendar: .current) }
     }
 
+    /// "Hidden." with Undo for the usual window, as the kept-card close shows its notice.
+    var hiddenNotice: String? { hiddenID == nil ? nil : "Hidden." }
+
+    /// Hides a fact, feeling or goal from every page. It stops playing if it was playing. Idea lines are not memories.
+    func hide(_ line: PortraitLine) {
+        guard let memory = line.memory else { return }
+        clearHiddenNotice()
+        playError = nil
+        if playingLineID == line.id { stop() }
+        do {
+            try deps.actions.setHidden(memory.id, true)
+        } catch {
+            self.error = "Could not hide that: \(error.localizedDescription)"
+            return
+        }
+        hiddenID = memory.id
+        hiddenTimer = Task { [weak self] in
+            try? await Task.sleep(for: CardHandler.undoWindow)
+            guard !Task.isCancelled else { return }
+            self?.hiddenID = nil
+        }
+        refresh(newLead: false)
+    }
+
+    /// Takes the hide back: the memory is shown again and its line returns to its place. A failed write
+    /// leaves the notice up, so the person can try again inside the window.
+    func undoHide() {
+        guard let id = hiddenID else { return }
+        do {
+            try deps.actions.setHidden(id, false)
+        } catch {
+            self.error = "Could not bring that back: \(error.localizedDescription)"
+            return
+        }
+        clearHiddenNotice()
+        refresh(newLead: false)
+    }
+
+    func clearHiddenNotice() {
+        hiddenTimer?.cancel()
+        hiddenTimer = nil
+        hiddenID = nil
+    }
+
+    /// After the confirmation: the memory and its spans, people and anchors go; the recording stays. No undo.
+    func delete(_ line: PortraitLine) {
+        deleteTarget = nil
+        guard let memory = line.memory else { return }
+        clearHiddenNotice()
+        playError = nil
+        if playingLineID == line.id { stop() }
+        do {
+            try deps.extractionStore.memories.delete(memory.id)
+        } catch {
+            self.error = "Could not delete that: \(error.localizedDescription)"
+            return
+        }
+        refresh(newLead: false)
+    }
+
     func isPlaying(_ line: PortraitLine) -> Bool {
         playingLineID == line.id && player.playingRange != nil
     }
@@ -68,6 +133,7 @@ final class YouViewModel {
     /// and changes nothing else. A telling is not checked to be non-empty when it is read, so an empty span reaches here.
     func togglePlayback(_ line: PortraitLine) {
         playError = nil
+        clearHiddenNotice()
         if isPlaying(line) { stop(); return }
         guard let telling = line.telling else { return }
         do {

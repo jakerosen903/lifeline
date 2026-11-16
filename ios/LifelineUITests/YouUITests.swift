@@ -146,4 +146,65 @@ final class YouUITests: XCTestCase {
         XCTAssertTrue(error.isHittable, "the error is on screen without scrolling")
         XCTAssertLessThan(error.frame.minY, app.staticTexts["Who you are"].frame.minY, "it sits above the parts")
     }
+
+    @MainActor
+    func testALineCanBeHidden() {
+        let app = XCUIApplication.launchWithPortrait(); app.openYou()
+        let line = app.buttons.matching(identifier: "you.line").matching(NSPredicate(format: "label == %@", "I'm the oldest of two")).firstMatch
+        line.press(forDuration: 1.0)
+        app.buttons["you.hide"].tap()
+        XCTAssertTrue(line.waitForNonExistence(timeout: 5))
+        XCTAssertEqual(app.youLineLabels().count, 5)
+    }
+
+    @MainActor
+    func testAHiddenLineCanBeTakenBack() {
+        let app = XCUIApplication.launchWithPortrait(); app.openYou()
+        let before = app.youLineLabels()
+        let line = app.buttons.matching(identifier: "you.line").matching(NSPredicate(format: "label == %@", "I'm the oldest of two")).firstMatch
+        line.press(forDuration: 1.0)
+        app.buttons["you.hide"].tap()
+        XCTAssertTrue(line.waitForNonExistence(timeout: 5))
+        XCTAssertEqual(app.any("you.hidden").label, "Hidden.", "the person is told, and can take it back")
+        XCTAssertGreaterThanOrEqual(app.buttons["you.undo"].frame.height, 44 - 0.01, "Undo is a full-size control")
+        app.buttons["you.undo"].tap()
+        XCTAssertTrue(line.waitForExistence(timeout: 5), "Undo brings the line back")
+        XCTAssertEqual(app.youLineLabels(), before, "in the same place")
+        XCTAssertFalse(app.any("you.hidden").exists, "the notice goes with the undo")
+    }
+
+    @MainActor
+    func testTheHiddenNoticeGoesAfterSixSeconds() {
+        let app = XCUIApplication.launchWithPortrait(); app.openYou()
+        app.buttons.matching(identifier: "you.line").matching(NSPredicate(format: "label == %@", "I'm the oldest of two")).firstMatch.press(forDuration: 1.0)
+        app.buttons["you.hide"].tap()
+        XCTAssertTrue(app.any("you.hidden").waitForExistence(timeout: 5))
+        XCTAssertTrue(app.any("you.hidden").waitForNonExistence(timeout: 12), "the notice does not stay")
+    }
+
+    @MainActor
+    func testALineIsDeletedOnlyAfterAsking() {
+        let app = XCUIApplication.launchWithPortrait(); app.openYou()
+        let line = app.buttons.matching(identifier: "you.line").matching(NSPredicate(format: "label == %@", "I want to take Maya to Lisbon someday")).firstMatch
+        line.press(forDuration: 1.0); app.buttons["you.delete"].tap()
+        // The iOS 26 dialog is a popover whose button appears twice in the tree: the first match is the one to tap.
+        let confirm = app.buttons["row.confirmDelete"].firstMatch
+        XCTAssertTrue(confirm.waitForExistence(timeout: 5))
+        XCTAssertEqual(confirm.label, "Delete “Lisbon”")
+        confirm.tap()
+        XCTAssertTrue(line.waitForNonExistence(timeout: 5))
+        XCTAssertFalse(app.staticTexts["What you're hoping for"].exists, "a part with nothing does not show")
+    }
+
+    @MainActor
+    func testAboutIsNotOnTimeline() {
+        let app = XCUIApplication.launchWithPortrait(); app.openTab("Timeline")
+        XCTAssertTrue(app.any("timeline.summary").waitForExistence(timeout: 5))
+        for _ in 0..<4 { app.swipeUp() }   // the List is lazy: an About section below the fold would not exist yet
+        XCTAssertFalse(app.any("timeline.about").exists)
+        XCTAssertFalse(app.buttons.matching(identifier: "about.row").firstMatch.exists)
+        app.swipeDown(velocity: .fast)
+        XCTAssertTrue(app.any("timeline.summary").waitForExistence(timeout: 5))
+        XCTAssertTrue(app.any("timeline.summary").label.contains("things about your life"), "the summary still counts them")
+    }
 }
