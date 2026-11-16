@@ -148,6 +148,12 @@ public actor ScriptedVoiceSession: VoiceSession {
                           words: words("the old shed out back", from: 15_000, to: 17_000)),
     ]
 
+    /// One long line for the follow-up chips fixture (`ScriptedExtractionService.followUpOutput`).
+    public static let followUpScript: [SegmentTranscript] = [
+        SegmentTranscript(range: MsRange(start: 0, end: 4_000), text: "my cousin Dara and I mended the garden gate",
+                          words: words("my cousin Dara and I mended the garden gate", from: 0, to: 4_000)),
+    ]
+
     private static func words(_ text: String, from start: Int, to end: Int) -> [TranscribedWord] {
         let tokens = text.split(separator: " ").map(String.init)
         let step = (end - start) / tokens.count

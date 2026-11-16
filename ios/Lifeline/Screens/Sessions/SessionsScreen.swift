@@ -14,7 +14,7 @@ struct SessionsScreen: View {
             }
             ForEach(viewModel.rows) { row in
                 NavigationLink {
-                    SessionDetailScreen(viewModel: SessionDetailViewModel(session: row.session, deps: viewModel.deps))
+                    SessionDetailScreen(session: row.session, deps: viewModel.deps)
                 } label: {
                     VStack(alignment: .leading, spacing: 4) {
                         Text(row.session.startedAt, format: .dateTime.weekday(.wide).month().day().hour().minute())

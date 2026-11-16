@@ -3,7 +3,7 @@ import SwiftUI
 
 /// Cards in arrival order, then the undo notice while a dismiss can still be taken back. The
 /// same component serves the live session, the session detail and the timeline. Pair cards
-/// (M5) sit after the memory and hint cards and before the questions.
+/// (M5) sit after the memory and kept cards and before the questions.
 struct CardStack: View {
     let cards: [Card]
     let handler: CardHandler
@@ -17,12 +17,25 @@ struct CardStack: View {
     var onSameStory: (Card, [MemoryID]) -> Void = { _, _ in }
     /// Undo under "Added to X." Its own action: it must never undo a dismiss made moments before.
     var onUndoMerge: () -> Void = {}
+    /// Undo under "n suggestions dismissed." after a kept card closed. Its own action, like the others.
+    var onUndoKeptClose: () -> Void = {}
     /// "Are these the same?" cards and their answers (M5): true means Same story / One story.
     var pairs: [PairRow] = []
     var onPair: (PairRow, Bool) -> Void = { _, _ in }
     var onUndoPair: () -> Void = {}
-    /// Keep on an entity card, as what it heard (nil) or the type chosen under Not quite (M7).
-    var onKeepEntity: (Card, EntityType?) -> Void = { _, _ in }
+    /// A hint, thing, place or idea chip on a kept card: accepted as heard (nil) or as the type
+    /// chosen from its menu.
+    var onFollowUp: (KeptCard, Card, EntityType?) -> Void = { _, _, _ in }
+    /// A person chip's "Who's this?" answered in its sheet.
+    var onResolveFollowUp: (KeptCard, Card, MentionChoice) -> Void = { _, _, _ in }
+    /// "Not any of these" on an entity chip.
+    var onDeclineFollowUp: (KeptCard, Card) -> Void = { _, _ in }
+    /// "Done" on a kept card.
+    var onKeptDone: (KeptCard) -> Void = { _ in }
+    /// A checked entity or person chip opens its page. Nil in the live session, which never leaves.
+    var onOpenEntity: ((Card) -> Void)?
+    /// Whether a checked chip has a page to open.
+    var hasPage: (Card) -> Bool = { _ in false }
 
     @State private var picking: Card?
 
@@ -43,6 +56,9 @@ struct CardStack: View {
             if let merged = handler.mergedNotice {
                 UndoNotice(text: merged, identifier: "card.mergedNotice", undoIdentifier: "card.undoMerge", onUndo: onUndoMerge)
             }
+            if let closed = handler.keptClosedNotice {
+                UndoNotice(text: closed, identifier: "card.keptClosedNotice", undoIdentifier: "card.undoKeptClose", onUndo: onUndoKeptClose)
+            }
             if let pair = handler.pairNotice {
                 UndoNotice(text: pair, identifier: "pair.notice", undoIdentifier: "pair.undo", onUndo: onUndoPair)
             }
@@ -52,6 +68,7 @@ struct CardStack: View {
         .animation(.default, value: handler.undoCard?.id)
         .animation(.default, value: handler.mergedNotice)
         .animation(.default, value: handler.pairNotice)
+        .animation(.default, value: handler.keptClosedNotice)
         .sheet(item: $picking) { card in
             let named = handler.suggestions(for: card).filter { $0.source == .extractor }.map(\.memoryID)
             SameAsPicker(matches: handler.pickerMatches(for: card), preselected: named.count > 1 ? Set(named) : nil) { chosen in
@@ -72,10 +89,13 @@ struct CardStack: View {
         case .whoIsThis(_, let text):
             WhoIsThisCard(text: text, people: handler.peopleChoices(for: text)) { onResolve(card, $0) }
                 .onAppear { handler.shown(card) }
-        case .hint(_, let hint):
-            HintCard(hint: hint, onAccept: { onAccept(card) }, onDismiss: { onDismiss(card) })
-        case .entity(_, let mention):
-            EntityCard(mention: mention, onKeep: { type in onKeepEntity(card, type) }, onNotAny: { onDismiss(card) })
+        case .kept(let kept):
+            KeptCardView(kept: kept, declined: handler.declined, peopleChoices: { handler.peopleChoices(for: $0) },
+                         onFollowUp: { onFollowUp(kept, $0, $1) }, onResolve: { onResolveFollowUp(kept, $0, $1) },
+                         onNotAny: { onDeclineFollowUp(kept, $0) }, onDone: { onKeptDone(kept) }, onOpenEntity: onOpenEntity, hasPage: hasPage)
+        case .hint, .entity:
+            // Never reached: CardQueue holds every follow-up as a chip under its memory, never as a card.
+            EmptyView()
         }
     }
 

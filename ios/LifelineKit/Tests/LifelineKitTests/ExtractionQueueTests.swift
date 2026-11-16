@@ -51,11 +51,11 @@ private func collect(_ events: AsyncStream<ExtractionEvent>, count: Int, timeout
     }
     #expect(s0 == env.segments[0].id && s1 == env.segments[1].id)
     #expect(first.count == 1 && first[0].kind == .memory && first[0].status == .pending && first[0].extractorVersion == "fake")
-    #expect(second.count == 1 && second[0].kind == .person)
+    #expect(second.isEmpty, "a name no memory carries goes to the People queue, not the session")
     #expect(env.service.requests.map(\.segmentText) == env.segments.map(\.text))
     #expect(env.service.requests[1].packet.previousSegments == [env.segments[0].text])
     #expect(try env.store.sessions.fetchSegment(env.segments[0].id)?.status == .extracted)
-    #expect(try env.store.candidates.pending(in: env.session).count == 2)
+    #expect(try env.store.candidates.pending(in: env.session).count == 1)
 }
 
 @Test func rejectedCandidatesAreStoredNotShown() async throws {
@@ -158,7 +158,36 @@ private func collect(_ events: AsyncStream<ExtractionEvent>, count: Int, timeout
     let stored = try env.store.candidates.candidates(for: env.segments[0].id)
     let memory = try #require(stored.first { $0.kind == .memory })
     #expect(memory.status == .dismissed && memory.rejection?.contains("disclosure") == true)
-    #expect(try env.store.candidates.pending(in: env.session).map(\.kind) == [.person], "nothing waits in the detail screen except the name")
+    #expect(try env.store.candidates.pending(in: env.session).isEmpty, "nothing waits in the detail screen")
+    #expect(try env.store.people.mentions(in: env.segments[0].id).map(\.status) == [.unresolved], "the name waits in the People queue")
+}
+
+@Test func nameNoMemoryCarriesBecomesAnOpenMention() async throws {
+    var output = gardenOutput()
+    output.mentions = [MentionOut(text: "Dara", kind: .person, likelyAliasOfPersonID: nil, confidence: 0.8, relationText: "my cousin")]
+    let env = try Env(texts: ["the garden had a pomegranate tree with Dara"], script: [.success(output)])
+    let queue = env.queue()
+    let events = await queue.events
+    await queue.enqueue(env.segments[0].id)
+    guard case .candidates(let shown, _)? = await collect(events, count: 1).first else { Issue.record("no event"); return }
+    #expect(shown.map(\.kind) == [.memory], "the name is not held under a memory that does not name it")
+    let mentions = try env.store.people.mentions(in: env.segments[0].id)
+    #expect(mentions.map(\.text) == ["Dara"] && mentions.map(\.status) == [.unresolved] && mentions.first?.relationText == "my cousin")
+    #expect(try env.store.people.mentions(status: .unresolved).map(\.id) == mentions.map(\.id))
+    #expect(try env.store.candidates.candidates(for: env.segments[0].id).first { $0.kind == .person }?.status == .accepted)
+}
+
+@Test func nameAMemoryCarriesStaysPendingUnderIt() async throws {
+    var output = gardenOutput(people: ["Maya"])
+    output.mentions = [MentionOut(text: "maya", kind: .person, likelyAliasOfPersonID: nil, confidence: 0.8)]
+    let env = try Env(texts: ["the garden had a pomegranate tree Maya climbed"], script: [.success(output)])
+    let queue = env.queue()
+    let events = await queue.events
+    await queue.enqueue(env.segments[0].id)
+    guard case .candidates(let shown, _)? = await collect(events, count: 1).first else { Issue.record("no event"); return }
+    #expect(shown.map(\.kind) == [.memory, .person], "the name rides along to be a chip on the kept card")
+    #expect(try env.store.people.mentions(in: env.segments[0].id).isEmpty)
+    #expect(try env.store.candidates.pending(in: env.session).map(\.kind) == [.memory, .person])
 }
 
 @Test func knownNameMentionIsResolvedWithoutACard() async throws {
@@ -363,9 +392,12 @@ private func firstCard(_ events: [ExtractionEvent]) -> Candidate? {
     #expect(hint.memoryCandidateID == a.id.rawValue && hint.phrase == "every summer")
     let actions = CandidateActions(store: env.store)
     _ = try actions.acceptMemory(try #require(emitted.first { $0.id == a.id }))
-    let waiting = CardQueue.waitingCards(pending: try env.store.candidates.pending(in: env.session),
-                                         statusOf: { (try? env.store.candidates.fetch($0))?.status })
-    #expect(waiting.contains { if case .hint = $0 { true } else { false } })
+    let waiting = CardQueue.waiting(pending: try env.store.candidates.pending(in: env.session),
+                                    segmentMemories: { (try? env.store.candidates.candidates(for: $0)) ?? [] },
+                                    candidate: { try? env.store.candidates.fetch($0) })
+    guard case .kept(let kept)? = waiting.cards.first(where: { $0.id == a.id.rawValue }) else { Issue.record("expected a kept card, got \(waiting.cards)"); return }
+    #expect(kept.followUps.contains { if case .hint = $0 { true } else { false } }, "the continuation's hint waits under the first card, kept")
+    #expect(kept.title == CandidatePayload.memory(a)?.title && !kept.title.isEmpty)
 }
 
 // MARK: - M5 stories

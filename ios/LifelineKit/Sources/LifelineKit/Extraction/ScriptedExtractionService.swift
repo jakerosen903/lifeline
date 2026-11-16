@@ -13,18 +13,21 @@ public struct ScriptedExtractionService: ExtractionService {
     public var facts: Bool
     /// UI tests of entities (M7), matched to `ScriptedVoiceSession.entityScript`.
     public var entities: Bool
+    /// UI tests of follow-up chips, matched to `ScriptedVoiceSession.followUpScript`.
+    public var followUps: Bool
 
     /// The one story the script tells: both scenes carry this ref, the Maya scene carries the title hint.
     public static let storyRef = "story-scripted"
 
-    public init(delayMs: Int = 300, heavy: Bool = false, facts: Bool = false, entities: Bool = false) {
-        self.delayMs = delayMs; self.heavy = heavy; self.facts = facts; self.entities = entities
+    public init(delayMs: Int = 300, heavy: Bool = false, facts: Bool = false, entities: Bool = false, followUps: Bool = false) {
+        self.delayMs = delayMs; self.heavy = heavy; self.facts = facts; self.entities = entities; self.followUps = followUps
     }
 
     public func extract(_ request: ExtractionRequest) async throws(ExtractionError) -> ExtractionResponse {
         try? await Task.sleep(for: .milliseconds(delayMs))
         let words = request.words
         let text = request.segmentText
+        if followUps { return Self.response(Self.followUpOutput(text: text, words: words)) }
         if entities { return Self.response(Self.entityOutput(text: text, words: words)) }
         var memories: [MemoryOut] = []
         var mentions: [MentionOut] = []
@@ -99,8 +102,22 @@ public struct ScriptedExtractionService: ExtractionService {
         } else if text.contains("hard work differently") {
             memories.append(memory("m4", .event, "I saw hard work differently", anchors: [AnchorOut(phrase: "in 2020", relation: .absolute, targetText: nil, value: nil)], refs: [hardWork]))
         } else if text.contains("old shed") {
+            memories.append(memory("m5", .event, "The old shed out back", refs: [EntityRefOut(text: "the old shed", kind: .thing, likelyEntityID: nil)]))
             mentions.append(MentionOut(text: "the old shed", kind: .thing, likelyAliasOfPersonID: nil, confidence: 0.8, ref: "t2"))
         }
         return ExtractorOutput(memories: memories, mentions: mentions, flags: .none)
+    }
+
+    /// The follow-up script: one memory that names a domain ("family"), a thing (the garden gate)
+    /// and a person (Dara), all referring to that memory, so Keep shows three chips on its card.
+    static func followUpOutput(text: String, words: [String]) -> ExtractorOutput {
+        let all = WordSpan(startWord: 0, endWord: max(0, words.count - 1))
+        let memory = MemoryOut(ref: "m1", kind: .event, title: "Mending the garden gate", quote: text, segmentSpan: all,
+                               peopleRefs: ["Dara"], placeText: nil, anchors: [], collectionHint: nil, chapterHint: nil,
+                               confidence: 0.9, entityRefs: [], aboutRef: "t1", domainHint: "family")
+        return ExtractorOutput(memories: [memory], mentions: [
+            MentionOut(text: "the garden gate", kind: .thing, likelyAliasOfPersonID: nil, confidence: 0.8, ref: "t1"),
+            MentionOut(text: "Dara", kind: .person, likelyAliasOfPersonID: nil, confidence: 0.8, relationText: "my cousin"),
+        ], flags: .none)
     }
 }

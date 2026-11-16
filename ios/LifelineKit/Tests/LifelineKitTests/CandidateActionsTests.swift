@@ -180,6 +180,27 @@ private struct Env {
     #expect(try env.store.people.findPerson(matching: "my mom")?.id == person.id)
 }
 
+@Test func chipAddsTheKinPhraseToTheRowKeepWrote() throws {
+    let env = try Env(text: "the garden had a pomegranate tree and my sister Maya climbed it")
+    let accepted = try env.actions.acceptMemory(try env.memoryCandidate(people: ["Maya"]))
+    let written = try #require(accepted.newMentions.first)
+    #expect(written.text == "Maya" && written.relationText == nil, "Keep writes the name without the phrase")
+    let mention = try env.actions.acceptMention(try env.mentionCandidate("Maya", ordinal: 1, relation: "my sister"))
+    #expect(mention.id == written.id && mention.relationText == "my sister")
+    #expect(try env.store.people.mention(id: written.id)?.relationText == "my sister")
+    _ = try env.actions.acceptMention(try env.mentionCandidate("maya", ordinal: 2, relation: "my cousin"))
+    #expect(try env.store.people.mention(id: written.id)?.relationText == "my sister", "a phrase already on the row is not overwritten")
+    #expect(try env.store.people.mentions(in: env.segment.id).count == 1)
+}
+
+@Test func blankKinPhraseLeavesTheRowWithout() throws {
+    let env = try Env(text: "the garden had a pomegranate tree and Maya climbed it")
+    let written = try #require(try env.actions.acceptMemory(try env.memoryCandidate(people: ["Maya"])).newMentions.first)
+    let mention = try env.actions.acceptMention(try env.mentionCandidate("Maya", ordinal: 1, relation: "   "))
+    #expect(mention.relationText == nil)
+    #expect(try env.store.people.mention(id: written.id)?.relationText == nil)
+}
+
 @Test func peopleRefWithRoleAndNameMatchesTheNamedPerson() throws {
     let env = try Env(text: "the garden had a pomegranate tree and my mom, Marcel, picked them")
     let marcel = try env.store.people.insertPerson(displayName: "Marcel")
