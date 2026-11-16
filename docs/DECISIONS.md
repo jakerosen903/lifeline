@@ -11,6 +11,10 @@ One entry per decision. Newest first. Status is Decided, Open, or Superseded.
 - A gap is measured from the latest end of all the moments above it, not only from the moment directly above. Example: 2000–10, then 2003, then 2012. The gap above 2012 is 2 years, not 9.
 - The margin leaves out the years only when the moment above shows the same years and the same qualifier. A guess in the same year as a stated date keeps its word "around".
 
+- Owner, 2026-11-16: for a confirmed relation ("before Graduation (2004)") the margin shows no years. The row shows the full text and the mark stays a dashed capsule. This changes the plan's decision 4.
+- Owner, 2026-11-16: a story of one year has a solid dot only when every dated member reads as said. Otherwise it has a dashed dot and "around". This changes the plan's decision 8.
+- Owner, 2026-11-16: "New chapter from here" goes with no replacement until S6c (decision 2), and a moment in a collection stays off the spine (decision 9). Known cost of decision 9: a gap label can cover years that hold collection moments.
+
 **Why.** A label of "9 years" across years that an earlier moment covers states something false about the person's life. A guess whose word is hidden reads as a fact (PRINCIPLES 5).
 
 **Consequences.** Each ruling is one line in `SpineLayout` and one test. To overrule one, change the line and its test.

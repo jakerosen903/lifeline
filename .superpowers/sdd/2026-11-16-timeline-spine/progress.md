@@ -26,3 +26,4 @@ Note: ExtractionQueueTests.drainGivesUpAtItsDeadline failed once in Task 2's ful
 Task 2: complete (commits 6bb546b..3299af8, review clean; swift test 884). Rulings R1, R2, R3 applied. Minor, carried to the final review: the literal "around" is written twice in SpineLayout; no test for a "probably" range beside the margin qualifier.
 Task 3: complete (commits 7700dbf..b932cfd, review clean; swift test 884). The app target does not compile from here until Tasks 4 and 5.
 Tasks 1 to 3 done. Stopped for the owner: the report on the 12 decisions. R1 and R2 are also in docs/DECISIONS.md.
+Owner answered the decisions stop: change 4 and 8, keep the rest (rulings R4, R5). Task 2b (kit amendment for R4 and R5) comes before Task 4.
