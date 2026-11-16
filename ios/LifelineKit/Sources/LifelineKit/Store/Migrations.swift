@@ -356,6 +356,36 @@ enum Migrations {
                 t.add(column: "started_from", .text).notNull().defaults(to: "tab")
             }
         }
+        // v13 (S4 photos): a photo is one row and one file; a link puts it on an entity or a memory.
+        // The link has a key per subject kind, so a cascade removes it on every delete path (decision 2).
+        m.registerMigration("v13") { db in
+            try db.create(table: "photo") { t in
+                t.primaryKey("id", .text)
+                t.column("file_name", .text).notNull().unique()
+                t.column("asset_local_id", .text)
+                t.column("taken_at", .text)
+                t.column("taken_origin", .text)
+                t.column("lat", .double)
+                t.column("lon", .double)
+                t.column("location_origin", .text)
+                t.column("sha256", .text).notNull().unique()
+                t.column("pixel_width", .integer).notNull()
+                t.column("pixel_height", .integer).notNull()
+                t.column("added_at", .datetime).notNull()
+            }
+            try db.create(table: "photo_link") { t in
+                t.column("photo_id", .text).notNull().references("photo", onDelete: .cascade)
+                t.column("entity_id", .text).references("entity", onDelete: .cascade).indexed()
+                t.column("memory_id", .text).references("memory", onDelete: .cascade).indexed()
+                t.column("role", .text).notNull()
+                t.column("sort_order", .integer).notNull()
+                t.check(sql: "(entity_id is null) <> (memory_id is null)")
+            }
+            try db.execute(sql: "create unique index photo_link_photo_entity on photo_link (photo_id, entity_id) where entity_id is not null")
+            try db.execute(sql: "create unique index photo_link_photo_memory on photo_link (photo_id, memory_id) where memory_id is not null")
+            try db.execute(sql: "create unique index photo_link_entity_cover on photo_link (entity_id) where role = 'cover' and entity_id is not null")
+            try db.execute(sql: "create unique index photo_link_memory_cover on photo_link (memory_id) where role = 'cover' and memory_id is not null")
+        }
         return m
     }
 }
