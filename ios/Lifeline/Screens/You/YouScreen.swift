@@ -85,7 +85,7 @@ struct YouScreen: View {
                     .accessibilityIdentifier("you.more")
             }
         }
-        .addPhotoFlow(isPresented: $addingPhoto, deps: viewModel.deps,
+        .addPhotoFlow(isPresented: $addingPhoto, deps: viewModel.deps, shelf: viewModel.shelf,
                       onFile: { file, assetID in await viewModel.addPhoto(fileAt: file, assetLocalID: assetID) },
                       onError: { viewModel.photoFailed($0) })
         .sheet(item: $viewing) { placed in

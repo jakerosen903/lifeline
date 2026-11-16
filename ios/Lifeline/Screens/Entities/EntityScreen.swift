@@ -166,7 +166,7 @@ struct EntityScreen: View {
             TellMeWhenSheet(title: viewModel.entity.title, birthDate: try? viewModel.deps.extractionStore.profile.ownerBirthDate(),
                             heading: "From when to when?") { viewModel.addDates($0) }
         }
-        .addPhotoFlow(isPresented: $addingPhoto, deps: viewModel.deps,
+        .addPhotoFlow(isPresented: $addingPhoto, deps: viewModel.deps, shelf: viewModel.shelf,
                       onFile: { file, assetID in await viewModel.addPhoto(fileAt: file, assetLocalID: assetID); onChange() },
                       onError: { viewModel.photoFailed($0) })
         .sheet(item: $viewing) { placed in

@@ -4,11 +4,12 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 extension View {
-    /// "Add a photo": the system picker, one image at a time, then the picked file to `onFile`. Under
-    /// `-uiTesting-pickPhoto <path>` the picker is skipped and that file goes to `onFile` at once.
-    func addPhotoFlow(isPresented: Binding<Bool>, deps: Dependencies, onFile: @escaping (URL, String?) async -> Void,
+    /// "Add a photo": the system picker, one image at a time, then the picked file to `onFile`. `shelf` shows
+    /// "Adding the photo…" from the moment the picked item arrives.
+    /// Under `-uiTesting-pickPhoto <path>` the picker is skipped and that file goes to `onFile` at once.
+    func addPhotoFlow(isPresented: Binding<Bool>, deps: Dependencies, shelf: PhotoShelf?, onFile: @escaping (URL, String?) async -> Void,
                       onError: @escaping (String) -> Void) -> some View {
-        modifier(AddPhotoFlow(isPresented: isPresented, pickPhotoPath: deps.pickPhotoPath, onFile: onFile, onError: onError))
+        modifier(AddPhotoFlow(isPresented: isPresented, pickPhotoPath: deps.pickPhotoPath, shelf: shelf, onFile: onFile, onError: onError))
     }
 }
 
@@ -18,6 +19,7 @@ extension View {
 struct AddPhotoFlow: ViewModifier {
     @Binding var isPresented: Bool
     let pickPhotoPath: String?
+    let shelf: PhotoShelf?
     let onFile: (URL, String?) async -> Void
     let onError: (String) -> Void
     @State private var selection: PhotosPickerItem?
@@ -39,7 +41,13 @@ struct AddPhotoFlow: ViewModifier {
                     guard let item else { return }
                     // Cleared at once, so picking the same photo again is a change too.
                     selection = nil
-                    Task { await receive(item) }
+                    // The line shows now: the hand-over below can take seconds for a photo in iCloud.
+                    let shelf = shelf
+                    shelf?.beginAdding()
+                    Task {
+                        defer { shelf?.endAdding() }
+                        await receive(item)
+                    }
                 }
         }
     }

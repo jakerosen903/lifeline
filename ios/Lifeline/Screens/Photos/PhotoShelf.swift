@@ -9,8 +9,11 @@ import LifelineKit
 final class PhotoShelf {
     let subject: PhotoSubject
     private(set) var photos: [PlacedPhoto] = []
-    /// True from the moment a picked file reaches the shelf until it is stored or refused.
-    private(set) var isAdding = false
+    /// Adds in flight: from the moment a picked item arrives (before the system hands its file over, which is the long
+    /// part for a photo in iCloud) until it is stored or refused. A count, so two picks never clear each other.
+    private var adds = InFlightCount()
+    /// "Adding the photo…" shows while this is true (decision 21).
+    var isAdding: Bool { adds.isActive }
     @ObservationIgnored private let deps: Dependencies
     @ObservationIgnored private let onError: (String) -> Void
 
@@ -27,9 +30,13 @@ final class PhotoShelf {
         do { photos = try deps.extractionStore.photos.photos(of: subject) } catch { onError("Could not show the photos: \(error.localizedDescription)") }
     }
 
+    /// The picker calls these around the hand-over; each `beginAdding()` must be paired with one `endAdding()`.
+    func beginAdding() { adds.begin() }
+    func endAdding() { adds.end() }
+
     func add(fileAt file: URL, assetLocalID: String?) async {
-        isAdding = true
-        defer { isAdding = false }
+        beginAdding()
+        defer { endAdding() }
         do { _ = try await deps.photos.add(fileAt: file, assetLocalID: assetLocalID, to: subject) } catch {
             onError("Could not add this photo: \(error.localizedDescription)")
         }

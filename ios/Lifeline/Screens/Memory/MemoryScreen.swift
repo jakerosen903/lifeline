@@ -151,7 +151,7 @@ struct MemoryScreen: View {
                 .accessibilityLabel("More")
                 .accessibilityIdentifier("memory.more")
         }
-        .addPhotoFlow(isPresented: $addingPhoto, deps: deps,
+        .addPhotoFlow(isPresented: $addingPhoto, deps: deps, shelf: viewModel.shelf,
                       onFile: { file, assetID in await viewModel.addPhoto(fileAt: file, assetLocalID: assetID); onChange() },
                       onError: { viewModel.photoFailed($0) })
         .sheet(item: $viewing) { placed in
