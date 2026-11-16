@@ -28,10 +28,10 @@ private func moment(_ year: Int, at n: Int) -> Memory {
 
 private func makeSource(owner: Entity? = nil, profile: Profile? = nil, birth: CivilDate? = nil, ownerMoments: [Memory] = [], memories: [Memory] = [],
                     links: [MemoryID: [AboutLink]] = [:], tags: [MemoryID: [String]] = [:], tellings: [MemoryID: Telling] = [:],
-                    ideas: [Entity] = [], ideaTellings: [EntityID: Telling] = [:]) -> PortraitSource {
+                    ideas: [Entity] = [], ideaTellings: [EntityID: Telling] = [:], heavySessions: Set<SessionID> = []) -> PortraitSource {
     PortraitSource(profile: profile, owner: owner, birth: birth, ownerMoments: ownerMoments, aboutMemories: memories, links: links,
                    memoryTags: Dictionary(uniqueKeysWithValues: tags.map { ($0.key.rawValue, $0.value) }),
-                   memoryTellings: tellings, ideas: ideas, ideaTellings: ideaTellings)
+                   memoryTellings: tellings, ideas: ideas, ideaTellings: ideaTellings, heavySessions: heavySessions)
 }
 
 private let jordan = Entity(type: .person, title: "Jordan")
@@ -267,4 +267,47 @@ private var utc: Calendar { var c = Calendar(identifier: .gregorian); c.timeZone
     let listed = memory("Listed", quote: "shown", kind: .fact, at: 1), hidden = memory("Hidden", quote: "away", kind: .fact, at: 2, hidden: true)
     let portrait = Portrait(makeSource(memories: [listed, hidden], tags: [listed.id: ["home"], hidden.id: ["secret"]]), currentYear: 2026)
     #expect(portrait.tags(leaving: nil) == ["home"])
+}
+
+// Final review, item 1: a line first told in a heavy session (a disclosure, a wish to stop) never leads (PRINCIPLES, safety).
+
+@Test func aLineFromAHeavySessionNeverLeadsEvenAlone() {
+    let fact = memory("The hard year", quote: "that was the year everything went wrong", kind: .fact, at: 1)
+    let heavy = told(1)
+    let portrait = Portrait(makeSource(memories: [fact], tellings: [fact.id: heavy], heavySessions: [heavy.sessionID]), currentYear: 2026)
+    #expect(portrait.leadPool.isEmpty)
+    #expect(portrait.lead(keeping: nil) { _ in Issue.record("no pick from an empty pool"); return 0 } == nil)
+    #expect(portrait.lead(keeping: "memory:\(fact.id.rawValue)") { _ in 0 } == nil, "a kept lead from a heavy session is not kept")
+}
+
+@Test func anOrdinaryLineFromAnotherSessionStillLeads() {
+    let hard = memory("The hard year", quote: "that was the year everything went wrong", kind: .feeling, at: 1)
+    let light = memory("Cello", quote: "I want to learn the cello", kind: .goal, at: 2)
+    let heavy = told(1), ordinary = told(2)
+    let portrait = Portrait(makeSource(memories: [hard, light], tellings: [hard.id: heavy, light.id: ordinary], heavySessions: [heavy.sessionID]), currentYear: 2026)
+    #expect(portrait.leadPool.map(\.id) == ["memory:\(light.id.rawValue)"])
+    #expect(portrait.lead(keeping: nil) { _ in 0 }?.id == "memory:\(light.id.rawValue)")
+}
+
+@Test func aLineFromAHeavySessionStillShowsInItsPartWithItsRecording() {
+    let hard = memory("The hard year", quote: "that was the year everything went wrong", kind: .feeling, at: 1)
+    let heavy = told(1)
+    let portrait = Portrait(makeSource(memories: [hard], tellings: [hard.id: heavy], heavySessions: [heavy.sessionID]), currentYear: 2026)
+    let lead = portrait.lead(keeping: nil) { _ in 0 }
+    let shown = portrait.lines(.howItFelt, leaving: lead?.id, tag: nil)
+    #expect(shown.map(\.id) == ["memory:\(hard.id.rawValue)"])
+    #expect(shown.first?.telling == heavy, "it keeps its play control")
+}
+
+// Final review, item 10: the lead's control speaks its length in words, not "0:04".
+
+@Test func theLeadControlSpeaksItsLength() {
+    #expect(Portrait.spokenDuration(ms: 0) == "0 seconds")
+    #expect(Portrait.spokenDuration(ms: 1_000) == "1 second")
+    #expect(Portrait.spokenDuration(ms: 4_000) == "4 seconds")
+    #expect(Portrait.spokenDuration(ms: 4_900) == "4 seconds", "the same whole seconds as the visible m:ss")
+    #expect(Portrait.spokenDuration(ms: 60_000) == "1 minute")
+    #expect(Portrait.spokenDuration(ms: 65_000) == "1 minute 5 seconds")
+    #expect(Portrait.spokenDuration(ms: 3_725_000) == "1 hour 2 minutes 5 seconds")
+    #expect(Portrait.spokenDuration(ms: -5) == "0 seconds")
 }

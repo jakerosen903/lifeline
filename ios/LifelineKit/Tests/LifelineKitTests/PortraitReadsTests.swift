@@ -145,11 +145,48 @@ private struct Fixture {
     try addLines(.fact, 3)
     let few = try statementsForOneRead()
     try addLines(.fact, 30); try addLines(.feeling, 10); try addLines(.goal, 10)
+    // Heavy sessions are read at once too: one by a flag row, one by its stage log.
+    for i in 0..<5 {
+        let heavy = Session(id: .init(), startedAt: at(200 + i), endedAt: nil, audioPath: "h\(i).m4a", stageLog: i.isMultiple(of: 2) ? "[]" : wantsToStopLog, landingChoiceMade: true)
+        try f.store.sessions.insert(heavy)
+        let segment = Segment(id: .init(), sessionID: heavy.id, index: 0, startMs: 0, endMs: 900, text: "hard", status: .extracted)
+        try f.store.sessions.insert(segment, words: [])
+        if i.isMultiple(of: 2) { try f.store.candidates.insert(try flagRow(segment.id, Flags(disclosure: .past, wantsToStop: false, wantsToChangeSubject: false))) }
+    }
     for i in 0..<10 {
         let idea = try f.entity(.idea, "Idea \(i)")
         try f.store.entities.insertSpan(EntitySpan(entityID: idea.id, segmentID: f.segments[100 + i].id, startMs: 0, endMs: 1_000, order: 0))
     }
     let many = try statementsForOneRead()
-    #expect(few > 0)
+    #expect(try f.store.sessions.heavySessionIDs().count == 5)
+    #expect(few == 66, "was \(few): the portrait's fixed number of statements, heavy sessions included")
     #expect(many == few)
+}
+
+// Final review, item 1: which sessions were heavy, read at once from stored flag rows and stage logs.
+
+private let wantsToStopLog = #"[{"stage":"windDown","at":"2026-03-01T00:00:00Z","reason":"wantsToStop"}]"#
+
+private func flagRow(_ segment: SegmentID, _ flags: Flags) throws -> Candidate {
+    StoreFixtures.candidate(segment, ordinal: 0, kind: .flag, payload: try CandidatePayload.encode(flags))
+}
+
+@Test func heavySessionsAreReadFromFlagRowsAndStageLogs() throws {
+    let f = try Fixture()
+    func session(_ log: String) throws -> (Session, Segment) {
+        let s = Session(id: .init(), startedAt: at(300), endedAt: nil, audioPath: "x.m4a", stageLog: log, landingChoiceMade: true)
+        try f.store.sessions.insert(s)
+        let segment = Segment(id: .init(), sessionID: s.id, index: 0, startMs: 0, endMs: 900, text: "words", status: .extracted)
+        try f.store.sessions.insert(segment, words: [])
+        return (s, segment)
+    }
+    let (flagged, flaggedSegment) = try session("[]")
+    try f.store.candidates.insert(try flagRow(flaggedSegment.id, Flags(disclosure: .present, wantsToStop: false, wantsToChangeSubject: false)))
+    let (stopped, _) = try session(wantsToStopLog)
+    let (onlySubject, subjectSegment) = try session("[]")
+    try f.store.candidates.insert(try flagRow(subjectSegment.id, Flags(disclosure: .none, wantsToStop: false, wantsToChangeSubject: true)))
+    let heavy = try f.store.sessions.heavySessionIDs()
+    #expect(heavy == [flagged.id, stopped.id])
+    #expect(!heavy.contains(onlySubject.id) && !heavy.contains(f.session.id), "a change of subject is not heavy")
+    #expect(try f.store.portraitSource().heavySessions == heavy)
 }

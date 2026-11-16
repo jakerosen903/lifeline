@@ -39,15 +39,24 @@ public struct Portrait: Sendable, Equatable {
     public var whatYouThink: [PortraitLine]
     public var hopingFor: [PortraitLine]
 
-    /// Lines that can lead: the person's own words and a recording to play, in part order.
+    /// Sessions with a heavy moment, from the source.
+    public var heavySessions: Set<SessionID>
+
+    /// Lines that can lead: the person's own words and a recording to play, in part order. A line first told in
+    /// a heavy session (a disclosure, a wish to stop) never leads: it is not put at title size with a play button
+    /// on a tab switch. It still shows in its part, with its play control (PRINCIPLES, session arc and safety).
     public var leadPool: [PortraitLine] {
-        (whoYouAre + howItFelt + hopingFor).filter { $0.isOwnWords && $0.telling != nil }
+        (whoYouAre + howItFelt + hopingFor).filter { line in
+            guard line.isOwnWords, let telling = line.telling else { return false }
+            return !heavySessions.contains(telling.sessionID)
+        }
     }
 
     public var isEmpty: Bool { whoYouAre.isEmpty && howItFelt.isEmpty && whatYouThink.isEmpty && hopingFor.isEmpty }
 
     public init(_ source: PortraitSource, currentYear: Int) {
         owner = source.owner
+        heavySessions = source.heavySessions
         let typedName = source.profile?.displayName?.trimmingCharacters(in: .whitespacesAndNewlines)
         let ownerName = source.owner?.title.trimmingCharacters(in: .whitespacesAndNewlines)
         name = [typedName, ownerName].lazy.compactMap { $0 }.first { !$0.isEmpty }
@@ -114,12 +123,21 @@ public struct Portrait: Sendable, Equatable {
         // The copy is English with Gregorian years: only the time zone comes from the device's calendar.
         var gregorian = Calendar(identifier: .gregorian)
         gregorian.timeZone = calendar.timeZone
-        let formatter = DateFormatter()
-        formatter.calendar = gregorian
-        formatter.timeZone = gregorian.timeZone
-        formatter.locale = Locale(identifier: "en_GB")
-        formatter.dateFormat = gregorian.component(.year, from: toldAt) == gregorian.component(.year, from: now) ? "MMMM" : "MMMM yyyy"
-        return "said in \(formatter.string(from: toldAt))"
+        let sameYear = gregorian.component(.year, from: toldAt) == gregorian.component(.year, from: now)
+        return "said in \(MonthFormatters.shared.string(from: toldAt, timeZone: gregorian.timeZone, withYear: !sameYear))"
+    }
+
+    /// A length in words for VoiceOver, with the same whole seconds as the visible "m:ss":
+    /// "4 seconds", "1 minute", "1 minute 5 seconds", "1 hour 2 minutes 5 seconds". Never negative.
+    public static func spokenDuration(ms: Int) -> String {
+        let total = max(0, ms) / 1_000
+        let h = total / 3_600, m = (total % 3_600) / 60, s = total % 60
+        func unit(_ n: Int, _ word: String) -> String { "\(n) \(word)\(n == 1 ? "" : "s")" }
+        var parts: [String] = []
+        if h > 0 { parts.append(unit(h, "hour")) }
+        if m > 0 { parts.append(unit(m, "minute")) }
+        if s > 0 || parts.isEmpty { parts.append(unit(s, "second")) }
+        return parts.joined(separator: " ")
     }
 
     // MARK: - The lead and the chips
@@ -151,6 +169,32 @@ public struct Portrait: Sendable, Equatable {
         let rest = all.filter { $0.id != lead }
         guard part == .whoYouAre, let tag = tag?.lowercased(), tags(leaving: lead).contains(where: { $0.lowercased() == tag }) else { return rest }
         return rest.filter { $0.tags.contains { $0.lowercased() == tag } }
+    }
+}
+
+/// "October" and "October 2025" formatters, made once per time zone instead of once per goal row per body pass.
+/// `DateFormatter` is not `Sendable`; every use happens under the lock, so the cache is safe from any thread.
+private final class MonthFormatters: @unchecked Sendable {
+    static let shared = MonthFormatters()
+    private let lock = NSLock()
+    private var cache: [String: DateFormatter] = [:]
+
+    func string(from date: Date, timeZone: TimeZone, withYear: Bool) -> String {
+        lock.withLock {
+            let key = "\(timeZone.identifier)|\(withYear)"
+            let formatter = cache[key] ?? {
+                var gregorian = Calendar(identifier: .gregorian)
+                gregorian.timeZone = timeZone
+                let made = DateFormatter()
+                made.calendar = gregorian
+                made.timeZone = timeZone
+                made.locale = Locale(identifier: "en_GB")
+                made.dateFormat = withYear ? "MMMM yyyy" : "MMMM"
+                cache[key] = made
+                return made
+            }()
+            return formatter.string(from: date)
+        }
     }
 }
 

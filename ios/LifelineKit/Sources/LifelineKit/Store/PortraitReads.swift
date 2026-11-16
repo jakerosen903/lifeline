@@ -8,14 +8,17 @@ public struct PortraitSource: Sendable {
     public var birth: CivilDate?
     /// The owner's own moments, for the life strip.
     public var ownerMoments: [Memory]
-    /// Told, visible facts, feelings and goals, oldest first.
+    /// Told, visible facts, feelings and goals, by `created_at`. `Portrait` sorts them by when they were told.
     public var aboutMemories: [Memory]
     public var links: [MemoryID: [AboutLink]]
-    /// Memory tags by `MemoryID.rawValue`.
+    /// Memory tags by `MemoryID.rawValue`, for every memory: not filtered to the listed ones, and it can hold
+    /// ids of memories that are gone. `Portrait` reads only the ids it lists.
     public var memoryTags: [String: [String]]
     public var memoryTellings: [MemoryID: Telling]
     public var ideas: [Entity]
     public var ideaTellings: [EntityID: Telling]
+    /// Sessions with a heavy moment (a disclosure, a wish to stop). A line first told in one never leads.
+    public var heavySessions: Set<SessionID> = []
 }
 
 extension ExtractionStore {
@@ -33,6 +36,7 @@ extension ExtractionStore {
             memoryTags: try tags.tagsByElement(.memory),
             memoryTellings: try memories.firstTellings(kinds: Self.aboutKinds),
             ideas: try entities.entities(type: .idea),
-            ideaTellings: try entities.firstTellings(type: .idea))
+            ideaTellings: try entities.firstTellings(type: .idea),
+            heavySessions: try sessions.heavySessionIDs())
     }
 }
