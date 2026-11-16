@@ -16,6 +16,7 @@ struct TimelineScreen: View {
     @State private var moveTarget: MemoryRow?
     /// The list row to scroll to the top: a story just opened, so its members show above the record bar.
     @State private var scrollTarget: StoryScrollTarget?
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     /// A story's row id in the list it sits in: the spine keys rows by `SpineRow.id`, the shelf by story.
     private enum StoryScrollTarget: Equatable {
@@ -117,9 +118,10 @@ struct TimelineScreen: View {
             .onChange(of: scrollTarget) { _, target in
                 guard let target else { return }
                 scrollTarget = nil
-                // After this update: the members must be in the list before it can scroll past them.
+                // On the next turn, once this update has put the opened story's member rows in the list.
+                // No animation under Reduce Motion.
                 Task { @MainActor in
-                    withAnimation {
+                    withAnimation(reduceMotion ? nil : .default) {
                         switch target {
                         case .spine(let id): proxy.scrollTo(id, anchor: .top)
                         case .shelf(let id): proxy.scrollTo(id, anchor: .top)

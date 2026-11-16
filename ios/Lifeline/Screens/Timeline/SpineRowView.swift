@@ -26,7 +26,7 @@ private struct SpineMarkOnFirstLine: ViewModifier {
 
 /// One stop on the spine, top to bottom: the gap above it, the period waypoint that starts at it,
 /// then the row itself: the margin with the years, the mark on the spine, and the moment or story.
-/// An open story's members follow under it in the same list row, beside the spine, without marks.
+/// An open story's members follow as list rows of their own, beside the spine, without marks.
 ///
 /// The spine is one 2-point ochre line. Each part draws its own piece at the same x, and the list
 /// rows touch (the screen gives them no vertical insets), so the pieces join into one line. It
@@ -49,15 +49,15 @@ struct SpineRowView: View {
             if let gap = row.stop.gapAbove, gap.units > 0 { SpineGap(gap: gap, geometry: geometry) }
             if let period = row.stop.periodAbove { SpineWaypoint(period: period, geometry: geometry, drawsSpine: !isFirst) }
             stopRow
-            // In this one view, not as list rows of their own: the list then lays them out at its own
-            // width, leading-aligned, like every other part of the row.
-            ForEach(openMembers) { member in
-                // Members carry no mark and keep their full date text in the row, as off the spine.
-                MemoryRowView(row: member, actions: actions)
-                    .padding(.leading, geometry.contentLeading + 16)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(alignment: .leading) { SpineLine(dashed: false, x: geometry.spineX) }
-            }
+        }
+        // List rows of their own, so each member keeps its own long-press menu (Hide, Exclude, Delete):
+        // the list lifts a context menu to its cell. The screen's row modifiers apply to each of them.
+        ForEach(openMembers) { member in
+            // Members carry no mark and keep their full date text in the row, as off the spine.
+            MemoryRowView(row: member, actions: actions)
+                .padding(.leading, geometry.contentLeading + 16)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(alignment: .leading) { SpineLine(dashed: false, x: geometry.spineX) }
         }
     }
 

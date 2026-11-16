@@ -59,20 +59,16 @@ struct MemoryText: View {
             .spineMarkOnFirstLine()
     }
 
-    /// Off the spine: the voice length beside the title when both fit on one line, else under it. A
-    /// narrow column (a story's members, indented beside the spine) or a large text size would
-    /// otherwise make the row wider than the list and push it off the side.
+    /// Off the spine: the voice length beside the title; under it at the accessibility sizes, where
+    /// side by side would leave the title one word a line.
     private var titleWithVoiceLength: some View {
-        ViewThatFits(in: .horizontal) {
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
-                title.fixedSize()
-                Spacer(minLength: 0)
-                voiceLength.fixedSize()
-            }
-            VStack(alignment: .leading, spacing: 2) {
-                title
-                voiceLength
-            }
+        let layout = typeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: 2))
+            : AnyLayout(HStackLayout(alignment: .firstTextBaseline, spacing: 8))
+        return layout {
+            title
+            if !typeSize.isAccessibilitySize { Spacer(minLength: 0) }
+            voiceLength
         }
     }
 
