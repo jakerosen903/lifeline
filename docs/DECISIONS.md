@@ -2,6 +2,39 @@
 
 One entry per decision. Newest first. Status is Decided, Open, or Superseded.
 
+## 2026-11-16 · Photos on pages, kept on the phone (S4)
+
+**Status:** Decided. Builds on the five-sections decision of 2026-11-15. Source: `docs/plans/2026-11-16-sections-photos.md`, decisions 2, 3, 4, 6, 8, 10, 15 and 20, and the rulings made while building it. The owner approved the v13 schema (`photo_link` with `entity_id` and `memory_id`) on 2026-11-16.
+
+**Decision.** A person, place or thing page, a memory page and You can hold photos. The first photo is the cover. A cover shows as the page header and as the face of the People tile.
+
+- **Links per subject kind (decision 2).** `photo_link` has `entity_id` and `memory_id`, exactly one set, each with `on delete cascade`. The spec had one polymorphic key. A cascade removes the link on every delete path with no code at each call site, and it needs no trigger, which the destructive-migration guard would flag. Cost: a third kind of subject, a chapter for example, needs a new column.
+- **Metadata stripped from the file (decisions 3 and 4).** The stored copy is a JPEG of at most 2048 pixels with no EXIF, GPS or orientation flag. The date taken and the position live only in the database row, with their origin. Cost: the app re-encodes the photo, so the person’s original bytes are not kept. The original stays in the Photos app.
+- **Metadata is a caption only (decision 6).** The app shows “taken {date}” and does nothing with the position. Cost: a photo’s date does not place it on the life strip, and its position does not suggest a place. A later spec must say where metadata may be offered.
+- **Cover rules (decision 8).** When the cover is removed, the oldest-added photo becomes the cover. With no photo left, the tile shows its letter and the page has no header.
+- **No orphans (decision 10).** A cascade removes links in the delete’s own transaction. A launch sweep removes unlinked photos, files with no row and `.partial` files. The sweep never deletes a row for a missing file.
+- **You (decision 15).** You shows the owner’s cover and a “…” menu with “Add a photo”. Photos on the strip wait.
+- **Backup (decision 20).** The copy holds `photos/*.jpg`, stored without compression. The manifest gets optional `photoFiles` and `photoBytes`.
+- **A pre-S4 build refuses a post-S4 copy.** The copy has schema v13. A build from before S4 shows “This copy was made by a newer version of Lifeline.” A copy from before S4 restores and has no photos.
+- **Photos stay on the target after an undone merge (decision 11).** Cost: undoing a merge does not move the photos back.
+- **Photos on the strip wait.** No Timeline row, Things tile, search result or map uses a photo yet (S5 to S8).
+
+**Rulings made while building (2026-11-16).** Each ruling has its cost.
+
+- **A repeat add repairs a missing file.** When the person adds a photo whose row exists and whose stored file is missing, the app writes the file again, with the same id and name, then links it. Why: picking the photo again is the only way to repair a photo that does not show. Cost: one extra file write on a rare path.
+- **The page scrolls to its top when the cover changes.** This holds for the entity page and You. Why: “Make this the cover” is tapped lower on the page, and the person must see the result. Cost: a scroll jump the owner may not want. The owner must confirm.
+- **The viewer’s “Done” has no glass background.** It is a plain toolbar button. With the glass background it measured 36 points at the largest text, under the 44-point minimum. Cost: this sheet’s toolbar looks unlike other sheets. The owner must confirm on the device.
+- **Four plan tests differ from the plan’s text, with assertions of equal strength.** The owner must see them.
+  - `photo.confirmRemove` is found with `.firstMatch`, because iOS 26 lists a confirmation-dialog button twice.
+  - The viewer caption query is scoped to `photo.viewer`, because the page’s caption under the sheet has the same identifier.
+  - The list cover sample is at x=0.1, not 0.04. At 0.04 the point lands on the row’s inset, before the face.
+  - `testAMemoryShowsItsPhotos` reveals its row and waits for `memory.range`. The row is off screen in a lazy list, and “The tree house” is an event, so its page shows the range and no kind.
+- **Two extra failure tests.** A foreign-key failure at the row insert and a failure at the file write prove that a failed add stores nothing. Cost: two more tests.
+
+**Why.** A life has faces and places, and the person recognizes them by sight (P1). The person keeps the photos and decides which one leads (P2). The app shows only what the file says and never describes a photo or guesses from it (P5). Photos stay on the phone like audio (data posture).
+
+**Costs.** The app re-encodes every photo. Metadata does not feed any other feature yet. The schema is permanent once v13 ships. S4 builds storage and display, not the “one photo, one story” prompt.
+
 ## 2026-11-16 · You is a portrait, and About leaves the Timeline (S3)
 
 **Status:** Decided. Builds on the five-sections decision of 2026-11-15. Source: `docs/plans/2026-11-16-sections-you.md`, decisions 2, 4, 5, 8, 17 and 18, and the rulings made while building it.
