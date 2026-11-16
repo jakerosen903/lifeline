@@ -36,7 +36,7 @@ struct PairCard: View {
                     .accessibilityIdentifier(isStory ? "pair.group" : "pair.same")
                 Button("Keep separate", action: onSeparate)
                     .buttonStyle(.bordered)
-                    .tint(Theme.oliveText)
+                    .tint(Theme.oliveOnFill)
                     .accessibilityIdentifier("pair.separate")
                 Spacer(minLength: 0)
             }

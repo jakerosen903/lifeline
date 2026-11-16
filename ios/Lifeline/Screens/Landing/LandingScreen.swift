@@ -123,7 +123,7 @@ struct LandingScreen: View {
             .accessibilityIdentifier("landing.done")
             Button("Review these moments") { reviewing = true }
                 .buttonStyle(.bordered)
-                .tint(Theme.oliveText)
+                .tint(Theme.oliveOnFill)
                 .accessibilityIdentifier("landing.review")
             HStack(spacing: 20) {
                 Button("Hide today from the timeline") { viewModel.hideToday() }

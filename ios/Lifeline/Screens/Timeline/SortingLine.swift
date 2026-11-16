@@ -28,7 +28,7 @@ struct SortingLine: View {
                 if status.canRetry {
                     Button("Try again", action: onTryAgain)
                         .buttonStyle(.bordered)
-                        .tint(Theme.oliveText)
+                        .tint(Theme.oliveOnFill)
                         .accessibilityIdentifier("timeline.sortingRetry")
                 }
             }

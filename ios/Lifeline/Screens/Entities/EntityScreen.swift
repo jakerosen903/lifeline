@@ -43,12 +43,14 @@ struct EntityScreen: View {
                             .accessibilityIdentifier("entity.span")
                     }
                     if viewModel.firstTelling != nil {
+                        // The 44-point frame sits in the label: outside the Button it grows the row,
+                        // not the area a tap reaches.
                         Button { viewModel.togglePlayback() } label: {
                             Label(viewModel.isPlaying ? "Stop" : "Play", systemImage: viewModel.isPlaying ? "stop.circle.fill" : "play.circle.fill")
+                                .frame(minHeight: 44)
+                                .contentShape(Rectangle())
                         }
                         .buttonStyle(.borderless).tint(Theme.oliveText)
-                        .frame(minHeight: 44)
-                        .contentShape(Rectangle())
                         .accessibilityIdentifier("entity.play")
                     }
                     if let strip = viewModel.strip, strip.sentence != nil {
@@ -98,12 +100,12 @@ struct EntityScreen: View {
                     Text("Tags").sectionHeadingStyle()
                     FlowLayout(spacing: 6) {
                         ForEach(viewModel.tags, id: \.self) { tag in
-                            Button { viewModel.removeTag(tag) } label: { Label(tag, systemImage: "xmark") }
-                                .tagPill(tint: Theme.secondaryText)
+                            Button { viewModel.removeTag(tag) } label: { TagPill(title: tag, systemImage: "xmark", tint: Theme.secondaryText) }
+                                .buttonStyle(.borderless)
                                 .accessibilityIdentifier("entity.tag")
                         }
-                        Button("Add a tag", systemImage: "tag") { draftTag = ""; addingTag = true }
-                            .tagPill(tint: Theme.oliveText)
+                        Button { draftTag = ""; addingTag = true } label: { TagPill(title: "Add a tag", systemImage: "tag", tint: Theme.oliveOnFill) }
+                            .buttonStyle(.borderless)
                             .accessibilityIdentifier("entity.addTag")
                     }
                 }
@@ -163,7 +165,7 @@ struct EntityScreen: View {
 
     /// Something said about it: the whole quote, cleaned for reading only (the stored words stay).
     private func detail(_ memory: Memory) -> some View {
-        let quote = ReadableQuote.text(memory.summaryQuote)
+        let quote = EntityPage.readableQuote(of: memory)
         return NavigationLink { open(memory) } label: {
             Text(quote).font(.system(.body, design: .serif)).foregroundStyle(Theme.ink)
                 .fixedSize(horizontal: false, vertical: true)
@@ -172,17 +174,19 @@ struct EntityScreen: View {
         .accessibilityIdentifier("entity.detail")
     }
 
-    /// A moment: its date above its title, as on Timeline.
+    /// A moment: its date above its title, as on Timeline. A half-open range has no date to show.
+    /// VoiceOver reads the title, then the date with its uncertainty ("around 1998").
     private func moment(_ memory: Memory) -> some View {
         NavigationLink { open(memory) } label: {
             VStack(alignment: .leading, spacing: 2) {
-                if memory.range.isPlaced {
+                if memory.range.isDated {
                     Text(memory.range.displayText).font(.footnote).foregroundStyle(Theme.ochreText)
                 }
                 Text(memory.title).foregroundStyle(Theme.ink)
             }
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(memory.title)
+            .accessibilityValue(memory.range.isDated ? memory.range.displayText : "")
         }
         .accessibilityIdentifier("entity.moment")
     }
@@ -191,26 +195,39 @@ struct EntityScreen: View {
     private func line(_ memory: Memory) -> some View {
         NavigationLink { open(memory) } label: {
             VStack(alignment: .leading, spacing: 2) {
-                Text("“\(ReadableQuote.text(memory.summaryQuote))”").font(.system(.body, design: .serif)).foregroundStyle(Theme.ink).lineLimit(2)
-                if memory.isMoment, memory.range.isPlaced {
+                Text("“\(EntityPage.readableQuote(of: memory))”").font(.system(.body, design: .serif)).foregroundStyle(Theme.ink).lineLimit(2)
+                if memory.isMoment, memory.range.isDated {
                     Text(memory.range.displayText).font(.footnote).foregroundStyle(Theme.ochreText)
                 }
             }
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(memory.title)
+            .accessibilityValue(memory.isMoment && memory.range.isDated ? memory.range.displayText : "")
         }
         .accessibilityIdentifier(memory.isMoment ? "entity.moment" : "entity.detail")
     }
 }
 
-private extension View {
-    /// A small capsule for a tag and for "Add a tag". `.titleAndIcon` is set explicitly: inside a
-    /// List row the automatic label style answers an unsized proposal (FlowLayout's measure) with
-    /// the icon alone in a tall frame, which drew "Add a tag" as a tall grey pill.
-    func tagPill(tint: Color) -> some View {
-        labelStyle(.titleAndIcon)
+/// A small capsule for a tag and for "Add a tag", drawn in the button's label. The 44-point
+/// frame and its content shape are in the label too, so the tap area is the button's own.
+/// The text uses the tint on a 12% fill of itself: `oliveOnFill` and `secondaryText` both reach
+/// 4.5:1 on that fill over linen, the page's surface.
+/// `.titleAndIcon` is set explicitly: inside a List row the automatic label style answers an
+/// unsized proposal (FlowLayout's measure) with the icon alone in a tall frame.
+private struct TagPill: View {
+    let title: String
+    let systemImage: String
+    let tint: Color
+
+    var body: some View {
+        Label(title, systemImage: systemImage)
+            .labelStyle(.titleAndIcon)
+            .font(.subheadline)
             .lineLimit(2)
-            .buttonStyle(.bordered).buttonBorderShape(.capsule).controlSize(.small).tint(tint)
+            .multilineTextAlignment(.leading)
+            .foregroundStyle(tint)
+            .padding(.horizontal, 10).padding(.vertical, 5)
+            .background(Capsule().fill(tint.opacity(0.12)))
             // Never squeezed shorter than its text; narrower only when a long tag must wrap in the row.
             .fixedSize(horizontal: false, vertical: true)
             .frame(minHeight: 44)

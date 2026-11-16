@@ -42,7 +42,7 @@ struct KeptCardView: View {
                 Spacer(minLength: 0)
                 Button("Done", action: onDone)
                     .buttonStyle(.bordered)
-                    .tint(Theme.oliveText)
+                    .tint(Theme.oliveOnFill)
                     .accessibilityIdentifier("card.keptDone")
             }
             .padding(.top, 4)

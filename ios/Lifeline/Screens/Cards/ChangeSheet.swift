@@ -50,7 +50,7 @@ struct ChangeSheet: View {
                             ForEach(viewModel.choices) { person in
                                 Button(person.displayName) { viewModel.add(person) }
                                     .buttonStyle(.bordered)
-                                    .tint(Theme.oliveText)
+                                    .tint(Theme.oliveOnFill)
                                     .accessibilityIdentifier("change.addPerson")
                             }
                         }
@@ -100,7 +100,7 @@ struct ChangeSheet: View {
                                 .accessibilityIdentifier("change.merged")
                             Spacer()
                             Button("Undo") { viewModel.undoMerge() }
-                                .buttonStyle(.bordered).tint(Theme.oliveText)
+                                .buttonStyle(.bordered).tint(Theme.oliveOnFill)
                                 .accessibilityIdentifier("change.undoMerge")
                         }
                     } else {
@@ -121,7 +121,7 @@ struct ChangeSheet: View {
                             Text(trimmed).foregroundStyle(Theme.ink).accessibilityIdentifier("change.trimmed")
                             Spacer()
                             Button("Undo") { viewModel.undoTrim() }
-                                .buttonStyle(.bordered).tint(Theme.oliveText)
+                                .buttonStyle(.bordered).tint(Theme.oliveOnFill)
                                 .accessibilityIdentifier("change.undoTrim")
                         }
                     }
@@ -159,7 +159,7 @@ struct ChangeSheet: View {
                             Text(changed).foregroundStyle(Theme.ink).accessibilityIdentifier("change.kindChanged")
                             Spacer()
                             Button("Undo") { viewModel.undoKind() }
-                                .buttonStyle(.bordered).tint(Theme.oliveText)
+                                .buttonStyle(.bordered).tint(Theme.oliveOnFill)
                                 .accessibilityIdentifier("change.undoKind")
                         }
                     }

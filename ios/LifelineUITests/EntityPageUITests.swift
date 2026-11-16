@@ -81,4 +81,20 @@ final class EntityPageUITests: XCTestCase {
         XCTAssertLessThanOrEqual(add.frame.height, 48)
         XCTAssertGreaterThan(add.frame.width, add.frame.height)
     }
+    /// An idea keeps "Over time"; its "Beside it" became "Often with" (plan decision 18).
+    @MainActor
+    func testAnIdeasPageListsOftenWith() {
+        let app = XCUIApplication.launchWithPeople(); app.openEntities("Ideas")
+        let row = app.buttons.matching(identifier: "entities.row").matching(NSPredicate(format: "label == %@", "Saying yes to things")).firstMatch
+        XCTAssertTrue(app.reveal(row), "the idea is listed on You")
+        row.tap()
+        XCTAssertTrue(app.staticTexts["entity.title"].waitForExistence(timeout: 10))
+        XCTAssertEqual(app.staticTexts["entity.title"].label, "Saying yes to things")
+        XCTAssertTrue(app.staticTexts["Over time"].exists)
+        XCTAssertTrue(app.reveal(app.staticTexts["Often with"]))
+        XCTAssertFalse(app.staticTexts["Beside it"].exists)
+        XCTAssertEqual(app.buttons.matching(identifier: "entity.oftenWith").allElementsBoundByIndex.map(\.label),
+                       ["Alder Street, 2 moments together", "Dad, 2 moments together", "Maya, 2 moments together"],
+                       "most shared first, then by name; never the owner")
+    }
 }

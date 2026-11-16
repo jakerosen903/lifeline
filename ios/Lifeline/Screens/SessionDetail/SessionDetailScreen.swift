@@ -82,7 +82,7 @@ struct SessionDetailScreen: View {
                             Spacer()
                             Button("Bring back") { viewModel.bringBack(candidate) }
                                 .buttonStyle(.bordered)
-                                .tint(Theme.oliveText)
+                                .tint(Theme.oliveOnFill)
                                 .accessibilityIdentifier("detail.bringBack")
                         }
                     }

@@ -22,7 +22,7 @@ struct DisclosureCard: View {
             .accessibilityIdentifier("session.crisisLine")
             Button("Okay", action: onOkay)
                 .buttonStyle(.bordered)
-                .tint(Theme.oliveText)
+                .tint(Theme.oliveOnFill)
                 .accessibilityIdentifier("session.disclosureOkay")
         }
         .padding(16)

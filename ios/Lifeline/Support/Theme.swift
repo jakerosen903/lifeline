@@ -15,6 +15,10 @@ enum Theme {
     static let olive = color(Palette.olive)
     /// Olive for text. Passes 4.5:1 on linen, sand and card; `olive` is for fills and large marks.
     static let oliveText = color(Palette.oliveText)
+    /// Olive for the tint of a `.bordered` button, whose text sits on a fill of its own tint.
+    /// Passes 4.5:1 on that fill over linen, sand and card. Borderless and plain text keep
+    /// `oliveText`; `.borderedProminent` keeps `olive`.
+    static let oliveOnFill = color(Palette.oliveOnFill)
     /// Ochre marks that are not text: bands, lines, dots.
     static let ochre = color(Palette.ochre)
     /// Ochre for text. Passes 4.5:1 on linen, sand and card.

@@ -40,7 +40,10 @@ struct FollowUpChip: View {
         } label: {
             Text(text)
                 .font(.subheadline)
-                .lineLimit(1)
+                // Two lines: a follow-up is a question, and FlowLayout offers a chip wider than
+                // the row only the row's width, so one line would cut the question short.
+                .lineLimit(2)
+                .multilineTextAlignment(.leading)
                 .strikethrough(declined)
                 .padding(.horizontal, 12)
                 .padding(.vertical, 6)
