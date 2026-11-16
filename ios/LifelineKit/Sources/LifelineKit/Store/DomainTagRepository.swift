@@ -36,6 +36,15 @@ public struct DomainTagRepository: Sendable {
                                                  arguments: [kind.rawValue, id]) }
     }
 
+    /// The tags of every element of one kind, by element id, in one query. Each list reads ignoring case.
+    public func tagsByElement(_ kind: ElementKind) throws -> [String: [String]] {
+        try db.writer.read { db in
+            let rows = try Row.fetchAll(db, sql: "select element_id, text from domain_tag where element_kind = ? order by text collate nocase, text",
+                                        arguments: [kind.rawValue])
+            return rows.reduce(into: [:]) { tags, row in tags[row["element_id"] as String, default: []].append(row["text"]) }
+        }
+    }
+
     /// Every tag in use, one spelling each, for the filter menu.
     public func all() throws -> [String] {
         try db.writer.read { try String.fetchAll($0, sql: "select min(text) from domain_tag group by lower(text) order by lower(text)") }

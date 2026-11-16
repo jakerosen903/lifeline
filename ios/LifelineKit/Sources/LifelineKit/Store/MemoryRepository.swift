@@ -122,6 +122,29 @@ public struct MemoryRepository: Sendable {
         }
     }
 
+    /// The first telling (lowest `order`) of every told, visible memory of these kinds, with its
+    /// session, in one query. A hidden memory or a floating stand-in is absent; so is a memory with no span.
+    public func firstTellings(kinds: Set<MemoryKind>) throws -> [MemoryID: Telling] {
+        guard !kinds.isEmpty else { return [:] }
+        return try db.writer.read { db in
+            let marks = databaseQuestionMarks(count: kinds.count)
+            let rows = try Row.fetchAll(db, sql: """
+                select span.memory_id, span.start_ms, span.end_ms, session.id as session_id, session.audio_path, session.started_at
+                from (select memory_id, min("order") as first_order from memory_span group by memory_id) first
+                join memory_span span on span.memory_id = first.memory_id and span."order" = first.first_order
+                join memory on memory.id = span.memory_id
+                join segment on segment.id = span.segment_id
+                join session on session.id = segment.session_id
+                where memory.kind in (\(marks)) and memory.hidden_from_timeline = 0 and memory.created_from_candidate_id is not null
+                """, arguments: StatementArguments(kinds.map(\.rawValue)))
+            return Dictionary(uniqueKeysWithValues: rows.map { row in
+                (MemoryID(rawValue: row["memory_id"]),
+                 Telling(sessionID: SessionID(rawValue: row["session_id"]), audioPath: row["audio_path"],
+                         range: MsRange(start: row["start_ms"], end: row["end_ms"]), toldAt: row["started_at"]))
+            })
+        }
+    }
+
     /// Every telling recorded in this session, with its memory, in session order. Stand-ins
     /// are left out as in `memories(in:)`; a later span of any real memory counts.
     public func spans(in session: SessionID) throws -> [(Memory, MemorySpan)] {

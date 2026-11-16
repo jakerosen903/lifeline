@@ -313,6 +313,51 @@ public struct EntityRepository: Sendable {
         }
     }
 
+    /// The first telling (lowest `order`) of every entity of a type that has a span, with its
+    /// session, in one query.
+    public func firstTellings(type: EntityType) throws -> [EntityID: Telling] {
+        try db.writer.read { db in
+            let rows = try Row.fetchAll(db, sql: """
+                select span.entity_id, span.start_ms, span.end_ms, session.id as session_id, session.audio_path, session.started_at
+                from (select entity_id, min("order") as first_order from entity_span group by entity_id) first
+                join entity_span span on span.entity_id = first.entity_id and span."order" = first.first_order
+                join entity on entity.id = span.entity_id
+                join segment on segment.id = span.segment_id
+                join session on session.id = segment.session_id
+                where entity.type = ?
+                """, arguments: [type.rawValue])
+            return Dictionary(uniqueKeysWithValues: rows.map { row in
+                (EntityID(rawValue: row["entity_id"]),
+                 Telling(sessionID: SessionID(rawValue: row["session_id"]), audioPath: row["audio_path"],
+                         range: MsRange(start: row["start_ms"], end: row["end_ms"]), toldAt: row["started_at"]))
+            })
+        }
+    }
+
+    /// What each told, visible memory of these kinds is linked to, in one query. Hidden entities
+    /// are kept: the caller decides what a hidden link means. Each list reads `detail` before
+    /// `mention`, then by title ignoring case.
+    public func aboutLinks(kinds: Set<MemoryKind>) throws -> [MemoryID: [AboutLink]] {
+        guard !kinds.isEmpty else { return [:] }
+        return try db.writer.read { db in
+            let marks = databaseQuestionMarks(count: kinds.count)
+            let rows = try Row.fetchAll(db, sql: """
+                select entity.*, me.memory_id as link_memory_id, me.relation as link_relation
+                from moment_entity me
+                join entity on entity.id = me.entity_id
+                join memory on memory.id = me.memory_id
+                where memory.kind in (\(marks)) and \(Self.toldAndVisible)
+                order by me.memory_id, me.relation = 'mention', entity.title collate nocase, entity.id
+                """, arguments: StatementArguments(kinds.map(\.rawValue)))
+            var links: [MemoryID: [AboutLink]] = [:]
+            for row in rows {
+                let relation = EntityRelation(rawValue: row["link_relation"]) ?? .mention
+                links[MemoryID(rawValue: row["link_memory_id"]), default: []].append(AboutLink(entity: try Entity(row: row), relation: relation))
+            }
+            return links
+        }
+    }
+
     // MARK: - Spans
 
     /// Derived, never asked: the earliest and latest of everything linked, moments and details
