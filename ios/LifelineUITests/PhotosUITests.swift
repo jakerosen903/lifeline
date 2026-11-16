@@ -100,8 +100,9 @@ final class PhotosUITests: XCTestCase {
     @MainActor
     func testAMemoryShowsItsPhotos() {
         let app = XCUIApplication.launchWithPhotos(); app.openEntityPage("Maya")
-        app.buttons.matching(identifier: "entity.moment").matching(NSPredicate(format: "label == %@", "The tree house")).firstMatch.tap()
-        XCTAssertTrue(app.any("memory.kind").waitForExistence(timeout: 5))
+        let moment = app.buttons.matching(identifier: "entity.moment").matching(NSPredicate(format: "label == %@", "The tree house")).firstMatch
+        XCTAssertTrue(app.reveal(moment)); moment.tap() // A List holds only the rows on screen; the cover and the row push this one below.
+        XCTAssertTrue(app.buttons["memory.range"].waitForExistence(timeout: 5)) // "The tree house" is an event: its page shows the range, not a kind.
         let thumb = app.buttons.matching(identifier: "photo.thumb").firstMatch
         XCTAssertTrue(thumb.exists)
         XCTAssertEqual(thumb.label, "Photo for The tree house")
