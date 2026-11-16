@@ -43,7 +43,12 @@ final class HomeViewModel {
             }
         }
     }
-    var presented: Presented?
+    var presented: Presented? {
+        didSet { if presented == nil, oldValue != nil { coverClosings += 1 } }
+    }
+    /// Counts the times the session or landing cover closed. A page under the cover gets no
+    /// `onAppear` when it closes, so a page on screen watches this to read what the session added.
+    private(set) var coverClosings = 0
     /// The page on screen; nil on a tab root. A session started now is about it.
     private(set) var context: SessionSubject?
     /// The screen that set `context`. Pushing and popping can report the new screen's appearance

@@ -22,13 +22,17 @@ struct EntityScreen: View {
     /// The page an "Often with" chip opened.
     @State private var opened: Entity?
     @Environment(\.dismiss) private var dismiss
+    /// Absent outside the shell (a preview): then nothing watches the session cover.
+    @Environment(HomeViewModel.self) private var home: HomeViewModel?
+    /// The top page of its stack. A page under a cover stays visible: the cover sends no onDisappear.
+    @State private var isVisible = false
 
     var body: some View {
         List {
             Section {
-                VStack(alignment: .leading, spacing: 4) {
+                VStack(alignment: .leading, spacing: 6) {
                     Text(viewModel.entity.type.singular)
-                        .font(.caption.weight(.semibold)).foregroundStyle(Theme.oliveText)
+                        .font(.footnote.weight(.semibold)).foregroundStyle(Theme.oliveText)
                     Text(viewModel.entity.title).titleStyle().accessibilityIdentifier("entity.title")
                     if let ownWords = viewModel.ownWords {
                         Text(ownWords).font(.subheadline).foregroundStyle(Theme.secondaryText)
@@ -43,6 +47,8 @@ struct EntityScreen: View {
                             Label(viewModel.isPlaying ? "Stop" : "Play", systemImage: viewModel.isPlaying ? "stop.circle.fill" : "play.circle.fill")
                         }
                         .buttonStyle(.borderless).tint(Theme.oliveText)
+                        .frame(minHeight: 44)
+                        .contentShape(Rectangle())
                         .accessibilityIdentifier("entity.play")
                     }
                     if let strip = viewModel.strip, strip.sentence != nil {
@@ -54,15 +60,15 @@ struct EntityScreen: View {
 
             if viewModel.entity.type == .idea {
                 if !viewModel.ideaLines.isEmpty {
-                    Section("Over time") {
+                    Section {
                         ForEach(viewModel.ideaLines) { memory in line(memory) }
-                    }
+                    } header: { Text("Over time").sectionHeadingStyle() }
                 }
             } else {
                 if !viewModel.said.isEmpty {
-                    Section(EntityPage.saidHeading(viewModel.entity.type, isOwner: viewModel.isOwner)) {
+                    Section {
                         ForEach(viewModel.said) { memory in detail(memory) }
-                    }
+                    } header: { Text(EntityPage.saidHeading(viewModel.entity.type, isOwner: viewModel.isOwner)).sectionHeadingStyle() }
                 }
             }
 
@@ -71,9 +77,9 @@ struct EntityScreen: View {
             }
 
             if viewModel.entity.type != .idea, !viewModel.moments.isEmpty {
-                Section(EntityPage.momentsHeading(title: viewModel.entity.title, isOwner: viewModel.isOwner)) {
+                Section {
                     ForEach(viewModel.moments) { memory in moment(memory) }
-                }
+                } header: { Text(EntityPage.momentsHeading(title: viewModel.entity.title, isOwner: viewModel.isOwner)).sectionHeadingStyle() }
             }
 
             if showsInvitation {
@@ -89,8 +95,7 @@ struct EntityScreen: View {
             // button is read as that button, the size of the whole row.
             Section {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("Tags").font(.headline).foregroundStyle(Theme.secondaryText)
-                        .accessibilityAddTraits(.isHeader)
+                    Text("Tags").sectionHeadingStyle()
                     FlowLayout(spacing: 6) {
                         ForEach(viewModel.tags, id: \.self) { tag in
                             Button { viewModel.removeTag(tag) } label: { Label(tag, systemImage: "xmark") }
@@ -107,7 +112,6 @@ struct EntityScreen: View {
 
             if let error = viewModel.error { Text(error).foregroundStyle(.red) }
         }
-        .listSectionSpacing(.compact)
         .scrollContentBackground(.hidden)
         .navigationDestination(item: $opened) { other in
             EntityScreen(viewModel: EntityViewModel(entity: other, deps: viewModel.deps), onChange: onChange)
@@ -139,8 +143,10 @@ struct EntityScreen: View {
             TellMeWhenSheet(title: viewModel.entity.title, birthDate: try? viewModel.deps.extractionStore.profile.ownerBirthDate(),
                             heading: "From when to when?") { viewModel.addDates($0) }
         }
-        .onAppear { viewModel.refresh() }
-        .onDisappear { viewModel.stop() }
+        .onAppear { isVisible = true; viewModel.refresh() }
+        .onDisappear { isVisible = false; viewModel.stop() }
+        // A session started here lands under a cover; when it closes, read what it added.
+        .onChange(of: home?.coverClosings) { if isVisible { viewModel.refresh() } }
         .sessionContext(viewModel.subject)
         .onChange(of: viewModel.isGone) { if viewModel.isGone { onChange(); dismiss() } }
     }
@@ -185,7 +191,7 @@ struct EntityScreen: View {
     private func line(_ memory: Memory) -> some View {
         NavigationLink { open(memory) } label: {
             VStack(alignment: .leading, spacing: 2) {
-                Text("“\(memory.summaryQuote)”").font(.system(.body, design: .serif)).foregroundStyle(Theme.ink).lineLimit(2)
+                Text("“\(ReadableQuote.text(memory.summaryQuote))”").font(.system(.body, design: .serif)).foregroundStyle(Theme.ink).lineLimit(2)
                 if memory.isMoment, memory.range.isPlaced {
                     Text(memory.range.displayText).font(.footnote).foregroundStyle(Theme.ochreText)
                 }
@@ -203,8 +209,10 @@ private extension View {
     /// the icon alone in a tall frame, which drew "Add a tag" as a tall grey pill.
     func tagPill(tint: Color) -> some View {
         labelStyle(.titleAndIcon)
+            .lineLimit(2)
             .buttonStyle(.bordered).buttonBorderShape(.capsule).controlSize(.small).tint(tint)
-            .fixedSize()
+            // Never squeezed shorter than its text; narrower only when a long tag must wrap in the row.
+            .fixedSize(horizontal: false, vertical: true)
             .frame(minHeight: 44)
             .contentShape(Rectangle())
     }

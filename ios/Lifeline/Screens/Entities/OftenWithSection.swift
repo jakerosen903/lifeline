@@ -13,7 +13,7 @@ struct OftenWithSection: View {
     let open: (Entity) -> Void
 
     var body: some View {
-        Section("Often with") {
+        Section {
             FlowLayout(spacing: 8) {
                 ForEach(items, id: \.entity.id) { item in
                     Button { open(item.entity) } label: { chip(item) }
@@ -22,18 +22,21 @@ struct OftenWithSection: View {
                         .accessibilityIdentifier("entity.oftenWith")
                 }
             }
+        } header: {
+            Text("Often with").sectionHeadingStyle()
         }
     }
 
+    /// At least 44 points high. A title too long for the row wraps to two lines.
     private func chip(_ item: CoOccurrence) -> some View {
         HStack(spacing: 6) {
-            Text(item.entity.title).foregroundStyle(Theme.ink)
-            Text(String(item.sharedMoments)).monospacedDigit().foregroundStyle(Theme.secondaryText)
+            Text(item.entity.title).foregroundStyle(Theme.ink).lineLimit(2).multilineTextAlignment(.leading)
+            Text(String(item.sharedMoments)).monospacedDigit().foregroundStyle(Theme.secondaryText).fixedSize()
         }
         .font(.subheadline)
-        .padding(.horizontal, 14)
+        .padding(.horizontal, 14).padding(.vertical, 6)
         .frame(minHeight: 44)
-        .background(Capsule().fill(Theme.linen))
-        .contentShape(Capsule())
+        .background(RoundedRectangle(cornerRadius: 22, style: .continuous).fill(Theme.linen))
+        .contentShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
     }
 }

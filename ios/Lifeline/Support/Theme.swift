@@ -33,6 +33,12 @@ extension View {
     func titleStyle() -> some View {
         font(.system(.largeTitle, design: .serif)).foregroundStyle(Theme.ink)
     }
+
+    /// A page's section heading ("Often with", "Tags"): one style wherever it sits, in a List
+    /// header or in a row.
+    func sectionHeadingStyle() -> some View {
+        font(.headline).foregroundStyle(Theme.secondaryText).textCase(nil).accessibilityAddTraits(.isHeader)
+    }
 }
 
 enum Format {

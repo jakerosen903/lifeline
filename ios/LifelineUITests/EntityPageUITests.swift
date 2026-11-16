@@ -16,11 +16,39 @@ final class EntityPageUITests: XCTestCase {
                        ["Dad, 3 moments together", "Alder Street, 2 moments together"])
         let moments = app.buttons.matching(identifier: "entity.moment")
         XCTAssertTrue(app.reveal(app.staticTexts["Moments with Maya"]))
-        XCTAssertEqual(moments.count, 4)
         XCTAssertLessThan(app.any("entity.strip").frame.minY, app.buttons["entity.detail"].firstMatch.frame.minY)
         XCTAssertLessThan(app.buttons["entity.detail"].firstMatch.frame.minY, app.buttons["entity.oftenWith"].firstMatch.frame.minY)
         XCTAssertLessThan(app.buttons["entity.oftenWith"].firstMatch.frame.minY, moments.firstMatch.frame.minY)
         XCTAssertFalse(app.staticTexts["Jordan"].exists, "the owner is never often with anyone")
+        // A List holds only the rows on screen: scroll to the last moment before reading them all.
+        XCTAssertTrue(app.reveal(moments.matching(NSPredicate(format: "label == %@", "Maya's graduation")).firstMatch))
+        XCTAssertEqual(moments.allElementsBoundByIndex.map(\.label),
+                       ["The tree house", "Learning to swim", "The science fair", "Maya's graduation"], "oldest first")
+    }
+    @MainActor
+    func testThePagesControlsAreFullSize() {
+        let app = XCUIApplication.launchWithPeople(); app.openEntityPage("Maya")
+        XCTAssertGreaterThanOrEqual(app.buttons["entity.play"].frame.height, 44)
+        let chips = app.buttons.matching(identifier: "entity.oftenWith").allElementsBoundByIndex
+        XCTAssertEqual(chips.count, 2)
+        for chip in chips { XCTAssertGreaterThanOrEqual(chip.frame.height, 44, chip.label) }
+    }
+    /// A session lands under a full-screen cover, so the page under it gets no onAppear. The scripted
+    /// session names Maya ("before Maya climbed it", in 1998), never Lena, so the test starts on Maya's page.
+    @MainActor
+    func testThePageReadsWhatASessionAddedWhenItCloses() {
+        let app = XCUIApplication.launchWithPeople(); app.openEntityPage("Maya")
+        XCTAssertEqual(app.any("entity.strip").label, "In 4 moments, from 1999 to 2003")
+        app.startSession()
+        let add = app.buttons["card.add"].firstMatch
+        XCTAssertTrue(add.waitForExistence(timeout: 20), "a memory card arrives")
+        var kept = 0
+        while add.waitForExistence(timeout: 8), kept < 3 { add.tap(); kept += 1 }
+        app.finishSession()
+        XCTAssertEqual(app.staticTexts["entity.title"].label, "Maya", "the landing closes onto her page")
+        let strip = app.any("entity.strip")
+        let updated = XCTNSPredicateExpectation(predicate: NSPredicate(format: "label == %@", "In 5 moments, from 1998 to 2003"), object: strip)
+        XCTAssertEqual(XCTWaiter().wait(for: [updated], timeout: 5), .completed, "the strip counts the new moment: \(strip.label)")
     }
     @MainActor
     func testOftenWithOpensThatPage() {
