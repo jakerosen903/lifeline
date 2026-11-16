@@ -17,9 +17,24 @@ One entry per decision. Newest first. Status is Decided, Open, or Superseded.
 - The About list leaves the Timeline. The summary keeps "and N things about your life".
 - No migration. The portrait reads in batches, reads nothing until it is on screen, and refreshes when a session closes.
 
+**Rulings from the final review (2026-11-16).** Each ruling has its cost.
+
+- **A line from a heavy session never leads.** A line whose first telling is in a session with a disclosure or a wish to stop is not in the lead pool. It still shows in its part, with its play control. The app reads the heavy sessions in one batch, as the landing reads one session. Why: a disclosure must not show at title size with a play button each time the person opens a tab (PRINCIPLES, session arc and safety). Cost: the check is per session, so an ordinary line from a heavy session never leads either.
+- **One slot for Undo and errors.** "Hidden." with Undo, a play error, and a failed hide, delete or undo show in one slot pinned at the bottom of You, above the record bar. It replaces "under the lead". One message shows at a time, and a newer one replaces the older. Undo stays in the slot while its 6 seconds last, also when an error replaces "Hidden.". VoiceOver announces each message when it appears, also when the same text appears again. The error for a page that could not be read keeps its own place. Why: an Undo the person cannot see is no safety net. Cost: one more floating element above the record bar while it shows.
+- **A stale play error goes.** The slot clears when You disappears and when a new lead is picked. Cost: none.
+- **Playback stops when its line leaves the page.** Hide, Delete and a tag chip that filters the line out each stop it. Cost: none.
+- **Sort order.** Facts, feelings and goals sort by when they were told (the session start), then by the start of the span, then by id. A line with no recording sorts after the others, by id. Why: one stable answer. Cost: two lines told in the same second sort by the span start, not by meaning.
+- **Chips come from listed facts only.** A tag only on a hidden, floating or unlisted memory makes no chip. Why: a chip must never lead to an empty part. Cost: none.
+- **"said in" uses the Gregorian calendar in English.** Only the time zone comes from the device. Why: the copy is English, and a Buddhist-calendar year in English copy reads as wrong. Cost: a person whose device uses another calendar sees Gregorian years.
+- **The owner is never an "about" target.** A feeling linked to the owner and to the lake reads "about The lake". Why: "about you" on your own page says nothing. Cost: none.
+- **Timeline count and tag menu.** "N things about your life" counts visible facts, feelings and goals. The tag filter and "Show hidden memories" do not change it. While a tag filter is on, the summary leaves out the "and N things" part. The tag menu offers only the tags that at least one moment carries. With a filter on and no moment that matches, the empty state shows. Why: Timeline must not claim content that it does not show. Cost: a tag used only on facts cannot filter the Timeline; it is a chip on You.
+- **Screens built before the owner answered.** The screen tasks were built on the plan's defaults before the owner answered the plan's open questions (dates under feelings, when the lead changes, the strip as the link to the owner's page, hidden lines one way, facts about others staying on You until extractor v7). Cost: rework of the affected views and tests if the owner overrules a default.
+
 **Why.** About held 62% of everything on one screen (audit F9), and the owner is a person too (F10). A portrait in the person's own words and voice serves P1 and P2. Showing only what the person said, with no guessed link, serves P5.
 
-**Costs.** Most facts about other people stay on You until extractor v7 re-reads the archive and adds detail links. A fact about a hidden entity shows nowhere until the entity shows again. A line hidden before the Undo existed has no way back. The lead changes less often while a person filters. No dark palette exists yet.
+**Costs.** Most facts about other people stay on You until extractor v7 re-reads the archive and adds detail links. A fact about a hidden entity shows nowhere until the entity shows again. The lead changes less often while a person filters. No dark palette exists yet.
+
+**Cost of Hide (read this before you hide a line).** Hide on You has no way back after its 6-second Undo, or after the person leaves the You root. No screen shows a hidden fact, feeling or goal again. "Show hidden memories" on Timeline shows only hidden moments. It does not show hidden facts, feelings or goals. A hidden fact, feeling or goal cannot be deleted, because no screen shows it. Lines hidden before this change are in the same state. A way back is a follow-up for the owner to place.
 
 ## 2026-11-15 · Five sections: Timeline, People, Places, Things, You
 

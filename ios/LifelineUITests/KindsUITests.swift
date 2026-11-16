@@ -18,14 +18,17 @@ final class KindsUITests: XCTestCase {
 
         // The fact is a detail of "the house" (S2 decision 17): not on Timeline, not on You, on the house's page.
         XCTAssertTrue(app.any("timeline.summary").waitForExistence(timeout: 5))
-        for _ in 0..<4 { app.swipeUp() }   // the List is lazy: an About section below the fold would not exist yet
+        // The List is lazy: scroll to its last row, the "Who's this?" card for Maya at the foot of the waiting cards,
+        // so an About section below it would be in the tree.
+        app.scrollTimelineToItsEnd(last: app.buttons["card.notAPerson"].firstMatch)
         XCTAssertFalse(app.any("timeline.about").exists, "no About section on Timeline")
         XCTAssertFalse(app.buttons["row.addDate"].exists, "nobody asks when a fact happened")
         XCTAssertFalse(app.any("timeline.shelf").exists, "the shelf holds moments only")
         app.openTab("You")
-        XCTAssertTrue(app.staticTexts["you.name"].waitForExistence(timeout: 10) || app.any("you.invite").waitForExistence(timeout: 5), "You is up")
-        XCTAssertFalse(app.buttons.matching(identifier: "you.line").matching(NSPredicate(format: "label CONTAINS %@", "The house had a blue door")).firstMatch.exists,
-                       "a fact about the house is not on You")
+        // Nothing else is told, so a wrongly placed house fact would be the lead, not a `you.line`: assert the empty page.
+        XCTAssertTrue(app.any("you.invite").waitForExistence(timeout: 10), "a fact about the house is not on You: You still invites a story")
+        XCTAssertFalse(app.any("you.lead").exists, "and nothing leads")
+        XCTAssertFalse(app.buttons.matching(identifier: "you.line").firstMatch.exists, "and no line shows")
         app.openTab("Things")
         let house = app.buttons.matching(identifier: "entities.row").matching(NSPredicate(format: "label == %@", "the house")).firstMatch
         XCTAssertTrue(house.waitForExistence(timeout: 5))
