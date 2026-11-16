@@ -54,3 +54,10 @@ Task 5: minor (deferred): colour(of:at:) records an XCTFail per poll inside wait
 Task 5: minor (deferred): EntitiesViewModel.refresh leaves covers stale when covers(type:) throws after rows updated.
 Task 5: note: kit 914 (two known timing flakes under load, pass alone); UI one run: PeopleUITests 10/0, PhotosUITests 7/0, ShellUITests 13/0.
 Task 5: complete (commits 1a0ad6d..1d68cf9, review clean; 2 rulings in rulings.md)
+Task 6: fix (controller ruling, not a review round): testAMemoryShowsItsPhotos could not pass as the plan wrote it; reveal + memory.range (rulings.md); commit 6b3fd14; PhotosUITests 12/0.
+Task 6: cannot-verify checked: the memory page has no refresh on appear or on coverClosings. Not a gap: MemoryViewModel reads in init (allowed), a memory's photos change only through this page's own actions (each reloads the shelf), and every sheet dismissal calls refresh(). Seeded photo shows on open (testAMemoryShowsItsPhotos).
+Task 6: minor (deferred): YouScreen scrolls to top on any cover id change, including a removal to nil; scroll only when the new value is non-nil. Same check for EntityScreen.
+Task 6: minor (deferred): addPhoto/makeCover/removePhoto/photoFailed/clearPhotoError wrappers repeat in Entity, Memory and You view models.
+Task 6: note: PhotoAddingLine and PhotoErrorSlot were extracted from EntityScreen (shared by three pages); PortraitHeader has two extra parameters (isAdding, label). Reviewer accepted both.
+Task 6: note: kit 914 (drainGivesUpAtItsDeadline flaked, passes alone); UI: PhotosUITests 12/0, YouUITests 22/0, KindsUITests 1/0, SameStoryUITests 5/0, SteadyUITests 6/0, ShellUITests 13/0.
+Task 6: complete (commits ab4bef0..6b3fd14, review clean; 1 ruling in rulings.md)
