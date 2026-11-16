@@ -27,6 +27,20 @@ public struct ChapterRepository: Sendable {
         }
     }
 
+    /// Deletes every chapter that has no title and no memory in it, and returns how many. Such a
+    /// chapter shows as "Untitled chapter" with nothing under it, and no action could remove it.
+    /// A chapter with a title is kept even when it is empty: the person named it.
+    @discardableResult
+    public func deleteEmptyUntitled() throws -> Int {
+        try db.writer.write { db in
+            try db.execute(sql: """
+                delete from chapter where (title is null or trim(title) = '')
+                and id not in (select chapter_id from memory where chapter_id is not null)
+                """)
+            return db.changesCount
+        }
+    }
+
     public func setRange(_ id: ChapterID, _ range: TimeRange) throws {
         try db.writer.write { db in
             guard var chapter = try Chapter.fetchOne(db, key: id.rawValue) else { return }
