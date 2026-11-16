@@ -9,29 +9,50 @@ final class SpineUITests: XCTestCase {
 
     override func setUp() { continueAfterFailure = false }
 
-    private func memoryRow(_ app: XCUIApplication, _ title: String) -> XCUIElement {
-        app.buttons.matching(identifier: "timeline.memory").matching(NSPredicate(format: "label BEGINSWITH %@", title)).firstMatch
+    private func memoryRows(_ app: XCUIApplication, _ title: String) -> XCUIElementQuery {
+        app.buttons.matching(identifier: "timeline.memory").matching(NSPredicate(format: "label BEGINSWITH %@", title))
     }
 
-    /// The labels of every element with this identifier, in the order the list shows them, however far down.
+    private func memoryRow(_ app: XCUIApplication, _ title: String) -> XCUIElement {
+        memoryRows(app, title).firstMatch
+    }
+
+    /// The labels of every element with this identifier, top to bottom, one entry per element, however far down.
     /// The list is lazy, so this scrolls to the last row (the shelf's "The blue kite") and records each screen on the way.
+    /// An element seen on two screens must count once and two elements with one label must count twice, so every sighting
+    /// gets an absolute y: each memory row's title is a fixed reference (titles are unique), and a later screen is shifted
+    /// by the row it shares with what was already seen. Two sightings are one element when label and absolute y agree.
     private func labelsOnTheWholeTimeline(_ app: XCUIApplication, identifier: String) -> [String] {
-        var seen: [String] = []
-        func record() {
+        var rowY: [String: CGFloat] = [:]   // title -> absolute y of its row
+        var log = SightingLog()
+        func record(firstScreen: Bool) {
+            let rows = app.buttons.matching(identifier: "timeline.memory").allElementsBoundByIndex
+                .filter { $0.exists && !$0.frame.isEmpty }
+                .map { (title: $0.label.components(separatedBy: " · ")[0], y: $0.frame.minY) }
+            var shift: CGFloat = 0
+            if !firstScreen {
+                guard let shared = rows.first(where: { rowY[$0.title] != nil }) else {
+                    XCTFail("this screen shares no row with the last one, so its elements cannot be placed")
+                    return
+                }
+                shift = rowY[shared.title]! - shared.y
+            }
+            for row in rows where rowY[row.title] == nil { rowY[row.title] = row.y + shift }
             let found = app.descendants(matching: .any).matching(identifier: identifier).allElementsBoundByIndex
                 .filter { $0.exists && !$0.frame.isEmpty }
-                .sorted { $0.frame.minY < $1.frame.minY }
-            for element in found where !seen.contains(element.label) { seen.append(element.label) }
+            for element in found { log.add(element.label, atY: element.frame.minY + shift) }
         }
         let last = memoryRow(app, "The blue kite")
+        var firstScreen = true
         for _ in 0..<10 {
-            record()
+            record(firstScreen: firstScreen)
+            firstScreen = false
             if last.exists && app.waitHittable(last, timeout: 1) { break }
             app.swipeUp()
         }
-        record()
+        if !firstScreen { record(firstScreen: false) }
         XCTAssertTrue(last.exists, "the scroll reached the last row, so everything above it was on screen once")
-        return seen
+        return log.labelsTopToBottom
     }
 
     // Each of the six dated titles is one timeline.memory button; the undated one is on the shelf.
@@ -41,7 +62,7 @@ final class SpineUITests: XCTestCase {
         for title in placedTitles {
             let row = memoryRow(app, title)
             XCTAssertTrue(app.reveal(row), "\(title) is on the timeline")
-            XCTAssertEqual(app.buttons.matching(identifier: "timeline.memory").matching(NSPredicate(format: "label BEGINSWITH %@", title)).count, 1,
+            XCTAssertEqual(memoryRows(app, title).count, 1,
                            "\(title) appears once")
             XCTAssertFalse(row.label.contains("no date yet"), "\(title) is placed: \(row.label)")
         }
@@ -121,4 +142,18 @@ final class SpineUITests: XCTestCase {
         XCTAssertTrue(app.scrollIntoView(row, swipes: 6), "The first apartment is hittable")
         XCTAssertTrue(row.label.contains("2008–10"), row.label)
     }
+}
+
+/// What was seen while scrolling, as (label, absolute y). The same label at the same place is one element; at another place, another.
+private struct SightingLog {
+    /// Closer than any two rows, waypoints or tags can sit, so it absorbs rounding and never merges two elements.
+    static let sameSpot: CGFloat = 20
+    private var entries: [(label: String, y: CGFloat)] = []
+
+    mutating func add(_ label: String, atY y: CGFloat) {
+        guard !entries.contains(where: { $0.label == label && abs($0.y - y) < Self.sameSpot }) else { return }
+        entries.append((label, y))
+    }
+
+    var labelsTopToBottom: [String] { entries.sorted { $0.y < $1.y }.map(\.label) }
 }
