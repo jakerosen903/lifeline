@@ -533,3 +533,21 @@ private func archives(in dir: URL) throws -> [URL] {
     #expect(try Backup.entryNames(of: archive).allSatisfy { !$0.hasPrefix("photos/") })
     #expect(try source.store.photos.photo(id: photo.id) == nil)
 }
+
+@Test func aStagedRestoreStaysOutOfCloudBackupUntilItIsApplied() throws {
+    let source = try Root(sessions: 1, memories: 1, photos: 1)
+    let archive = source.url.appending(path: "photos.lifeline")
+    try Backup.export(root: source.url, appVersion: "1.0", to: archive, database: source.db)
+    let target = try Root(sessions: 1, memories: 1)
+    let documents = try docs()
+    _ = try Backup.stage(archive, root: target.url, appVersion: "1.0", database: target.db, safetyCopyDirectory: documents)
+    // Between "Replace" and the relaunch, the unpacked photos and audio must not ride the phone's cloud backup.
+    let staging = target.url.appending(path: Backup.stagingName, directoryHint: .isDirectory)
+    #expect(try staging.resourceValues(forKeys: [.isExcludedFromBackupKey]).isExcludedFromBackup == true)
+    // Once swapped in, the folder is the app's own again: the database is backed up as before; audio and photos are not.
+    #expect(try Backup.applyPendingRestore(root: target.url, safetyCopyDirectory: documents))
+    let current = AudioLocation.rootDirectory(under: target.url)
+    #expect(try current.resourceValues(forKeys: [.isExcludedFromBackupKey]).isExcludedFromBackup == false)
+    #expect(try PhotoLocation.path(under: target.url).resourceValues(forKeys: [.isExcludedFromBackupKey]).isExcludedFromBackup == true)
+    #expect(try current.appending(path: Backup.audioDirectory).resourceValues(forKeys: [.isExcludedFromBackupKey]).isExcludedFromBackup == true)
+}

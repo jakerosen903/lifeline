@@ -196,6 +196,8 @@ public enum Backup {
         var reserved: URL?
         do {
             try fm.createDirectory(at: staging, withIntermediateDirectories: true)
+            // The unpacked audio and photos wait here until the next launch; the phone's cloud backup must not carry them.
+            try AudioLocation.applyBackupExclusion(to: staging)
             try fm.unzipItem(at: archive, to: staging)
             guard fm.fileExists(atPath: staging.appending(path: databaseName).path) else { throw Error.incomplete }
             // The copy must open before the phone's archive is touched.
@@ -252,6 +254,13 @@ public enum Backup {
             try fm.moveItem(at: current, to: aside)
         }
         try fm.moveItem(at: staging, to: current)
+        // The staging folder's exclusion moved with it. The app's folder (the database) is backed up as before;
+        // only audio and photos stay out, below. A kill before this line leaves the folder out of the cloud backup:
+        // nothing is lost, and the person's own copy still carries it.
+        var included = URLResourceValues()
+        included.isExcludedFromBackup = false
+        var currentURL = current
+        try currentURL.setResourceValues(included)
         let audio = current.appending(path: audioDirectory, directoryHint: .isDirectory)
         try fm.createDirectory(at: audio, withIntermediateDirectories: true)
         try AudioLocation.applyBackupExclusion(to: audio)
