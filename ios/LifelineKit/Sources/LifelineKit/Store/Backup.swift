@@ -11,15 +11,20 @@ public struct BackupManifest: Codable, Sendable, Equatable {
     public var memories: Int
     public var audioFiles: Int
     public var audioBytes: Int64
+    /// Nil in a copy an older build wrote (before photos); 0 when there were none.
+    public var photoFiles: Int?
+    public var photoBytes: Int64?
 
-    public init(appVersion: String, schemaVersion: String, createdAt: Date, sessions: Int, memories: Int, audioFiles: Int, audioBytes: Int64) {
+    public init(appVersion: String, schemaVersion: String, createdAt: Date, sessions: Int, memories: Int, audioFiles: Int, audioBytes: Int64,
+                photoFiles: Int? = nil, photoBytes: Int64? = nil) {
         self.appVersion = appVersion; self.schemaVersion = schemaVersion; self.createdAt = createdAt
         self.sessions = sessions; self.memories = memories; self.audioFiles = audioFiles; self.audioBytes = audioBytes
+        self.photoFiles = photoFiles; self.photoBytes = photoBytes
     }
 }
 
 /// One file that holds everything (M6): the database (checkpointed, copied through GRDB's backup
-/// API so a live write cannot tear it), the audio, the pause log and a manifest. The API key is
+/// API so a live write cannot tear it), the audio, the photos (S4), the pause log and a manifest. The API key is
 /// never in it. A restore is staged, a safety copy of the phone's current archive is written
 /// first, and the swap happens at the next launch before the database opens.
 public enum Backup {
@@ -33,6 +38,7 @@ public enum Backup {
     static let manifestName = "manifest.json"
     static let pausesName = "pauses.log"
     static let audioDirectory = "audio"
+    static let photosDirectory = PhotoLocation.directoryName
     static let stagingName = "Lifeline-restore-staging"
     static let markerName = "Lifeline-restore-pending.json"
     static let replacedName = "Lifeline-replaced"
@@ -92,10 +98,17 @@ public enum Backup {
             audioFiles += 1
             audioBytes += Int64((try? fm.attributesOfItem(atPath: audioDir.appending(path: name).path)[.size] as? Int) ?? 0)
         }
+        var photoBytes: Int64 = 0
+        let photosDir = appDir.appending(path: photosDirectory)
+        let photos = ((try? fm.contentsOfDirectory(atPath: photosDir.path)) ?? []).filter { $0.hasSuffix(".jpg") }.sorted()
+        for name in photos {
+            photoBytes += Int64((try? fm.attributesOfItem(atPath: photosDir.appending(path: name).path)[.size] as? Int) ?? 0)
+        }
         // Whole seconds: the manifest round-trips through ISO 8601 and must compare equal after.
         let created = Date(timeIntervalSince1970: Date.now.timeIntervalSince1970.rounded(.down))
         let manifest = BackupManifest(appVersion: appVersion, schemaVersion: try schemaVersion(of: dbCopy), createdAt: created,
-                                      sessions: sessions, memories: memories, audioFiles: audioFiles, audioBytes: audioBytes)
+                                      sessions: sessions, memories: memories, audioFiles: audioFiles, audioBytes: audioBytes,
+                                      photoFiles: photos.count, photoBytes: photoBytes)
 
         progress(audioFiles == 1 ? "Packing 1 recording…" : "Packing \(audioFiles) recordings…")
         try fm.createDirectory(at: destination.deletingLastPathComponent(), withIntermediateDirectories: true)
@@ -106,6 +119,10 @@ public enum Backup {
             try archive.addEntry(with: databaseName, fileURL: dbCopy, compressionMethod: .deflate)
             for name in audio {
                 try archive.addEntry(with: "\(audioDirectory)/\(name)", fileURL: audioDir.appending(path: name), compressionMethod: .none)
+            }
+            // Photos are already JPEG: stored, not deflated.
+            for name in photos {
+                try archive.addEntry(with: "\(photosDirectory)/\(name)", fileURL: photosDir.appending(path: name), compressionMethod: .none)
             }
             let pauses = appDir.appending(path: pausesName)
             if fm.fileExists(atPath: pauses.path) { try archive.addEntry(with: pausesName, fileURL: pauses, compressionMethod: .deflate) }
@@ -238,6 +255,10 @@ public enum Backup {
         let audio = current.appending(path: audioDirectory, directoryHint: .isDirectory)
         try fm.createDirectory(at: audio, withIntermediateDirectories: true)
         try AudioLocation.applyBackupExclusion(to: audio)
+        // The same for photos: a copy from before photos has no folder, and the phone's cloud backup must never carry it.
+        let photos = current.appending(path: photosDirectory, directoryHint: .isDirectory)
+        try fm.createDirectory(at: photos, withIntermediateDirectories: true)
+        try AudioLocation.applyBackupExclusion(to: photos)
         try? fm.removeItem(at: marker)
         preserveAll(under: root, safetyCopyDirectory: safetyCopyDirectory)
         return true

@@ -8,8 +8,10 @@ private struct Root {
     let url: URL
     let db: AppDatabase
     let store: ExtractionStore
+    /// The person the photos hang on; nil when the root has no photos.
+    private(set) var maya: Entity?
 
-    init(sessions: Int = 2, memories: Int = 3) throws {
+    init(sessions: Int = 2, memories: Int = 3, photos: Int = 0) throws {
         url = FileManager.default.temporaryDirectory.appending(path: "lifeline-backup-\(UUID().uuidString)")
         db = try AppDatabase.open(at: url.appending(path: "Lifeline/lifeline.sqlite"))
         store = ExtractionStore(db)
@@ -26,11 +28,61 @@ private struct Root {
             }
         }
         try "paused once\n".write(to: url.appending(path: "Lifeline/pauses.log"), atomically: true, encoding: .utf8)
+        if photos > 0 {
+            let person = try store.entities.insert(type: .person, title: "Maya")
+            maya = person
+            for i in 0..<photos { _ = try addPhoto(to: person, rgb: 0x204060 + i * 0x101010) }
+        }
+    }
+
+    /// One generated photo added through the library, as the app adds it (the sweep runs first, as at launch).
+    /// The library is an actor; this runs the call on its own thread so the fixture stays synchronous.
+    @discardableResult
+    func addPhoto(to person: Entity, rgb: Int) throws -> Photo {
+        let sources = url.appending(path: "sources", directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: sources, withIntermediateDirectories: true)
+        let source = sources.appending(path: "\(UUID().uuidString).jpg")
+        try GeneratedPhoto.write(to: source, width: 600, height: 400, rgb: rgb)
+        try PhotoLibrary.sweep(root: url, photos: store.photos)
+        let library = PhotoLibrary(root: url, photos: store.photos)
+        let box = ResultBox<Photo>()
+        let done = DispatchSemaphore(value: 0)
+        Thread.detachNewThread {
+            Task {
+                box.result = await Result { try await library.add(fileAt: source, assetLocalID: nil, to: .entity(person.id)) }
+                done.signal()
+            }
+        }
+        done.wait()
+        return try #require(box.result).get()
+    }
+
+    private var photosDirectory: URL { PhotoLocation.path(under: url) }
+
+    /// Sorted, as the archive lists them.
+    func photoFileNames() -> [String] {
+        ((try? FileManager.default.contentsOfDirectory(atPath: photosDirectory.path)) ?? []).filter { $0.hasSuffix(".jpg") }.sorted()
+    }
+
+    func photoBytes() -> Int64 {
+        photoFileNames().reduce(0) { $0 + Int64((try? FileManager.default.attributesOfItem(atPath: photosDirectory.appending(path: $1).path)[.size] as? Int) ?? 0) }
+    }
+
+    func photoData() throws -> [String: Data] {
+        Dictionary(uniqueKeysWithValues: try photoFileNames().map { ($0, try Data(contentsOf: photosDirectory.appending(path: $0))) })
     }
 
     func audioBytes() throws -> [String: Data] {
         let dir = try AudioLocation.directory(under: url)
         return Dictionary(uniqueKeysWithValues: try FileManager.default.contentsOfDirectory(atPath: dir.path).map { ($0, try Data(contentsOf: dir.appending(path: $0))) })
+    }
+}
+
+private final class ResultBox<T>: @unchecked Sendable { var result: Result<T, any Error>? }
+
+private extension Result where Failure == any Error {
+    init(_ body: () async throws -> Success) async {
+        do { self = .success(try await body()) } catch { self = .failure(error) }
     }
 }
 
@@ -357,4 +409,109 @@ private func archives(in dir: URL) throws -> [URL] {
     #expect(try Backup.applyPendingRestore(root: target, safetyCopyDirectory: documents))
     let restored = InterviewerTurnRepository(try AppDatabase.open(at: target.appending(path: "Lifeline/lifeline.sqlite")))
     #expect(try restored.turns(in: session) == [spoken])
+}
+
+// MARK: - Photos (S4)
+
+@Test func exportCarriesThePhotosAndCountsThem() throws {
+    let source = try Root(sessions: 1, memories: 1, photos: 2)
+    let archive = source.url.appending(path: "photos.lifeline")
+    let manifest = try Backup.export(root: source.url, appVersion: "1.0", to: archive, database: source.db)
+    #expect(manifest.photoFiles == 2 && manifest.photoBytes == source.photoBytes())
+    #expect(try Backup.entryNames(of: archive).filter { $0.hasPrefix("photos/") }.sorted() == source.photoFileNames().map { "photos/\($0)" })
+    #expect(try Backup.inspect(archive) == manifest)
+
+    // No photos: the fields are present and zero, and the folder is not in the archive.
+    let bare = try Root(sessions: 1, memories: 1)
+    let none = try Backup.export(root: bare.url, appVersion: "1.0", to: bare.url.appending(path: "bare.lifeline"), database: bare.db)
+    #expect(none.photoFiles == 0 && none.photoBytes == 0)
+}
+
+@Test func aRestorePutsThePhotosBack() throws {
+    let source = try Root(sessions: 1, memories: 1, photos: 2)
+    let maya = try #require(source.maya)
+    let archive = source.url.appending(path: "photos.lifeline")
+    try Backup.export(root: source.url, appVersion: "1.0", to: archive, database: source.db)
+    let target = FileManager.default.temporaryDirectory.appending(path: "lifeline-restore-\(UUID().uuidString)")
+    _ = try AppDatabase.open(at: target.appending(path: "Lifeline/lifeline.sqlite"))
+    let documents = try docs()
+    _ = try Backup.stage(archive, root: target, appVersion: "1.0", safetyCopyDirectory: documents)
+    #expect(try Backup.applyPendingRestore(root: target, safetyCopyDirectory: documents))
+    let restored = ExtractionStore(try AppDatabase.open(at: target.appending(path: "Lifeline/lifeline.sqlite")))
+    let targetPhotos = PhotoLocation.path(under: target)
+    #expect(try restored.photos.photos(of: .entity(maya.id)).count == 2)
+    for (name, data) in try source.photoData() { #expect(try Data(contentsOf: targetPhotos.appending(path: name)) == data) }
+    #expect(try targetPhotos.resourceValues(forKeys: [.isExcludedFromBackupKey]).isExcludedFromBackup == true)
+    #expect(try PhotoLibrary.sweep(root: target, photos: restored.photos) == .init(rows: 0, files: 0), "the restore leaves nothing to sweep")
+}
+
+@Test func aManifestWithoutPhotoFieldsStillReads() throws {
+    let source = try Root(sessions: 1, memories: 1, photos: 1)
+    let archive = source.url.appending(path: "a.lifeline")
+    _ = try Backup.export(root: source.url, appVersion: "1.0", to: archive, database: source.db)
+    let old = try Backup.rewritingManifest(of: archive) { $0.photoFiles = nil; $0.photoBytes = nil }
+    #expect(try Backup.inspect(old).photoFiles == nil)
+    // What an M6 build wrote: no photo keys at all.
+    let m6 = #"{"appVersion":"0.9","audioBytes":10,"audioFiles":1,"createdAt":"2026-10-24T12:00:00Z","memories":1,"schemaVersion":"v8","sessions":1}"#
+    let decoder = JSONDecoder(); decoder.dateDecodingStrategy = .iso8601
+    let decoded = try decoder.decode(BackupManifest.self, from: Data(m6.utf8))
+    #expect(decoded.photoFiles == nil && decoded.photoBytes == nil && decoded.sessions == 1)
+    // A nil field is left out of the JSON, not written as null.
+    let encoder = JSONEncoder(); encoder.dateEncodingStrategy = .iso8601
+    let json = try #require(String(data: try encoder.encode(decoded), encoding: .utf8))
+    #expect(!json.contains("photo"))
+}
+
+@Test func aV12ArchiveRestoresAndMigrates() throws {
+    // A database migrated only to v12 (before photos), one session, the entity "Maya", no photos folder.
+    let oldRoot = FileManager.default.temporaryDirectory.appending(path: "lifeline-v12-\(UUID().uuidString)")
+    try FileManager.default.createDirectory(at: oldRoot.appending(path: "Lifeline"), withIntermediateDirectories: true)
+    var config = Configuration(); config.foreignKeysEnabled = true
+    let queue = try DatabaseQueue(path: oldRoot.appending(path: "Lifeline/lifeline.sqlite").path, configuration: config)
+    try Migrations.migrator.migrate(queue, upTo: "v12")
+    try queue.write { try $0.execute(sql: "insert into session (id, started_at, ended_at, audio_path, stage_log, landing_choice_made) values ('s1', '2026-10-01', '2026-10-01', 'a.m4a', '[]', 1)") }
+    let written = try Backup.export(root: oldRoot, appVersion: "0.9", to: oldRoot.appending(path: "old.lifeline"))
+    // As a v12 build wrote it: no photo fields.
+    let oldArchive = try Backup.rewritingManifest(of: oldRoot.appending(path: "old.lifeline")) { $0.photoFiles = nil; $0.photoBytes = nil }
+    #expect(try Backup.inspect(oldArchive).schemaVersion == "v12" && written.sessions == 1)
+    #expect(try Backup.entryNames(of: oldArchive).allSatisfy { !$0.hasPrefix("photos/") })
+
+    let target = try Root(sessions: 1, memories: 1, photos: 1)
+    let documents = try docs()
+    _ = try Backup.stage(oldArchive, root: target.url, appVersion: "1.0", database: target.db, safetyCopyDirectory: documents)
+    #expect(try Backup.applyPendingRestore(root: target.url, safetyCopyDirectory: documents))
+    let opened = try AppDatabase.open(at: target.url.appending(path: "Lifeline/lifeline.sqlite"))
+    #expect(try opened.writer.read { try $0.tableExists("photo") && $0.tableExists("photo_link") }, "migrated on open")
+    #expect(try ExtractionStore(opened).photos.fileNames().isEmpty)
+    // `path`, not `directory`: the restore itself must have made the folder and excluded it.
+    #expect(try PhotoLocation.path(under: target.url).resourceValues(forKeys: [.isExcludedFromBackupKey]).isExcludedFromBackup == true)
+    #expect(try SessionRepository(opened).listSessions().count == 1)
+}
+
+@Test func theSafetyCopyKeepsThePhonesPhotos() throws {
+    let phone = try Root(sessions: 1, memories: 1, photos: 1)
+    let other = try Root(sessions: 1, memories: 1)
+    let otherArchive = other.url.appending(path: "other.lifeline")
+    _ = try Backup.export(root: other.url, appVersion: "1.0", to: otherArchive, database: other.db)
+    let documents = try docs()
+    let pending = try Backup.stage(otherArchive, root: phone.url, appVersion: "1.0", database: phone.db, safetyCopyDirectory: documents)
+    #expect(try Backup.entryNames(of: pending.safetyCopy).contains("photos/\(phone.photoFileNames()[0])"))
+    #expect(try Backup.inspect(pending.safetyCopy).photoFiles == 1)
+}
+
+@Test func theReplacedArchiveKeepsPhotosAddedAfterStaging() throws {
+    let phone = try Root(sessions: 1, memories: 1, photos: 1)
+    let other = try Root(sessions: 2, memories: 2)
+    let archive = other.url.appending(path: "other.lifeline")
+    _ = try Backup.export(root: other.url, appVersion: "1.0", to: archive, database: other.db)
+    let documents = try docs()
+    _ = try Backup.stage(archive, root: phone.url, appVersion: "1.0", database: phone.db, safetyCopyDirectory: documents)
+    // The person keeps using the app before closing it: one more photo.
+    let before = Set(phone.photoFileNames())
+    try phone.addPhoto(to: try #require(phone.maya), rgb: 0xAA3355)
+    let added = try #require(Set(phone.photoFileNames()).subtracting(before).first)
+    #expect(try Backup.applyPendingRestore(root: phone.url, safetyCopyDirectory: documents))
+    let replaced = try #require(try archives(in: documents).first { $0.lastPathComponent.hasPrefix("Lifeline-replaced-") })
+    #expect(try Backup.entryNames(of: replaced).contains("photos/\(added)"))
+    #expect(try Backup.inspect(replaced).photoFiles == 2)
 }
