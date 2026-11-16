@@ -17,12 +17,12 @@ private func memory(_ title: String, kind: MemoryKind, hidden: Bool = false, flo
 }
 
 @Test func theSummaryLeavesOutThingsWhileATagFilterIsOn() {
-    #expect(TimelineSummary.text(memories: 2, chapters: 1, firstYear: 1999, things: 3, tagFiltered: false)
-            == "2 memories · 1 chapter · 1999 → now · and 3 things about your life")
-    #expect(TimelineSummary.text(memories: 0, chapters: 0, firstYear: nil, things: 2, tagFiltered: true) == "0 memories")
-    #expect(TimelineSummary.text(memories: 1, chapters: 0, firstYear: 2001, things: 1, tagFiltered: false)
+    #expect(TimelineSummary.text(memories: 2, firstYear: 1999, things: 3, tagFiltered: false)
+            == "2 memories · 1999 → now · and 3 things about your life")
+    #expect(TimelineSummary.text(memories: 0, firstYear: nil, things: 2, tagFiltered: true) == "0 memories")
+    #expect(TimelineSummary.text(memories: 1, firstYear: 2001, things: 1, tagFiltered: false)
             == "1 memory · 2001 → now · and 1 thing about your life")
-    #expect(TimelineSummary.text(memories: 1, chapters: 0, firstYear: nil, things: 0, tagFiltered: false) == "1 memory")
+    #expect(TimelineSummary.text(memories: 1, firstYear: nil, things: 0, tagFiltered: false) == "1 memory")
 }
 
 @Test func theTagMenuOffersOnlyTagsAMomentCarries() {
