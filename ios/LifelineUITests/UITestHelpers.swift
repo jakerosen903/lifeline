@@ -70,6 +70,37 @@ extension XCUIApplication {
         if segment.waitForExistence(timeout: 3) { segment.tap() } else { buttons["Listen"].firstMatch.tap() }
     }
 
+    // MARK: - The invented family
+
+    /// Launches with `-uiTesting-seedPeople`: Jordan with Maya, Dad, Sam, Lena and Alder Street. The seed saves a
+    /// profile, so first open is done; do not call `skipFirstOpen()`.
+    static func launchWithPeople(_ extra: [String] = []) -> XCUIApplication {
+        let app = XCUIApplication()
+        app.launchArguments += ["-uiTesting", "-uiTesting-seedPeople"] + extra
+        app.launch()
+        XCTAssertTrue(app.waitHittable(app.buttons["home.start"], timeout: 15), "the seeded app lands on the timeline")
+        return app
+    }
+
+    /// The `entities.row` labels, top to bottom, then leading to trailing.
+    func entityRowLabels() -> [String] {
+        let rows = buttons.matching(identifier: "entities.row").allElementsBoundByIndex
+            .filter { $0.exists && !$0.frame.isEmpty }
+        return rows.sorted { a, b in
+            let (fa, fb) = (a.frame, b.frame)
+            return abs(fa.minY - fb.minY) > 1 ? fa.minY < fb.minY : fa.minX < fb.minX
+        }.map(\.label)
+    }
+
+    /// People, then the row with this label, then wait for the page's title.
+    func openEntityPage(_ title: String) {
+        openTab("People")
+        let row = buttons.matching(identifier: "entities.row").matching(NSPredicate(format: "label == %@", title)).firstMatch
+        XCTAssertTrue(waitHittable(row, timeout: 10), "the \(title) row is on screen")
+        row.tap()
+        XCTAssertTrue(staticTexts["entity.title"].waitForExistence(timeout: 10), "the \(title) page is up")
+    }
+
     // MARK: - Routes through the tabs
 
     /// Select a tab by its title. Tapping the tab the app is already on is harmless.

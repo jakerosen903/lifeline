@@ -45,7 +45,7 @@ struct EntityListScreen: View {
 
 /// Entity rows that open their pages: the title, then its span.
 struct EntityRows: View {
-    let rows: [EntitiesViewModel.Row]
+    let rows: [EntitySummary]
     let deps: Dependencies
     let onChange: () -> Void
 
@@ -56,7 +56,7 @@ struct EntityRows: View {
             } label: {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(row.entity.title).font(.system(.headline, design: .serif)).foregroundStyle(Theme.ink)
-                    Text(row.spanText).font(.caption).foregroundStyle(Theme.ochreText)
+                    Text(EntityPage.spanText(row.span)).font(.caption).foregroundStyle(Theme.ochreText)
                 }
                 .padding(.vertical, 2)
                 .accessibilityElement(children: .ignore)

@@ -16,6 +16,8 @@ final class EntityViewModel {
     private(set) var tags: [String] = []
     private(set) var firstTelling: (span: EntitySpan, session: Session)?
     private(set) var isGone = false
+    /// False until the first `refresh()`: a page reads nothing until it is on screen.
+    private(set) var isLoaded = false
     /// The owner's own page ("About you"): a session from here is about "yourself".
     private(set) var isOwner = false
     private(set) var error: String?
@@ -25,7 +27,6 @@ final class EntityViewModel {
     init(entity: Entity, deps: Dependencies) {
         self.entity = entity
         self.deps = deps
-        refresh()
     }
 
     /// "Add dates" is offered only on a place or a thing, and only as the person's own action.
@@ -35,6 +36,7 @@ final class EntityViewModel {
     var subject: SessionSubject { SessionSubject(entityID: entity.id, title: entity.title, isOwner: isOwner, excludedFromAI: entity.excludedFromAI) }
 
     func refresh() {
+        defer { isLoaded = true }
         do {
             let store = deps.extractionStore
             guard let current = try store.entities.entity(id: entity.id) else { isGone = true; return }
