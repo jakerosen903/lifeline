@@ -196,9 +196,16 @@ public enum Backup {
         var reserved: URL?
         do {
             try fm.createDirectory(at: staging, withIntermediateDirectories: true)
-            // The unpacked audio and photos wait here until the next launch; the phone's cloud backup must not carry them.
-            try AudioLocation.applyBackupExclusion(to: staging)
             try fm.unzipItem(at: archive, to: staging)
+            // The unpacked recordings and photos wait here until the next launch; the phone's cloud backup must not
+            // carry them. Only these two folders are flagged, as they are for good after the swap. The staging folder
+            // itself is never flagged: it becomes the app's folder, and a flag on it could strand the database out of
+            // the cloud backup if a kill came between the swap and a clear.
+            for name in [audioDirectory, photosDirectory] {
+                let folder = staging.appending(path: name, directoryHint: .isDirectory)
+                try fm.createDirectory(at: folder, withIntermediateDirectories: true)
+                try AudioLocation.applyBackupExclusion(to: folder)
+            }
             guard fm.fileExists(atPath: staging.appending(path: databaseName).path) else { throw Error.incomplete }
             // The copy must open before the phone's archive is touched.
             _ = try DatabaseQueue(path: staging.appending(path: databaseName).path).read { try String.fetchOne($0, sql: "pragma schema_version") }
@@ -254,13 +261,6 @@ public enum Backup {
             try fm.moveItem(at: current, to: aside)
         }
         try fm.moveItem(at: staging, to: current)
-        // The staging folder's exclusion moved with it. The app's folder (the database) is backed up as before;
-        // only audio and photos stay out, below. A kill before this line leaves the folder out of the cloud backup:
-        // nothing is lost, and the person's own copy still carries it.
-        var included = URLResourceValues()
-        included.isExcludedFromBackup = false
-        var currentURL = current
-        try currentURL.setResourceValues(included)
         let audio = current.appending(path: audioDirectory, directoryHint: .isDirectory)
         try fm.createDirectory(at: audio, withIntermediateDirectories: true)
         try AudioLocation.applyBackupExclusion(to: audio)

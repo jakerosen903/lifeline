@@ -286,7 +286,7 @@ Photos on the life strip of You wait for a later spec. That spec must say where 
 
 A sweep removes what a delete, a failure or a kill leaves behind: a photo with no link, a file with no row, and a half-written `.partial` file. The sweep runs at launch. It also runs before a copy is made: before an export and before a restore is staged. So a photo whose page was deleted does not travel in a copy. The sweep never deletes a row because its file is missing.
 
-The photos folder is part of the `.lifeline` copy and is out of the phone’s cloud backup, as audio is. A restore that waits for the next launch is out of the cloud backup too.
+The photos folder is part of the `.lifeline` copy and is out of the phone’s cloud backup, as audio is. When a restore waits for the next launch, its recordings and photos are out of the cloud backup too. Its database is not, as before photos.
 
 ### 10. The spoken interviewer (M8, in review)
 

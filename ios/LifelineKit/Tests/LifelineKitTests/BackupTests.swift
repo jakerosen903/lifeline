@@ -534,20 +534,47 @@ private func archives(in dir: URL) throws -> [URL] {
     #expect(try source.store.photos.photo(id: photo.id) == nil)
 }
 
-@Test func aStagedRestoreStaysOutOfCloudBackupUntilItIsApplied() throws {
+private func isExcluded(_ url: URL) throws -> Bool {
+    try url.resourceValues(forKeys: [.isExcludedFromBackupKey]).isExcludedFromBackup == true
+}
+
+/// A phone with one photo, and a copy of another phone (with a photo) staged onto it.
+private func stagedRestore() throws -> (target: Root, documents: URL) {
     let source = try Root(sessions: 1, memories: 1, photos: 1)
     let archive = source.url.appending(path: "photos.lifeline")
     try Backup.export(root: source.url, appVersion: "1.0", to: archive, database: source.db)
     let target = try Root(sessions: 1, memories: 1)
     let documents = try docs()
     _ = try Backup.stage(archive, root: target.url, appVersion: "1.0", database: target.db, safetyCopyDirectory: documents)
-    // Between "Replace" and the relaunch, the unpacked photos and audio must not ride the phone's cloud backup.
+    return (target, documents)
+}
+
+@Test func aStagedRestoresRecordingsAndPhotosStayOutOfCloudBackup() throws {
+    let (target, _) = try stagedRestore()
+    // Between "Replace" and the relaunch, the unpacked audio and photos must not ride the phone's cloud backup.
     let staging = target.url.appending(path: Backup.stagingName, directoryHint: .isDirectory)
-    #expect(try staging.resourceValues(forKeys: [.isExcludedFromBackupKey]).isExcludedFromBackup == true)
-    // Once swapped in, the folder is the app's own again: the database is backed up as before; audio and photos are not.
+    #expect(try isExcluded(staging.appending(path: Backup.audioDirectory)))
+    #expect(try isExcluded(staging.appending(path: Backup.photosDirectory)))
+    // The folder itself is never flagged: it becomes the app's folder, and the database is backed up as before.
+    #expect(try !isExcluded(staging))
+}
+
+@Test func anAppliedRestoreKeepsTheDatabaseInCloudBackup() throws {
+    let (target, documents) = try stagedRestore()
     #expect(try Backup.applyPendingRestore(root: target.url, safetyCopyDirectory: documents))
     let current = AudioLocation.rootDirectory(under: target.url)
-    #expect(try current.resourceValues(forKeys: [.isExcludedFromBackupKey]).isExcludedFromBackup == false)
-    #expect(try PhotoLocation.path(under: target.url).resourceValues(forKeys: [.isExcludedFromBackupKey]).isExcludedFromBackup == true)
-    #expect(try current.appending(path: Backup.audioDirectory).resourceValues(forKeys: [.isExcludedFromBackupKey]).isExcludedFromBackup == true)
+    #expect(try !isExcluded(current))
+    #expect(try isExcluded(current.appending(path: Backup.audioDirectory)))
+    #expect(try isExcluded(current.appending(path: Backup.photosDirectory)))
+}
+
+@Test func aKillRightAfterTheSwapLeavesTheDatabaseInCloudBackup() throws {
+    let (target, documents) = try stagedRestore()
+    // What a kill right after the swap leaves: the old folder moved aside, the staged one in its place, the marker still there.
+    let fm = FileManager.default
+    let current = AudioLocation.rootDirectory(under: target.url)
+    try fm.moveItem(at: current, to: target.url.appending(path: Backup.replacedName, directoryHint: .isDirectory))
+    try fm.moveItem(at: target.url.appending(path: Backup.stagingName, directoryHint: .isDirectory), to: current)
+    _ = try Backup.applyPendingRestore(root: target.url, safetyCopyDirectory: documents)
+    #expect(try !isExcluded(current))
 }
