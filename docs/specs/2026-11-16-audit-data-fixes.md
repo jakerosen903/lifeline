@@ -103,7 +103,7 @@ A1 keeps one chapter rule, because it is a repair and needs no new screen:
 
 ### A2: names
 
-1. One pure function gives the match key of a name: lower case, edge spaces removed, edge punctuation removed, inner runs of spaces made one space. It replaces `PeopleRepository.normalize` for entity titles, story titles, chapter titles and collection titles.
+1. One pure function gives the match key of a name: lower case, edge spaces removed, sentence punctuation and quotation marks at the ends removed, inner runs of spaces made one space. A symbol at the end stays, because it can be part of a name: "C++" and "C#" are two names. It replaces `PeopleRepository.normalize` for entity titles, story titles, chapter titles and collection titles.
 2. Stored titles do not change. The person's spelling shows as they said it. Only the comparison changes.
 3. Lookups by title must compare match keys. The store keeps the key in a column so that SQL can compare it (a migration; see "Data").
 4. Existing entities of the same type with the same match key must become one entity. See owner's call 1.
