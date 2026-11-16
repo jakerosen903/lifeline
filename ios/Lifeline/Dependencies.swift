@@ -30,6 +30,8 @@ struct Dependencies {
     let promptLog: PromptLogRepository
     /// The arc's numbers: short under `-uiTesting`.
     let arcConfig: ArcConfig
+    /// Which of `count` lines leads the You page: at random in the app, the first under `-uiTesting` (S3 decision 9).
+    let pickLead: @Sendable (_ count: Int) -> Int
     /// Durable sorting: started at launch, cancelled per session before a delete.
     let worker: SortingWorker
     /// "Same as X?": retrieval by on-device embeddings; the extractor decides, the person confirms.
@@ -164,6 +166,7 @@ struct Dependencies {
             actions: actions,
             promptLog: PromptLogRepository(db),
             arcConfig: .default,
+            pickLead: { Int.random(in: 0..<$0) },
             worker: SortingWorker(store: store, service: extraction, matcher: matcher, reporter: reporter, log: { print("[sorting] \($0)") }),
             matcher: matcher,
             reconcile: reconcile,
@@ -231,6 +234,7 @@ struct Dependencies {
             actions: actions,
             promptLog: PromptLogRepository(db),
             arcConfig: .uiTesting,
+            pickLead: { _ in 0 },
             worker: SortingWorker(store: store, service: extraction, matcher: matcher, reporter: reporter),
             matcher: matcher,
             reconcile: reconcile,

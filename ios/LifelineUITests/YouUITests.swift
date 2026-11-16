@@ -1,0 +1,78 @@
+import XCTest
+
+/// You as a portrait (S3): the header, the lead line, the four parts in the spec's order, the chips, and the
+/// page with nothing told. The portrait seed is invented: Jordan, born 1990 in Dayton.
+final class YouUITests: XCTestCase {
+    @MainActor
+    func testThePortraitReadsInTheSpecOrder() {
+        let app = XCUIApplication.launchWithPortrait(); app.openYou()
+        XCTAssertEqual(app.staticTexts["you.name"].label, "Jordan")
+        XCTAssertEqual(app.staticTexts["you.birth"].label, "born 1990 in Dayton")
+        XCTAssertEqual(app.buttons["entities.aboutYou"].label, "In 2 moments, from 1999 to 2000")
+        XCTAssertEqual(app.staticTexts["you.lead"].label, "I was always the kid who took things apart", "pickLead is 0 under test")
+        XCTAssertEqual(app.youLineLabels(), ["I'm the oldest of two", "I never could sit still in a classroom", "Something about Ohio",
+                                             "Leaving Boston felt like closing a book before the last chapter",
+                                             "I was never scared at the lake, not once", "I want to take Maya to Lisbon someday"])
+        XCTAssertFalse(app.buttons["Two years younger than me"].exists, "a fact about Maya is on her page, not here")
+        XCTAssertFalse(app.buttons["I still sleep with the hall light on"].exists, "a hidden fact never shows")
+        XCTAssertFalse(app.buttons.matching(identifier: "you.line").matching(NSPredicate(format: "label == %@", "I was always the kid who took things apart")).firstMatch.exists, "the lead does not repeat")
+        let headings = ["Who you are", "How it felt", "What you think", "What you're hoping for"].map { app.staticTexts[$0] }
+        XCTAssertTrue(headings.allSatisfy(\.exists))
+        XCTAssertEqual(headings.map(\.frame.minY), headings.map(\.frame.minY).sorted(), "the parts in spec order")
+        XCTAssertLessThan(app.staticTexts["you.lead"].frame.minY, headings[0].frame.minY)
+        XCTAssertEqual(app.buttons.matching(identifier: "you.feelingAbout").firstMatch.label, "about The lake")
+        XCTAssertEqual(app.buttons.matching(identifier: "entities.row").firstMatch.label, "Saying yes to things")
+        XCTAssertFalse(app.any("you.invite").exists)
+    }
+
+    @MainActor
+    func testTheChipsFilterWhoYouAre() {
+        let app = XCUIApplication.launchWithPortrait(); app.openYou()
+        XCTAssertEqual(app.buttons.matching(identifier: "you.tag").allElementsBoundByIndex.map(\.label), ["Family", "School"])
+        app.buttons.matching(identifier: "you.tag").matching(NSPredicate(format: "label == %@", "Family")).firstMatch.tap()
+        XCTAssertEqual(app.youLineLabels(), ["I'm the oldest of two",
+                                             "Leaving Boston felt like closing a book before the last chapter",
+                                             "I was never scared at the lake, not once", "I want to take Maya to Lisbon someday"],
+                       "the chip filters Who you are only")
+        XCTAssertTrue(app.buttons.matching(identifier: "you.tag").matching(NSPredicate(format: "label == %@", "Family")).firstMatch.isSelected)
+        app.buttons["you.tag.all"].tap()
+        XCTAssertTrue(app.buttons["I never could sit still in a classroom"].waitForExistence(timeout: 5))
+    }
+
+    @MainActor
+    func testAFeelingOpensWhatItIsAbout() {
+        let app = XCUIApplication.launchWithPortrait(); app.openYou()
+        app.buttons["you.feelingAbout"].firstMatch.tap()
+        XCTAssertTrue(app.staticTexts["entity.title"].waitForExistence(timeout: 5))
+        XCTAssertEqual(app.staticTexts["entity.title"].label, "The lake")
+    }
+
+    @MainActor
+    func testALineOpensItsMemory() {
+        let app = XCUIApplication.launchWithPortrait(); app.openYou()
+        app.buttons.matching(identifier: "you.line").firstMatch.tap()
+        XCTAssertTrue(app.any("memory.kind").waitForExistence(timeout: 5))
+    }
+
+    @MainActor
+    func testAYouPageWithNothingToldInvitesAStory() {
+        let app = XCUIApplication()
+        app.launchArguments = ["-uiTesting"]; app.launch(); app.skipFirstOpen()   // an owner, nothing told
+        app.openTab("You")
+        XCTAssertTrue(app.any("you.invite").waitForExistence(timeout: 5))
+        XCTAssertEqual(app.any("you.invite").label, "Stories you tell about yourself will show here.")
+        for absent in ["Who you are", "How it felt", "What you're hoping for"] { XCTAssertFalse(app.staticTexts[absent].exists) }
+        XCTAssertFalse(app.any("you.lead").exists)
+        XCTAssertEqual(app.buttons["home.start"].label, "Tell a story about yourself")
+        XCTAssertTrue(app.buttons["home.settings"].exists)
+    }
+
+    @MainActor
+    func testTheLargestTextSizeKeepsEveryLine() {
+        let app = XCUIApplication.launchWithPortrait(["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"]); app.openYou()
+        XCTAssertEqual(app.youLineLabels().count, 6)
+        let lead = app.staticTexts["you.lead"]
+        XCTAssertGreaterThan(lead.frame.height, 120, "the lead wraps onto several lines, never truncates")
+        for chip in app.buttons.matching(identifier: "you.tag").allElementsBoundByIndex { XCTAssertGreaterThanOrEqual(chip.frame.height, 44) }
+    }
+}

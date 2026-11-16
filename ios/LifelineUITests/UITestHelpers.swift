@@ -82,6 +82,29 @@ extension XCUIApplication {
         return app
     }
 
+    /// Launches with `-uiTesting-seedPortrait`: the invented family, then Jordan's own facts, feelings and a goal
+    /// (born 1990 in Dayton). First open is done; do not call `skipFirstOpen()`.
+    static func launchWithPortrait(_ extra: [String] = []) -> XCUIApplication {
+        let app = XCUIApplication()
+        app.launchArguments += ["-uiTesting", "-uiTesting-seedPortrait"] + extra
+        app.launch()
+        XCTAssertTrue(app.waitHittable(app.buttons["home.start"], timeout: 15), "the seeded app lands on the timeline")
+        return app
+    }
+
+    /// The You tab, once its header is up.
+    func openYou() {
+        openTab("You")
+        XCTAssertTrue(staticTexts["you.name"].waitForExistence(timeout: 10), "the portrait's header is up")
+    }
+
+    /// The `you.line` labels on You, top to bottom. A fact or a goal is a button; a feeling is its text.
+    func youLineLabels() -> [String] {
+        let lines = (buttons.matching(identifier: "you.line").allElementsBoundByIndex + staticTexts.matching(identifier: "you.line").allElementsBoundByIndex)
+            .filter { $0.exists && !$0.frame.isEmpty }
+        return lines.sorted { $0.frame.minY < $1.frame.minY }.map(\.label)
+    }
+
     /// The `entities.row` labels, top to bottom, then leading to trailing.
     func entityRowLabels() -> [String] {
         let rows = buttons.matching(identifier: "entities.row").allElementsBoundByIndex
