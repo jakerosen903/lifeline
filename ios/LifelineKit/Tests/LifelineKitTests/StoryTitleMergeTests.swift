@@ -46,15 +46,27 @@ private struct Env {
     #expect(try env.store.stories.stories().count == 2)
 }
 
-@Test func aHintOnAStoryMemberJoinsItsStoryToTheNamedOne() throws {
+@Test func aHintOnAStoryMemberMovesOnlyThatMemory() throws {
     let env = try Env()
-    let a = try env.kept("we packed the car"), b = try env.kept("the tire went flat"), c = try env.kept("we saw the ocean")
+    let a = try env.kept("we packed the car"), b = try env.kept("the tire went flat")
+    let c = try env.kept("we saw the ocean"), d = try env.kept("the long walk")
     let trip = try env.actions.acceptStoryHint("The road trip", for: a.id)
-    let other = try env.actions.createStory(title: nil, containing: [b.id, c.id])
+    let other = try env.actions.createStory(title: "Driving west", containing: [b.id, c.id, d.id])
     let result = try env.actions.acceptStoryHint("The road trip", for: b.id)
     #expect(result.id == trip.id)
-    #expect(try env.store.stories.story(id: other.id) == nil, "the member's story joined the named one and is gone")
-    #expect(try env.members(trip.id) == [a.id, b.id, c.id], "its members keep their order, after the ones already there")
+    #expect(try env.members(trip.id) == [a.id, b.id], "the hinted memory joins the named story")
+    #expect(try env.members(other.id) == [c.id, d.id], "the story it left keeps its other members")
+    #expect(try env.store.stories.story(id: other.id)?.title == "Driving west", "and its title")
+}
+
+@Test func aHintThatEmptiesAStoryRemovesOnlyTheEmptyRow() throws {
+    let env = try Env()
+    let a = try env.kept("we packed the car"), b = try env.kept("the tire went flat")
+    let trip = try env.actions.acceptStoryHint("The road trip", for: a.id)
+    let alone = try env.actions.createStory(title: nil, containing: [b.id])
+    _ = try env.actions.acceptStoryHint("The road trip", for: b.id)
+    #expect(try env.store.stories.story(id: alone.id) == nil, "a story with nobody left is deleted, as on every move")
+    #expect(try env.members(trip.id) == [a.id, b.id])
 }
 
 @Test func aHintThatNamesTheMembersOwnStoryOnlyRenamesIt() throws {
