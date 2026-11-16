@@ -1,8 +1,8 @@
 import LifelineKit
 import SwiftUI
 
-/// Your story so far. The Timeline tab's root: waiting cards, chapters with bands, collections,
-/// the shelf and the one open question. Facts, feelings and goals live on You.
+/// Your story so far. The Timeline tab's root: waiting cards, the spine of dated moments,
+/// collections, the shelf and the one open question. Facts, feelings and goals live on You.
 struct TimelineScreen: View {
     let viewModel: TimelineViewModel
     @State private var showSettings = false
@@ -17,7 +17,6 @@ struct TimelineScreen: View {
 
     private var rowActions: MemoryRowActions {
         MemoryRowActions(open: { openMemory = $0 },
-                         newChapter: { viewModel.newChapter(for: $0.id, title: nil) },
                          addToCollection: { collectionTarget = $0 },
                          addDate: { dateTarget = $0 },
                          hide: { viewModel.hide($0.id) },
@@ -101,7 +100,7 @@ struct TimelineScreen: View {
             summarySection
             sortingRow
             waitingSection
-            chapterSections
+            spineSection
             collectionSections
             shelfAndQuestion
             footer
@@ -145,26 +144,33 @@ struct TimelineScreen: View {
         }
     }
 
-    @ViewBuilder private var chapterSections: some View {
-        ForEach(viewModel.chapters) { chapter in
-            ChapterSection(title: chapter.title, rangeText: chapter.chapter.range.isPlaced ? chapter.chapter.range.displayText : nil,
-                           memories: chapter.memories, axis: viewModel.axis, actions: rowActions,
-                           stories: chapter.stories, expanded: viewModel.expandedStories, onToggleStory: { viewModel.toggleStory($0) },
-                           storyActions: storyActions)
+    /// One section of rows with no header, cards or separators: the rows touch, so the spine reads as one line.
+    /// With nothing dated there is no section, and so no spine and no period.
+    @ViewBuilder private var spineSection: some View {
+        if !viewModel.spine.isEmpty {
+            Section {
+                ForEach(viewModel.spine) { row in
+                    SpineRowView(row: row, isFirst: row.id == viewModel.spine.first?.id, isLast: row.id == viewModel.spine.last?.id,
+                                 expanded: storyID(of: row).map { viewModel.expandedStories.contains($0) } ?? false,
+                                 onToggleStory: { storyID(of: row).map { viewModel.toggleStory($0) } },
+                                 actions: rowActions, storyActions: storyActions)
+                }
+                .listRowSeparator(.hidden)
+                .listRowBackground(Color.clear)
+                .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 12))
+            }
         }
-        if !viewModel.unchaptered.isEmpty || !viewModel.unchapteredStories.isEmpty {
-            ChapterSection(title: viewModel.chapters.isEmpty ? "On the timeline" : "Outside any chapter", rangeText: nil,
-                           memories: viewModel.unchaptered, axis: viewModel.axis, actions: rowActions,
-                           stories: viewModel.unchapteredStories, expanded: viewModel.expandedStories, onToggleStory: { viewModel.toggleStory($0) },
-                           storyActions: storyActions)
-        }
+    }
+
+    private func storyID(of row: SpineRow) -> StoryID? {
+        if case .story(let story) = row.content { story.id } else { nil }
     }
 
     @ViewBuilder private var collectionSections: some View {
         ForEach(viewModel.collections) { collection in
             Section {
                 ForEach(collection.members) { row in
-                    MemoryRowView(row: row, axis: row.memory.range.isPlaced ? viewModel.axis : nil, actions: rowActions)
+                    MemoryRowView(row: row, actions: rowActions)
                 }
             } header: {
                 VStack(alignment: .leading, spacing: 2) {

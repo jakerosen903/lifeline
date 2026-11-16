@@ -7,15 +7,15 @@ struct StoryRowActions {
     let split: (StoryRow) -> Void
 }
 
-/// A story as one row: its title (or "{first} + {n} more"), its span from the dated members,
-/// and the members folded under it until the row is tapped (M5).
+/// A story as one row: its title (or "{first} + {n} more") and its span from the dated members
+/// (M5). A tap opens or folds it; whoever lists the story lays its members out under it.
 struct StoryRowView: View {
     let row: StoryRow
-    let axis: ClosedRange<Int>?
     let expanded: Bool
     let onToggle: () -> Void
-    let actions: MemoryRowActions
     let storyActions: StoryRowActions
+    /// From the title's first baseline up to where the mark's centre sits: about half a capital.
+    @ScaledMetric(relativeTo: .headline) private var markLift: CGFloat = 6
 
     var body: some View {
         HStack(alignment: .top, spacing: 8) {
@@ -28,6 +28,8 @@ struct StoryRowView: View {
                     Text(row.title)
                         .font(.system(.headline, design: .serif))
                         .foregroundStyle(Theme.ink)
+                        // On the spine the mark lines up with the title's first line.
+                        .alignmentGuide(.spineMark) { [lift = markLift] in $0[.firstTextBaseline] - lift }
                     Text(row.isPlaced ? row.span.displayText : "no dates yet")
                         .font(.subheadline)
                         .foregroundStyle(Theme.ochreText)
@@ -46,15 +48,10 @@ struct StoryRowView: View {
                     .accessibilityIdentifier("story.split")
             } label: {
                 Image(systemName: "ellipsis.circle").font(.title3).foregroundStyle(Theme.secondaryText).padding(.top, 8)
+                    .frame(minWidth: 44, minHeight: 44, alignment: .top)
             }
             .buttonStyle(.borderless)
             .accessibilityIdentifier("story.more")
-        }
-        if expanded {
-            ForEach(row.members) { member in
-                MemoryRowView(row: member, axis: member.memory.range.isPlaced ? axis : nil, actions: actions)
-                    .padding(.leading, 16)
-            }
         }
     }
 }
