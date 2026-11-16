@@ -28,4 +28,36 @@ public enum EntityPage {
             return ka != kb ? ka < kb : a.createdAt < b.createdAt
         }
     }
+
+    /// What a page lists besides its strip: what the person said, and the moments in order (S2).
+    public struct Sections: Sendable, Equatable {
+        public var said: [Memory]
+        public var moments: [Memory]
+    }
+
+    /// `said` holds the details and the mentions that are not moments, once each, oldest told
+    /// first. `moments` holds the mentions that are moments (decision 2), in `ordered` order.
+    /// A hidden memory and a floating stand-in (not told) are in neither.
+    public static func sections(details: [Memory], mentions: [Memory]) -> Sections {
+        func shown(_ memories: [Memory]) -> [Memory] { memories.filter { !$0.hiddenFromTimeline && !$0.isFloating } }
+        let shownMentions = shown(mentions)
+        var seen = Set<MemoryID>()
+        let said = (shown(details) + shownMentions.filter { !$0.isMoment }).filter { seen.insert($0.id).inserted }
+            .sorted { ($0.createdAt, $0.id.rawValue) < ($1.createdAt, $1.id.rawValue) }
+        return Sections(said: said, moments: ordered(shownMentions.filter(\.isMoment), toldAt: [:]))
+    }
+
+    /// Never a guessed gender: the store holds none (decision 4).
+    public static func saidHeading(_ type: EntityType, isOwner: Bool) -> String {
+        if isOwner { return "What you've said about yourself" }
+        return type == .person ? "What you've said about them" : "What you've said about it"
+    }
+
+    public static func momentsHeading(title: String, isOwner: Bool) -> String {
+        isOwner ? "Your moments" : "Moments with \(title)"
+    }
+
+    public static func invitation(title: String, isOwner: Bool) -> String {
+        "Stories you tell about \(isOwner ? "yourself" : title) will show here."
+    }
 }
