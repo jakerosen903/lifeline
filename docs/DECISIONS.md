@@ -16,6 +16,48 @@ One entry per decision. Newest first. Status is Decided, Open, or Superseded.
 
 **Why.** After a month of use, one screen carried everything and six unlabeled icons led away from it (audit F7, F9). Each kind of thing in a life needs its own way of being seen, and every one of them must lead back to telling (P1, P2). No screen may ask the person to complete a record (P9), and no inferred span, location or name may show as fact (P5).
 
+## 2026-11-15 · A kept card's close can be undone
+
+**Status:** Decided by the owner. Source: the review of PR #18 (`CardHandler.close`); `docs/specs/2026-10-26-cards-follow-ups.md`, rules 9 and 11.
+
+When a kept card closes, the follow-ups nobody answered are dismissed. A card closes on "Done" and also when the person acts on another memory card, so follow-ups could go with no tap on them. The app now shows "{n} suggestions dismissed." with Undo for 6 seconds whenever a close dismissed something. Undo makes the follow-ups pending again and brings the card back.
+
+Closes inside one 6-second window add up: one Undo takes all of them back. The close writes its dismissals in one transaction, and Undo writes its restores in one transaction, so a failure or a kill leaves every follow-up of that write as it was (PRINCIPLES 4).
+
+**Why.** Unanswered follow-ups must not pile up in "Waiting for you": that backlog is what the UI audit removed. So the close still dismisses them. But a dismissal the person did not choose must be one they can take back (PRINCIPLES 9).
+
+**Not chosen.** Leaving unanswered follow-ups pending: one leftover card for each kept memory. Keeping the silent dismissal: no way back.
+
+## 2026-10-26 · Filler words are hidden in quotes on lists and pages
+
+**Status:** Decided by the owner. Source: `docs/specs/2026-10-26-ui-audit.md`, call 1 and finding F12.
+
+Quotes on lists, entity pages and About hide filler words ("um", "uh", "like", "you know") and repeated words. The stored transcript does not change. The memory page and the audio keep every word (PRINCIPLES 1).
+
+## 2026-10-26 · The timeline groups moments into computed life periods
+
+**Status:** Decided by the owner. Source: `docs/specs/2026-10-26-ui-audit.md`, call 2 and findings F2–F3.
+
+The timeline reads life periods from the dates and the owner's age, for example "Growing up · 2004–2012". Each computed period shows as a guess (PRINCIPLES 5). A chapter the person names replaces the period it covers. "Outside any chapter" goes away.
+
+## 2026-10-26 · Extractor v7 changes to existing memories are suggestions
+
+**Status:** Decided by the owner. Source: `docs/specs/2026-10-26-ui-audit.md`, call 3.
+
+Extractor v7 re-reads the existing memories. Each change it finds (a new title, a link to a person, "about you" in place of the owner's name) is a suggestion the person approves. No change is applied silently (PRINCIPLES 9).
+
+## 2026-10-26 · A labeled tab bar replaces the floating icons
+
+**Status:** Decided by the owner. Source: `docs/specs/2026-10-26-ui-audit.md`, call 4 and finding F7.
+
+The app's top level is a tab bar with labels: Timeline, People, Sessions, Settings. The six unlabeled floating icons go away.
+
+## 2026-10-26 · Follow-ups stay on the memory card
+
+**Status:** Decided by the owner after a month of use. Source: `docs/specs/2026-10-26-ui-audit.md`, finding F1.
+
+A follow-up (a domain tag, a story hint, a collection hint, an entity) never appears as its own card. After Keep, the memory card stays and shows its follow-ups as optional chips. A separate card read as random because nothing tied it to its memory (PRINCIPLES 9).
+
 ## 2026-10-25 · The interviewer speaks briefly, never over the person, and never improvises on safety (M8)
 
 The app speaks its fixed lines and short model reflections in a settle-in session. A quick story stays nearly silent. Any speech from the person stops the app at once. The app's own words are kept apart from the person's in the transcript and never become a memory.

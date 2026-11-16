@@ -62,7 +62,7 @@ struct LandingScreen: View {
             .linenBackground()
             .navigationBarTitleDisplayMode(.inline)
             .navigationDestination(isPresented: Binding(get: { reviewing }, set: { reviewing = $0 })) {
-                SessionDetailScreen(viewModel: SessionDetailViewModel(session: viewModel.session, deps: viewModel.deps))
+                SessionDetailScreen(session: viewModel.session, deps: viewModel.deps)
             }
         }
         .interactiveDismissDisabled()

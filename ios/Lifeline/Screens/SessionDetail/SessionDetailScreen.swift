@@ -4,7 +4,13 @@ import SwiftUI
 /// One session: cards still waiting for an answer, the memories it produced, and every
 /// moment, each playable. The timeline proper is M3.
 struct SessionDetailScreen: View {
-    let viewModel: SessionDetailViewModel
+    /// Made once per navigation: a parent that re-renders (the landing polls while sorting) must
+    /// not swap the model, and with it the cards' touched state, under the person.
+    @State private var viewModel: SessionDetailViewModel
+
+    init(session: Session, deps: Dependencies) {
+        _viewModel = State(initialValue: SessionDetailViewModel(session: session, deps: deps))
+    }
 
     var body: some View {
         List {
@@ -13,8 +19,12 @@ struct SessionDetailScreen: View {
                     CardStack(cards: viewModel.waiting, handler: viewModel.cards,
                               onAccept: { viewModel.accept($0) }, onChange: { viewModel.change($0) }, onDismiss: { viewModel.dismiss($0) },
                               onResolve: { viewModel.resolve($0, $1) }, onUndo: { viewModel.undo() },
-                              onSameStory: { viewModel.sameStory($0, into: $1) }, onUndoMerge: { viewModel.undoMerge() },
-                              onKeepEntity: { viewModel.keepEntity($0, as: $1) })
+                              onSameStory: { viewModel.sameStory($0, into: $1) }, onUndoMerge: { viewModel.undoMerge() }, onUndoKeptClose: { viewModel.undoKeptClose() },
+                              onFollowUp: { viewModel.followUp($0, $1, as: $2) },
+                              onResolveFollowUp: { viewModel.resolveFollowUp($0, $1, $2) },
+                              onDeclineFollowUp: { viewModel.declineFollowUp($0, $1) },
+                              onKeptDone: { viewModel.keptDone($0) },
+                              onOpenEntity: { viewModel.open($0) }, hasPage: { viewModel.flow.hasPage($0) })
                         .listRowBackground(Color.clear)
                         .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
                 }
@@ -88,6 +98,9 @@ struct SessionDetailScreen: View {
         .navigationBarTitleDisplayMode(.inline)
         .onAppear { viewModel.refresh() }
         .onDisappear { viewModel.stop() }
+        .navigationDestination(item: Binding(get: { viewModel.openedEntity }, set: { viewModel.openedEntity = $0 })) { entity in
+            EntityScreen(viewModel: EntityViewModel(entity: entity, deps: viewModel.deps)) { viewModel.refresh() }
+        }
         .sheet(item: Binding(get: { viewModel.changing }, set: { viewModel.changing = $0 })) { memory in
             ChangeSheet(memory: memory, deps: viewModel.deps) { viewModel.refresh() }
         }

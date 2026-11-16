@@ -193,7 +193,8 @@ public actor ExtractionQueue {
     /// Writes one row per candidate in output order, plus a flag row when any flag is set, and
     /// marks the segment extracted, all in one transaction. Rejected rows are dismissed with the
     /// reason; after a serious disclosure the memory rows are withheld the same way. A person
-    /// mention whose name the app already knows is resolved on the spot and not shown.
+    /// mention whose name the app already knows is resolved on the spot and not shown; one that
+    /// no memory in the output names becomes an open mention for the People queue.
     /// Returns the rows to show.
     private func storeCandidates(_ validated: OutputValidator.Validated, segment: SegmentID, version: String) throws -> [Candidate] {
         var ordinal = 0
@@ -261,12 +262,20 @@ public actor ExtractionQueue {
         }
         // Superseded rows are records with nothing to tap; only pending hint rows from this pass show.
         shown += rows.filter { $0.kind == .hint && $0.status == .pending && !shown.contains($0) }
+        // A name no memory here carries has no card to wait under: it goes to the People queue at once.
+        let owners = rows.filter { $0.kind == .memory && $0.status == .pending }.compactMap { c in CandidatePayload.memory(c).map { (c, $0) } }
+        let unownedMentions = shown.filter { c in
+            guard c.kind == .person, let mention = CandidatePayload.mention(c) else { return false }
+            return FollowUpOwner.owner(of: .whoIsThis(.candidate(c), text: mention.text), among: owners, excluding: []) == nil
+        }
+        shown.removeAll { unownedMentions.contains($0) }
         // The rows, the segment's status and the grown cards land together.
         let grown = try store.candidates.insertAll(rows, markingExtracted: segment, in: store.sessions, extending: extended)
         for (candidate, _) in knownMentions {
             let mention = try actions.acceptMention(candidate)
             try actions.resolveIfKnown(mention)
         }
+        for candidate in unownedMentions { _ = try actions.acceptMention(candidate) }
         for continuation in extended {
             // The grown card shows again; a card kept in the meantime leaves its continuation as an ordinary card.
             let id = grown.contains(continuation.earlierID) ? continuation.earlierID : continuation.rowID

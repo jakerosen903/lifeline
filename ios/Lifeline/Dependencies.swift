@@ -181,7 +181,7 @@ struct Dependencies {
         // an empty key store, and a scripted service that refuses to sort without one, as the live one does.
         let secrets = InMemorySecretStore(args.contains("-uiTesting-noKey") ? [:] : [.anthropicAPIKey: "sk-ant-api03-" + String(repeating: "x", count: 40)])
         let scripted = ScriptedExtractionService(delayMs: args.contains("-uiTesting-slowExtract") ? 4_000 : 200, heavy: args.contains("-uiTesting-heavy"),
-                                                 facts: args.contains("-uiTesting-fact"), entities: args.contains("-uiTesting-entities"))
+                                                 facts: args.contains("-uiTesting-fact"), entities: args.contains("-uiTesting-entities"), followUps: args.contains("-uiTesting-followUps"))
         let extraction = KeyGatedExtractionService(inner: scripted, hasKey: { ((try? secrets.read(.anthropicAPIKey)) ?? nil) != nil })
         // Word-overlap vectors under test: deterministic, and enough for the scripted retelling
         // to be retrieved into the packet so the scripted extractor can name it.
@@ -200,6 +200,7 @@ struct Dependencies {
             makeVoiceSession: { _, onStatus in
                 onStatus(.ready)
                 // `-uiTesting-slow`: a segment every few seconds, for tests that act between segments.
+                if args.contains("-uiTesting-followUps") { return ScriptedVoiceSession(script: ScriptedVoiceSession.followUpScript, intervalMs: 800) }
                 if args.contains("-uiTesting-entities") { return ScriptedVoiceSession(script: ScriptedVoiceSession.entityScript, intervalMs: 800) }
                 return ScriptedVoiceSession(intervalMs: args.contains("-uiTesting-slow") ? 2_500 : 800)
             },

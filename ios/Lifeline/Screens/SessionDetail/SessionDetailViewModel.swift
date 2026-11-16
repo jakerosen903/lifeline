@@ -21,15 +21,20 @@ final class SessionDetailViewModel {
     private(set) var dismissed: [Candidate] = []
     private(set) var error: String?
     var changing: Memory?
+    /// The page a checked entity or person chip opened.
+    var openedEntity: Entity?
     let player = SegmentPlayer()
-    let cards: CardHandler
+    /// The waiting cards as a queue, acted on with the same calls as the live session.
+    let flow: CardFlow
+    var cards: CardHandler { flow.handler }
     let deps: Dependencies
 
     init(session: Session, deps: Dependencies) {
         self.session = session
         self.deps = deps
-        cards = CardHandler(deps: deps)
-        refresh()
+        // The screen's onAppear loads it: SwiftUI may build and discard a model on a parent's render, so init stays cheap.
+        flow = CardFlow(deps: deps)
+        flow.onAutoClose = { [weak self] in self?.refresh() }
     }
 
     func refresh() {
@@ -45,10 +50,13 @@ final class SessionDetailViewModel {
                           anchors: try deps.extractionStore.memories.anchors(of: memory.id).map(\.phrase))
             }
             let candidates = deps.extractionStore.candidates
-            let pending = CardQueue.waitingCards(pending: try candidates.pending(in: session.id)) { (try? candidates.fetch($0))?.status }
+            flow.reload(CardQueue.waiting(pending: try candidates.pending(in: session.id),
+                                          segmentMemories: { (try? candidates.candidates(for: $0)) ?? [] },
+                                          candidate: { try? candidates.fetch($0) }))
+            let pending = flow.cards
             // Names a memory listed that never had their own card wait here as well.
             let segmentIDs = Set(segments.map(\.id))
-            let shownNames = Set(pending.compactMap { if case .whoIsThis(_, let text) = $0 { PeopleRepository.normalize(text) } else { nil } })
+            let shownNames = Set(pending.flatMap(\.withFollowUps).compactMap { if case .whoIsThis(_, let text) = $0 { PeopleRepository.normalize(text) } else { nil } })
             let openNames = try deps.extractionStore.people.mentions(status: .unresolved)
                 .filter { segmentIDs.contains($0.segmentID) && !shownNames.contains(PeopleRepository.normalize($0.text)) }
                 .map(Card.init)
@@ -64,14 +72,22 @@ final class SessionDetailViewModel {
         catch { self.error = "Could not bring that back: \(error.localizedDescription)" }
     }
 
-    func accept(_ card: Card) { if cards.accept(card) { refresh() } }
-    func keepEntity(_ card: Card, as type: EntityType?) { if cards.acceptEntity(card, as: type) != nil { refresh() } }
-    func change(_ card: Card) { if let memory = cards.keep(card) { refresh(); changing = memory } }
-    func dismiss(_ card: Card) { if cards.dismiss(card) { refresh() } }
-    func undo() { if cards.undo() != nil { refresh() } }
-    func undoMerge() { if cards.undoMerge() != nil { refresh() } }
-    func sameStory(_ card: Card, into targets: [MemoryID]) { if cards.sameStory(card, into: targets) { refresh() } }
-    func resolve(_ card: Card, _ choice: MentionChoice) { if cards.resolve(card, choice) { refresh() } }
+    // Each action changes the queue as the live session does, then re-reads the store; the
+    // rebuilt queue keeps the open kept card as it is on screen.
+    func accept(_ card: Card) { if flow.accept(card) { refresh() } }
+    func change(_ card: Card) { if let memory = flow.change(card) { refresh(); changing = memory } }
+    func dismiss(_ card: Card) { if flow.dismiss(card) { refresh() } }
+    func undo() { if flow.undo() { refresh() } }
+    func undoMerge() { if flow.undoMerge() { refresh() } }
+    func undoKeptClose() { if flow.undoKeptClose() { refresh() } }
+    func sameStory(_ card: Card, into targets: [MemoryID]) { if flow.sameStory(card, into: targets) { refresh() } }
+    func resolve(_ card: Card, _ choice: MentionChoice) { if flow.resolve(card, choice) { refresh() } }
+    func followUp(_ kept: KeptCard, _ card: Card, as type: EntityType?) { if flow.followUp(kept, card, as: type) { refresh() } }
+    func resolveFollowUp(_ kept: KeptCard, _ card: Card, _ choice: MentionChoice) { if flow.resolveFollowUp(kept, card, choice) { refresh() } }
+    func declineFollowUp(_ kept: KeptCard, _ card: Card) { if flow.declineFollowUp(kept, card) { refresh() } }
+    func keptDone(_ kept: KeptCard) { flow.keptDone(kept); refresh() }
+    /// A checked entity or person chip, tapped again: its page.
+    func open(_ followUp: Card) { openedEntity = flow.page(for: followUp) }
 
     func isPlaying(_ segment: Segment) -> Bool { player.playingRange == segment.range && player.isPlaying }
 

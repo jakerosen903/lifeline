@@ -81,19 +81,8 @@ final class CardHandler {
 
     func notPartOfStory(_ card: Card) { optedOutOfStory.insert(card.id) }
 
-    /// Returns true when the card is done with.
-    func accept(_ card: Card) -> Bool {
-        switch card {
-        case .memory:
-            return keep(card) != nil
-        case .hint(let candidate, _):
-            return attempt("Could not file that") { _ = try deps.actions.acceptHint(candidate) }
-        case .entity:
-            return acceptEntity(card, as: nil) != nil
-        case .whoIsThis:
-            return false
-        }
-    }
+    /// Keep on a memory card, the only card with one. Returns true when the card is done with.
+    func accept(_ card: Card) -> Bool { keep(card) != nil }
 
     /// Keep on an entity card, as what it heard or as the type the person chose (M7).
     /// Returns the entity so the caller can open its page.
@@ -104,6 +93,77 @@ final class CardHandler {
         return kept
     }
 
+    // MARK: - Follow-ups on a kept card
+
+    /// Follow-ups answered with "Not any of these", so their chips read as declined, not checked.
+    private(set) var declined: Set<String> = []
+
+    /// One tap on a hint, thing, place or idea chip: accepted as "Yes" or "Keep" did, or as the
+    /// type chosen from its menu. Never opens a page. Returns true when the chip is answered.
+    func acceptFollowUp(_ card: Card, as type: EntityType?) -> Bool {
+        switch card {
+        case .hint(let candidate, _):
+            return attempt("Could not file that") { _ = try deps.actions.acceptHint(candidate) }
+        case .entity:
+            return acceptEntity(card, as: type) != nil
+        case .memory, .whoIsThis, .kept:
+            return false
+        }
+    }
+
+    /// "Not any of these" on a chip: the follow-up is let go, with no undo notice.
+    func declineFollowUp(_ card: Card) -> Bool {
+        guard case .entity(let candidate, _) = card else { return false }
+        let done = attempt("Could not dismiss that") { try deps.actions.dismiss(candidate) }
+        if done { declined.insert(card.id) }
+        return done
+    }
+
+    /// Suggestions dismissed moments ago by a kept card's close, while Undo is still offered.
+    var keptClosedNotice: String? { recentKeptClose.notice }
+    private var recentKeptClose = KeptCloseUndo()
+    private var keptCloseTimer: Task<Void, Never>?
+
+    /// A kept card closed: the hints and entities nobody answered are dismissed in one write, as
+    /// "Not quite" did; a person nobody answered becomes an open mention for the People queue.
+    /// When anything was dismissed the notice offers Undo for the usual window, because a card
+    /// can close on another card's tap and the person must be able to take that back. A second
+    /// close inside the window adds to the first and restarts the window, so one Undo takes both
+    /// back. A close that dismissed nothing shows nothing and leaves an earlier notice standing.
+    func close(_ closing: KeptClose) {
+        let candidates = closing.dismiss.compactMap { card -> Candidate? in
+            switch card {
+            case .hint(let candidate, _), .entity(let candidate, _): candidate
+            case .memory, .whoIsThis, .kept: nil
+            }
+        }
+        var dismissed: [Candidate] = []
+        if !candidates.isEmpty {
+            _ = attempt("Could not dismiss that") { dismissed = try deps.actions.dismissAll(candidates) }
+        }
+        for card in closing.openAsMention { shown(card) }
+        guard !dismissed.isEmpty else { return }
+        recentKeptClose.add(cards: closing.undoable, dismissed: dismissed)
+        keptCloseTimer?.cancel()
+        keptCloseTimer = Task { [weak self] in
+            try? await Task.sleep(for: Self.undoWindow)
+            guard !Task.isCancelled else { return }
+            self?.recentKeptClose = KeptCloseUndo()
+        }
+    }
+
+    /// Takes the recent closes back: every suggestion they dismissed waits again, in one write,
+    /// and the kept cards are returned for the caller's stack. When the write fails nothing
+    /// changes and the notice stays, so the person can try again inside the window. A name that
+    /// went to the People queue stays there too; its chip answers the same mention.
+    func undoKeptClose() -> [KeptCard] {
+        let recent = recentKeptClose
+        guard !recent.isEmpty, attempt("Could not bring that back", { try deps.actions.restoreAll(recent.dismissed) }) else { return [] }
+        keptCloseTimer?.cancel()
+        recentKeptClose = KeptCloseUndo()
+        return recent.cards
+    }
+
     /// Dismiss never touches the recording; for a few seconds it can be undone.
     func dismiss(_ card: Card) -> Bool {
         let done = attempt("Could not dismiss that") {
@@ -112,6 +172,9 @@ final class CardHandler {
                 try deps.actions.dismiss(candidate)
             case .whoIsThis:
                 try deps.actions.resolveMention(try mention(for: card).id, to: .notAPerson)
+            case .kept:
+                // A kept card closes with Done; it is never dismissed.
+                throw CandidateActions.Error.wrongKind
             }
         }
         if done {
@@ -138,6 +201,8 @@ final class CardHandler {
                 try deps.actions.restore(candidate)
             case .whoIsThis:
                 try deps.actions.restoreMention(try mention(for: card).id)
+            case .kept:
+                throw CandidateActions.Error.wrongKind
             }
         }
         return done ? card : nil
@@ -271,11 +336,15 @@ final class CardHandler {
         return done ? recent.card : nil
     }
 
-    func resolve(_ card: Card, _ choice: MentionChoice) -> Bool {
-        guard case .whoIsThis = card else { return false }
-        let done = attempt("Could not save that") { try deps.actions.resolveMention(try mention(for: card).id, to: choice) }
+    func resolve(_ card: Card, _ choice: MentionChoice) -> Bool { resolvePerson(card, choice).done }
+
+    /// Resolve, and who the name turned out to be: nobody for "Not a person".
+    func resolvePerson(_ card: Card, _ choice: MentionChoice) -> (done: Bool, person: Person?) {
+        guard case .whoIsThis = card else { return (false, nil) }
+        var person: Person?
+        let done = attempt("Could not save that") { person = try deps.actions.resolveMention(try mention(for: card).id, to: choice) }
         if done { rankedChoices.removeAll() }
-        return done
+        return (done, person)
     }
 
     /// Everyone but the owner, closest names first, so a known person is always reachable.

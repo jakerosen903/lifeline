@@ -149,10 +149,11 @@ final class TimelineUITests: XCTestCase {
         XCTAssertTrue(reveal(title, in: app), "the unacted card waits on the timeline")
         title.tap()   // a tap on the card's body, not on a button
         XCTAssertTrue(title.waitForExistence(timeout: 2), "a tap on the card must not act on it")
-        let who = app.staticTexts["Who's this?"].firstMatch
-        XCTAssertTrue(reveal(who, in: app))
-        who.tap()
-        XCTAssertTrue(who.waitForExistence(timeout: 2), "same for a who-is-this card")
+        XCTAssertFalse(app.buttons["card.followUp"].exists, "a waiting memory's follow-ups show only after Keep, never as cards of their own")
+        let maya = app.staticTexts.matching(identifier: "card.title").matching(NSPredicate(format: "label == %@", "Maya climbed it")).firstMatch
+        XCTAssertTrue(reveal(maya, in: app))
+        maya.tap()
+        XCTAssertTrue(maya.waitForExistence(timeout: 2), "same for the Maya card")
     }
 
     @MainActor
