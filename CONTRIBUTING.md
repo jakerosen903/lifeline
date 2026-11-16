@@ -67,7 +67,7 @@ For a copy-only or markdown-only PR, "What changes", "Principles" and a before/a
 
 Lifeline is built design-first. Each milestone has a **spec** in `docs/specs/` (what and why) and a **plan** in `docs/plans/` (the ordered tasks, each with its tests). The spec is redlined with Jake before any code. The plan breaks it into small tasks. Then Claude Code works through the plan one task at a time and keeps a ledger at `.superpowers/sdd/<date>-<milestone>/progress.md`. Each ledger line is a task status, a **ruling** (a small judgment call the plan left open, with "cost if wrong"), or a note about a flaky test. Larger, non-obvious rulings graduate into `docs/DECISIONS.md`.
 
-The `.superpowers/` folder is **gitignored**, so the ledgers are on Jake's machine, not in your clone. Ask Jake for the M7 ledger (`2026-10-25-m7-elements/progress.md`) or the M5 ledger (`2026-10-23-m5-organize/progress.md`) as reference, and read them next to `docs/plans/2026-10-25-m7-elements.md`. M6 and M8 shipped without SDD ledgers. That is history, not a model to copy. For your first tasks (openers, copy) you do not need a spec or a ledger. For anything that adds a screen or changes behavior, such as onboarding, write a short spec in `docs/specs/` first and get Jake's redline.
+The ledgers in `.superpowers/sdd/` are **tracked** (`progress.md` and `rulings.md` only; the scratch files next to them stay gitignored), so they are in your clone. Read the M7 ledger (`.superpowers/sdd/2026-10-25-m7-elements/progress.md`) or the M5 ledger (`.superpowers/sdd/2026-10-23-m5-organize/progress.md`) as reference, next to `docs/plans/2026-10-25-m7-elements.md`. M6 and M8 shipped without SDD ledgers. That is history, not a model to copy. For your first tasks (openers, copy) you do not need a spec or a ledger. For anything that adds a screen or changes behavior, such as onboarding, write a short spec in `docs/specs/` first and get Jake's redline.
 
 ## Tests
 
@@ -76,7 +76,7 @@ The `.superpowers/` folder is **gitignored**, so the ledgers are on Jake's machi
 | Kind | Folder | Framework | How to run |
 |---|---|---|---|
 | Kit tests (logic) | `ios/LifelineKit/Tests/LifelineKitTests/` | Swift Testing (`@Test`, `#expect`) | `cd ios/LifelineKit && swift test` |
-| UI tests (the app) | `ios/LifelineUITests/` | XCTest (`XCTestCase`) | Xcode ⌘U on the Lifeline scheme |
+| UI tests (the app) | `ios/LifelineUITests/` | XCTest (`XCTestCase`) | Xcode ⌘U on the Lifeline scheme, or one class with `-only-testing` (see `README.md`) |
 
 Test data is invented. Never use a real person's name, number, email or story in a test or fixture. Fixtures live in `ios/LifelineKit/Tests/Fixtures/`.
 
@@ -113,7 +113,7 @@ func testFirstOpenShowsAboutYouAndSkipLeadsHome() {
 }
 ```
 
-Shared steps (skip first open, start a session, finish) are in `UITestHelpers.swift`.
+`home.start` is the record bar above the tabs. Shared steps (skip first open, start a session, finish, open a tab, open Settings) are in `UITestHelpers.swift`. Reach a screen through these helpers, not by tapping through the tabs by hand in each test.
 
 ### Idioms
 
@@ -131,8 +131,8 @@ Shared steps (skip first open, start a session, finish) are in `UITestHelpers.sw
 | Interviewer voice | `ios/LifelineKit/Sources/LifelineKit/Interviewer/Prompts/interviewer.v1.md` | The rules the spoken reflections follow. Changes need a principle cited in the PR. |
 | Extractor prompt | `ios/LifelineKit/Sources/LifelineKit/Extraction/Prompts/extractor.v6.md` | How speech becomes memory cards. Jake's area; ask first. |
 | Safety responses | `ios/LifelineKit/Sources/LifelineKit/Arc/FixedResponses/` | Fixed words for serious disclosures. Never edit without Jake. |
-| UI copy | The SwiftUI view files in `ios/Lifeline/Screens/<Screen>/` | Look for `Text("…")`, `Button("…")`, `Label("…")`. |
-| Error messages | The view model next to each screen (`*ViewModel.swift`) | Look for `self.error = "…"`. |
+| UI copy | The SwiftUI view files in `ios/Lifeline/Screens/<Screen>/` | Look for `Text("…")`, `Button("…")`, `Label("…")`. The tabs and the record bar are in `Screens/Shell/`. |
+| Error messages | The view model next to each screen (`*ViewModel.swift`) | Look for `self.error = "…"`. Start errors (microphone, audio) are `StartError` in `Home/HomeViewModel.swift`. |
 | Permission prompts (mic, speech) | `ios/project.yml` under `info: properties:` | Then run `xcodegen generate`, which rewrites `Info.plist`. Commit both. |
 | Screen designs | `docs/design/` (index in `docs/design/README.md`) | Design canvases; redline with Jake. |
 

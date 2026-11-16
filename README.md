@@ -42,7 +42,7 @@ You do **not** need these to start:
 4. Open `ios/Lifeline.xcodeproj` in Xcode. Xcode fetches the two Swift packages (GRDB, ZIPFoundation) the first time. Wait for "Resolving packages" to finish.
 5. Pick the **Lifeline** scheme and an **iPhone 17 Pro (iOS 26.x)** Simulator in the toolbar.
 6. Turn on scripted mode (recommended for your first run): Product → Scheme → Edit Scheme… → Run → Arguments → add `-uiTesting` under "Arguments Passed On Launch".
-7. Press **⌘R**. The app opens on "Tell me one story."
+7. Press **⌘R**. The app opens on "Tell me one story." Past first open, the app shows five tabs (Timeline, People, Places, Things, You) and a record bar above them that says "Tell a story".
 
 ### Scripted mode vs live mode
 
@@ -65,7 +65,7 @@ Other launch arguments you can add next to `-uiTesting` (see `ios/Lifeline/Depen
 
 - Sorting, duplicate checks and the interviewer call the Anthropic API. Without a key the app still records and transcribes. Moments wait as "sorting" until a key is added.
 - Get a key from <https://console.anthropic.com>. It starts with `sk-ant-`.
-- In the app: Settings → paste the key → Save. It goes into the device Keychain. It is never in the repo.
+- In the app: the **You** tab → Settings → paste the key → Save. It goes into the device Keychain. It is never in the repo.
 - Never put a key in a file, a commit, a screenshot or a PR. A CI guard blocks keys in the diff.
 
 <!-- TODO(Jake): decide which key Danielle uses for live mode (her own Console account, or a shared dev key with a spend limit) and write it here. -->
@@ -83,6 +83,7 @@ Other launch arguments you can add next to `-uiTesting` (see `ios/Lifeline/Depen
   cd ios
   xcodebuild test -project Lifeline.xcodeproj -scheme Lifeline -destination 'platform=iOS Simulator,name=iPhone 17 Pro'
   ```
+  The whole UI suite is slow. While you work, run only the classes your change could affect: add `-only-testing:LifelineUITests/<Class>` (for example `ShellUITests`). Run the whole suite once before you open the PR.
 - You can also run one kit test from Xcode: open `ios/LifelineKit/Package.swift` in Xcode and click the diamond next to the test.
 
 ### Run on a real iPhone (optional)
@@ -96,7 +97,9 @@ Other launch arguments you can add next to `-uiTesting` (see `ios/Lifeline/Depen
 
 ## Status
 
-V1 milestones M1–M8 have shipped: record, transcribe, extract and confirm, place, land, organize, steady, memory kinds and entities, and the spoken interviewer. Plans are in `docs/plans/`, specs in `docs/specs/`, and the decision log in `docs/DECISIONS.md`.
+V1 milestones M1–M8 have shipped: record, transcribe, extract and confirm, place, land, organize, steady, memory kinds and entities, and the spoken interviewer. Card follow-ups have shipped too.
+
+The five-sections design (`docs/specs/2026-11-15-five-sections.md`) is in progress. The shell (five tabs and the record bar) and the entity pages with the People grid have shipped. The You portrait is in review. `docs/plans/2026-11-15-sections.md` gives the ship order for the rest. Plans are in `docs/plans/`, specs in `docs/specs/`, and the decision log in `docs/DECISIONS.md`.
 
 ## Stack
 
@@ -104,7 +107,7 @@ iOS native (Swift/SwiftUI). All logic lives in the `ios/LifelineKit` Swift packa
 
 ## Layout
 
-- `ios/Lifeline/` — the app: screens (`Screens/`), wiring (`Dependencies.swift`).
+- `ios/Lifeline/` — the app: screens (`Screens/`; the tabs and the record bar are in `Screens/Shell/`), wiring (`Dependencies.swift`).
 - `ios/LifelineKit/` — the logic package and its tests (`Tests/LifelineKitTests/`).
 - `ios/LifelineUITests/` — UI tests that drive the app in scripted mode.
 - `ios/project.yml` — the XcodeGen source for the Xcode project.
@@ -121,3 +124,4 @@ iOS native (Swift/SwiftUI). All logic lives in the `ios/LifelineKit` Swift packa
   - `SessionRecorderTests.stopReturnsBeforeExtractionFinishes` (timing under load)
   - Some `BackupTests` (these write real files into `~/Documents`)
   - UI tests that time out while another build runs. Rerun the one test on a quiet Simulator.
+  - `SteadyUITests.testStatusLineShowsWhileSortingAndGoes` (failed once on a whole-suite run and passed alone; the cause is not found)
