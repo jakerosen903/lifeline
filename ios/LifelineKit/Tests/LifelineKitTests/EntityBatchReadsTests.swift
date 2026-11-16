@@ -250,7 +250,7 @@ private extension Person {
     #expect(statementsFor20 == statementsFor2)
 }
 
-@Test func aDetailLinkIsNotASharedMoment() throws {
+@Test func aDetailLinkOnAMomentIsASharedMoment() throws {
     var f = try Fixture()
     let maya = try f.person("Maya"), sam = try f.person("Sam")
     for title in ["A", "B"] {
@@ -258,5 +258,16 @@ private extension Person {
         try f.link(event, maya)
         try f.link(event, sam, relation: .detail)
     }
-    #expect(try !f.store.entities.coOccurrences(of: maya.id).contains { $0.entity.id == sam.id })
+    #expect(try f.store.entities.coOccurrences(of: maya.id).map { "\($0.entity.title) \($0.sharedMoments)" } == ["Sam 2"])
+}
+
+@Test func factsLinkingBothAreNotSharedMoments() throws {
+    var f = try Fixture()
+    let maya = try f.person("Maya"), sam = try f.person("Sam")
+    for title in ["A", "B"] {
+        let fact = try f.memory(title, kind: .fact)
+        try f.link(fact, maya, sam)
+        try f.link(fact, maya, sam, relation: .detail)
+    }
+    #expect(try f.store.entities.coOccurrences(of: maya.id).isEmpty)
 }

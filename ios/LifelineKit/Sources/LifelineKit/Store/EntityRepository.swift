@@ -236,6 +236,8 @@ public struct EntityRepository: Sendable {
     }
 
     /// The entities that share told moments with `entity`, most shared first, then by title.
+    /// A shared moment is a memory of kind event or other, not hidden and told, that links both
+    /// entities by any relation (plan decision 3).
     /// The owner, ideas and hidden entities never appear; nothing is linked that was not told.
     public func coOccurrences(of entity: EntityID, minimumShared: Int = 2) throws -> [CoOccurrence] {
         try db.writer.read { db in
@@ -245,7 +247,7 @@ public struct EntityRepository: Sendable {
                 join moment_entity theirs on theirs.memory_id = mine.memory_id and theirs.entity_id <> mine.entity_id
                 join memory on memory.id = mine.memory_id
                 join entity other on other.id = theirs.entity_id
-                where mine.entity_id = ? and mine.relation = 'mention' and theirs.relation = 'mention' and \(Self.toldMoment)
+                where mine.entity_id = ? and \(Self.toldMoment)
                   and other.hidden_from_timeline = 0 and other.type <> 'idea' and other.id not in (\(Self.ownerEntity))
                 group by other.id
                 having shared >= ?
