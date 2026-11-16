@@ -191,13 +191,14 @@ import GRDB
         try db.execute(sql: photo("p1"))
         try db.execute(sql: "insert into photo_link (photo_id, entity_id, role, sort_order) values ('p1', 'e1', 'cover', 0)")
     }
+    // p2 has no link yet, so only the check can refuse these two.
+    try queue.write { try $0.execute(sql: photo("p2")) }
     #expect(throws: DatabaseError.self, "a link names one subject") {
-        try queue.write { try $0.execute(sql: "insert into photo_link (photo_id, entity_id, memory_id, role, sort_order) values ('p1', 'e1', 'm1', 'attached', 1)") }
+        try queue.write { try $0.execute(sql: "insert into photo_link (photo_id, entity_id, memory_id, role, sort_order) values ('p2', 'e1', 'm1', 'attached', 1)") }
     }
     #expect(throws: DatabaseError.self, "a link names a subject") {
-        try queue.write { try $0.execute(sql: "insert into photo_link (photo_id, role, sort_order) values ('p1', 'attached', 1)") }
+        try queue.write { try $0.execute(sql: "insert into photo_link (photo_id, role, sort_order) values ('p2', 'attached', 1)") }
     }
-    try queue.write { try $0.execute(sql: photo("p2")) }
     #expect(throws: DatabaseError.self, "one cover per subject") {
         try queue.write { try $0.execute(sql: "insert into photo_link (photo_id, entity_id, role, sort_order) values ('p2', 'e1', 'cover', 1)") }
     }

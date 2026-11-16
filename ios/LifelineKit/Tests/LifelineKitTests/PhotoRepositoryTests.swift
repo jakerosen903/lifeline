@@ -40,6 +40,8 @@ private struct Fixture {
     #expect(PhotoTakenAt(exif: "2012:06:14 15:32:10")?.stored == "2012-06-14T15:32:10")
     #expect(PhotoTakenAt(exif: "0000:00:00 00:00:00") == nil)
     #expect(PhotoTakenAt(exif: "2012-06-14") == nil)
+    #expect(PhotoTakenAt(exif: "+012:06:14 15:32:10") == nil, "digits only: no sign")
+    #expect(PhotoTakenAt(exif: "2012:06:14 +5:32:10") == nil, "digits only: no sign")
     #expect(PhotoTakenAt(stored: "2012-06-14T15:32:10")?.date == CivilDate(year: 2012, month: 6, day: 14))
 }
 
@@ -164,4 +166,36 @@ private struct Fixture {
     try f.photos.insert(photo("a"), linkingTo: .entity(maya.id))
     try f.store.entities.setHidden(maya.id, true)
     #expect(try f.photos.covers(type: .person)[maya.id] == nil)
+}
+
+@Test func makingAnUnlinkedPhotoTheCoverChangesNothing() throws {
+    let f = try Fixture(), maya = try f.person("Maya"), dad = try f.person("Dad")
+    let a = photo("a", at: 1), b = photo("b", at: 2)
+    try f.photos.insert(a, linkingTo: .entity(maya.id)); try f.photos.insert(b, linkingTo: .entity(dad.id))
+    try f.photos.setCover(b.id, of: .entity(maya.id))
+    #expect(try f.photos.photos(of: .entity(maya.id)).map { "\($0.id.rawValue) \($0.role.rawValue)" } == ["\(a.id.rawValue) cover"])
+    #expect(try f.photos.photos(of: .entity(dad.id)).map(\.isCover) == [true])
+}
+
+@Test func unlinkingAPhotoThatIsNotOnThePageChangesNothing() throws {
+    let f = try Fixture(), maya = try f.person("Maya"), dad = try f.person("Dad")
+    let a = photo("a", at: 1), b = photo("b", at: 2)
+    try f.photos.insert(a, linkingTo: .entity(maya.id)); try f.photos.insert(b, linkingTo: .entity(dad.id))
+    #expect(try f.photos.unlink(b.id, from: .entity(maya.id)) == nil)
+    #expect(try f.photos.photo(id: b.id) == b, "the row stays")
+    #expect(try f.photos.photos(of: .entity(maya.id)).map { "\($0.id.rawValue) \($0.role.rawValue)" } == ["\(a.id.rawValue) cover"])
+    // A row with no link at all is the sweep's to delete, not unlink's.
+    let loose = photo("loose", at: 3)
+    try f.db.writer.write { try loose.insert($0) }
+    #expect(try f.photos.unlink(loose.id, from: .entity(maya.id)) == nil)
+    #expect(try f.photos.photo(id: loose.id) == loose)
+}
+
+@Test func foldingGivesTheSourceCoverToATargetWithNone() throws {
+    let f = try Fixture()
+    let t = try f.memory("The tree house", segment: 0), s = try f.memory("The tree house again", segment: 1)
+    let y = photo("y", at: 1), z = photo("z", at: 2)
+    try f.photos.insert(y, linkingTo: .memory(s.id)); try f.photos.insert(z, linkingTo: .memory(s.id))
+    try f.store.memories.fold(s, into: t)
+    #expect(try f.photos.photos(of: .memory(t.id)).map { "\($0.id.rawValue) \($0.role.rawValue)" } == ["\(y.id.rawValue) cover", "\(z.id.rawValue) attached"])
 }

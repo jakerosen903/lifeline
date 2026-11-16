@@ -69,6 +69,9 @@ public struct PhotoRepository: Sendable {
     public func setCover(_ photo: PhotoID, of subject: PhotoSubject) throws {
         try db.writer.write { db in
             let (column, value) = subject.key
+            let linked = try Int.fetchOne(db, sql: "select count(*) from photo_link where \(column) = ? and photo_id = ?",
+                                          arguments: [value, photo.rawValue]) ?? 0
+            guard linked == 1 else { return }
             // The unique index allows one cover, so the old one steps down first.
             try db.execute(sql: "update photo_link set role = 'attached' where \(column) = ? and role = 'cover' and photo_id <> ?",
                            arguments: [value, photo.rawValue])
@@ -81,8 +84,9 @@ public struct PhotoRepository: Sendable {
     public func unlink(_ photo: PhotoID, from subject: PhotoSubject) throws -> Photo? {
         try db.writer.write { db in
             let (column, value) = subject.key
-            let wasCover = try String.fetchOne(db, sql: "select role from photo_link where \(column) = ? and photo_id = ?",
-                                               arguments: [value, photo.rawValue]) == PhotoRole.cover.rawValue
+            guard let role = try String.fetchOne(db, sql: "select role from photo_link where \(column) = ? and photo_id = ?",
+                                                 arguments: [value, photo.rawValue]) else { return nil }
+            let wasCover = role == PhotoRole.cover.rawValue
             try db.execute(sql: "delete from photo_link where \(column) = ? and photo_id = ?", arguments: [value, photo.rawValue])
             if wasCover {
                 try db.execute(sql: """
@@ -112,7 +116,7 @@ public struct PhotoRepository: Sendable {
                                       arguments: [value, photo.rawValue]) ?? 0
         guard linked == 0 else { return }
         let held = try Row.fetchOne(db, sql: """
-            select count(*) as n, max(sort_order) as top, max(role = 'cover') as has_cover from photo_link where \(column) = ?
+            select max(sort_order) as top, max(role = 'cover') as has_cover from photo_link where \(column) = ?
             """, arguments: [value])
         let hasCover = (held?["has_cover"] as Int?) == 1
         let next = ((held?["top"] as Int?) ?? -1) + 1

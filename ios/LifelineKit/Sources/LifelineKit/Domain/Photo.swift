@@ -31,7 +31,7 @@ public struct PhotoTakenAt: Sendable, Hashable {
     private init?(dateText: Substring, dateSeparator: Character, timeText: Substring) {
         let d = dateText.split(separator: dateSeparator, omittingEmptySubsequences: false)
         let t = timeText.split(separator: ":", omittingEmptySubsequences: false)
-        guard d.count == 3, t.count == 3, d[0].count == 4, d[1].count == 2, d[2].count == 2, t.allSatisfy({ $0.count == 2 }),
+        guard d.count == 3, t.count == 3, d[0].count == 4, d[1].count == 2, d[2].count == 2, (d + t).allSatisfy({ $0.allSatisfy(\.isASCIIDigit) }), t.allSatisfy({ $0.count == 2 }),
               let year = Int(d[0]), let month = Int(d[1]), let day = Int(d[2]),
               let hour = Int(t[0]), let minute = Int(t[1]), let second = Int(t[2]),
               (0...23).contains(hour), (0...59).contains(minute), (0...59).contains(second),
@@ -78,4 +78,9 @@ public struct PlacedPhoto: Sendable, Equatable, Identifiable {
     public var isCover: Bool { role == .cover }
 
     public init(photo: Photo, role: PhotoRole) { self.photo = photo; self.role = role }
+}
+
+private extension Character {
+    /// `Int("+1")` accepts a sign; a camera's date never has one.
+    var isASCIIDigit: Bool { ("0"..."9").contains(self) }
 }
