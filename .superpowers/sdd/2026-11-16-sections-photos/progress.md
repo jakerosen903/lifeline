@@ -61,3 +61,9 @@ Task 6: minor (deferred): addPhoto/makeCover/removePhoto/photoFailed/clearPhotoE
 Task 6: note: PhotoAddingLine and PhotoErrorSlot were extracted from EntityScreen (shared by three pages); PortraitHeader has two extra parameters (isAdding, label). Reviewer accepted both.
 Task 6: note: kit 914 (drainGivesUpAtItsDeadline flaked, passes alone); UI: PhotosUITests 12/0, YouUITests 22/0, KindsUITests 1/0, SameStoryUITests 5/0, SteadyUITests 6/0, ShellUITests 13/0.
 Task 6: complete (commits ab4bef0..6b3fd14, review clean; 1 ruling in rulings.md)
+Task 7: fix round 1/5 (7 addressed, 0 open — one copy per photo and merge-moves-photos missing from the docs; precision and STE minors; commits add9004..9334904)
+Task 7: minor (deferred): DECISIONS S4 "Source" line omits decisions 7 and 11.
+Task 7: minor (deferred): OVERVIEW "Photos": the caption sentence sits in the SHA-256 paragraph.
+Task 7: note: "undoing a merge leaves the photos on the target" is stated from plan decision 11, not verified in code — final review to check.
+Task 7: note: letter-tile tint differs between before/after People screenshots because the tint derives from the entity id, random at each seed; this branch does not touch it.
+Task 7: complete (commits 237ff36..9334904, review clean; swift test 914)
