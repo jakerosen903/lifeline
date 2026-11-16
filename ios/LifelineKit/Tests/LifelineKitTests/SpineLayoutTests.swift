@@ -56,7 +56,57 @@ private func inferred(_ year: Int) -> TimeRange { .year(year, origin: .inferred,
 
 @Test func aRelationKeepsItsFullTextInTheRow() {
     let relation = TimeRange.span(.firstOfYear(2002), .lastOfYear(2004), granularity: .year, origin: .confirmed, evidence: "before Graduation (2004)")
-    #expect(stops([relation])[0].rowDateText == "before Graduation (2004)")
+    let stop = stops([relation])[0]
+    #expect(stop.rowDateText == "before Graduation (2004)")
+    #expect(!stop.showsYears, "the band's far edge is slack: the margin shows no years for a relation")
+    #expect(stop.qualifier == nil)
+}
+
+@Test func theMomentUnderARelationShowsItsYears() {
+    let relation = TimeRange.year(2004, origin: .confirmed, evidence: "during the move (2004)")
+    let result = stops([relation, .stated(year: 2004)])
+    #expect(result[0].mark == .dashedDot)
+    #expect(result[0].qualifier == nil)
+    #expect(!result[0].showsYears)
+    #expect(result[1].showsYears, "nothing is written above to compare with")
+}
+
+// MARK: - A story's range (ruling R5)
+
+private func storyStop(_ members: [TimeRange]) -> SpineLayout.Stop {
+    stops([SpineLayout.storyRange(members: members)])[0]
+}
+
+@Test func aStoryOfStatedMomentsInOneYearIsASolidDot() {
+    let stop = storyStop([.stated(year: 2001), .stated(year: 2001)])
+    #expect(stop.mark == .solidDot)
+    #expect(stop.qualifier == nil)
+    #expect(stop.years == "2001")
+}
+
+@Test func aStoryWithAGuessInOneYearIsADashedDot() {
+    let range = SpineLayout.storyRange(members: [.stated(year: 2001), inferred(2001)])
+    #expect(range.origin == .inferred)
+    let stop = stops([range])[0]
+    #expect(stop.mark == .dashedDot)
+    #expect(stop.qualifier == "around")
+    #expect(stop.rowDateText == nil)
+}
+
+@Test func aStoryOverSeveralYearsIsACapsule() {
+    let stop = storyStop([.stated(year: 2001), .stated(year: 2003)])
+    #expect(stop.mark == .dashedCapsule)
+    #expect(stop.years == "2001–03")
+}
+
+@Test func aStoryWithNoDatedMemberIsUnplaced() {
+    #expect(!SpineLayout.storyRange(members: [.unplaced]).isDated)
+    #expect(!SpineLayout.storyRange(members: []).isDated)
+}
+
+@Test func anUndatedMemberDoesNotChangeAStorysRange() {
+    let stop = storyStop([.stated(year: 2001), .stated(year: 2001), .unplaced])
+    #expect(stop.mark == .solidDot)
 }
 
 @Test func theGapTable() {
