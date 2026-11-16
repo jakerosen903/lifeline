@@ -14,6 +14,14 @@ struct TimelineScreen: View {
     @State private var storyTitle = ""
     @State private var splitTarget: StoryRow?
     @State private var moveTarget: MemoryRow?
+    /// The list row to scroll to the top: a story just opened, so its members show above the record bar.
+    @State private var scrollTarget: StoryScrollTarget?
+
+    /// A story's row id in the list it sits in: the spine keys rows by `SpineRow.id`, the shelf by story.
+    private enum StoryScrollTarget: Equatable {
+        case spine(String)
+        case shelf(StoryID)
+    }
 
     private var rowActions: MemoryRowActions {
         MemoryRowActions(open: { openMemory = $0 },
@@ -96,15 +104,37 @@ struct TimelineScreen: View {
     }
 
     private var timelineList: some View {
-        List {
-            summarySection
-            sortingRow
-            waitingSection
-            spineSection
-            collectionSections
-            shelfAndQuestion
-            footer
+        ScrollViewReader { proxy in
+            List {
+                summarySection
+                sortingRow
+                waitingSection
+                spineSection
+                collectionSections
+                shelfAndQuestion
+                footer
+            }
+            .onChange(of: scrollTarget) { _, target in
+                guard let target else { return }
+                scrollTarget = nil
+                // After this update: the members must be in the list before it can scroll past them.
+                Task { @MainActor in
+                    withAnimation {
+                        switch target {
+                        case .spine(let id): proxy.scrollTo(id, anchor: .top)
+                        case .shelf(let id): proxy.scrollTo(id, anchor: .top)
+                        }
+                    }
+                }
+            }
         }
+    }
+
+    /// Opens or folds a story. An opened story scrolls to the top: its members appear under it, and
+    /// near the bottom of the list they would otherwise appear under the record bar, out of sight.
+    private func toggleStory(_ id: StoryID, rowID: StoryScrollTarget) {
+        viewModel.toggleStory(id)
+        if viewModel.expandedStories.contains(id) { scrollTarget = rowID }
     }
 
     @ViewBuilder private var sortingRow: some View {
@@ -152,7 +182,7 @@ struct TimelineScreen: View {
                 ForEach(viewModel.spine) { row in
                     SpineRowView(row: row, isFirst: row.id == viewModel.spine.first?.id, isLast: row.id == viewModel.spine.last?.id,
                                  expanded: storyID(of: row).map { viewModel.expandedStories.contains($0) } ?? false,
-                                 onToggleStory: { if let id = storyID(of: row) { viewModel.toggleStory(id) } },
+                                 onToggleStory: { if let id = storyID(of: row) { toggleStory(id, rowID: .spine(row.id)) } },
                                  actions: rowActions, storyActions: storyActions)
                 }
                 .listRowSeparator(.hidden)
@@ -186,7 +216,7 @@ struct TimelineScreen: View {
     @ViewBuilder private var shelfAndQuestion: some View {
         if !viewModel.shelf.isEmpty || !viewModel.shelfStories.isEmpty {
             ShelfSection(title: "Somewhere in your story", memories: viewModel.shelf, actions: rowActions,
-                         stories: viewModel.shelfStories, expanded: viewModel.expandedStories, onToggleStory: { viewModel.toggleStory($0) },
+                         stories: viewModel.shelfStories, expanded: viewModel.expandedStories, onToggleStory: { toggleStory($0, rowID: .shelf($0)) },
                          storyActions: storyActions)
         }
         if let question = viewModel.question, let row = viewModel.questionRow {

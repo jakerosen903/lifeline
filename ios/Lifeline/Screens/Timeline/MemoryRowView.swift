@@ -26,8 +26,13 @@ struct MemoryRowView: View {
     var body: some View {
         HStack(alignment: .top, spacing: 8) {
             VStack(alignment: .leading, spacing: 4) {
-                // Full width, so the "…" menu sits at the trailing edge whatever the title's length.
-                Button { actions.open(row) } label: { MemoryText(row: row, placement: placement).frame(maxWidth: .infinity, alignment: .leading) }
+                // Full width, so the "…" menu sits at the trailing edge whatever the title's length, and a
+                // rectangle to hit: a plain button otherwise answers only on its text, not between the lines.
+                Button { actions.open(row) } label: {
+                    MemoryText(row: row, placement: placement)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .contentShape(Rectangle())
+                }
                     .buttonStyle(.plain)
                     .accessibilityIdentifier("timeline.memory")
                 // Outside the button, so the tag is an element of its own; the button's label names the chapter too.

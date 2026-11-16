@@ -40,12 +40,14 @@ struct StoryRowView: View {
                     if !datesAboveTitle { date }
                 }
                 .padding(.vertical, 6)
+                // The whole row up to the "…" menu opens or folds the story, not only its words.
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel("\(row.title) · \(dateText) · \(row.members.count) moments")
             }
             .buttonStyle(.plain)
             .accessibilityIdentifier("timeline.story")
-            Spacer(minLength: 0)
             Menu {
                 Button("Rename…", systemImage: "pencil") { storyActions.rename(row) }
                     .accessibilityIdentifier("story.rename")
