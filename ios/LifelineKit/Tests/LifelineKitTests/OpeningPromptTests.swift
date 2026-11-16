@@ -73,3 +73,68 @@ private let now = Date(timeIntervalSince1970: 1_800_000_000)
     let used = try log.lastUsed()
     #expect(used["house"] == now.addingTimeInterval(60) && used["meal"] == now)
 }
+
+// MARK: - A session about a subject
+
+private func entityItem(_ text: String, entity: EntityID?, payoff: Int = 1, status: CuriosityStatus = .open) -> CuriosityItem {
+    CuriosityItem(id: .init(), kind: .personWithoutMoment, text: text, payoffCount: payoff, status: status,
+                  sourceMemoryID: nil, targetMemoryID: nil, entityID: entity)
+}
+
+@Test func aSubjectWithAnOpenSceneQuestionOpensWithIt() throws {
+    let bank = try PromptBank.load()
+    let maya = SessionSubject(entityID: .init(), title: "Maya", isOwner: false)
+    let question = entityItem("Is there one time with Maya that stands out?", entity: maya.entityID)
+    let other = entityItem("Is there one time with Sam that stands out?", entity: .init(), payoff: 9)
+    let usedYesterday = ["curiosity:\(question.id.rawValue)": now.addingTimeInterval(-86_400)]
+    let opening = OpeningChooser.choose(subject: maya, curiosity: [other, question], bank: bank, lastUsed: usedYesterday, now: now)
+    #expect(opening.main == .curiosity(question, text: OpeningChooser.phrase(for: question)), "the cooldown does not apply, and another entity's question never leads")
+}
+
+@Test func aSubjectsDismissedOrAnsweredQuestionDoesNotLead() throws {
+    let bank = try PromptBank.load()
+    let maya = SessionSubject(entityID: .init(), title: "Maya", isOwner: false)
+    let dismissed = entityItem("Is there one time with Maya that stands out?", entity: maya.entityID, status: .dismissed)
+    let answered = entityItem("What was Maya like?", entity: maya.entityID, payoff: 5, status: .answered)
+    let opening = OpeningChooser.choose(subject: maya, curiosity: [dismissed, answered], bank: bank, lastUsed: [:], now: now)
+    #expect(opening.main == .subject(maya, text: "Tell me about Maya."))
+}
+
+@Test func aSubjectWithNoQuestionOpensWithItsTitle() throws {
+    let bank = try PromptBank.load()
+    let volvo = SessionSubject(entityID: .init(), title: "Dad's Volvo", isOwner: false)
+    let opening = OpeningChooser.choose(subject: volvo, curiosity: [], bank: bank, lastUsed: [:], now: now)
+    #expect(opening.main.text == "Tell me about Dad's Volvo.")
+    #expect(opening.main.logID == "subject:\(volvo.entityID.rawValue)")
+}
+
+@Test func theOwnerAsSubjectOpensWithThemself() throws {
+    let bank = try PromptBank.load()
+    let owner = SessionSubject(entityID: .init(), title: "Ines", isOwner: true)
+    let opening = OpeningChooser.choose(subject: owner, curiosity: [], bank: bank, lastUsed: [:], now: now)
+    #expect(opening.main.text == "Tell me something about yourself.")
+}
+
+@Test func aSubjectKeepsTheSceneAlternates() throws {
+    let bank = try PromptBank.load()
+    let maya = SessionSubject(entityID: .init(), title: "Maya", isOwner: false)
+    let opening = OpeningChooser.choose(subject: maya, curiosity: [], bank: bank, lastUsed: [:], now: now)
+    #expect(opening.alternates == bank.prefix(3).map(OpeningPrompt.scene))
+}
+
+@Test func aSubjectsHigherPayoffQuestionLeads() throws {
+    let bank = try PromptBank.load()
+    let maya = SessionSubject(entityID: .init(), title: "Maya", isOwner: false)
+    let small = entityItem("What was Maya like?", entity: maya.entityID, payoff: 1)
+    let big = entityItem("Is there one time with Maya that stands out?", entity: maya.entityID, payoff: 4)
+    let opening = OpeningChooser.choose(subject: maya, curiosity: [small, big], bank: bank, lastUsed: [:], now: now)
+    #expect(opening.main == .curiosity(big, text: OpeningChooser.phrase(for: big)))
+}
+
+@Test func aSubjectExcludedFromAIDoesNotNameItselfInTheOpening() throws {
+    let bank = try PromptBank.load()
+    let secret = SessionSubject(entityID: .init(), title: "Maya", isOwner: false, excludedFromAI: true)
+    let opening = OpeningChooser.choose(subject: secret, curiosity: [], bank: bank, lastUsed: [:], now: now)
+    #expect(!opening.main.text.contains("Maya"))
+    #expect(opening.main == OpeningChooser.choose(curiosity: [], bank: bank, lastUsed: [:], now: now).main, "the plain tab opening")
+}

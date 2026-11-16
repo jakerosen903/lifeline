@@ -6,6 +6,8 @@ import GRDB
 public struct CandidateRepository: Sendable {
     public enum Error: Swift.Error, Equatable {
         case duplicate
+        /// A row that a whole-set write needed was not in the status the write expects.
+        case statusChanged
     }
 
     private let db: AppDatabase
@@ -72,6 +74,32 @@ public struct CandidateRepository: Sendable {
         try db.writer.write { db in
             try db.execute(sql: "update candidate set status = ?, rejection = ? where id = ?",
                            arguments: [status.rawValue, rejection, id.rawValue])
+        }
+    }
+
+    /// Dismisses every listed row that is still pending, in one transaction: a failure or a kill
+    /// leaves every row as it was. A row that is no longer pending (the person answered it
+    /// elsewhere) is skipped, because there is nothing left to dismiss. Returns the ids dismissed.
+    public func dismissAll(_ ids: [CandidateID]) throws -> [CandidateID] {
+        try db.writer.write { db in
+            try ids.filter { id in
+                try db.execute(sql: "update candidate set status = ?, rejection = null where id = ? and status = ?",
+                               arguments: [CandidateStatus.dismissed.rawValue, id.rawValue, CandidateStatus.pending.rawValue])
+                return db.changesCount == 1
+            }
+        }
+    }
+
+    /// Makes every listed row pending again, in one transaction. All rows come back or none
+    /// does: a row that is not dismissed by the owner (another status, or a validator rejection)
+    /// throws `statusChanged` and rolls the others back.
+    public func restoreAll(_ ids: [CandidateID]) throws {
+        try db.writer.write { db in
+            for id in ids {
+                try db.execute(sql: "update candidate set status = ? where id = ? and status = ? and rejection is null",
+                               arguments: [CandidateStatus.pending.rawValue, id.rawValue, CandidateStatus.dismissed.rawValue])
+                guard db.changesCount == 1 else { throw Error.statusChanged }
+            }
         }
     }
 

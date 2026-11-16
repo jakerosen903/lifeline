@@ -22,15 +22,15 @@ struct StoryRowView: View {
             Button(action: onToggle) {
                 VStack(alignment: .leading, spacing: 4) {
                     HStack(spacing: 6) {
-                        Image(systemName: expanded ? "chevron.down" : "chevron.right").font(.caption).foregroundStyle(Theme.stone)
-                        Text("Story").font(.caption).foregroundStyle(Theme.stone)
+                        Image(systemName: expanded ? "chevron.down" : "chevron.right").font(.caption).foregroundStyle(Theme.secondaryText)
+                        Text("Story").font(.caption).foregroundStyle(Theme.secondaryText)
                     }
                     Text(row.title)
                         .font(.system(.headline, design: .serif))
                         .foregroundStyle(Theme.ink)
                     Text(row.isPlaced ? row.span.displayText : "no dates yet")
                         .font(.subheadline)
-                        .foregroundStyle(Theme.ochre)
+                        .foregroundStyle(Theme.ochreText)
                 }
                 .padding(.vertical, 6)
                 .accessibilityElement(children: .ignore)
@@ -45,7 +45,7 @@ struct StoryRowView: View {
                 Button("Split…", systemImage: "scissors") { storyActions.split(row) }
                     .accessibilityIdentifier("story.split")
             } label: {
-                Image(systemName: "ellipsis.circle").font(.title3).foregroundStyle(Theme.stone).padding(.top, 8)
+                Image(systemName: "ellipsis.circle").font(.title3).foregroundStyle(Theme.secondaryText).padding(.top, 8)
             }
             .buttonStyle(.borderless)
             .accessibilityIdentifier("story.more")
@@ -109,7 +109,7 @@ struct MoveToStorySheet: View {
         NavigationStack {
             List {
                 if stories.isEmpty {
-                    Text("No other story yet.").foregroundStyle(Theme.stone)
+                    Text("No other story yet.").foregroundStyle(Theme.secondaryText)
                 }
                 ForEach(stories) { story in
                     Button(story.title ?? "Untitled story") { onChoose(story.id); dismiss() }

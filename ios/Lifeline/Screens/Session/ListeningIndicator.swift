@@ -18,7 +18,7 @@ struct ListeningIndicator: View {
             HStack(alignment: .center, spacing: 3) {
                 ForEach(0..<Self.barCount, id: \.self) { index in
                     Capsule()
-                        .fill(mode == .paused ? Theme.stone : Theme.olive)
+                        .fill(mode == .paused ? Theme.hairline : Theme.olive)
                         .frame(width: 4, height: Self.height * Self.scale(bar: index, at: t, mode: mode))
                 }
             }

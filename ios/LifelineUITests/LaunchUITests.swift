@@ -31,7 +31,7 @@ final class LaunchUITests: XCTestCase {
         name.typeText("Rina")
         app.buttons["aboutYou.continue"].tap()
         XCTAssertTrue(app.buttons["home.start"].waitForExistence(timeout: 5))
-        app.buttons["home.settings"].tap()
+        app.openSettings()
         let settingsName = app.textFields["aboutYou.name"]
         XCTAssertTrue(settingsName.waitForExistence(timeout: 5))
         XCTAssertEqual(settingsName.value as? String, "Rina")
@@ -51,8 +51,7 @@ final class LaunchUITests: XCTestCase {
         XCTAssertTrue(app.otherElements["session.listening"].exists, "the listening indicator stays on screen")
         app.finishSession()
 
-        XCTAssertTrue(app.buttons["timeline.sessions"].waitForExistence(timeout: 10))
-        app.buttons["timeline.sessions"].tap()
+        app.openSessions()
         let row = app.buttons["home.sessionRow"].firstMatch
         XCTAssertTrue(row.waitForExistence(timeout: 5))
         XCTAssertTrue(row.label.contains("moments"))

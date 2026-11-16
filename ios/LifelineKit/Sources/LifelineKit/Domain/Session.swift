@@ -1,5 +1,10 @@
 import Foundation
 
+/// Where a session began: from a tab's own record button, or from a person, place or thing's page.
+public enum SessionOrigin: String, Codable, Sendable {
+    case tab, page
+}
+
 /// One recording. The row exists from the moment recording starts so a crash
 /// leaves evidence; `endedAt` is nil until the session lands.
 public struct Session: Codable, Sendable, Equatable, Identifiable {
@@ -16,9 +21,13 @@ public struct Session: Codable, Sendable, Equatable, Identifiable {
     public var kind: SessionKind
     /// "Hide today from the timeline": memories kept from this session later are hidden too.
     public var hiddenFromTimeline: Bool
+    /// The person, place or thing a page-started session is about. Nil from a tab, or once the subject is deleted.
+    public var subjectEntityID: EntityID?
+    public var startedFrom: SessionOrigin
 
     public init(id: SessionID, startedAt: Date, endedAt: Date?, audioPath: String, stageLog: String, landingChoiceMade: Bool,
-                kind: SessionKind = .quick, hiddenFromTimeline: Bool = false) {
+                kind: SessionKind = .quick, hiddenFromTimeline: Bool = false,
+                subjectEntityID: EntityID? = nil, startedFrom: SessionOrigin = .tab) {
         self.id = id
         self.startedAt = startedAt
         self.endedAt = endedAt
@@ -27,6 +36,8 @@ public struct Session: Codable, Sendable, Equatable, Identifiable {
         self.landingChoiceMade = landingChoiceMade
         self.kind = kind
         self.hiddenFromTimeline = hiddenFromTimeline
+        self.subjectEntityID = subjectEntityID
+        self.startedFrom = startedFrom
     }
 }
 

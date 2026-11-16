@@ -28,12 +28,12 @@ struct SortingLine: View {
                 if status.canRetry {
                     Button("Try again", action: onTryAgain)
                         .buttonStyle(.bordered)
-                        .tint(Theme.olive)
+                        .tint(Theme.oliveOnFill)
                         .accessibilityIdentifier("timeline.sortingRetry")
                 }
             }
             .font(.footnote)
-            .foregroundStyle(status.needsKey || status.canRetry ? Theme.ochre : Theme.stone)
+            .foregroundStyle(status.needsKey || status.canRetry ? Theme.ochreText : Theme.secondaryText)
         }
     }
 }

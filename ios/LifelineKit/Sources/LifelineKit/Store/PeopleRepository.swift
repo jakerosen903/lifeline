@@ -70,8 +70,10 @@ public struct PeopleRepository: Sendable {
     }
 
     /// The alias that reads as a relation to the owner ("my mom", "our dog"), if any.
-    public static func relationLabel(aliases: [Alias]) -> String? {
-        aliases.map(\.text).first { text in
+    public static func relationLabel(aliases: [Alias]) -> String? { relationLabel(texts: aliases.map(\.text)) }
+
+    static func relationLabel(texts: [String]) -> String? {
+        texts.first { text in
             let lower = text.lowercased()
             return lower.hasPrefix("my ") || lower.hasPrefix("our ")
         }
@@ -108,6 +110,15 @@ public struct PeopleRepository: Sendable {
 
     public func insertMention(_ mention: Mention) throws {
         try db.writer.write { try mention.insert($0) }
+    }
+
+    /// Sets the kin or role phrase on a mention that has none (Keep wrote the row before the chip's phrase arrived).
+    public func setRelationIfMissing(_ id: MentionID, _ relation: String) throws {
+        try db.writer.write { db in
+            guard var row = try Mention.fetchOne(db, key: id.rawValue), row.relationText == nil else { return }
+            row.relationText = relation
+            try row.update(db)
+        }
     }
 
     public func mention(id: MentionID) throws -> Mention? {

@@ -204,6 +204,115 @@ public struct EntityRepository: Sendable {
         try db.writer.read { try Entity.order(Column("created_at")).fetchAll($0) }
     }
 
+    // MARK: - Batched reads
+
+    /// A told moment: an event or other, not hidden, with a candidate (a floating stand-in is not told).
+    private static let toldAndVisible = "memory.hidden_from_timeline = 0 and memory.created_from_candidate_id is not null"
+    private static let toldMoment = "memory.kind in ('event', 'other') and \(toldAndVisible)"
+    private static let ownerEntity = "select entity_id from person where is_owner = 1"
+
+    /// Every linked memory of every entity of a type, in one query. An entity with no linked
+    /// memory is absent. Each memory is listed once per entity, oldest told first. It does not
+    /// filter hidden entities: callers pair it with `entities(type:)`, which does.
+    public func strips(type: EntityType) throws -> [EntityID: [LinkedTime]] {
+        try db.writer.read { db in
+            let rows = try Row.fetchAll(db, sql: """
+                select me.entity_id, memory.id, memory.earliest, memory.latest, memory.likely_start, memory.likely_end,
+                       memory.granularity, memory.origin, memory.evidence_text,
+                       max(me.relation = 'mention' and \(Self.toldMoment)) as is_moment
+                from moment_entity me
+                join entity on entity.id = me.entity_id
+                join memory on memory.id = me.memory_id
+                where entity.type = ?
+                group by me.entity_id, memory.id
+                order by memory.created_at, memory.id
+                """, arguments: [type.rawValue])
+            var strips: [EntityID: [LinkedTime]] = [:]
+            for row in rows {
+                let time = LinkedTime(memoryID: MemoryID(rawValue: row["id"]), range: TimeRange(memoryRow: row), isMoment: row["is_moment"])
+                strips[EntityID(rawValue: row["entity_id"]), default: []].append(time)
+            }
+            return strips
+        }
+    }
+
+    /// The entities that share told moments with `entity`, most shared first, then by title.
+    /// A shared moment is a memory of kind event or other, not hidden and told, that links both
+    /// entities by any relation (plan decision 3).
+    /// The owner, ideas and hidden entities never appear; nothing is linked that was not told.
+    public func coOccurrences(of entity: EntityID, minimumShared: Int = 2) throws -> [CoOccurrence] {
+        try db.writer.read { db in
+            let rows = try Row.fetchAll(db, sql: """
+                select other.*, count(distinct memory.id) as shared
+                from moment_entity mine
+                join moment_entity theirs on theirs.memory_id = mine.memory_id and theirs.entity_id <> mine.entity_id
+                join memory on memory.id = mine.memory_id
+                join entity other on other.id = theirs.entity_id
+                where mine.entity_id = ? and \(Self.toldMoment)
+                  and other.hidden_from_timeline = 0 and other.type <> 'idea' and other.id not in (\(Self.ownerEntity))
+                group by other.id
+                having shared >= ?
+                order by shared desc, other.title collate nocase, other.id
+                """, arguments: [entity.rawValue, minimumShared])
+            return try rows.map { CoOccurrence(entity: try Entity(row: $0), sharedMoments: $0["shared"]) }
+        }
+    }
+
+    /// The words the person used for each entity of a type, where they used any. A role text
+    /// counts only from a told memory that is not hidden.
+    public func ownWords(type: EntityType) throws -> [EntityID: String] {
+        try db.writer.read { try Self.ownWords(where: "entity.type = ?", arguments: [type.rawValue], in: $0) }
+    }
+
+    public func ownWords(of entity: EntityID) throws -> String? {
+        try db.writer.read { try Self.ownWords(where: "entity.id = ?", arguments: [entity.rawValue], in: $0)[entity] }
+    }
+
+    private static func ownWords(where condition: String, arguments: StatementArguments, in db: Database) throws -> [EntityID: String] {
+        var titles: [EntityID: String] = [:]
+        var aliases: [EntityID: [String]] = [:]
+        for row in try Row.fetchAll(db, sql: """
+            select entity.id, entity.title, alias.text from alias
+            join person on person.id = alias.person_id
+            join entity on entity.id = person.entity_id
+            where \(condition) order by alias.text
+            """, arguments: arguments) {
+            let id = EntityID(rawValue: row["id"])
+            titles[id] = row["title"]
+            aliases[id, default: []].append(row["text"])
+        }
+        var roleTexts: [EntityID: [String]] = [:]
+        for row in try Row.fetchAll(db, sql: """
+            select entity.id, entity.title, me.role_text from moment_entity me
+            join entity on entity.id = me.entity_id
+            join memory on memory.id = me.memory_id
+            where \(condition) and me.role_text is not null and \(Self.toldAndVisible)
+            """, arguments: arguments) {
+            let id = EntityID(rawValue: row["id"])
+            titles[id] = row["title"]
+            roleTexts[id, default: []].append(row["role_text"])
+        }
+        return titles.reduce(into: [:]) { words, entry in
+            let (id, title) = entry
+            words[id] = OwnWords.choose(title: title, aliases: aliases[id, default: []], roleTexts: roleTexts[id, default: []])
+        }
+    }
+
+    /// Every visible entity of a type with its strip, span and own words, by title, in four queries
+    /// however many entities there are.
+    public func summaries(type: EntityType) throws -> [EntitySummary] {
+        let entities = try entities(type: type)
+        let strips = try strips(type: type)
+        let words = try ownWords(type: type)
+        return entities.map { entity in
+            let linked = strips[entity.id, default: []]
+            let stated = entity.range.isPlaced ? entity.range : nil
+            return EntitySummary(entity: entity, ownWords: words[entity.id],
+                                 momentRanges: linked.filter(\.isMoment).map(\.range),
+                                 span: stated ?? Self.derivedSpan(over: linked.map(\.range)))
+        }
+    }
+
     // MARK: - Spans
 
     /// Derived, never asked: the earliest and latest of everything linked, moments and details
@@ -213,10 +322,15 @@ public struct EntityRepository: Sendable {
             try Memory.fetchAll(db, sql: "select distinct memory.* from memory join moment_entity me on me.memory_id = memory.id where me.entity_id = ?",
                                 arguments: [entity.rawValue])
         }
-        var span = ChapterRepository.span(over: linked.map(\.range))
+        return Self.derivedSpan(over: linked.map(\.range))
+    }
+
+    /// The rule behind `derivedSpan(of:)`, over ranges already read.
+    static func derivedSpan(over ranges: [TimeRange]) -> TimeRange {
+        var span = ChapterRepository.span(over: ranges)
         // Its uncertainty is the weakest of its members': said only when every member was said.
-        let placed = linked.map(\.range).filter(\.isPlaced)
-        if span.isPlaced { span.origin = placed.allSatisfy { $0.origin == .stated || $0.origin == .confirmed } ? .stated : .inferred }
+        let placed = ranges.filter(\.isPlaced)
+        if span.isPlaced { span.origin = placed.allSatisfy(\.readsAsSaid) ? .stated : .inferred }
         return span
     }
 
@@ -245,6 +359,19 @@ public struct EntityRepository: Sendable {
 }
 
 // MARK: - Records
+
+private extension TimeRange {
+    /// A memory's range from a row with the memory's range columns, unprefixed.
+    init(memoryRow row: Row) {
+        self.init(earliest: (row["earliest"] as String?).flatMap(CivilDate.init(iso:)),
+                  latest: (row["latest"] as String?).flatMap(CivilDate.init(iso:)),
+                  likelyStart: (row["likely_start"] as String?).flatMap(CivilDate.init(iso:)),
+                  likelyEnd: (row["likely_end"] as String?).flatMap(CivilDate.init(iso:)),
+                  granularity: (row["granularity"] as String?).flatMap(Granularity.init(rawValue:)),
+                  origin: (row["origin"] as String?).flatMap(RangeOrigin.init(rawValue:)),
+                  evidenceText: row["evidence_text"])
+    }
+}
 
 extension Entity: FetchableRecord, PersistableRecord {
     public static let databaseTableName = "entity"

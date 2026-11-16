@@ -18,13 +18,6 @@ final class InterviewerUITests: XCTestCase {
         return app
     }
 
-    @MainActor
-    private func startSettleIn(_ app: XCUIApplication) {
-        XCTAssertTrue(app.waitHittable(app.buttons["home.settleIn"], timeout: 5))
-        app.buttons["home.settleIn"].tap()
-        XCTAssertTrue(app.buttons["session.finish"].waitForExistence(timeout: 5))
-    }
-
     /// The text element with this identifier and exactly this label.
     @MainActor
     private func text(_ app: XCUIApplication, _ identifier: String, _ label: String) -> XCUIElement {
@@ -41,7 +34,7 @@ final class InterviewerUITests: XCTestCase {
     /// From the timeline, the newest session's detail, settled so it can scroll.
     @MainActor
     private func openSessionDetail(_ app: XCUIApplication) {
-        app.buttons["timeline.sessions"].tap()
+        app.openSessions()
         let row = app.buttons["home.sessionRow"].firstMatch
         XCTAssertTrue(row.waitForExistence(timeout: 5))
         row.tap()
@@ -173,7 +166,7 @@ final class InterviewerUITests: XCTestCase {
     @MainActor
     func testSpeaksOffShowsNoTurns() {
         let app = launchToTimeline(arguments: ["-uiTesting-speaks"])
-        app.buttons["home.settings"].tap()
+        app.openSettings()
         let toggle = app.switches["settings.speaks"]
         XCTAssertTrue(app.reveal(toggle), "Settings has Lifeline speaks")
         XCTAssertEqual(toggle.value as? String, "1", "on by default")
@@ -210,7 +203,7 @@ final class InterviewerUITests: XCTestCase {
     @MainActor
     func testSettleInShowsAReflectionAfterAScriptedSegment() {
         let app = launchToTimeline(arguments: ["-uiTesting-speaks", "-uiTesting-slow"])
-        startSettleIn(app)
+        app.startSettleIn()
         XCTAssertTrue(app.staticTexts["session.turn"].waitForExistence(timeout: 15), "the Listen view shows a reflection")
         app.finishSession()
 
@@ -226,7 +219,7 @@ final class InterviewerUITests: XCTestCase {
     @MainActor
     func testTheWrapUpIsSpokenAtThePlannedLength() {
         let app = launchToTimeline(arguments: ["-uiTesting-speaks", "-uiTesting-slow"])
-        startSettleIn(app)
+        app.startSettleIn()
         XCTAssertTrue(app.any("session.wrapUp").waitForExistence(timeout: 14), "the wrap-up is offered at the planned length")
         XCTAssertTrue(text(app, "session.turn", Self.wrapUp).waitForExistence(timeout: 10), "and spoken after a clean check")
         app.finishSession()

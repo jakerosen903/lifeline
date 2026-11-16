@@ -26,7 +26,7 @@ struct PairCard: View {
         VStack(alignment: .leading, spacing: 10) {
             Text(isStory ? "Sounds like one story" : "Are these the same?")
                 .font(.caption.weight(.semibold))
-                .foregroundStyle(Theme.olive)
+                .foregroundStyle(Theme.oliveText)
             side(row.a, recordedAt: row.aRecordedAt)
             side(row.b, recordedAt: row.bRecordedAt)
             HStack(spacing: 12) {
@@ -36,7 +36,7 @@ struct PairCard: View {
                     .accessibilityIdentifier(isStory ? "pair.group" : "pair.same")
                 Button("Keep separate", action: onSeparate)
                     .buttonStyle(.bordered)
-                    .tint(Theme.olive)
+                    .tint(Theme.oliveOnFill)
                     .accessibilityIdentifier("pair.separate")
                 Spacer(minLength: 0)
             }
@@ -64,7 +64,7 @@ struct PairCard: View {
                 if let recordedAt {
                     Text("recorded " + recordedAt.formatted(.dateTime.month(.abbreviated).day()))
                         .font(.caption)
-                        .foregroundStyle(Theme.stone)
+                        .foregroundStyle(Theme.secondaryText)
                 }
             }
         }

@@ -19,7 +19,6 @@ final class SessionViewModel: Identifiable {
     private(set) var landed = false
     private(set) var startError: String?
     private(set) var stopError: String?
-    private(set) var cardQueue = CardQueue()
     private(set) var extractionStatus: String?
     private(set) var opening: Opening { didSet { snapshot.opening = opening.main.text } }
     private(set) var arc: SessionArc { didSet { snapshot.stage = arc.stage } }
@@ -37,9 +36,14 @@ final class SessionViewModel: Identifiable {
     private(set) var isQuiet = false
     var view: ViewMode = .listen
     var changing: Memory?
-    let cards: CardHandler
+    /// The card queue and what a tap does to it, shared with the session detail and the timeline.
+    let flow: CardFlow
+    var cards: CardHandler { flow.handler }
+    var cardQueue: CardQueue { flow.queue }
 
     let deps: Dependencies
+    /// The page this session is about, if it started from one.
+    let subject: SessionSubject?
     private var recorder: SessionRecorder?
     private var queue: ExtractionQueue?
     /// Everything the interviewer loop hears, in order. Finished when the session ends.
@@ -52,11 +56,12 @@ final class SessionViewModel: Identifiable {
     private var segmentsSeen = 0
     private var declinedOffers = 0
 
-    init(deps: Dependencies, kind: SessionKind = .quick) {
+    init(deps: Dependencies, kind: SessionKind = .quick, subject: SessionSubject? = nil) {
         self.deps = deps
+        self.subject = subject
         self.kind = kind
-        cards = CardHandler(deps: deps)
-        let opening = deps.opening()
+        flow = CardFlow(deps: deps)
+        let opening = deps.opening(subject: subject)
         let arc = SessionArc(kind: kind, config: deps.arcConfig, startedAt: .now)
         self.opening = opening
         self.arc = arc
@@ -133,7 +138,7 @@ final class SessionViewModel: Identifiable {
         }
         do {
             let captureStart = ContinuousClock.now
-            try await recorder.start(id: sessionID, kind: kind)
+            try await recorder.start(id: sessionID, kind: kind, subject: subject?.entityID, startedFrom: subject == nil ? .tab : .page)  // Rule: a session with a subject started on a page; none, on a tab.
             if speaks { startInterviewer(inputs: inputs, recorder: recorder, session: sessionID, captureStart: captureStart) }
             arc = SessionArc(kind: kind, config: deps.arcConfig, startedAt: startedAt)
             persistLog()
@@ -248,40 +253,30 @@ final class SessionViewModel: Identifiable {
 
     // MARK: - Cards
 
-    func accept(_ card: Card) {
-        guard cards.accept(card) else { return }
-        cardQueue.remove(card.id)
-        if case .memory = card { cardQueue.memoryAccepted(card.id) }
-    }
-    /// Keep on an entity card as the type chosen (M7).
-    func keepEntity(_ card: Card, as type: EntityType?) {
-        guard cards.acceptEntity(card, as: type) != nil else { return }
-        cardQueue.remove(card.id)
-    }
+    /// Every memory action first closes the open kept card, as if "Done" was tapped (CardFlow).
+    func accept(_ card: Card) { _ = flow.accept(card) }
     func change(_ card: Card) {
-        guard let memory = cards.keep(card) else { return }
-        cardQueue.remove(card.id)
-        cardQueue.memoryAccepted(card.id)
-        changing = memory
+        if let memory = flow.change(card) { changing = memory }
     }
-    func dismiss(_ card: Card) {
-        guard cards.dismiss(card) else { return }
-        cardQueue.remove(card.id)
-        if case .memory = card { cardQueue.memoryDismissed(card.id) }
-    }
-    func undo() {
-        if let card = cards.undo() { cardQueue.restore(card) }
-    }
-    func undoMerge() {
-        if let card = cards.undoMerge() { cardQueue.restore(card) }
-    }
-    /// "Same story": the card joins an earlier memory; its hints follow as if it were kept.
-    func sameStory(_ card: Card, into targets: [MemoryID]) {
-        guard cards.sameStory(card, into: targets) else { return }
-        cardQueue.remove(card.id)
-        cardQueue.memoryAccepted(card.id)
-    }
-    func resolve(_ card: Card, _ choice: MentionChoice) { if cards.resolve(card, choice) { cardQueue.remove(card.id) } }
+    func dismiss(_ card: Card) { _ = flow.dismiss(card) }
+    func undo() { _ = flow.undo() }
+    func undoMerge() { _ = flow.undoMerge() }
+    func undoKeptClose() { _ = flow.undoKeptClose() }
+    /// "Same story": the card joins an earlier memory; its follow-ups follow as if it were kept.
+    func sameStory(_ card: Card, into targets: [MemoryID]) { _ = flow.sameStory(card, into: targets) }
+    func resolve(_ card: Card, _ choice: MentionChoice) { _ = flow.resolve(card, choice) }
+
+    // MARK: - Kept cards
+
+    /// A hint, thing, place or idea chip: accepted as heard or as the type chosen. Never leaves
+    /// the session for the entity's page.
+    func followUp(_ kept: KeptCard, _ card: Card, as type: EntityType?) { _ = flow.followUp(kept, card, as: type) }
+    /// A person chip answered in its "Who's this?" sheet.
+    func resolveFollowUp(_ kept: KeptCard, _ card: Card, _ choice: MentionChoice) { _ = flow.resolveFollowUp(kept, card, choice) }
+    /// "Not any of these" on an entity chip.
+    func declineFollowUp(_ kept: KeptCard, _ card: Card) { _ = flow.declineFollowUp(kept, card) }
+    /// "Done": unanswered hints and entities are dismissed, unanswered people wait in People.
+    func keptDone(_ kept: KeptCard) { flow.keptDone(kept) }
 
     // MARK: - The arc
 
@@ -327,6 +322,7 @@ final class SessionViewModel: Identifiable {
 
     private func offerNextPrompt() {
         guard kind == .settleIn, !arc.heavy, !state.isSpeaking, nextPrompt == nil, !isStopping else { return }
+        // No subject on purpose: the page the session started from shapes only its opening question.
         let next = deps.opening().main
         guard next != opening.main else { return }
         nextPrompt = next
@@ -347,7 +343,7 @@ final class SessionViewModel: Identifiable {
     private func apply(_ status: TranscriberAvailability) { transcriberStatus = status }
 
     private func apply(_ event: ExtractionEvent) {
-        cardQueue.apply(event)
+        flow.apply(event)
         switch event {
         case .failed(_, let error):
             switch error {
@@ -358,7 +354,6 @@ final class SessionViewModel: Identifiable {
             }
         case .candidates(_, let segment):
             extractionStatus = nil
-            cardQueue.cards.forEach { cards.shown($0) }
             // After the segment's flags, which the queue reports first: a success with none means clean flags.
             interviewer?.yield(.extracted(segment))
         case .flags(let flags, let segment):

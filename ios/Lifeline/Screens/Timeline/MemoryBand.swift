@@ -34,12 +34,12 @@ struct MemoryBand: View {
                     .foregroundStyle(Theme.ink)
                 Spacer(minLength: 0)
                 if !row.durationText.isEmpty {
-                    Text("\(row.durationText) in your voice").font(.caption).foregroundStyle(Theme.stone)
+                    Text("\(row.durationText) in your voice").font(.caption).foregroundStyle(Theme.secondaryText)
                 }
             }
             Text(row.subtitle)
                 .font(.subheadline)
-                .foregroundStyle(row.isGuess || !row.memory.range.isPlaced ? Theme.ochre : Theme.ink.opacity(0.8))
+                .foregroundStyle(row.isGuess || !row.memory.range.isPlaced ? Theme.ochreText : Theme.ink.opacity(0.8))
         }
         .padding(.vertical, 6)
         .accessibilityElement(children: .ignore)
@@ -90,7 +90,7 @@ struct MemoryRowView: View {
                             .accessibilityIdentifier("row.addCollection")
                     }
                     .buttonStyle(.bordered)
-                    .tint(Theme.olive)
+                    .tint(Theme.oliveOnFill)
                     .font(.caption)
                     .padding(.bottom, 6)
                 }
@@ -100,7 +100,7 @@ struct MemoryRowView: View {
             } label: {
                 Image(systemName: "ellipsis.circle")
                     .font(.title3)
-                    .foregroundStyle(Theme.stone)
+                    .foregroundStyle(Theme.secondaryText)
                     .padding(.top, 8)
             }
             .buttonStyle(.borderless)

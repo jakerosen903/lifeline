@@ -299,6 +299,24 @@ public struct CandidateActions: Sendable {
         }
     }
 
+    /// A kept card's close: the suggestions nobody answered are dismissed in one transaction.
+    /// Returns the ones dismissed; a suggestion answered in the meantime is left alone.
+    public func dismissAll(_ candidates: [Candidate]) throws -> [Candidate] {
+        let dismissed = Set(try store.candidates.dismissAll(candidates.map(\.id)))
+        return candidates.filter { dismissed.contains($0.id) }
+    }
+
+    /// Undo of a kept card's close: every suggestion waits again, or none does. Hints and
+    /// entities only; a person candidate also needs its mention reopened, which `restore` does.
+    public func restoreAll(_ candidates: [Candidate]) throws {
+        guard candidates.allSatisfy({ $0.kind == .hint || $0.kind == .entity }) else { throw Error.wrongKind }
+        do {
+            try store.candidates.restoreAll(candidates.map(\.id))
+        } catch CandidateRepository.Error.statusChanged {
+            throw Error.notDismissed
+        }
+    }
+
     public func restoreMention(_ id: MentionID) throws {
         try store.people.reopen(id)
     }
@@ -477,7 +495,14 @@ public struct CandidateActions: Sendable {
     }
 
     func mention(for text: String, in segment: SegmentID, relation: String? = nil) throws -> Mention {
-        if let existing = try store.people.mentions(in: segment).first(where: { Self.same($0.text, text) }) { return existing }
+        if var existing = try store.people.mentions(in: segment).first(where: { Self.same($0.text, text) }) {
+            // Keep may have written the row without the phrase the person said with the name ("my sister").
+            if existing.relationText == nil, let relation = relation?.trimmingCharacters(in: .whitespacesAndNewlines), !relation.isEmpty {
+                try store.people.setRelationIfMissing(existing.id, relation)
+                existing.relationText = relation
+            }
+            return existing
+        }
         let row = Mention(id: .init(), segmentID: segment, text: text.trimmingCharacters(in: .whitespacesAndNewlines), status: .unresolved,
                           personID: nil, relationText: relation?.trimmingCharacters(in: .whitespacesAndNewlines))
         try store.people.insertMention(row)

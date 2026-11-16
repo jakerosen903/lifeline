@@ -23,8 +23,7 @@ final class ExtractionUITests: XCTestCase {
         XCTAssertFalse(blueDoorCard.waitForExistence(timeout: 2), "the card goes once added")
         app.finishSession()
 
-        XCTAssertTrue(app.buttons["timeline.sessions"].waitForExistence(timeout: 10))
-        app.buttons["timeline.sessions"].tap()
+        app.openSessions()
         let row = app.buttons["home.sessionRow"].firstMatch
         XCTAssertTrue(row.waitForExistence(timeout: 5))
         row.tap()
@@ -37,11 +36,21 @@ final class ExtractionUITests: XCTestCase {
     func testWhoIsThisResolvesToANewPerson() {
         let app = launchToHome()
         app.startSession()
-        XCTAssertTrue(app.staticTexts["Who's this?"].waitForExistence(timeout: 20), "a who-is-this card should appear")
+        // "Who's this?" is a chip on the Maya memory's card once it is kept.
+        let maya = app.staticTexts.matching(identifier: "card.title").matching(NSPredicate(format: "label == %@", "Maya climbed it")).firstMatch
+        XCTAssertTrue(maya.waitForExistence(timeout: 20), "the Maya memory card arrives")
+        let mayaCard = app.descendants(matching: .any).matching(identifier: "card.memory")
+            .containing(NSPredicate(format: "identifier == %@ AND label == %@", "card.title", "Maya climbed it")).firstMatch
+        let keep = mayaCard.buttons["card.add"].firstMatch
+        XCTAssertTrue(keep.waitForExistence(timeout: 10), "Keep on the Maya card, wherever it sits in the stack")
+        keep.tap()
+        let chip = app.buttons.matching(identifier: "card.followUp").matching(NSPredicate(format: "label == %@", "Maya: who's this?")).firstMatch
+        XCTAssertTrue(chip.waitForExistence(timeout: 5), "a who-is-this chip appears on the kept card")
+        chip.tap()
+        XCTAssertTrue(app.buttons["card.newPerson"].firstMatch.waitForExistence(timeout: 5))
         app.buttons["card.newPerson"].firstMatch.tap()
         app.finishSession()
-        XCTAssertTrue(app.buttons["home.people"].waitForExistence(timeout: 5))
-        app.buttons["home.people"].tap()
+        app.openNamesQueue()
         let person = app.buttons["people.row"].firstMatch
         XCTAssertTrue(person.waitForExistence(timeout: 5))
         XCTAssertTrue(person.label.contains("Maya"))
@@ -65,8 +74,7 @@ final class ExtractionUITests: XCTestCase {
         app.startSession()
         XCTAssertTrue(app.staticTexts["Sounds like a memory"].waitForExistence(timeout: 15))
         app.finishSession()
-        XCTAssertTrue(app.buttons["timeline.sessions"].waitForExistence(timeout: 10))
-        app.buttons["timeline.sessions"].tap()
+        app.openSessions()
         let row = app.buttons["home.sessionRow"].firstMatch
         XCTAssertTrue(row.waitForExistence(timeout: 5))
         row.tap()
@@ -76,7 +84,7 @@ final class ExtractionUITests: XCTestCase {
     @MainActor
     func testSettingsSavesAKeyState() {
         let app = launchToHome()
-        app.buttons["home.settings"].tap()
+        app.openSettings()
         let field = app.textFields["settings.apiKey"]
         XCTAssertTrue(field.waitForExistence(timeout: 5))
         field.tap()

@@ -15,7 +15,7 @@ struct TurnLine: View {
             HStack(spacing: 6) {
                 Text("Lifeline")
                     .font(.caption.weight(.semibold))
-                    .foregroundStyle(Theme.stone)
+                    .foregroundStyle(Theme.secondaryText)
                 if marksCutOff && turn.interrupted {
                     Text("cut off")
                         .font(.caption)
@@ -25,7 +25,7 @@ struct TurnLine: View {
             }
             Text(turn.text)
                 .font(font)
-                .foregroundStyle(Theme.stone)
+                .foregroundStyle(Theme.secondaryText)
                 .accessibilityIdentifier(identifier)
         }
     }

@@ -55,12 +55,13 @@ final class TimelineUITests: XCTestCase {
     func testAddingABirthdayPlacesTheAgeMemory() {
         let app = launchToTimeline()
         record(app, accept: 1)
-        app.buttons["home.settings"].tap()
+        app.openSettings()
         let toggle = app.switches["aboutYou.hasBirthday"]
         XCTAssertTrue(toggle.waitForExistence(timeout: 5))
         toggle.switches.firstMatch.tap()
         XCTAssertTrue(app.datePickers["aboutYou.birthday"].waitForExistence(timeout: 3), "the birthday picker appears once the toggle is on")
         app.buttons["aboutYou.continue"].tap()
+        app.openTab("Timeline")   // Settings opens from You; the memory is on the timeline
         XCTAssertTrue(app.buttons["home.start"].waitForExistence(timeout: 5))
         let memory = app.buttons.matching(identifier: "timeline.memory").matching(NSPredicate(format: "label CONTAINS %@", "The blue door")).firstMatch
         XCTAssertTrue(reveal(memory, in: app))
@@ -149,10 +150,11 @@ final class TimelineUITests: XCTestCase {
         XCTAssertTrue(reveal(title, in: app), "the unacted card waits on the timeline")
         title.tap()   // a tap on the card's body, not on a button
         XCTAssertTrue(title.waitForExistence(timeout: 2), "a tap on the card must not act on it")
-        let who = app.staticTexts["Who's this?"].firstMatch
-        XCTAssertTrue(reveal(who, in: app))
-        who.tap()
-        XCTAssertTrue(who.waitForExistence(timeout: 2), "same for a who-is-this card")
+        XCTAssertFalse(app.buttons["card.followUp"].exists, "a waiting memory's follow-ups show only after Keep, never as cards of their own")
+        let maya = app.staticTexts.matching(identifier: "card.title").matching(NSPredicate(format: "label == %@", "Maya climbed it")).firstMatch
+        XCTAssertTrue(reveal(maya, in: app))
+        maya.tap()
+        XCTAssertTrue(maya.waitForExistence(timeout: 2), "same for the Maya card")
     }
 
     @MainActor
@@ -163,8 +165,7 @@ final class TimelineUITests: XCTestCase {
         XCTAssertTrue(dismiss.waitForExistence(timeout: 15))
         dismiss.tap()   // "Not quite" on the blue door, in the session
         app.finishSession()
-        XCTAssertTrue(app.buttons["timeline.sessions"].waitForExistence(timeout: 10))
-        app.buttons["timeline.sessions"].tap()
+        app.openSessions()
         XCTAssertTrue(app.buttons["home.sessionRow"].firstMatch.waitForExistence(timeout: 5))
         app.buttons["home.sessionRow"].firstMatch.tap()
         let bringBack = app.buttons["detail.bringBack"].firstMatch
@@ -178,8 +179,7 @@ final class TimelineUITests: XCTestCase {
     func testSessionsAreOneTapAway() {
         let app = launchToTimeline()
         record(app, accept: 0)
-        XCTAssertTrue(app.buttons["timeline.sessions"].waitForExistence(timeout: 5))
-        app.buttons["timeline.sessions"].tap()
+        app.openSessions()
         XCTAssertTrue(app.buttons["home.sessionRow"].firstMatch.waitForExistence(timeout: 5))
     }
 }

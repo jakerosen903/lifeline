@@ -349,6 +349,13 @@ enum Migrations {
                 t.column("interrupted", .boolean).notNull().defaults(to: false)
             }
         }
+        // v12 (sections shell): what a session is about, and whether it began from a tab or a page.
+        m.registerMigration("v12") { db in
+            try db.alter(table: "session") { t in
+                t.add(column: "subject_entity_id", .text).references("entity", onDelete: .setNull)
+                t.add(column: "started_from", .text).notNull().defaults(to: "tab")
+            }
+        }
         return m
     }
 }

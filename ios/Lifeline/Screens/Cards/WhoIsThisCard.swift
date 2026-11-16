@@ -14,7 +14,7 @@ struct WhoIsThisCard: View {
         VStack(alignment: .leading, spacing: 10) {
             Text("Who's this?")
                 .font(.caption.weight(.semibold))
-                .foregroundStyle(Theme.ochre)
+                .foregroundStyle(Theme.ochreText)
             Text("“\(text)”")
                 .font(.system(.title3, design: .serif).weight(.semibold))
                 .foregroundStyle(Theme.ink)
@@ -24,7 +24,7 @@ struct WhoIsThisCard: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 .buttonStyle(.bordered)
-                .tint(Theme.olive)
+                .tint(Theme.oliveOnFill)
                 .accessibilityIdentifier("card.person")
             }
             if people.count > Self.shown {
@@ -37,7 +37,7 @@ struct WhoIsThisCard: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 .buttonStyle(.bordered)
-                .tint(Theme.stone)
+                .tint(Theme.secondaryText)
                 .accessibilityIdentifier("card.someoneElse")
             }
             Button { onChoose(.new(displayName: text)) } label: {
@@ -49,7 +49,7 @@ struct WhoIsThisCard: View {
             .accessibilityIdentifier("card.newPerson")
             Button("Not a person") { onChoose(.notAPerson) }
                 .buttonStyle(.borderless)
-                .foregroundStyle(Theme.stone)
+                .foregroundStyle(Theme.secondaryText)
                 .accessibilityIdentifier("card.notAPerson")
         }
         .padding(16)

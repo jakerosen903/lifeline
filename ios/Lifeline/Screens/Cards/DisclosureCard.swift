@@ -18,11 +18,11 @@ struct DisclosureCard: View {
                 Label("\(crisisLine.label): \(crisisLine.number)", systemImage: "phone")
                     .font(.subheadline.weight(.semibold))
             }
-            .tint(Theme.olive)
+            .tint(Theme.oliveText)
             .accessibilityIdentifier("session.crisisLine")
             Button("Okay", action: onOkay)
                 .buttonStyle(.bordered)
-                .tint(Theme.olive)
+                .tint(Theme.oliveOnFill)
                 .accessibilityIdentifier("session.disclosureOkay")
         }
         .padding(16)

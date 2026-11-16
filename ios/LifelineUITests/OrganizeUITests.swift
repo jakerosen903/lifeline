@@ -186,9 +186,14 @@ final class OrganizeUITests: XCTestCase {
         var tries = 0
         while tries < 4 && story.frame.maxY > app.buttons["home.start"].frame.minY - 8 { app.swipeUp(); tries += 1 }
         story.tap()
-        XCTAssertTrue(memoryRows(app, containing: "Maya climbed it").firstMatch.waitForExistence(timeout: 3))
+        XCTAssertTrue(memoryRows(app, containing: "The blue door").firstMatch.waitForExistence(timeout: 3), "the first member unfolds under the row")
         XCTAssertEqual(memoryRows(app, containing: "The blue door").count, 1)
-        app.buttons["story.more"].firstMatch.tap()
+        // The open name from the first telling adds a Check this tag, so the second member can sit below the fold.
+        XCTAssertTrue(app.reveal(memoryRows(app, containing: "Maya climbed it").firstMatch), "the second member unfolds too")
+        let more = app.buttons["story.more"].firstMatch
+        tries = 0
+        while tries < 4 && !(more.exists && more.isHittable) { app.swipeDown(); tries += 1 }
+        more.tap()
         XCTAssertTrue(app.buttons["story.rename"].waitForExistence(timeout: 3))
         app.buttons["story.rename"].tap()
         let field = app.textFields.firstMatch

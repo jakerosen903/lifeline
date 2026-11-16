@@ -13,7 +13,7 @@ struct WrapUpBanner: View {
             HStack(spacing: 12) {
                 Button("Finish", action: onFinish)
                     .buttonStyle(.bordered)
-                    .tint(Theme.olive)
+                    .tint(Theme.oliveOnFill)
                     .accessibilityIdentifier("session.wrapUpFinish")
                 Button("Keep going", action: onKeepGoing)
                     .buttonStyle(.borderedProminent)
@@ -37,7 +37,7 @@ struct NextPromptOffer: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("If you like:").font(.caption).foregroundStyle(Theme.stone)
+            Text("If you like:").font(.caption).foregroundStyle(Theme.secondaryText)
             Text(text)
                 .font(.system(.headline, design: .serif))
                 .foregroundStyle(Theme.ink)
@@ -45,11 +45,11 @@ struct NextPromptOffer: View {
             HStack(spacing: 12) {
                 Button("Take it", action: onTake)
                     .buttonStyle(.bordered)
-                    .tint(Theme.olive)
+                    .tint(Theme.oliveOnFill)
                     .accessibilityIdentifier("session.nextPromptTake")
                 Button("Another time", action: onLater)
                     .buttonStyle(.borderless)
-                    .foregroundStyle(Theme.stone)
+                    .foregroundStyle(Theme.secondaryText)
                     .accessibilityIdentifier("session.nextPromptLater")
             }
         }

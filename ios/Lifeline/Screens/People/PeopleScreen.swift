@@ -21,7 +21,7 @@ struct PeopleScreen: View {
             Section("In your story") {
                 if viewModel.people.isEmpty {
                     Text("No one yet. People appear as you tell stories.")
-                        .foregroundStyle(Theme.stone)
+                        .foregroundStyle(Theme.secondaryText)
                 }
                 ForEach(viewModel.people) { row in
                     Button {
@@ -34,14 +34,14 @@ struct PeopleScreen: View {
                                     .font(.system(.headline, design: .serif))
                                     .foregroundStyle(Theme.ink)
                                 if let relation = row.relation {
-                                    Text("· \(relation)").font(.subheadline).foregroundStyle(Theme.ochre)
+                                    Text("· \(relation)").font(.subheadline).foregroundStyle(Theme.ochreText)
                                 }
                             }
                             let others = row.aliases.filter { $0 != row.relation }
                             if !others.isEmpty {
                                 Text("also called " + others.map { "“\($0)”" }.joined(separator: ", "))
                                     .font(.caption)
-                                    .foregroundStyle(Theme.stone)
+                                    .foregroundStyle(Theme.secondaryText)
                             }
                         }
                         .padding(.vertical, 2)

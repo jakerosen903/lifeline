@@ -31,7 +31,7 @@ struct ChangeSheet: View {
                         .disabled(!viewModel.canSaveTitle)
                         .accessibilityIdentifier("change.saveTitle")
                     Text("“\(viewModel.memory.summaryQuote)”")
-                        .font(.footnote).foregroundStyle(Theme.stone)
+                        .font(.footnote).foregroundStyle(Theme.secondaryText)
                 }
 
                 Section("Who was there") {
@@ -41,7 +41,7 @@ struct ChangeSheet: View {
                             Spacer()
                             Button("Remove") { viewModel.remove(person) }
                                 .buttonStyle(.borderless)
-                                .foregroundStyle(Theme.stone)
+                                .foregroundStyle(Theme.secondaryText)
                                 .accessibilityIdentifier("change.removePerson")
                         }
                     }
@@ -50,7 +50,7 @@ struct ChangeSheet: View {
                             ForEach(viewModel.choices) { person in
                                 Button(person.displayName) { viewModel.add(person) }
                                     .buttonStyle(.bordered)
-                                    .tint(Theme.olive)
+                                    .tint(Theme.oliveOnFill)
                                     .accessibilityIdentifier("change.addPerson")
                             }
                         }
@@ -72,9 +72,9 @@ struct ChangeSheet: View {
                         showWhen.toggle()
                     } label: {
                         HStack {
-                            Text(viewModel.when.rangeText).foregroundStyle(viewModel.when.isGuess ? Theme.ochre : Theme.ink)
+                            Text(viewModel.when.rangeText).foregroundStyle(viewModel.when.isGuess ? Theme.ochreText : Theme.ink)
                             Spacer()
-                            Image(systemName: showWhen ? "chevron.up" : "chevron.down").foregroundStyle(Theme.stone)
+                            Image(systemName: showWhen ? "chevron.up" : "chevron.down").foregroundStyle(Theme.secondaryText)
                         }
                     }
                     .buttonStyle(.borderless)
@@ -88,7 +88,7 @@ struct ChangeSheet: View {
                     }
                     Button("Tell me when", systemImage: "calendar") { tellingWhen = true }
                         .buttonStyle(.borderless)
-                        .tint(Theme.olive)
+                        .tint(Theme.oliveText)
                         .accessibilityIdentifier("change.tellMeWhen")
                 }
                 }
@@ -100,13 +100,13 @@ struct ChangeSheet: View {
                                 .accessibilityIdentifier("change.merged")
                             Spacer()
                             Button("Undo") { viewModel.undoMerge() }
-                                .buttonStyle(.bordered).tint(Theme.olive)
+                                .buttonStyle(.bordered).tint(Theme.oliveOnFill)
                                 .accessibilityIdentifier("change.undoMerge")
                         }
                     } else {
                         Button("Same as another memory…", systemImage: "arrow.triangle.merge") { pickingSameAs = true }
                             .buttonStyle(.borderless)
-                            .tint(Theme.olive)
+                            .tint(Theme.oliveText)
                             .accessibilityIdentifier("change.sameAs")
                     }
                 } header: {
@@ -121,13 +121,13 @@ struct ChangeSheet: View {
                             Text(trimmed).foregroundStyle(Theme.ink).accessibilityIdentifier("change.trimmed")
                             Spacer()
                             Button("Undo") { viewModel.undoTrim() }
-                                .buttonStyle(.bordered).tint(Theme.olive)
+                                .buttonStyle(.bordered).tint(Theme.oliveOnFill)
                                 .accessibilityIdentifier("change.undoTrim")
                         }
                     }
                     Button("Which part of the recording", systemImage: "waveform.path") { trimming = true }
                         .buttonStyle(.borderless)
-                        .tint(Theme.olive)
+                        .tint(Theme.oliveText)
                         .disabled(viewModel.parts.isEmpty)
                         .accessibilityIdentifier("change.whichPart")
                     laterRow("Just tell me")
@@ -150,7 +150,7 @@ struct ChangeSheet: View {
                         HStack {
                             Text(ChangeViewModel.kindChoices.first { $0.kind == viewModel.shownKind }?.label ?? "A moment").foregroundStyle(Theme.ink)
                             Spacer()
-                            Image(systemName: "chevron.up.chevron.down").foregroundStyle(Theme.stone)
+                            Image(systemName: "chevron.up.chevron.down").foregroundStyle(Theme.secondaryText)
                         }
                     }
                     .accessibilityIdentifier("change.kind")
@@ -159,7 +159,7 @@ struct ChangeSheet: View {
                             Text(changed).foregroundStyle(Theme.ink).accessibilityIdentifier("change.kindChanged")
                             Spacer()
                             Button("Undo") { viewModel.undoKind() }
-                                .buttonStyle(.bordered).tint(Theme.olive)
+                                .buttonStyle(.bordered).tint(Theme.oliveOnFill)
                                 .accessibilityIdentifier("change.undoKind")
                         }
                     }
@@ -171,7 +171,7 @@ struct ChangeSheet: View {
                             }
                         } label: {
                             HStack {
-                                Text("About whom or what?").foregroundStyle(Theme.stone)
+                                Text("About whom or what?").foregroundStyle(Theme.secondaryText)
                                 Spacer()
                                 Text(viewModel.aboutLabel).foregroundStyle(Theme.ink)
                             }
@@ -214,9 +214,9 @@ struct ChangeSheet: View {
         HStack {
             Text(title)
             Spacer()
-            Text("later").font(.caption).foregroundStyle(Theme.stone)
+            Text("later").font(.caption).foregroundStyle(Theme.secondaryText)
         }
-        .foregroundStyle(Theme.stone)
+        .foregroundStyle(Theme.secondaryText)
         .accessibilityElement(children: .combine)
         .accessibilityIdentifier("change.later")
     }

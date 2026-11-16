@@ -81,7 +81,7 @@ import Testing
     #expect(event?.kind == .event && event?.title == "The blue door")
 }
 
-@Test func entityScriptLandsAThingAnIdeaAndACard() throws {
+@Test func entityScriptLandsAThingAnIdeaAndAShed() throws {
     let store = ExtractionStore(try AppDatabase.inMemory())
     let actions = CandidateActions(store: store)
     let texts = ScriptedVoiceSession.entityScript.map(\.text)
@@ -112,5 +112,6 @@ import Testing
     #expect(ideas.count == 2, "each Keep makes its own idea: an idea on file is reused by id only, never by title")
     #expect(ideas.allSatisfy { (try? store.entities.moments(of: $0.id).count) == 1 })
     let pending = cards.filter { $0.kind == .entity && $0.status == .pending }
-    #expect(pending.compactMap(CandidatePayload.mention).map(\.text) == ["the old shed"], "only the shed is a card")
+    #expect(pending.isEmpty, "a memory names the shed, so Keep links it and nothing is asked")
+    #expect(try store.entities.find(type: .thing, title: "the old shed") != nil)
 }

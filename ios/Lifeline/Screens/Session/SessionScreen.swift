@@ -38,11 +38,11 @@ struct SessionScreen: View {
         HStack {
             Text("You chose \(viewModel.kindText)")
                 .font(.caption)
-                .foregroundStyle(Theme.stone)
+                .foregroundStyle(Theme.secondaryText)
                 .accessibilityIdentifier("session.kind")
             Spacer()
             if let line = viewModel.statusLine {
-                Text(line).font(.subheadline).foregroundStyle(Theme.ochre)
+                Text(line).font(.subheadline).foregroundStyle(Theme.ochreText)
                     .accessibilityIdentifier("session.status")
             }
             ListeningIndicator(mode: indicatorMode)
@@ -77,10 +77,10 @@ struct SessionScreen: View {
                      : "Take your time. Pauses are fine. I'm only listening.")
                     .accessibilityIdentifier("session.listenCopy")
                     .font(.system(.body, design: .serif))
-                    .foregroundStyle(Theme.stone)
+                    .foregroundStyle(Theme.secondaryText)
                 HStack(spacing: 8) {
                     Image(systemName: viewModel.isPaused ? "pause.circle" : "record.circle")
-                        .foregroundStyle(viewModel.isPaused ? Theme.stone : Theme.ochre)
+                        .foregroundStyle(viewModel.isPaused ? Theme.secondaryText : Theme.ochreText)
                     Text(viewModel.isPaused ? "Paused. Nothing is lost." : "Recording, saved as you go")
                         .font(.subheadline)
                         .foregroundStyle(Theme.ink)
@@ -89,11 +89,11 @@ struct SessionScreen: View {
                 .accessibilityIdentifier("session.recording")
                 Text(viewModel.countText)
                     .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(Theme.olive)
+                    .foregroundStyle(Theme.oliveText)
                     .accessibilityIdentifier("session.count")
                 Text("The screen can lock. Recording keeps going.")
                     .font(.caption)
-                    .foregroundStyle(Theme.stone)
+                    .foregroundStyle(Theme.secondaryText)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(24)
@@ -138,8 +138,11 @@ struct SessionScreen: View {
                     CardStack(cards: viewModel.visibleCards, handler: viewModel.cards,
                               onAccept: { viewModel.accept($0) }, onChange: { viewModel.change($0) }, onDismiss: { viewModel.dismiss($0) },
                               onResolve: { viewModel.resolve($0, $1) }, onUndo: { viewModel.undo() },
-                              onSameStory: { viewModel.sameStory($0, into: $1) }, onUndoMerge: { viewModel.undoMerge() },
-                              onKeepEntity: { viewModel.keepEntity($0, as: $1) })
+                              onSameStory: { viewModel.sameStory($0, into: $1) }, onUndoMerge: { viewModel.undoMerge() }, onUndoKeptClose: { viewModel.undoKeptClose() },
+                              onFollowUp: { viewModel.followUp($0, $1, as: $2) },
+                              onResolveFollowUp: { viewModel.resolveFollowUp($0, $1, $2) },
+                              onDeclineFollowUp: { viewModel.declineFollowUp($0, $1) },
+                              onKeptDone: { viewModel.keptDone($0) })
                         .padding(.top, 8)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -161,7 +164,7 @@ struct SessionScreen: View {
             if compact {
                 Text(viewModel.prompt)
                     .font(.system(.headline, design: .serif))
-                    .foregroundStyle(Theme.stone)
+                    .foregroundStyle(Theme.secondaryText)
                     .accessibilityIdentifier("session.prompt")
             } else {
                 Text(viewModel.prompt).titleStyle().accessibilityIdentifier("session.prompt")
@@ -169,7 +172,8 @@ struct SessionScreen: View {
                     FlowLayout(spacing: 6) {
                         ForEach(Array(viewModel.alternates.enumerated()), id: \.offset) { index, text in
                             Button { viewModel.swapIn(alternate: index) } label: {
-                                Text(text).font(.caption).lineLimit(1)
+                                // A whole prompt: two lines rather than cut short in a narrow row.
+                                Text(text).font(.caption).lineLimit(2).multilineTextAlignment(.leading)
                                     .padding(.horizontal, 10).padding(.vertical, 5)
                                     .background(Capsule().fill(Theme.sand))
                                     .foregroundStyle(Theme.ink)
@@ -181,7 +185,7 @@ struct SessionScreen: View {
                 } else {
                     ForEach(Array(viewModel.alternates.enumerated()), id: \.offset) { index, text in
                         Button { viewModel.swapIn(alternate: index) } label: {
-                            Text(text).font(.footnote).foregroundStyle(Theme.stone).multilineTextAlignment(.leading)
+                            Text(text).font(.footnote).foregroundStyle(Theme.secondaryText).multilineTextAlignment(.leading)
                         }
                         .buttonStyle(.plain)
                         .accessibilityIdentifier("session.alternate")
@@ -201,7 +205,7 @@ struct SessionScreen: View {
         if !state.spoken.isEmpty || !state.partial.isEmpty {
             (Text(state.spoken).foregroundStyle(Theme.ink)
                 + Text(state.spoken.isEmpty || state.partial.isEmpty ? "" : " ")
-                + Text(state.partial).foregroundStyle(Theme.stone))
+                + Text(state.partial).foregroundStyle(Theme.secondaryText))
                 .font(.system(.title3, design: .serif))
                 .accessibilityIdentifier("session.live")
                 .id("live")
