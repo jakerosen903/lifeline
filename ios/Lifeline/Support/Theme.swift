@@ -20,6 +20,9 @@ enum Theme {
     /// Ochre for text. Passes 4.5:1 on linen, sand and card.
     static let ochreText = color(Palette.ochreText)
 
+    /// The three tints behind a monogram. `ink` passes 4.5:1 on each (a kit test pins it).
+    static let monogramTints = Palette.monogramTints.map(color)
+
     private static func color(_ hex: Int) -> Color {
         Color(red: Double((hex >> 16) & 0xFF) / 255, green: Double((hex >> 8) & 0xFF) / 255, blue: Double(hex & 0xFF) / 255)
     }

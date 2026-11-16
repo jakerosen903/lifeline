@@ -24,21 +24,7 @@ struct EntityListScreen: View {
         .scrollContentBackground(.hidden)
         .linenBackground()
         .navigationTitle(viewModel.type.screenTitle)
-        .toolbar {
-            if !viewModel.allTags.isEmpty {
-                Menu {
-                    Button("Everything") { viewModel.tagFilter = nil }
-                    ForEach(viewModel.allTags, id: \.self) { tag in
-                        Button { viewModel.tagFilter = tag } label: {
-                            if viewModel.tagFilter == tag { Label(tag, systemImage: "checkmark") } else { Text(tag) }
-                        }
-                        .accessibilityIdentifier("entities.tag.\(tag)")
-                    }
-                } label: { Image(systemName: viewModel.tagFilter == nil ? "tag" : "tag.fill") }
-                    .accessibilityLabel(viewModel.tagFilter.map { "Showing \($0)" } ?? "Filter by tag")
-                    .accessibilityIdentifier("entities.tagFilter")
-            }
-        }
+        .toolbar { EntityTagFilterMenu(viewModel: viewModel) }
         .onAppear { viewModel.refresh() }
     }
 }
@@ -63,6 +49,29 @@ struct EntityRows: View {
                 .accessibilityLabel(row.entity.title)
             }
             .accessibilityIdentifier("entities.row")
+        }
+    }
+}
+
+/// The toolbar menu that narrows a list to one tag. It shows only once a tag exists.
+struct EntityTagFilterMenu: ToolbarContent {
+    let viewModel: EntitiesViewModel
+
+    var body: some ToolbarContent {
+        ToolbarItem {
+            if !viewModel.allTags.isEmpty {
+                Menu {
+                    Button("Everything") { viewModel.tagFilter = nil }
+                    ForEach(viewModel.allTags, id: \.self) { tag in
+                        Button { viewModel.tagFilter = tag } label: {
+                            if viewModel.tagFilter == tag { Label(tag, systemImage: "checkmark") } else { Text(tag) }
+                        }
+                        .accessibilityIdentifier("entities.tag.\(tag)")
+                    }
+                } label: { Image(systemName: viewModel.tagFilter == nil ? "tag" : "tag.fill") }
+                    .accessibilityLabel(viewModel.tagFilter.map { "Showing \($0)" } ?? "Filter by tag")
+                    .accessibilityIdentifier("entities.tagFilter")
+            }
         }
     }
 }

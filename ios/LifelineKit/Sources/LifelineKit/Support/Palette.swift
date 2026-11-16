@@ -16,6 +16,8 @@ public enum Palette {
     public static let stone = 0xA89A85
     public static let olive = 0x5F7046
     public static let ochre = 0xC8893F
+    /// The three quiet tints behind a person's monogram. `ink` must pass 4.5:1 on each.
+    public static let monogramTints = [0xE3DCC6, 0xDDE2D3, 0xEADBCB]
 
     /// WCAG contrast ratio between two colours, from 1 to 21.
     public static func contrast(_ a: Int, _ b: Int) -> Double {

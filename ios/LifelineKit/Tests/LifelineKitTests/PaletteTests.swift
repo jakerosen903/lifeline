@@ -20,3 +20,8 @@ import Testing
     #expect(Palette.contrast(0xFFFFFF, 0xFFFFFF) == 1)
     #expect(Palette.contrast(0x000000, 0xFFFFFF) == Palette.contrast(0xFFFFFF, 0x000000))
 }
+
+@Test func inkPassesOnEveryTint() {
+    #expect(Palette.monogramTints == [0xE3DCC6, 0xDDE2D3, 0xEADBCB])
+    for tint in Palette.monogramTints { #expect(Palette.contrast(Palette.ink, tint) >= 4.5) }
+}
