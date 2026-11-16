@@ -30,3 +30,9 @@ Task 1: minor (deferred): PhotoRepository role fallback `?? .attached` hides a c
 Task 1: note: the implementer wrote code before tests; RED was a compile error only. Remedied by five mutation checks, summarised in task-1-report.md. Later dispatches say "test first".
 Task 1: note: hungFinalizeDoesNotBlockSegmentCloseOrStop and drainGivesUpAtItsDeadline failed in 3 full runs under load, pass alone and in the final run; timing tests, not photo code.
 Task 1: complete (commits 426e7e0..b81932c, review clean; swift test 878)
+Task 2: fix round 1/5 (5 addressed, 0 open — failed-write cleanup unproven (two tests + mutations added; internal writeCopy seam); repair of a missing file on re-add (ruling); sweep doc comment; deleteIfPresent rename; P3 and TIFF assertions; commits e18267c..c644a0f)
+Task 2: minor (deferred): a deduplicated re-add drops a later assetLocalID (the first one is kept).
+Task 2: minor (deferred): static sweep is not serialised with add; documented "run at launch before any add" — Task 4 must wire it so.
+Task 2: note: in aWriteThatFailsStoresNothing the throw is the .partial Data.write (Cocoa 513), not the folder setup.
+Task 2: note: drainGivesUpAtItsDeadline flaked once under load again; passes alone.
+Task 2: complete (commits dc11f8b..c644a0f, review clean; swift test 907)
