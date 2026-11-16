@@ -2,6 +2,25 @@
 
 One entry per decision. Newest first. Status is Decided, Open, or Superseded.
 
+## 2026-11-16 · You is a portrait, and About leaves the Timeline (S3)
+
+**Status:** Decided. Builds on the five-sections decision of 2026-11-15. Source: `docs/plans/2026-11-16-sections-you.md`, decisions 2, 4, 5, 8, 17 and 18, and the rulings made while building it.
+
+**Decision.** You shows the name and birth line, the owner's life strip, one lead line, then "Who you are", "How it felt", "What you think" and "What you're hoping for". Every line with a recording plays only its own span.
+
+- A fact shows on You when it has a detail link to the owner, or none. A fact detailed only to someone else shows on that page. A fact about only a hidden person or thing follows it and does not show on You. The app never names a hidden entity in "about". The app does not guess who a fact is about.
+- A feeling says "about {title}" from its first non-owner detail link, else its first mention link. With no link, no line shows. Feelings and facts show no date. A goal shows "said in {month}" or "said in {month} {year}", the month its session started.
+- The lead comes from facts, feelings and goals with own words and a recording. It changes each time You appears, stays across a refresh, never repeats in its part, and stays while a tag chip other than "All" is selected.
+- Hide and Delete... move to a long-press menu on each line. Hide shows "Hidden." with Undo for 6 seconds, because a long-press Hide is easy to trigger by mistake. Delete asks first.
+- A feeling's quote opens its memory page, and "about" is a separate link, so one kind of line behaves one way.
+- A play error shows in ink with a red icon, to keep 4.5:1 contrast. A missing file reads "Could not play this: the recording could not be found."
+- The About list leaves the Timeline. The summary keeps "and N things about your life".
+- No migration. The portrait reads in batches, reads nothing until it is on screen, and refreshes when a session closes.
+
+**Why.** About held 62% of everything on one screen (audit F9), and the owner is a person too (F10). A portrait in the person's own words and voice serves P1 and P2. Showing only what the person said, with no guessed link, serves P5.
+
+**Costs.** Most facts about other people stay on You until extractor v7 re-reads the archive and adds detail links. A fact about a hidden entity shows nowhere until the entity shows again. A line hidden before the Undo existed has no way back. The lead changes less often while a person filters. No dark palette exists yet.
+
 ## 2026-11-15 · Five sections: Timeline, People, Places, Things, You
 
 **Status:** Decided. Supersedes owner's call 4 of the UI audit of 2026-10-26 (a tab bar of Timeline, People, Sessions, Settings). Source: the owner's approval of `docs/specs/2026-11-15-five-sections.md`.
