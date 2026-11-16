@@ -209,8 +209,8 @@ Build `PortraitSource` values by hand; no store. Invented words only.
 
 ```swift
 @Test func factsAboutYouOrNobodyAreWhoYouAre() {
-    // f1 detail → owner; f2 no link; f3 detail → Maya only; f4 mention → Maya, no detail; f5 detail → owner and Maya
-    #expect(Portrait(source, currentYear: 2026).whoYouAre.map(\.id) == ["memory:\(f1.id)", "memory:\(f2.id)", "memory:\(f4.id)", "memory:\(f5.id)"])
+    // f1 detail → owner; f2 no link and no telling; f3 detail → Maya only; f4 mention → Maya, no detail; f5 detail → owner and Maya
+    #expect(Portrait(source, currentYear: 2026).whoYouAre.map(\.id) == ["memory:\(f1.id)", "memory:\(f4.id)", "memory:\(f5.id)", "memory:\(f2.id)"])   // f2 has no telling, so it sorts last
 }
 @Test func feelingsAndGoalsShowWhateverTheyAreAbout() {
     #expect(portrait.howItFelt.count == 2 && portrait.hopingFor.count == 1)
@@ -277,7 +277,7 @@ Build `PortraitSource` values by hand; no store. Invented words only.
 ```
 
 - [ ] **Step 2: Run `swift test --filter Portrait`.** Expected: FAIL, `Portrait` does not exist.
-- [ ] **Step 3: Implement `Portrait.swift`.** Facts, feelings and goals keep `aboutMemories` order sorted by `createdAt`, then id. The strip is `LifeStrip(moments: EntityPage.sections(details: [], mentions: ownerMoments).moments.map(\.range), birthYear: birth?.year, currentYear:)`, and nil when its sentence is nil. `name` is the trimmed `profile.displayName`, else the owner's title, and nil when empty.
+- [ ] **Step 3: Implement `Portrait.swift`.** Facts, feelings and goals are sorted by the telling's `toldAt`, then its span start, then memory id; a line with no telling sorts last, by id (decision 7). The strip is `LifeStrip(moments: EntityPage.sections(details: [], mentions: ownerMoments).moments.map(\.range), birthYear: birth?.year, currentYear:)`, and nil when its sentence is nil. `name` is the trimmed `profile.displayName`, else the owner's title, and nil when empty.
 - [ ] **Step 4: Run `swift test`.** Expected: PASS.
 - [ ] **Step 5: Commit** — `Kit: the portrait's parts, its lead line and its header`
 
