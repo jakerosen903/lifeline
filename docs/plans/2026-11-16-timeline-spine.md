@@ -319,5 +319,7 @@ Read each of the three tests in full before you change it. If the surrounding te
 - **Shelf count.** The shelf header counts a half-open moment ("before 2004") as "undated".
 - **Collection and story.** A story member that is also in a collection shows in both places and is counted twice in the summary. This was so before this PR.
 - **UI-test seed.** A seed with a story, a relation and a range of years would let the open-story and capsule cases run in CI.
+- **People and places on a row.** The spec's "The spine" rule 5 says a row shows the people and the place, and a tap on a person or a place opens its page. S6a shows the people as plain text and shows no place. Neither is a button.
+- **The waypoint above a relation.** Ruling R18 removes the gap label next to a confirmed relation. The waypoint above a relation still comes from the start of its band, and that start can be the builder's slack. The period it names can be wrong by the slack.
 - **S6b:** the pinned card. `spine` already holds what the frame needs: the years of the rows on screen.
 - **S6c:** the tag becomes a button; the life map; the chapter's sheet; "Add to a chapter…"; `chapter.range` holds stated years only; empty untitled chapters are deleted.

@@ -50,7 +50,7 @@ final class SpineUITests: XCTestCase {
             if last.exists && app.waitHittable(last, timeout: 1) { break }
             app.swipeUp()
         }
-        if !firstScreen { record(firstScreen: false) }
+        record(firstScreen: false)  // the screen the loop stopped on, after its last swipe
         XCTAssertTrue(last.exists, "the scroll reached the last row, so everything above it was on screen once")
         return log.labelsTopToBottom
     }
@@ -80,13 +80,12 @@ final class SpineUITests: XCTestCase {
         XCTAssertEqual(periods, ["Childhood · by your age", "Teens · by your age"], "each period once, oldest first")
     }
 
-    // timeline.gap: exactly one, labelled "3 years"; none says "2 years".
+    // timeline.gap: exactly one, labelled "3 years", so none says "2 years".
     @MainActor
     func testAThreeYearGapSaysSo() {
         let app = XCUIApplication.launchWithSpine()
         let gaps = labelsOnTheWholeTimeline(app, identifier: "timeline.gap")
-        XCTAssertEqual(gaps, ["3 years"], "only the three-year gap names itself")
-        XCTAssertFalse(gaps.contains("2 years"), "a two-year gap does not")
+        XCTAssertEqual(gaps, ["3 years"], "only the three-year gap names itself; a two-year gap does not")
     }
 
     // "The tree house" row's label contains "Maple Street"; one timeline.tag.

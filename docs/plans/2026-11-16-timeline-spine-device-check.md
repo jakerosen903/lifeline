@@ -25,6 +25,8 @@ Use the owner's iPhone with the owner's real archive, on branch `sections-timeli
 - [ ] 18. At the largest text size, the date must sit above the title on every row, moments and stories.
 - [ ] 19. Tap the empty right side of a row. It must open the moment, or open the story.
 - [ ] 20. A long Check-this tag must wrap, not push the "..." menu off the screen.
+- [ ] 21. Find a moment whose date is a guess over two years ("around 1999–2000"). The margin must say "around".
+- [ ] 22. Find a moment with a relation date. The gaps above and below it must show no "years" label.
 
 ## Screenshots
 
@@ -35,9 +37,9 @@ Screenshots are in `docs/screenshots/timeline-spine/`. All were taken on the iPh
 | `before-top.png` | The Timeline at the top, before the spine. |
 | `before-gap.png` | The Timeline scrolled to a long quiet stretch, before. |
 | `before-largest-text.png` | The Timeline at the largest text size, before. |
-| `before-row-menu.png` | A row's long-press menu, before. |
+| `before-row-menu.png` | A row's "..." menu, before. |
 | `after-top.png` | The spine at the top: marks, margin years, waypoints. |
 | `after-gap.png` | The spine scrolled to a gap: dashed spine and "{n} years" label. |
 | `after-largest-text.png` | The spine at the largest text size: the date above the title. |
-| `after-row-menu.png` | A spine row's long-press menu. |
+| `after-row-menu.png` | A spine row's "..." menu. |
 | `after-open-story.png` | An open story with its moments under it and the spine beside them. |

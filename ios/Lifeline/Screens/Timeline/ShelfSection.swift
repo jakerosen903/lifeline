@@ -2,7 +2,7 @@ import LifelineKit
 import SwiftUI
 
 /// Memories with no year to show and no collection: "Somewhere in your story". A date with one end
-/// only ("before 2004") sits here too, with its date text, until it has a year the spine can show.
+/// only ("before 2004") sits here too, and its date reads "no date yet", until it has a year the spine can show.
 struct ShelfSection: View {
     let title: String
     let memories: [MemoryRow]
