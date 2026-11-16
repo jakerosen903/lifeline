@@ -203,9 +203,38 @@ private struct World {
     #expect(Portrait(makeSource(birth: birth, ownerMoments: [moment(1999, at: 1)]), currentYear: 2026).strip == nil, "no owner, no strip")
 }
 
+private var utc: Calendar { var c = Calendar(identifier: .gregorian); c.timeZone = TimeZone(identifier: "UTC")!; return c }
+
 @Test func aGoalSaysWhenItWasSaid() {
-    #expect(Portrait.saidWhen(date(2026, 10, 3), now: date(2026, 11, 16)) == "said in October")
-    #expect(Portrait.saidWhen(date(2025, 10, 3), now: date(2026, 11, 16)) == "said in October 2025")
+    #expect(Portrait.saidWhen(date(2026, 10, 3), now: date(2026, 11, 16), calendar: utc) == "said in October")
+    #expect(Portrait.saidWhen(date(2025, 10, 3), now: date(2026, 11, 16), calendar: utc) == "said in October 2025")
+}
+
+@Test func saidWhenCrossesTheYearBoundary() {
+    let lateDecember = utc.date(from: DateComponents(year: 2025, month: 12, day: 31, hour: 23))!
+    let earlyJanuary = utc.date(from: DateComponents(year: 2026, month: 1, day: 1, hour: 0, minute: 30))!
+    #expect(Portrait.saidWhen(lateDecember, now: earlyJanuary, calendar: utc) == "said in December 2025")
+    #expect(Portrait.saidWhen(earlyJanuary, now: date(2026, 1, 2), calendar: utc) == "said in January")
+}
+
+@Test func saidWhenReadsGregorianYearsWhateverCalendarTheDeviceUses() {
+    var buddhist = Calendar(identifier: .buddhist); buddhist.timeZone = TimeZone(identifier: "UTC")!
+    #expect(Portrait.saidWhen(date(2025, 10, 3), now: date(2026, 11, 16), calendar: buddhist) == "said in October 2025")
+    #expect(Portrait.saidWhen(date(2026, 10, 3), now: date(2026, 11, 16), calendar: buddhist) == "said in October")
+}
+
+@Test func anIdeaIsNeverWhatAFeelingIsAbout() {
+    let feeling = memory("Feeling", quote: "I felt brave", kind: .feeling, at: 1)
+    let idea = Entity(type: .idea, title: "Saying yes")
+    let portrait = Portrait(makeSource(owner: jordan, memories: [feeling], links: [feeling.id: [link(idea, .detail)]]), currentYear: 2026)
+    #expect(portrait.howItFelt[0].about == nil)
+}
+
+@Test func aFactDetailedOnlyToAnIdeaLeavesYou() {
+    // Decision 2: a detail link only to something other than the owner sends the fact to that page, an idea's included.
+    let fact = memory("About an idea", quote: "I think about saying yes", kind: .fact, at: 1)
+    let idea = Entity(type: .idea, title: "Saying yes")
+    #expect(Portrait(makeSource(owner: jordan, memories: [fact], links: [fact.id: [link(idea, .detail)]]), currentYear: 2026).whoYouAre.isEmpty)
 }
 
 @Test func oldestToldFirstIgnoresTheOrderTheyArriveIn() {

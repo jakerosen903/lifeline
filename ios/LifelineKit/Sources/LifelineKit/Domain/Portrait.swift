@@ -65,7 +65,7 @@ public struct Portrait: Sendable, Equatable {
             let own = EntityPage.ownWordsQuote(of: memory)
             let links = source.links[memory.id] ?? []
             // What a feeling is about: the first other person, place or thing it describes, else the first it names.
-            let others = links.map(\.entity).isEmpty ? [] : links.filter { $0.entity.id != ownerID && $0.entity.type != .idea && !$0.entity.hiddenFromTimeline }
+            let others = links.filter { $0.entity.id != ownerID && $0.entity.type != .idea && !$0.entity.hiddenFromTimeline }
             let about = part == .howItFelt ? (others.first { $0.relation == .detail } ?? others.first)?.entity : nil
             return PortraitLine(source: .memory(memory), part: part, text: own ?? memory.title, isOwnWords: own != nil,
                                 tags: part == .whoYouAre ? source.memoryTags[memory.id.rawValue] ?? [] : [],
@@ -111,11 +111,14 @@ public struct Portrait: Sendable, Equatable {
 
     /// "said in October", or "said in October 2025" when the year is not this one. Session start, so known, not guessed.
     public static func saidWhen(_ toldAt: Date, now: Date, calendar: Calendar = .current) -> String {
+        // The copy is English with Gregorian years: only the time zone comes from the device's calendar.
+        var gregorian = Calendar(identifier: .gregorian)
+        gregorian.timeZone = calendar.timeZone
         let formatter = DateFormatter()
-        formatter.calendar = calendar
-        formatter.timeZone = calendar.timeZone
+        formatter.calendar = gregorian
+        formatter.timeZone = gregorian.timeZone
         formatter.locale = Locale(identifier: "en_GB")
-        formatter.dateFormat = calendar.component(.year, from: toldAt) == calendar.component(.year, from: now) ? "MMMM" : "MMMM yyyy"
+        formatter.dateFormat = gregorian.component(.year, from: toldAt) == gregorian.component(.year, from: now) ? "MMMM" : "MMMM yyyy"
         return "said in \(formatter.string(from: toldAt))"
     }
 
