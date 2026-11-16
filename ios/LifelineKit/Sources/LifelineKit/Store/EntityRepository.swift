@@ -211,7 +211,8 @@ public struct EntityRepository: Sendable {
     private static let ownerEntity = "select entity_id from person where is_owner = 1"
 
     /// Every linked memory of every entity of a type, in one query. An entity with no linked
-    /// memory is absent. Each memory is listed once per entity, oldest told first.
+    /// memory is absent. Each memory is listed once per entity, oldest told first. It does not
+    /// filter hidden entities: callers pair it with `entities(type:)`, which does.
     public func strips(type: EntityType) throws -> [EntityID: [LinkedTime]] {
         try db.writer.read { db in
             let rows = try Row.fetchAll(db, sql: """
@@ -244,11 +245,11 @@ public struct EntityRepository: Sendable {
                 join moment_entity theirs on theirs.memory_id = mine.memory_id and theirs.entity_id <> mine.entity_id
                 join memory on memory.id = mine.memory_id
                 join entity other on other.id = theirs.entity_id
-                where mine.entity_id = ? and \(Self.toldMoment)
+                where mine.entity_id = ? and mine.relation = 'mention' and theirs.relation = 'mention' and \(Self.toldMoment)
                   and other.hidden_from_timeline = 0 and other.type <> 'idea' and other.id not in (\(Self.ownerEntity))
                 group by other.id
                 having shared >= ?
-                order by shared desc, other.title collate nocase
+                order by shared desc, other.title collate nocase, other.id
                 """, arguments: [entity.rawValue, minimumShared])
             return try rows.map { CoOccurrence(entity: try Entity(row: $0), sharedMoments: $0["shared"]) }
         }

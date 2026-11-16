@@ -249,3 +249,14 @@ private extension Person {
     #expect(statementsFor2 > 0)
     #expect(statementsFor20 == statementsFor2)
 }
+
+@Test func aDetailLinkIsNotASharedMoment() throws {
+    var f = try Fixture()
+    let maya = try f.person("Maya"), sam = try f.person("Sam")
+    for title in ["A", "B"] {
+        let event = try f.memory(title)
+        try f.link(event, maya)
+        try f.link(event, sam, relation: .detail)
+    }
+    #expect(try !f.store.entities.coOccurrences(of: maya.id).contains { $0.entity.id == sam.id })
+}
