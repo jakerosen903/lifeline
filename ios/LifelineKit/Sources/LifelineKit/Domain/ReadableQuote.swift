@@ -5,11 +5,16 @@ import Foundation
 ///
 /// Rules, in this order: fragments, fillers, repeats, the end comma, the capital.
 /// - A fragment is a token made only of dashes, dots and commas.
-/// - Fillers: "um", "uh" and "erm"; "like" only when a comma follows it; "you know" only when a
-///   comma follows it or it ends the quote. A removed filler takes its trailing comma with it.
-///   A comma before it stays. An end mark (. ? !) it carried moves to the word before.
-/// - A word said twice or more in a row keeps one copy, with no comma, except "had had" and
-///   "that that". The copy keeps the end mark of the last one.
+/// - Fillers: "um", "uh" and "erm"; "like" only when a comma follows it and it is not the verb:
+///   the word before it ends with a comma too (", like,") or is a form of "be" ("it was like,
+///   huge"); "you know" only when a comma follows it or it ends the quote. A removed filler
+///   takes its trailing comma with it. A comma before it stays. A "." or "…" it carried moves to
+///   the word before, never doubled. A "?" or "!" it carried becomes ".", so a statement never
+///   turns into a question or an exclamation.
+/// - A word said twice or more in a row keeps one copy: the first as written, without its comma,
+///   plus the end marks and closing quotes of the last. "had had" and "that that" stay.
+/// - Only a letter is capitalised, and only the first character after opening quotes.
+/// - `maxWords` cuts at a word and ends with "…". A value below 1 acts as 1.
 public enum ReadableQuote {
     public static func text(_ raw: String, maxWords: Int? = nil) -> String {
         var tokens = raw.split(whereSeparator: \.isWhitespace).map(String.init)
@@ -19,7 +24,7 @@ public enum ReadableQuote {
         if let last = tokens.last { tokens[tokens.count - 1] = last.withoutTrailingCommas() }
         if let maxWords, tokens.count > max(maxWords, 1) {
             tokens = Array(tokens.prefix(max(maxWords, 1)))
-            let cut = tokens.removeLast().withoutTrailingCommas().trimmingCharacters(in: Self.cutMarks)
+            let cut = String(tokens.removeLast().reversed().drop { Self.cutMarks.contains($0.unicodeScalars.first!) }.reversed())
             return capitalised((tokens + [cut]).joined(separator: " ")) + "…"
         }
         return capitalised(tokens.joined(separator: " "))
@@ -28,6 +33,8 @@ public enum ReadableQuote {
     // MARK: - Rules
 
     private static let fillerSounds: Set<String> = ["um", "uh", "erm"]
+    private static let beForms: Set<String> = ["was", "is", "were", "are", "am", "be", "been", "being", "it's", "that's"]
+    private static let closers: Set<Character> = ["\"", "\u{201D}", "'", "\u{2019}", "\u{00BB}", ")", "]"]
     private static let repeatable: Set<String> = ["had", "that"]
     private static let fragmentMarks = CharacterSet(charactersIn: "-\u{2013}\u{2014}.\u{2026},")
     private static let cutMarks = CharacterSet(charactersIn: ",;:.-\u{2013}\u{2014}")
@@ -43,13 +50,16 @@ public enum ReadableQuote {
         func drop(_ filler: String) {
             // The end mark of a removed filler moves to the word before it.
             guard let mark = filler.last(where: { $0 != "," }), endMarks.contains(mark), let previous = kept.popLast() else { return }
-            kept.append(previous.withoutTrailingCommas() + String(mark))
+            let bare = previous.withoutTrailingCommas()
+            if let end = bare.last, endMarks.contains(end) { kept.append(bare); return }
+            kept.append(bare + (mark == "?" || mark == "!" ? "." : String(mark)))
         }
         while i < tokens.count {
             let token = tokens[i], word = core(token)
             if fillerSounds.contains(word) {
                 drop(token); i += 1
-            } else if word == "like", token.hasSuffix(",") {
+            } else if word == "like", token.hasSuffix(","), let before = kept.last,
+                      before.hasSuffix(",") || beForms.contains(core(before)) {
                 drop(token); i += 1
             } else if word == "you", !token.hasSuffix(","), i + 1 < tokens.count, core(tokens[i + 1]) == "know",
                       tokens[i + 1].hasSuffix(",") || i + 2 == tokens.count {
@@ -69,7 +79,7 @@ public enum ReadableQuote {
             var j = i + 1
             while !word.isEmpty, j < tokens.count, core(tokens[j]) == word { j += 1 }
             if j - i > 1, !repeatable.contains(word) {
-                kept.append(leadingMarks(of: tokens[i]) + bareWord(tokens[i]) + endMark(of: tokens[j - 1]))
+                kept.append(withoutEnding(tokens[i]) + ending(of: tokens[j - 1]))
             } else {
                 kept.append(contentsOf: tokens[i..<j])
             }
@@ -90,14 +100,22 @@ public enum ReadableQuote {
         return String(scalars)
     }
 
-    private static func leadingMarks(of token: String) -> String { String(token.prefix { !$0.isLetter && !$0.isNumber }) }
-
-    private static func endMark(of token: String) -> String {
-        token.withoutTrailingCommas().last.flatMap { endMarks.contains($0) ? String($0) : nil } ?? ""
+    /// The run of end marks and closing quotes a token ends with, after its commas.
+    private static func ending(of token: String) -> String {
+        String(token.withoutTrailingCommas().reversed().prefix { endMarks.contains($0) || closers.contains($0) }.reversed())
     }
 
+    /// The token as written, without its trailing commas, end marks and closing quotes.
+    private static func withoutEnding(_ token: String) -> String {
+        let bare = token.withoutTrailingCommas()
+        return String(bare.dropLast(ending(of: bare).count))
+    }
+
+    private static let openers: Set<Character> = ["\"", "\u{201C}", "'", "\u{2018}", "\u{00AB}", "(", "["]
+
+    /// Only a letter is capitalised: "1999 was" and an emoji start stay as said.
     private static func capitalised(_ text: String) -> String {
-        guard let index = text.firstIndex(where: \.isLetter) else { return text }
+        guard let index = text.firstIndex(where: { !$0.isWhitespace && !openers.contains($0) }), text[index].isLetter else { return text }
         return text.replacingCharacters(in: index...index, with: text[index].uppercased())
     }
 }
