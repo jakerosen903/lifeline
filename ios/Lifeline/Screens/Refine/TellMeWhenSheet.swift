@@ -51,7 +51,7 @@ struct TellMeWhenSheet: View {
                     ForEach(Shape.allCases) { Text($0.rawValue).tag($0) }
                 }
                 .pickerStyle(.menu)
-                .tint(Theme.olive)
+                .tint(Theme.oliveText)
                 .accessibilityIdentifier("when.shape")
 
                 switch shape {

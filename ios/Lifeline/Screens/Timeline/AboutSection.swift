@@ -14,7 +14,7 @@ struct AboutSection: View {
                     Button { actions.open(row) } label: {
                         VStack(alignment: .leading, spacing: 4) {
                             Text(row.memory.title).font(.system(.body, design: .serif)).foregroundStyle(Theme.ink)
-                            Text("“\(row.memory.summaryQuote)”").font(.footnote).foregroundStyle(Theme.secondaryText).lineLimit(3)
+                            Text("“\(ReadableQuote.text(row.memory.summaryQuote, maxWords: 40))”").font(.footnote).foregroundStyle(Theme.secondaryText)
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.vertical, 6)

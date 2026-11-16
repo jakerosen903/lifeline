@@ -13,7 +13,7 @@ struct WrapUpBanner: View {
             HStack(spacing: 12) {
                 Button("Finish", action: onFinish)
                     .buttonStyle(.bordered)
-                    .tint(Theme.olive)
+                    .tint(Theme.oliveText)
                     .accessibilityIdentifier("session.wrapUpFinish")
                 Button("Keep going", action: onKeepGoing)
                     .buttonStyle(.borderedProminent)
@@ -45,7 +45,7 @@ struct NextPromptOffer: View {
             HStack(spacing: 12) {
                 Button("Take it", action: onTake)
                     .buttonStyle(.bordered)
-                    .tint(Theme.olive)
+                    .tint(Theme.oliveText)
                     .accessibilityIdentifier("session.nextPromptTake")
                 Button("Another time", action: onLater)
                     .buttonStyle(.borderless)

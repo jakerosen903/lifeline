@@ -50,7 +50,7 @@ struct ChangeSheet: View {
                             ForEach(viewModel.choices) { person in
                                 Button(person.displayName) { viewModel.add(person) }
                                     .buttonStyle(.bordered)
-                                    .tint(Theme.olive)
+                                    .tint(Theme.oliveText)
                                     .accessibilityIdentifier("change.addPerson")
                             }
                         }
@@ -88,7 +88,7 @@ struct ChangeSheet: View {
                     }
                     Button("Tell me when", systemImage: "calendar") { tellingWhen = true }
                         .buttonStyle(.borderless)
-                        .tint(Theme.olive)
+                        .tint(Theme.oliveText)
                         .accessibilityIdentifier("change.tellMeWhen")
                 }
                 }
@@ -100,13 +100,13 @@ struct ChangeSheet: View {
                                 .accessibilityIdentifier("change.merged")
                             Spacer()
                             Button("Undo") { viewModel.undoMerge() }
-                                .buttonStyle(.bordered).tint(Theme.olive)
+                                .buttonStyle(.bordered).tint(Theme.oliveText)
                                 .accessibilityIdentifier("change.undoMerge")
                         }
                     } else {
                         Button("Same as another memory…", systemImage: "arrow.triangle.merge") { pickingSameAs = true }
                             .buttonStyle(.borderless)
-                            .tint(Theme.olive)
+                            .tint(Theme.oliveText)
                             .accessibilityIdentifier("change.sameAs")
                     }
                 } header: {
@@ -121,13 +121,13 @@ struct ChangeSheet: View {
                             Text(trimmed).foregroundStyle(Theme.ink).accessibilityIdentifier("change.trimmed")
                             Spacer()
                             Button("Undo") { viewModel.undoTrim() }
-                                .buttonStyle(.bordered).tint(Theme.olive)
+                                .buttonStyle(.bordered).tint(Theme.oliveText)
                                 .accessibilityIdentifier("change.undoTrim")
                         }
                     }
                     Button("Which part of the recording", systemImage: "waveform.path") { trimming = true }
                         .buttonStyle(.borderless)
-                        .tint(Theme.olive)
+                        .tint(Theme.oliveText)
                         .disabled(viewModel.parts.isEmpty)
                         .accessibilityIdentifier("change.whichPart")
                     laterRow("Just tell me")
@@ -159,7 +159,7 @@ struct ChangeSheet: View {
                             Text(changed).foregroundStyle(Theme.ink).accessibilityIdentifier("change.kindChanged")
                             Spacer()
                             Button("Undo") { viewModel.undoKind() }
-                                .buttonStyle(.bordered).tint(Theme.olive)
+                                .buttonStyle(.bordered).tint(Theme.oliveText)
                                 .accessibilityIdentifier("change.undoKind")
                         }
                     }
