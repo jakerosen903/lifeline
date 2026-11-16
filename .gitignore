@@ -16,4 +16,6 @@ ios/Lifeline.xcodeproj/
 ios/Config/Local.xcconfig
 .build/
 .swiftpm/
-.superpowers/
+.superpowers/*
+# SDD ledgers are tracked; .superpowers/sdd/.gitignore says which files.
+!.superpowers/sdd/

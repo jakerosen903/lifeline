@@ -1,0 +1,10 @@
+# Tracked so every session and checkout shares the SDD record.
+# Keep each plan's ledger and rulings; everything else here is scratch
+# (task briefs, test logs, review diffs, plan-path).
+# superpowers' sdd-workspace writes this file only when it is missing.
+*
+!.gitignore
+!*/
+!*/progress.md
+!*/rulings.md
+!*/decisions.md
