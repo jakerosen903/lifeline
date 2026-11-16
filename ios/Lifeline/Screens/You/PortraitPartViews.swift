@@ -68,22 +68,33 @@ struct PortraitSaidRow: View {
     }
 }
 
-/// A feeling: a sand card with the words in italic serif, and what it is about when the words named it.
+/// A feeling: a sand card with the words in italic serif, which open its memory, and what it is about
+/// when the words named it, which opens that page.
 struct PortraitFeelingCard: View {
     let line: PortraitLine
     let deps: Dependencies
     let onChange: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(line.drawnText).font(.system(.body, design: .serif).italic()).foregroundStyle(Theme.ink)
-                .fixedSize(horizontal: false, vertical: true)
-                .accessibilityLabel(line.text)
+        VStack(alignment: .leading, spacing: 0) {
+            if let memory = line.memory {
+                NavigationLink {
+                    MemoryScreen(viewModel: MemoryViewModel(memory: memory, deps: deps), deps: deps, onChange: onChange)
+                } label: {
+                    Text(line.drawnText).font(.system(.body, design: .serif).italic()).foregroundStyle(Theme.ink)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                        .contentShape(Rectangle())
+                        .accessibilityLabel(line.text)
+                }
+                .buttonStyle(.plain)
                 .accessibilityIdentifier("you.line")
+            }
             if let about = line.about {
                 NavigationLink {
                     EntityScreen(viewModel: EntityViewModel(entity: about, deps: deps), onChange: onChange)
                 } label: {
+                    // Centred in its 44-point hit area, whose slack is the card's bottom margin: no blank band.
                     Text("about \(about.title)").font(.footnote).foregroundStyle(Theme.oliveText)
                         .fixedSize(horizontal: false, vertical: true)
                         .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
@@ -93,7 +104,8 @@ struct PortraitFeelingCard: View {
                 .accessibilityIdentifier("you.feelingAbout")
             }
         }
-        .padding(.horizontal, 16).padding(.vertical, 14)
+        // The links' 44-point frames carry most of the vertical margin, so the card hugs its words.
+        .padding(.horizontal, 16).padding(.top, 4).padding(.bottom, line.about == nil ? 4 : 0)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(RoundedRectangle(cornerRadius: 16).fill(Theme.sand))
     }
@@ -146,35 +158,30 @@ struct PortraitChips: View {
     }
 }
 
+/// One button whose look follows the selection, so VoiceOver keeps its focus on a tap. A capsule about
+/// 44 points high, drawn in the label with its hit area. Chosen: olive fill, white text and a checkmark.
+/// Not chosen: `oliveOnFill` text on a 12% fill of itself, which reaches 4.5:1 over linen (as `TagPill`).
 private struct PortraitChip: View {
     let title: String
     let isSelected: Bool
     let action: () -> Void
 
     var body: some View {
-        if isSelected {
-            Button(action: action) { label }
-                .buttonStyle(.borderedProminent).tint(Theme.olive)
-                .buttonBorderShape(.capsule)
-                .accessibilityAddTraits(.isSelected)
-        } else {
-            Button(action: action) { label }
-                .buttonStyle(.bordered).tint(Theme.oliveOnFill)
-                .buttonBorderShape(.capsule)
+        Button(action: action) {
+            HStack(spacing: 6) {
+                if isSelected { Image(systemName: "checkmark").fontWeight(.semibold) }
+                Text(title).multilineTextAlignment(.leading)
+            }
+            .font(.subheadline)
+            .foregroundStyle(isSelected ? Color.white : Theme.oliveOnFill)
+            .padding(.horizontal, 14).padding(.vertical, 6)
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(minHeight: 44)
+            .background(Capsule().fill(isSelected ? Theme.olive : Theme.oliveOnFill.opacity(0.12)))
+            .contentShape(Capsule())
         }
-    }
-
-    private var label: some View {
-        Label {
-            Text(title)
-        } icon: {
-            if isSelected { Image(systemName: "checkmark") }
-        }
-        .labelStyle(.titleAndIcon)
-        .font(.subheadline)
-        .multilineTextAlignment(.leading)
-        .fixedSize(horizontal: false, vertical: true)
-        .frame(minHeight: 44)
-        .contentShape(Rectangle())
+        .buttonStyle(.plain)
+        .accessibilityLabel(title)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 }

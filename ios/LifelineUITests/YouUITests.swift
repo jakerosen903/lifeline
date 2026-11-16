@@ -23,13 +23,27 @@ final class YouUITests: XCTestCase {
         XCTAssertEqual(app.buttons.matching(identifier: "you.feelingAbout").firstMatch.label, "about The lake")
         XCTAssertEqual(app.buttons.matching(identifier: "entities.row").firstMatch.label, "Saying yes to things")
         XCTAssertFalse(app.any("you.invite").exists)
+        let line = { (label: String) in app.buttons.matching(identifier: "you.line").matching(NSPredicate(format: "label == %@", label)).firstMatch }
+        XCTAssertEqual(line("I'm the oldest of two").value as? String, "Family", "a fact's tags are its value")
+        let said = line("I want to take Maya to Lisbon someday").value as? String ?? ""
+        XCTAssertTrue(said.hasPrefix("said in "), "a goal says when it was said, was “\(said)”")
+        XCTAssertNil(said.rangeOfCharacter(from: .decimalDigits), "said this year: the month only, was “\(said)”")
     }
 
     @MainActor
     func testTheChipsFilterWhoYouAre() {
         let app = XCUIApplication.launchWithPortrait(); app.openYou()
         XCTAssertEqual(app.buttons.matching(identifier: "you.tag").allElementsBoundByIndex.map(\.label), ["Family", "School"])
-        app.buttons.matching(identifier: "you.tag").matching(NSPredicate(format: "label == %@", "Family")).firstMatch.tap()
+        let all = app.buttons["you.tag.all"]
+        let family = app.buttons.matching(identifier: "you.tag").matching(NSPredicate(format: "label == %@", "Family")).firstMatch
+        XCTAssertTrue(all.isSelected, "the filter starts on All")
+        XCTAssertFalse(family.isSelected)
+        for chip in [all, family] {
+            XCTAssertGreaterThanOrEqual(chip.frame.height, 44, "a chip is a full-size control")
+            XCTAssertLessThanOrEqual(chip.frame.height, 50, "a chip is not padded past its hit area")
+        }
+        family.tap()
+        XCTAssertFalse(all.isSelected, "choosing a tag deselects All")
         XCTAssertEqual(app.youLineLabels(), ["I'm the oldest of two",
                                              "Leaving Boston felt like closing a book before the last chapter",
                                              "I was never scared at the lake, not once", "I want to take Maya to Lisbon someday"],
@@ -45,6 +59,16 @@ final class YouUITests: XCTestCase {
         app.buttons["you.feelingAbout"].firstMatch.tap()
         XCTAssertTrue(app.staticTexts["entity.title"].waitForExistence(timeout: 5))
         XCTAssertEqual(app.staticTexts["entity.title"].label, "The lake")
+    }
+
+    @MainActor
+    func testAFeelingWithNothingItIsAboutOpensItsMemory() {
+        let app = XCUIApplication.launchWithPortrait(); app.openYou()
+        let feeling = app.buttons.matching(identifier: "you.line")
+            .matching(NSPredicate(format: "label == %@", "Leaving Boston felt like closing a book before the last chapter")).firstMatch
+        XCTAssertTrue(app.reveal(feeling))
+        feeling.tap()
+        XCTAssertTrue(app.any("memory.kind").waitForExistence(timeout: 5))
     }
 
     @MainActor

@@ -32,7 +32,7 @@ final class YouViewModel {
             if let chosen = tag?.lowercased(), !tags.contains(where: { $0.lowercased() == chosen }) { tag = nil }
             error = nil
         } catch {
-            self.error = error.localizedDescription
+            self.error = "Could not read your page: \(error.localizedDescription)"
         }
     }
 

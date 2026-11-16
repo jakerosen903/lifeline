@@ -41,7 +41,14 @@ struct YouScreen: View {
                     }
                 }
                 if let error = viewModel.error {
-                    Text(error).foregroundStyle(.red).accessibilityIdentifier("you.error")
+                    // Ink text for contrast; the red is only in the symbol, as on the record bar.
+                    Label {
+                        Text(error).foregroundStyle(Theme.ink).fixedSize(horizontal: false, vertical: true)
+                    } icon: {
+                        Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.red)
+                    }
+                    .accessibilityElement(children: .combine)
+                    .accessibilityIdentifier("you.error")
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -59,7 +66,8 @@ struct YouScreen: View {
             SettingsScreen(deps: viewModel.deps, isSessionLive: isSessionLive)
         }
         // The root appeared (tab selected, or back from a pushed page): a fresh lead (decision 8).
-        .onAppear { isVisible = true; viewModel.refresh(newLead: true) }
+        // While a tag is chosen the lead stays (decisions 8 and 12): a new lead must not take the only fact with that tag.
+        .onAppear { isVisible = true; viewModel.refresh(newLead: viewModel.tag == nil) }
         .onDisappear { isVisible = false }
         // A story told from here lands under a cover; when it closes, read what it added and keep the lead.
         .onChange(of: home?.coverClosings) { if isVisible { viewModel.refresh(newLead: false) } }

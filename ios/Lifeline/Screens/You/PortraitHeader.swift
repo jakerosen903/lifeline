@@ -13,6 +13,7 @@ struct PortraitHeader: View {
             if let name = portrait.name {
                 Text(name).titleStyle()
                     .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityAddTraits(.isHeader)
                     .accessibilityIdentifier("you.name")
             }
             if let birth = portrait.birthLine {
@@ -35,6 +36,7 @@ struct PortraitHeader: View {
                 }
                 .buttonStyle(.plain)
                 .padding(.top, 6)
+                .accessibilityHint("Opens your page")
                 .accessibilityIdentifier("entities.aboutYou")
             }
         }
