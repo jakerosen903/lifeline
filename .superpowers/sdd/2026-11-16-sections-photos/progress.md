@@ -24,3 +24,9 @@ Pre-flight (one row per shared file or interface, one row per task):
 - Global: simulator id 88EC5B09-3A30-4544-8145-F5246BB99AEE exists (iPhone 17 Pro, booted).
 Pre-flight result: no conflict found.
 Baseline: swift test on f0eb114 → 862 tests in 8 suites passed, 0 failures.
+Owner gate: v13 schema approved by the owner in chat on 2026-11-16 ("Yes, ship v13"), as shown: photo + photo_link with entity_id/memory_id, check, four partial unique indexes, two plain indexes.
+Task 1: fix round 1/5 (6 addressed, 0 open — vacuous check assertion; no behavioural RED (mutation checks a–e done); setCover/unlink on an unlinked photo; signed digits; unused column; fold with no target cover; commits 7d331fc..b81932c)
+Task 1: minor (deferred): PhotoRepository role fallback `?? .attached` hides a corrupt role value (schema has no check on role).
+Task 1: note: the implementer wrote code before tests; RED was a compile error only. Remedied by five mutation checks, summarised in task-1-report.md. Later dispatches say "test first".
+Task 1: note: hungFinalizeDoesNotBlockSegmentCloseOrStop and drainGivesUpAtItsDeadline failed in 3 full runs under load, pass alone and in the final run; timing tests, not photo code.
+Task 1: complete (commits 426e7e0..b81932c, review clean; swift test 878)
