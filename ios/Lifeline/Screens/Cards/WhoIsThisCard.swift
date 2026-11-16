@@ -24,7 +24,7 @@ struct WhoIsThisCard: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 .buttonStyle(.bordered)
-                .tint(Theme.olive)
+                .tint(Theme.oliveOnFill)
                 .accessibilityIdentifier("card.person")
             }
             if people.count > Self.shown {

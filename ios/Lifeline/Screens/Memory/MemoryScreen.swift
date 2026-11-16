@@ -67,7 +67,7 @@ struct MemoryScreen: View {
                                           systemImage: viewModel.isPlaying(telling.span) ? "stop.circle.fill" : "play.circle.fill")
                                         .font(.title3)
                                 }
-                                .tint(Theme.olive)
+                                .tint(Theme.oliveText)
                                 .accessibilityIdentifier("memory.play")
                                 Spacer()
                                 Text("recorded " + telling.session.startedAt.formatted(.dateTime.month().day().year())).font(.caption).foregroundStyle(Theme.secondaryText)

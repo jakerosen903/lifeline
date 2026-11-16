@@ -79,12 +79,12 @@ struct MemoryCard: View {
                 if match != nil {
                     Button("Same story", action: onSameStory)
                         .buttonStyle(.bordered)
-                        .tint(Theme.olive)
+                        .tint(Theme.oliveOnFill)
                         .accessibilityIdentifier("card.sameStory")
                 }
                 Button("Change…", action: onChange)
                     .buttonStyle(.bordered)
-                    .tint(Theme.olive)
+                    .tint(Theme.oliveOnFill)
                     .accessibilityIdentifier("card.change")
                 Spacer(minLength: 0)
                 Button("Dismiss", action: onDismiss)
@@ -164,7 +164,7 @@ struct UndoNotice: View {
             Spacer(minLength: 0)
             Button("Undo", action: onUndo)
                 .buttonStyle(.bordered)
-                .tint(Theme.olive)
+                .tint(Theme.oliveOnFill)
                 .accessibilityIdentifier(undoIdentifier)
         }
         .padding(.horizontal, 16)

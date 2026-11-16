@@ -20,3 +20,19 @@ import Testing
     #expect(Palette.contrast(0xFFFFFF, 0xFFFFFF) == 1)
     #expect(Palette.contrast(0x000000, 0xFFFFFF) == Palette.contrast(0xFFFFFF, 0x000000))
 }
+
+@Test func inkPassesOnEveryTint() {
+    #expect(Palette.monogramTints == [0xE3DCC6, 0xDDE2D3, 0xEADBCB])
+    for tint in Palette.monogramTints { #expect(Palette.contrast(Palette.ink, tint) >= 4.5) }
+}
+
+// Final review: a bordered button fills itself with its tint at low opacity, so its text sits on
+// a blend, not on the surface.
+@Test func oliveTextOnABorderedButtonsOwnFillPasses() {
+    for surface in [Palette.linen, Palette.sand, Palette.card] {
+        let fill = Palette.blend(Palette.oliveOnFill, over: surface, opacity: 0.2)
+        #expect(Palette.contrast(Palette.oliveOnFill, fill) >= 4.5)
+    }
+    #expect(Palette.blend(0x000000, over: 0xFFFFFF, opacity: 0.5) == 0x808080)
+    #expect(Palette.blend(0x123456, over: 0xFFFFFF, opacity: 1) == 0x123456)
+}

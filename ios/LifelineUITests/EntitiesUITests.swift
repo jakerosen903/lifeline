@@ -41,7 +41,7 @@ final class EntitiesUITests: XCTestCase {
         shed.tap()
         XCTAssertTrue(app.staticTexts["entity.title"].waitForExistence(timeout: 5))
         XCTAssertEqual(app.staticTexts["entity.title"].label, "the old shed")
-        XCTAssertTrue(app.staticTexts["no dates yet"].exists, "nobody asks when")
+        XCTAssertEqual(app.any("entity.stripSentence").label, "In one moment", "nobody asks when")
         app.navigationBars.buttons.firstMatch.tap()
         XCTAssertTrue(app.navigationBars["Things"].waitForExistence(timeout: 5), "back on the Things list")
 
@@ -55,7 +55,7 @@ final class EntitiesUITests: XCTestCase {
         XCTAssertEqual(detail.label, "The house had a blue door")
         XCTAssertEqual(moment.label, "We painted the house")
         XCTAssertLessThan(detail.frame.minY, moment.frame.minY, "details first, moments below")
-        XCTAssertEqual(app.staticTexts["entity.span"].label, "in 1995")
+        XCTAssertEqual(app.any("entity.stripSentence").label, "In one moment, in 1995")
         app.navigationBars.buttons.firstMatch.tap()
 
         // Two ideas that share words are two ideas: each Keep makes its own, reused by id only.

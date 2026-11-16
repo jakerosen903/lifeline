@@ -52,7 +52,7 @@ struct TrimSheet: View {
                                 .accessibilityIdentifier("trim.play")
                         }
                         .buttonStyle(.bordered)
-                        .tint(Theme.olive)
+                        .tint(Theme.oliveOnFill)
                     }
                 }
                 .padding(24)

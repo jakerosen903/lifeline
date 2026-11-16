@@ -248,6 +248,7 @@ struct Dependencies {
         deps.exportWithoutShareSheet = true
         if args.contains("-uiTesting-seed") { try UITestSeed.write(sessions: deps.sessions, store: store) }
         if args.contains("-uiTesting-seedPerson") { try UITestSeed.writePersonOnly(store: store) }
+        if args.contains("-uiTesting-seedPeople") { try UITestSeed.writePeople(store: store, profile: deps.profile, sessions: deps.sessions) }
         if args.contains("-uiTesting-noOwner") { try UITestSeed.writeProfileWithoutOwner(profile: deps.profile, store: store) }
         return deps
     }

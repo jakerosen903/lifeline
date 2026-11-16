@@ -90,7 +90,7 @@ struct MemoryRowView: View {
                             .accessibilityIdentifier("row.addCollection")
                     }
                     .buttonStyle(.bordered)
-                    .tint(Theme.olive)
+                    .tint(Theme.oliveOnFill)
                     .font(.caption)
                     .padding(.bottom, 6)
                 }

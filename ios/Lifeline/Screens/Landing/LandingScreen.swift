@@ -17,7 +17,7 @@ struct LandingScreen: View {
                                 .font(.subheadline.weight(.semibold))
                                 .multilineTextAlignment(.leading)
                         }
-                        .tint(Theme.olive)
+                        .tint(Theme.oliveText)
                         .accessibilityIdentifier("landing.crisisLine")
                     }
                     Text(viewModel.headline).titleStyle().accessibilityIdentifier("landing.headline")
@@ -123,7 +123,7 @@ struct LandingScreen: View {
             .accessibilityIdentifier("landing.done")
             Button("Review these moments") { reviewing = true }
                 .buttonStyle(.bordered)
-                .tint(Theme.olive)
+                .tint(Theme.oliveOnFill)
                 .accessibilityIdentifier("landing.review")
             HStack(spacing: 20) {
                 Button("Hide today from the timeline") { viewModel.hideToday() }

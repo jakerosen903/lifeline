@@ -70,8 +70,10 @@ public struct PeopleRepository: Sendable {
     }
 
     /// The alias that reads as a relation to the owner ("my mom", "our dog"), if any.
-    public static func relationLabel(aliases: [Alias]) -> String? {
-        aliases.map(\.text).first { text in
+    public static func relationLabel(aliases: [Alias]) -> String? { relationLabel(texts: aliases.map(\.text)) }
+
+    static func relationLabel(texts: [String]) -> String? {
+        texts.first { text in
             let lower = text.lowercased()
             return lower.hasPrefix("my ") || lower.hasPrefix("our ")
         }

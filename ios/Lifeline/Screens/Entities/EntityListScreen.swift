@@ -5,6 +5,10 @@ import SwiftUI
 struct EntityListScreen: View {
     /// Created once per presentation: a parent re-render must not reset the filter.
     @State private var viewModel: EntitiesViewModel
+    /// Absent outside the shell (a preview): then nothing watches the session cover.
+    @Environment(HomeViewModel.self) private var home: HomeViewModel?
+    /// The top page of its stack. Under a cover it stays visible: the cover sends no onDisappear.
+    @State private var isVisible = false
 
     init(deps: Dependencies, type: EntityType) {
         _viewModel = State(initialValue: EntitiesViewModel(deps: deps, type: type))
@@ -13,7 +17,8 @@ struct EntityListScreen: View {
     var body: some View {
         List {
             Section {
-                if viewModel.rows.isEmpty {
+                // Only after the first read: before it, the text would flash over a full list.
+                if viewModel.isLoaded, viewModel.rows.isEmpty {
                     Text(viewModel.tagFilter == nil ? "Nothing yet. They appear as you tell stories." : "Nothing tagged “\(viewModel.tagFilter!)”.")
                         .foregroundStyle(Theme.secondaryText)
                 }
@@ -24,7 +29,44 @@ struct EntityListScreen: View {
         .scrollContentBackground(.hidden)
         .linenBackground()
         .navigationTitle(viewModel.type.screenTitle)
-        .toolbar {
+        .toolbar { EntityTagFilterMenu(viewModel: viewModel) }
+        .onAppear { isVisible = true; viewModel.refresh() }
+        .onDisappear { isVisible = false }
+        // A session started from this tab lands under a cover; when it closes, read what it added.
+        .onChange(of: home?.coverClosings) { if isVisible { viewModel.refresh() } }
+    }
+}
+
+/// Entity rows that open their pages: the title, then its span.
+struct EntityRows: View {
+    let rows: [EntitySummary]
+    let deps: Dependencies
+    let onChange: () -> Void
+
+    var body: some View {
+        ForEach(rows) { row in
+            NavigationLink {
+                EntityScreen(viewModel: EntityViewModel(entity: row.entity, deps: deps), onChange: onChange)
+            } label: {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(row.entity.title).font(.system(.headline, design: .serif)).foregroundStyle(Theme.ink)
+                    Text(EntityPage.spanText(row.span)).font(.caption).foregroundStyle(Theme.ochreText)
+                }
+                .padding(.vertical, 2)
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(row.entity.title)
+            }
+            .accessibilityIdentifier("entities.row")
+        }
+    }
+}
+
+/// The toolbar menu that narrows a list to one tag. It shows only once a tag exists.
+struct EntityTagFilterMenu: ToolbarContent {
+    let viewModel: EntitiesViewModel
+
+    var body: some ToolbarContent {
+        ToolbarItem {
             if !viewModel.allTags.isEmpty {
                 Menu {
                     Button("Everything") { viewModel.tagFilter = nil }
@@ -38,31 +80,6 @@ struct EntityListScreen: View {
                     .accessibilityLabel(viewModel.tagFilter.map { "Showing \($0)" } ?? "Filter by tag")
                     .accessibilityIdentifier("entities.tagFilter")
             }
-        }
-        .onAppear { viewModel.refresh() }
-    }
-}
-
-/// Entity rows that open their pages: the title, then its span.
-struct EntityRows: View {
-    let rows: [EntitiesViewModel.Row]
-    let deps: Dependencies
-    let onChange: () -> Void
-
-    var body: some View {
-        ForEach(rows) { row in
-            NavigationLink {
-                EntityScreen(viewModel: EntityViewModel(entity: row.entity, deps: deps), onChange: onChange)
-            } label: {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(row.entity.title).font(.system(.headline, design: .serif)).foregroundStyle(Theme.ink)
-                    Text(row.spanText).font(.caption).foregroundStyle(Theme.ochreText)
-                }
-                .padding(.vertical, 2)
-                .accessibilityElement(children: .ignore)
-                .accessibilityLabel(row.entity.title)
-            }
-            .accessibilityIdentifier("entities.row")
         }
     }
 }

@@ -15,10 +15,17 @@ enum Theme {
     static let olive = color(Palette.olive)
     /// Olive for text. Passes 4.5:1 on linen, sand and card; `olive` is for fills and large marks.
     static let oliveText = color(Palette.oliveText)
+    /// Olive for the tint of a `.bordered` button, whose text sits on a fill of its own tint.
+    /// Passes 4.5:1 on that fill over linen, sand and card. Borderless and plain text keep
+    /// `oliveText`; `.borderedProminent` keeps `olive`.
+    static let oliveOnFill = color(Palette.oliveOnFill)
     /// Ochre marks that are not text: bands, lines, dots.
     static let ochre = color(Palette.ochre)
     /// Ochre for text. Passes 4.5:1 on linen, sand and card.
     static let ochreText = color(Palette.ochreText)
+
+    /// The three tints behind a monogram. `ink` passes 4.5:1 on each (a kit test pins it).
+    static let monogramTints = Palette.monogramTints.map(color)
 
     private static func color(_ hex: Int) -> Color {
         Color(red: Double((hex >> 16) & 0xFF) / 255, green: Double((hex >> 8) & 0xFF) / 255, blue: Double(hex & 0xFF) / 255)
@@ -32,6 +39,12 @@ extension View {
 
     func titleStyle() -> some View {
         font(.system(.largeTitle, design: .serif)).foregroundStyle(Theme.ink)
+    }
+
+    /// A page's section heading ("Often with", "Tags"): one style wherever it sits, in a List
+    /// header or in a row.
+    func sectionHeadingStyle() -> some View {
+        font(.headline).foregroundStyle(Theme.secondaryText).textCase(nil).accessibilityAddTraits(.isHeader)
     }
 }
 

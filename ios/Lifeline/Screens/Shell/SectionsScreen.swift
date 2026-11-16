@@ -53,7 +53,7 @@ private struct PeopleTabRoot: View {
     @State private var showNames = false
 
     var body: some View {
-        EntityListScreen(deps: deps, type: .person)
+        PeopleGridScreen(deps: deps)
             .toolbar {
                 Menu {
                     Button("Names you mentioned", systemImage: "person.text.rectangle") { showNames = true }

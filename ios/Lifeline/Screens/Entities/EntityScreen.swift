@@ -1,9 +1,10 @@
 import LifelineKit
 import SwiftUI
 
-/// An entity page (M7): the title, its details in the person's words, its span and first
-/// telling, then the moments it appears in, then the people, places and things beside it.
-/// Nothing here asks for a date; "Add dates" waits for the person.
+/// An entity page (M7, S2), in the spec's order: the title, the person's own words for it, a span
+/// only if they gave one, Play, the life strip, what they said about it, what it is often with,
+/// then its moments in order, then tags. A section with nothing in it does not show; a page with
+/// nothing at all invites a story. Nothing here asks for a date; "Add dates" waits for the person.
 struct EntityScreen: View {
     /// Created once per presentation, so playback and sheets survive a parent re-render.
     @State private var viewModel: EntityViewModel
@@ -18,79 +19,105 @@ struct EntityScreen: View {
     @State private var addingDates = false
     @State private var addingTag = false
     @State private var draftTag = ""
+    /// The page an "Often with" chip opened.
+    @State private var opened: Entity?
     @Environment(\.dismiss) private var dismiss
+    /// Absent outside the shell (a preview): then nothing watches the session cover.
+    @Environment(HomeViewModel.self) private var home: HomeViewModel?
+    /// The top page of its stack. A page under a cover stays visible: the cover sends no onDisappear.
+    @State private var isVisible = false
 
     var body: some View {
         List {
             Section {
                 VStack(alignment: .leading, spacing: 6) {
                     Text(viewModel.entity.type.singular)
-                        .font(.caption.weight(.semibold)).foregroundStyle(Theme.oliveText)
+                        .font(.footnote.weight(.semibold)).foregroundStyle(Theme.oliveText)
                     Text(viewModel.entity.title).titleStyle().accessibilityIdentifier("entity.title")
-                    Text(viewModel.spanText).font(.subheadline.weight(.semibold)).foregroundStyle(Theme.ochreText)
-                        .accessibilityIdentifier("entity.span")
+                    if let ownWords = viewModel.ownWords {
+                        Text(ownWords).font(.subheadline).foregroundStyle(Theme.secondaryText)
+                            .accessibilityIdentifier("entity.ownWords")
+                    }
+                    if let span = viewModel.statedSpanText {
+                        Text(span).font(.subheadline.weight(.semibold)).foregroundStyle(Theme.ochreText)
+                            .accessibilityIdentifier("entity.span")
+                    }
                     if viewModel.firstTelling != nil {
+                        // The 44-point frame sits in the label: outside the Button it grows the row,
+                        // not the area a tap reaches.
                         Button { viewModel.togglePlayback() } label: {
                             Label(viewModel.isPlaying ? "Stop" : "Play", systemImage: viewModel.isPlaying ? "stop.circle.fill" : "play.circle.fill")
+                                .frame(minHeight: 44)
+                                .contentShape(Rectangle())
                         }
                         .buttonStyle(.borderless).tint(Theme.oliveText)
                         .accessibilityIdentifier("entity.play")
+                    }
+                    if let strip = viewModel.strip, strip.sentence != nil {
+                        LifeStripView(strip: strip)
                     }
                 }
                 .listRowBackground(Color.clear)
             }
 
             if viewModel.entity.type == .idea {
-                Section("Over time") {
-                    ForEach(viewModel.ideaLines) { memory in line(memory) }
-                    if viewModel.ideaLines.isEmpty { Text("Nothing told about it yet.").foregroundStyle(Theme.secondaryText) }
+                if !viewModel.ideaLines.isEmpty {
+                    Section {
+                        ForEach(viewModel.ideaLines) { memory in line(memory) }
+                    } header: { Text("Over time").sectionHeadingStyle() }
                 }
             } else {
-                // Details first, moments below (owner's decision 6).
-                Section("What you said about it") {
-                    ForEach(viewModel.details) { memory in line(memory) }
-                    if viewModel.details.isEmpty { Text("Nothing said about it yet.").foregroundStyle(Theme.secondaryText) }
-                }
-                Section("Moments") {
-                    ForEach(viewModel.moments) { memory in line(memory) }
-                    if viewModel.moments.isEmpty { Text("No moments yet.").foregroundStyle(Theme.secondaryText) }
+                if !viewModel.said.isEmpty {
+                    Section {
+                        ForEach(viewModel.said) { memory in detail(memory) }
+                    } header: { Text(EntityPage.saidHeading(viewModel.entity.type, isOwner: viewModel.isOwner)).sectionHeadingStyle() }
                 }
             }
 
-            if !viewModel.coOccurring.isEmpty {
-                Section("Beside it") {
+            if !viewModel.oftenWith.isEmpty {
+                OftenWithSection(items: viewModel.oftenWith) { opened = $0 }
+            }
+
+            if viewModel.entity.type != .idea, !viewModel.moments.isEmpty {
+                Section {
+                    ForEach(viewModel.moments) { memory in moment(memory) }
+                } header: { Text(EntityPage.momentsHeading(title: viewModel.entity.title, isOwner: viewModel.isOwner)).sectionHeadingStyle() }
+            }
+
+            if showsInvitation {
+                Section {
+                    Text(EntityPage.invitation(title: viewModel.entity.title, isOwner: viewModel.isOwner))
+                        .font(.body).foregroundStyle(Theme.secondaryText)
+                        .accessibilityIdentifier("entity.invite")
+                        .listRowBackground(Color.clear)
+                }
+            }
+
+            // The heading sits in the row, not the section header: a List row whose only element is one
+            // button is read as that button, the size of the whole row.
+            Section {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Tags").sectionHeadingStyle()
                     FlowLayout(spacing: 6) {
-                        ForEach(viewModel.coOccurring) { other in
-                            NavigationLink {
-                                EntityScreen(viewModel: EntityViewModel(entity: other, deps: viewModel.deps), onChange: onChange)
-                            } label: {
-                                Text(other.title).font(.caption).padding(.horizontal, 10).padding(.vertical, 5)
-                                    .background(Capsule().fill(Theme.linen)).foregroundStyle(Theme.ink)
-                            }
-                            .buttonStyle(.plain)
+                        ForEach(viewModel.tags, id: \.self) { tag in
+                            Button { viewModel.removeTag(tag) } label: { TagPill(title: tag, systemImage: "xmark", tint: Theme.secondaryText) }
+                                .buttonStyle(.borderless)
+                                .accessibilityIdentifier("entity.tag")
                         }
+                        Button { draftTag = ""; addingTag = true } label: { TagPill(title: "Add a tag", systemImage: "tag", tint: Theme.oliveOnFill) }
+                            .buttonStyle(.borderless)
+                            .accessibilityIdentifier("entity.addTag")
                     }
                 }
-            }
-
-            Section("Tags") {
-                FlowLayout(spacing: 6) {
-                    ForEach(viewModel.tags, id: \.self) { tag in
-                        Button { viewModel.removeTag(tag) } label: {
-                            Label(tag, systemImage: "xmark").font(.caption)
-                        }
-                        .buttonStyle(.bordered).tint(Theme.secondaryText)
-                        .accessibilityIdentifier("entity.tag")
-                    }
-                    Button("Add a tag", systemImage: "tag") { draftTag = ""; addingTag = true }
-                        .buttonStyle(.bordered).tint(Theme.olive).font(.caption)
-                        .accessibilityIdentifier("entity.addTag")
-                }
+                .listRowBackground(Color.clear)
             }
 
             if let error = viewModel.error { Text(error).foregroundStyle(.red) }
         }
         .scrollContentBackground(.hidden)
+        .navigationDestination(item: $opened) { other in
+            EntityScreen(viewModel: EntityViewModel(entity: other, deps: viewModel.deps), onChange: onChange)
+        }
         .linenBackground()
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -118,25 +145,92 @@ struct EntityScreen: View {
             TellMeWhenSheet(title: viewModel.entity.title, birthDate: try? viewModel.deps.extractionStore.profile.ownerBirthDate(),
                             heading: "From when to when?") { viewModel.addDates($0) }
         }
-        .onAppear { viewModel.refresh() }
-        .onDisappear { viewModel.stop() }
+        .onAppear { isVisible = true; viewModel.refresh() }
+        .onDisappear { isVisible = false; viewModel.stop() }
+        // A session started here lands under a cover; when it closes, read what it added.
+        .onChange(of: home?.coverClosings) { if isVisible { viewModel.refresh() } }
         .sessionContext(viewModel.subject)
         .onChange(of: viewModel.isGone) { if viewModel.isGone { onChange(); dismiss() } }
     }
 
-    private func line(_ memory: Memory) -> some View {
-        NavigationLink {
-            MemoryScreen(viewModel: MemoryViewModel(memory: memory, deps: viewModel.deps), deps: viewModel.deps) { viewModel.refresh(); onChange() }
-        } label: {
+    /// Waits for the first load, so the first frame never says "nothing here" about a full page.
+    private var showsInvitation: Bool {
+        guard viewModel.isLoaded else { return false }
+        return viewModel.entity.type == .idea ? viewModel.ideaLines.isEmpty : viewModel.said.isEmpty && viewModel.moments.isEmpty
+    }
+
+    private func open(_ memory: Memory) -> some View {
+        MemoryScreen(viewModel: MemoryViewModel(memory: memory, deps: viewModel.deps), deps: viewModel.deps) { viewModel.refresh(); onChange() }
+    }
+
+    /// Something said about it: the whole quote, cleaned for reading only (the stored words stay).
+    private func detail(_ memory: Memory) -> some View {
+        let quote = EntityPage.readableQuote(of: memory)
+        return NavigationLink { open(memory) } label: {
+            Text(quote).font(.system(.body, design: .serif)).foregroundStyle(Theme.ink)
+                .fixedSize(horizontal: false, vertical: true)
+                .accessibilityLabel(quote)
+        }
+        .accessibilityIdentifier("entity.detail")
+    }
+
+    /// A moment: its date above its title, as on Timeline. A half-open range has no date to show.
+    /// VoiceOver reads the title, then the date with its uncertainty ("around 1998").
+    private func moment(_ memory: Memory) -> some View {
+        NavigationLink { open(memory) } label: {
             VStack(alignment: .leading, spacing: 2) {
-                Text("“\(memory.summaryQuote)”").font(.system(.body, design: .serif)).foregroundStyle(Theme.ink).lineLimit(2)
-                if memory.isMoment, memory.range.isPlaced {
-                    Text(memory.range.displayText).font(.caption).foregroundStyle(Theme.ochreText)
+                if memory.range.isDated {
+                    Text(memory.range.displayText).font(.footnote).foregroundStyle(Theme.ochreText)
+                }
+                Text(memory.title).foregroundStyle(Theme.ink)
+            }
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(memory.title)
+            .accessibilityValue(memory.range.isDated ? memory.range.displayText : "")
+        }
+        .accessibilityIdentifier("entity.moment")
+    }
+
+    /// An idea's line: its quote, and its date when it is a placed moment.
+    private func line(_ memory: Memory) -> some View {
+        NavigationLink { open(memory) } label: {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(EntityPage.ownWordsQuote(of: memory).map { "“\($0)”" } ?? memory.title).font(.system(.body, design: .serif)).foregroundStyle(Theme.ink).lineLimit(2)
+                if memory.isMoment, memory.range.isDated {
+                    Text(memory.range.displayText).font(.footnote).foregroundStyle(Theme.ochreText)
                 }
             }
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(memory.title)
+            .accessibilityValue(memory.isMoment && memory.range.isDated ? memory.range.displayText : "")
         }
         .accessibilityIdentifier(memory.isMoment ? "entity.moment" : "entity.detail")
+    }
+}
+
+/// A small capsule for a tag and for "Add a tag", drawn in the button's label. The 44-point
+/// frame and its content shape are in the label too, so the tap area is the button's own.
+/// The text uses the tint on a 12% fill of itself: `oliveOnFill` and `secondaryText` both reach
+/// 4.5:1 on that fill over linen, the page's surface.
+/// `.titleAndIcon` is set explicitly: inside a List row the automatic label style answers an
+/// unsized proposal (FlowLayout's measure) with the icon alone in a tall frame.
+private struct TagPill: View {
+    let title: String
+    let systemImage: String
+    let tint: Color
+
+    var body: some View {
+        Label(title, systemImage: systemImage)
+            .labelStyle(.titleAndIcon)
+            .font(.subheadline)
+            .lineLimit(2)
+            .multilineTextAlignment(.leading)
+            .foregroundStyle(tint)
+            .padding(.horizontal, 10).padding(.vertical, 5)
+            .background(Capsule().fill(tint.opacity(0.12)))
+            // Never squeezed shorter than its text; narrower only when a long tag must wrap in the row.
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(minHeight: 44)
+            .contentShape(Rectangle())
     }
 }

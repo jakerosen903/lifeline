@@ -26,7 +26,7 @@ struct RefineCard: View {
                     ForEach(question.choices) { choice in
                         Button(choice.label) { onChoose(choice) }
                             .buttonStyle(.bordered)
-                            .tint(Theme.olive)
+                            .tint(Theme.oliveOnFill)
                             .accessibilityIdentifier("refine.choice")
                     }
                 }
@@ -37,7 +37,7 @@ struct RefineCard: View {
             if let onTellMeWhen {
                 Button("Tell me when", systemImage: "calendar", action: onTellMeWhen)
                     .buttonStyle(.bordered)
-                    .tint(Theme.olive)
+                    .tint(Theme.oliveOnFill)
                     .accessibilityIdentifier("refine.tellMeWhen")
             }
             Button("Keep “\(bestGuess)” for now", action: onKeep)

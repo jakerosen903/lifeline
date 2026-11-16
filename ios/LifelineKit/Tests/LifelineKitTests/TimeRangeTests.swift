@@ -62,3 +62,25 @@ private func d(_ s: String) -> CivilDate { CivilDate(iso: s)! }
     #expect(range.earliest == CivilDate(iso: "1998-06-15") && range.latest == CivilDate(iso: "1999-06-14"))
     #expect(range.origin == .stated && range.evidenceText == "about 8" && range.displayText == "about 8")
 }
+
+// Final review: a hedged or relative date never reads as said on a page or a strip.
+
+@Test func onlyAPlainStatedOrConfirmedDateReadsAsSaid() {
+    #expect(TimeRange.stated(year: 1998).readsAsSaid)
+    #expect(TimeRange.year(1998, origin: .confirmed, evidence: nil).readsAsSaid)
+    #expect(!TimeRange.stated(around: 1998).readsAsSaid, "\"around 1998\" is the person's hedge")
+    #expect(!TimeRange.stated(age: .approximate(center: 8, slack: 0), birth: d("1990-05-01"), evidence: "about 8").readsAsSaid)
+    let before = TimeRange.span(d("1996-01-01"), d("2004-12-31"), granularity: .year, origin: .confirmed, evidence: "before Graduation (2004)")
+    #expect(!before.readsAsSaid, "the far edge of a relation is the builder's slack")
+    #expect(!TimeRange.year(1998, origin: .inferred, evidence: nil).readsAsSaid)
+    #expect(!TimeRange.year(1998, origin: .derived, evidence: nil).readsAsSaid)
+}
+
+@Test func aRangeIsDatedOnlyWithBothEnds() {
+    #expect(TimeRange.stated(year: 1998).isDated)
+    #expect(!TimeRange.unplaced.isDated)
+    let onlyEarliest = TimeRange(earliest: d("1999-01-01"), latest: nil, likelyStart: nil, likelyEnd: nil, granularity: .year, origin: .inferred, evidenceText: nil)
+    let onlyLatest = TimeRange(earliest: nil, latest: d("1999-12-31"), likelyStart: nil, likelyEnd: nil, granularity: .year, origin: .inferred, evidenceText: nil)
+    #expect(onlyEarliest.isPlaced && !onlyEarliest.isDated)
+    #expect(onlyLatest.isPlaced && !onlyLatest.isDated)
+}

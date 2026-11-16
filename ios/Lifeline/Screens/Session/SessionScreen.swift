@@ -172,7 +172,8 @@ struct SessionScreen: View {
                     FlowLayout(spacing: 6) {
                         ForEach(Array(viewModel.alternates.enumerated()), id: \.offset) { index, text in
                             Button { viewModel.swapIn(alternate: index) } label: {
-                                Text(text).font(.caption).lineLimit(1)
+                                // A whole prompt: two lines rather than cut short in a narrow row.
+                                Text(text).font(.caption).lineLimit(2).multilineTextAlignment(.leading)
                                     .padding(.horizontal, 10).padding(.vertical, 5)
                                     .background(Capsule().fill(Theme.sand))
                                     .foregroundStyle(Theme.ink)
