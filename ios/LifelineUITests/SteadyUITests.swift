@@ -67,8 +67,7 @@ extension SteadyUITests {
 
     @MainActor
     private func openSettings(_ app: XCUIApplication) {
-        XCTAssertTrue(app.waitHittable(app.buttons["home.settings"], timeout: 5))
-        app.buttons["home.settings"].tap()
+        app.openSettings()
         XCTAssertTrue(app.buttons["settings.done"].waitForExistence(timeout: 5))
     }
 

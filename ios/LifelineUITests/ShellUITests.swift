@@ -91,8 +91,7 @@ final class ShellUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["session.segment"].firstMatch.waitForExistence(timeout: 15), "the session hears something, so it lands")
         app.finishSession()
 
-        app.tabBars.buttons["Timeline"].tap()
-        app.buttons["timeline.sessions"].tap()
+        app.openSessions()
         XCTAssertTrue(app.any("home.sessionRow").waitForExistence(timeout: 5))
         XCTAssertEqual(app.descendants(matching: .any).matching(identifier: "home.sessionRow").count, 1, "one session, not two")
     }
@@ -100,10 +99,7 @@ final class ShellUITests: XCTestCase {
     @MainActor
     func testSettleInIsInTheBarsMenu() {
         let app = launch()
-        app.buttons["home.more"].tap()
-        XCTAssertTrue(app.buttons["home.settleIn"].waitForExistence(timeout: 5))
-        app.buttons["home.settleIn"].tap()
-        XCTAssertTrue(app.buttons["session.finish"].waitForExistence(timeout: 5))
+        app.startSettleIn()
         XCTAssertEqual(app.staticTexts["session.kind"].label, "You chose settling in")
     }
 

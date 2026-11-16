@@ -3,9 +3,9 @@ import XCTest
 extension XCUIApplication {
     /// First open: "Add a little context" then Skip, which saves an empty profile and leads home.
     func skipFirstOpen() {
-        XCTAssertTrue(buttons["firstOpen.context"].waitForExistence(timeout: 5))
+        XCTAssertTrue(waitHittable(buttons["firstOpen.context"], timeout: 15), "the first-open context button is tappable")
         buttons["firstOpen.context"].tap()
-        XCTAssertTrue(buttons["aboutYou.skip"].waitForExistence(timeout: 5))
+        XCTAssertTrue(waitHittable(buttons["aboutYou.skip"], timeout: 15), "the Skip button is tappable")
         buttons["aboutYou.skip"].tap()
     }
 
@@ -29,12 +29,21 @@ extension XCUIApplication {
 
     /// Elements under a full-screen cover still "exist"; only a hittable one is really on screen.
     func waitHittable(_ element: XCUIElement, timeout: TimeInterval) -> Bool {
-        let deadline = Date().addingTimeInterval(timeout)
-        while Date() < deadline {
-            if element.exists && element.isHittable { return true }
-            RunLoop.current.run(until: Date().addingTimeInterval(0.2))
+        // Asking isHittable of an element mid-transition records a failure instead of answering no,
+        // so ask only once its frame is on screen and has held still for a poll.
+        var last = CGRect.null
+        func settled() -> Bool {
+            guard element.exists else { last = .null; return false }
+            let frame = element.frame
+            defer { last = frame }
+            return !frame.isEmpty && frame == last && self.frame.contains(CGPoint(x: frame.midX, y: frame.midY))
         }
-        return element.exists && element.isHittable
+        let deadline = Date().addingTimeInterval(timeout)
+        repeat {
+            if settled() && element.isHittable { return true }
+            RunLoop.current.run(until: Date().addingTimeInterval(0.2))
+        } while Date() < deadline
+        return settled() && element.isHittable
     }
 
     /// Lists are lazy: a row below the fold is not in the tree until it scrolls into view.
@@ -59,5 +68,69 @@ extension XCUIApplication {
     func openListen() {
         let segment = segmentedControls["session.view"].buttons["Listen"]
         if segment.waitForExistence(timeout: 3) { segment.tap() } else { buttons["Listen"].firstMatch.tap() }
+    }
+
+    // MARK: - Routes through the tabs
+
+    /// Select a tab by its title. Tapping the tab the app is already on is harmless.
+    func openTab(_ title: String) {
+        let tab = tabBars.buttons[title]
+        XCTAssertTrue(waitHittable(tab, timeout: 10), "the \(title) tab is on screen")
+        tab.tap()
+    }
+
+    /// The entity list for a type: People, Places or Things have a tab; Ideas are listed on You.
+    func openEntities(_ type: String) {
+        openTab(type == "Ideas" ? "You" : type)
+    }
+
+    /// You, then the Settings button.
+    func openSettings() {
+        openTab("You")
+        let settings = buttons["home.settings"]
+        XCTAssertTrue(waitHittable(settings, timeout: 10), "Settings is on the You tab")
+        settings.tap()
+    }
+
+    /// Timeline, then the Sessions button.
+    func openSessions() {
+        openTab("Timeline")
+        let sessions = buttons["timeline.sessions"]
+        XCTAssertTrue(waitHittable(sessions, timeout: 10), "Sessions is on the Timeline tab")
+        sessions.tap()
+        XCTAssertTrue(navigationBars["Sessions"].waitForExistence(timeout: 5), "the Sessions screen is up")
+    }
+
+    /// People, the overflow menu, then "Names you mentioned".
+    func openNamesQueue() {
+        openTab("People")
+        let more = buttons["people.more"]
+        XCTAssertTrue(waitHittable(more, timeout: 10), "the People overflow menu is on screen")
+        more.tap()
+        let names = buttons["home.people"]
+        XCTAssertTrue(waitHittable(names, timeout: 5), "Names you mentioned is in the menu")
+        names.tap()
+    }
+
+    /// Timeline, its overflow menu, then the "Show hidden memories" toggle.
+    func toggleShowHiddenMemories() {
+        openTab("Timeline")
+        let more = buttons["timeline.more"]
+        XCTAssertTrue(waitHittable(more, timeout: 10), "the Timeline overflow menu is on screen")
+        more.tap()
+        let toggle = any("timeline.showHidden")
+        XCTAssertTrue(waitHittable(toggle, timeout: 5), "Show hidden memories is in the menu")
+        toggle.tap()
+    }
+
+    /// The record bar's menu, then "Settle in".
+    func startSettleIn() {
+        let more = buttons["home.more"]
+        XCTAssertTrue(waitHittable(more, timeout: 10), "the record bar's menu is on screen")
+        more.tap()
+        let settle = buttons["home.settleIn"]
+        XCTAssertTrue(waitHittable(settle, timeout: 5), "Settle in is in the bar's menu")
+        settle.tap()
+        XCTAssertTrue(buttons["session.finish"].waitForExistence(timeout: 5))
     }
 }

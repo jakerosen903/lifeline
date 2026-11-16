@@ -84,8 +84,7 @@ final class LandingUITests: XCTestCase {
     @MainActor
     func testSettleInOffersTheNextQuestionAfterQuiet() {
         let app = launchToTimeline()
-        XCTAssertTrue(app.waitHittable(app.buttons["home.settleIn"], timeout: 5))
-        app.buttons["home.settleIn"].tap()
+        app.startSettleIn()
         XCTAssertTrue(app.buttons["session.finish"].waitForExistence(timeout: 5))
         XCTAssertEqual(app.staticTexts["session.kind"].label, "You chose settling in")
         let offer = app.any("session.nextPrompt")
@@ -99,8 +98,7 @@ final class LandingUITests: XCTestCase {
     @MainActor
     func testWrapUpOffersAndKeepGoingContinues() {
         let app = launchToTimeline()
-        XCTAssertTrue(app.waitHittable(app.buttons["home.settleIn"], timeout: 5))
-        app.buttons["home.settleIn"].tap()
+        app.startSettleIn()
         let wrapUp = app.any("session.wrapUp")
         XCTAssertTrue(wrapUp.waitForExistence(timeout: 14), "settling in is offered a wrap-up at the planned length")
         app.buttons["session.keepGoing"].tap()
@@ -180,13 +178,13 @@ final class LandingUITests: XCTestCase {
         let app = launchToTimeline()
         recordToLanding(app)
         app.buttons["landing.done"].tap()
-        XCTAssertTrue(app.waitHittable(app.buttons["home.settings"], timeout: 10))
-        app.buttons["home.settings"].tap()
+        app.openSettings()
         let toggle = app.switches["aboutYou.hasBirthday"]
         XCTAssertTrue(toggle.waitForExistence(timeout: 5))
         toggle.switches.firstMatch.tap()
         XCTAssertTrue(app.datePickers["aboutYou.birthday"].waitForExistence(timeout: 3))
         app.buttons["aboutYou.continue"].tap()
+        app.openTab("Timeline")   // Settings opens from You; the card is on the timeline
         XCTAssertTrue(app.waitHittable(app.buttons["home.start"], timeout: 5))
         let tag = app.any("card.checkThis")
         XCTAssertTrue(app.reveal(tag), "an inferred range carries a Check this tag")
@@ -226,9 +224,9 @@ final class LandingUITests: XCTestCase {
         app.buttons["landing.hide"].tap()
         XCTAssertTrue(app.waitHittable(app.buttons["home.start"], timeout: 10))
         XCTAssertFalse(app.buttons["timeline.memory"].firstMatch.waitForExistence(timeout: 2), "hidden from everyday browsing")
-        app.buttons["timeline.showHidden"].tap()
+        app.toggleShowHiddenMemories()
         XCTAssertTrue(app.reveal(app.buttons["timeline.memory"].firstMatch), "the Hidden filter shows it")
-        app.buttons["timeline.sessions"].tap()
+        app.openSessions()
         XCTAssertTrue(app.buttons["home.sessionRow"].firstMatch.waitForExistence(timeout: 5), "Sessions still has it")
         app.buttons["home.sessionRow"].firstMatch.tap()
         XCTAssertTrue(app.reveal(app.buttons["detail.memory"].firstMatch))
@@ -245,7 +243,7 @@ final class LandingUITests: XCTestCase {
         XCTAssertTrue(app.waitHittable(app.buttons["home.start"], timeout: 10))
         XCTAssertFalse(app.buttons["timeline.memory"].firstMatch.waitForExistence(timeout: 2))
         XCTAssertFalse(app.any("timeline.waiting").exists)
-        app.buttons["timeline.sessions"].tap()
+        app.openSessions()
         XCTAssertTrue(app.staticTexts["No sessions yet"].waitForExistence(timeout: 5), "the recording is gone")
     }
 

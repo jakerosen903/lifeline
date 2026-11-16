@@ -67,8 +67,7 @@ final class FollowUpUITests: XCTestCase {
         XCTAssertEqual(app.buttons.matching(identifier: "card.followUp").count, 0, "no chip is left on the session")
         // The name nobody answered is not lost: it waits in the People queue.
         app.finishSession()
-        XCTAssertTrue(app.waitHittable(app.buttons["home.people"], timeout: 5))
-        app.buttons["home.people"].tap()
+        app.openNamesQueue()
         let who = app.any("card.whoIsThis")
         XCTAssertTrue(who.waitForExistence(timeout: 5), "an open mention waits in the People queue")
         XCTAssertTrue(who.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "Dara")).firstMatch.exists, "the unanswered name is Dara")
