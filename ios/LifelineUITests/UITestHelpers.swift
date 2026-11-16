@@ -55,6 +55,24 @@ extension XCUIApplication {
         return element.waitForExistence(timeout: 2)
     }
 
+    /// Timeline is a lazy List: scrolls until `last`, the row known to be its last, is on screen and stays there
+    /// after one more swipe. Anything below it would then be in the tree, so its absence can be asserted.
+    func scrollTimelineToItsEnd(last: XCUIElement, file: StaticString = #filePath, line: UInt = #line) {
+        XCTAssertTrue(reveal(last, swipes: 8), "the Timeline's last row exists", file: file, line: line)
+        swipeUp()
+        XCTAssertTrue(waitHittable(last, timeout: 5), "the last row stays on screen: this is the end of the list", file: file, line: line)
+    }
+
+    /// A plain ScrollView holds every element, so existing says nothing about being on screen: swipes up until
+    /// the element is hittable.
+    func scrollIntoView(_ element: XCUIElement, swipes: Int = 6) -> Bool {
+        for _ in 0..<swipes {
+            if element.exists, waitHittable(element, timeout: 1) { return true }
+            swipeUp()
+        }
+        return waitHittable(element, timeout: 2)
+    }
+
     /// Any element with this identifier, whatever its type.
     func any(_ identifier: String) -> XCUIElement {
         descendants(matching: .any).matching(identifier: identifier).firstMatch

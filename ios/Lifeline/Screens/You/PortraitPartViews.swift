@@ -57,32 +57,32 @@ struct PortraitSaidRow: View {
         let deps = viewModel.deps
         if let memory = line.memory {
             HStack(alignment: .center, spacing: 0) {
-            NavigationLink {
-                MemoryScreen(viewModel: MemoryViewModel(memory: memory, deps: deps), deps: deps, onChange: onChange)
-            } label: {
-                HStack(alignment: .center, spacing: 8) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(line.drawnText).font(.system(.body, design: .serif)).foregroundStyle(Theme.ink)
-                            .fixedSize(horizontal: false, vertical: true)
-                        if let note {
-                            Text(note).font(.footnote).foregroundStyle(Theme.secondaryText)
+                NavigationLink {
+                    MemoryScreen(viewModel: MemoryViewModel(memory: memory, deps: deps), deps: deps, onChange: onChange)
+                } label: {
+                    HStack(alignment: .center, spacing: 8) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(line.drawnText).font(.system(.body, design: .serif)).foregroundStyle(Theme.ink)
                                 .fixedSize(horizontal: false, vertical: true)
+                            if let note {
+                                Text(note).font(.footnote).foregroundStyle(Theme.secondaryText)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
                         }
+                        Spacer(minLength: 0)
                     }
-                    Spacer(minLength: 0)
+                    .padding(.vertical, 10)
+                    .frame(minHeight: 44)
+                    .contentShape(Rectangle())
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(line.text)
+                    .accessibilityValue(note ?? "")
                 }
-                .padding(.vertical, 10)
-                .frame(minHeight: 44)
-                .contentShape(Rectangle())
-                .accessibilityElement(children: .ignore)
-                .accessibilityLabel(line.text)
-                .accessibilityValue(note ?? "")
-            }
-            .buttonStyle(.plain)
-            .lineMenu(line, viewModel)
-            .accessibilityIdentifier("you.line")
-            // Beside the link, never inside it: nested controls swallow taps and merge for VoiceOver.
-            PlayLineButton(line: line, viewModel: viewModel)
+                .buttonStyle(.plain)
+                .lineMenu(line, viewModel)
+                .accessibilityIdentifier("you.line")
+                // Beside the link, never inside it: nested controls swallow taps and merge for VoiceOver.
+                PlayLineButton(line: line, viewModel: viewModel)
             }
             .overlay(alignment: .bottom) { Rectangle().fill(Theme.hairline).frame(height: 1) }
         }
@@ -101,19 +101,19 @@ struct PortraitFeelingCard: View {
         VStack(alignment: .leading, spacing: 0) {
             if let memory = line.memory {
                 HStack(alignment: .center, spacing: 0) {
-                NavigationLink {
-                    MemoryScreen(viewModel: MemoryViewModel(memory: memory, deps: deps), deps: deps, onChange: onChange)
-                } label: {
-                    Text(line.drawnText).font(.system(.body, design: .serif).italic()).foregroundStyle(Theme.ink)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
-                        .contentShape(Rectangle())
-                        .accessibilityLabel(line.text)
-                }
-                .buttonStyle(.plain)
-                .lineMenu(line, viewModel)
-                .accessibilityIdentifier("you.line")
-                PlayLineButton(line: line, viewModel: viewModel)
+                    NavigationLink {
+                        MemoryScreen(viewModel: MemoryViewModel(memory: memory, deps: deps), deps: deps, onChange: onChange)
+                    } label: {
+                        Text(line.drawnText).font(.system(.body, design: .serif).italic()).foregroundStyle(Theme.ink)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                            .contentShape(Rectangle())
+                            .accessibilityLabel(line.text)
+                    }
+                    .buttonStyle(.plain)
+                    .lineMenu(line, viewModel)
+                    .accessibilityIdentifier("you.line")
+                    PlayLineButton(line: line, viewModel: viewModel)
                 }
             }
             if let about = line.about {
@@ -147,25 +147,25 @@ struct PortraitIdeaRow: View {
         let deps = viewModel.deps
         if let idea = line.idea {
             HStack(alignment: .center, spacing: 0) {
-            NavigationLink {
-                EntityScreen(viewModel: EntityViewModel(entity: idea, deps: deps), onChange: onChange)
-            } label: {
-                HStack(alignment: .top, spacing: 14) {
-                    Rectangle().fill(Theme.ochre).frame(width: 3)
-                    Text(line.text).font(.system(.title2, design: .serif)).foregroundStyle(Theme.ink)
-                        .fixedSize(horizontal: false, vertical: true)
-                    Spacer(minLength: 0)
+                NavigationLink {
+                    EntityScreen(viewModel: EntityViewModel(entity: idea, deps: deps), onChange: onChange)
+                } label: {
+                    HStack(alignment: .top, spacing: 14) {
+                        Rectangle().fill(Theme.ochre).frame(width: 3)
+                        Text(line.text).font(.system(.title2, design: .serif)).foregroundStyle(Theme.ink)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Spacer(minLength: 0)
+                    }
+                    .padding(.vertical, 4)
+                    .frame(minHeight: 44)
+                    .contentShape(Rectangle())
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(line.text)
                 }
-                .padding(.vertical, 4)
-                .frame(minHeight: 44)
-                .contentShape(Rectangle())
-                .accessibilityElement(children: .ignore)
-                .accessibilityLabel(line.text)
-            }
-            .buttonStyle(.plain)
-            .accessibilityIdentifier("entities.row")
-            // Its first telling, when it has one; beside the link, never inside it.
-            PlayLineButton(line: line, viewModel: viewModel)
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("entities.row")
+                // Its first telling, when it has one; beside the link, never inside it.
+                PlayLineButton(line: line, viewModel: viewModel)
             }
         }
     }
@@ -262,6 +262,8 @@ struct PortraitLeadPlayButton: View {
             .buttonStyle(.bordered)
             .buttonBorderShape(.capsule)
             .tint(Theme.oliveOnFill)
+            // The visible "0:04" reads aloud as "zero colon zero four": say the length in words.
+            .accessibilityLabel(playing ? "Stop" : "Hear yourself say it, \(Portrait.spokenDuration(ms: telling.range.end - telling.range.start))")
             .accessibilityIdentifier("you.lead.play")
         }
     }

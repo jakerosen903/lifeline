@@ -98,20 +98,26 @@ final class YouUITests: XCTestCase {
         XCTAssertEqual(app.youLineLabels().count, 6)
         let lead = app.staticTexts["you.lead"]
         XCTAssertGreaterThan(lead.frame.height, 120, "the lead wraps onto several lines, never truncates")
-        for chip in app.buttons.matching(identifier: "you.tag").allElementsBoundByIndex { XCTAssertGreaterThanOrEqual(chip.frame.height, 44) }
+        // The same 0.01 of rounding as the chip test: the accessibility frame carries float noise.
+        for chip in app.buttons.matching(identifier: "you.tag").allElementsBoundByIndex { XCTAssertGreaterThanOrEqual(chip.frame.height, 44 - 0.01) }
     }
 
     @MainActor
     func testEveryLineWithARecordingHasAPlayControl() {
         let app = XCUIApplication.launchWithPortrait(); app.openYou()
-        XCTAssertEqual(app.buttons["you.lead.play"].label, "Hear yourself say it, 0:04")
+        XCTAssertEqual(app.buttons["you.lead.play"].label, "Hear yourself say it, 4 seconds", "the length in words for VoiceOver; the visible text keeps 0:04")
         XCTAssertEqual(app.buttons.matching(identifier: "you.play").count, 7, "six lines and one idea with a recording; the other idea has none")
         let first = app.buttons.matching(identifier: "you.play").firstMatch
         XCTAssertEqual(first.label, "Hear yourself say it")
         XCTAssertEqual(first.value as? String, "I'm the oldest of two", "the value tells identical controls apart")
         let idea = { (title: String) in app.buttons.matching(identifier: "entities.row").matching(NSPredicate(format: "label == %@", title)).firstMatch }
         let plays = app.buttons.matching(identifier: "you.play").allElementsBoundByIndex
-        let besides = { (title: String) in plays.filter { $0.frame.midY >= idea(title).frame.minY && $0.frame.midY <= idea(title).frame.maxY }.count }
+        let besides = { (title: String) -> Int in
+            // A missing row has an empty frame, which no control is beside: say so instead of counting 0.
+            XCTAssertTrue(idea(title).exists, "the idea row “\(title)” exists")
+            XCTAssertFalse(plays.isEmpty, "the play controls exist")
+            return plays.filter { $0.frame.midY >= idea(title).frame.minY && $0.frame.midY <= idea(title).frame.maxY }.count
+        }
         XCTAssertEqual(besides("Saying yes to things"), 1, "an idea with a telling plays it, beside its link")
         XCTAssertEqual(besides("Telling the truth"), 0, "an idea with no span has no control")
     }
@@ -144,7 +150,52 @@ final class YouUITests: XCTestCase {
         let error = app.any("you.error")
         XCTAssertTrue(error.waitForExistence(timeout: 5))
         XCTAssertTrue(error.isHittable, "the error is on screen without scrolling")
-        XCTAssertLessThan(error.frame.minY, app.staticTexts["Who you are"].frame.minY, "it sits above the parts")
+        // The one slot pinned above the record bar (final review, item 2), not under the lead.
+        XCTAssertLessThanOrEqual(error.frame.maxY, app.buttons["home.start"].frame.minY, "it sits above the record bar")
+    }
+
+    @MainActor
+    func testAFailedPlayFarDownShowsItsErrorWhereYouLook() {
+        let app = XCUIApplication.launchWithPortrait(); app.openYou()   // the seed never writes seed.m4a
+        let play = app.buttons.matching(identifier: "you.play").matching(NSPredicate(format: "value == %@", "I want to take Maya to Lisbon someday")).firstMatch
+        XCTAssertTrue(app.scrollIntoView(play), "the lowest line's play control, scrolled to")
+        play.tap()
+        let error = app.any("you.error")
+        XCTAssertTrue(error.waitForExistence(timeout: 5))
+        XCTAssertEqual(error.label, "Could not play this: the recording could not be found.")
+        XCTAssertTrue(error.isHittable, "the error is on screen without scrolling back up")
+        XCTAssertLessThanOrEqual(error.frame.maxY, app.buttons["home.start"].frame.minY, "it sits above the record bar")
+    }
+
+    @MainActor
+    func testHidingALineFarDownShowsUndoWithoutScrolling() {
+        let app = XCUIApplication.launchWithPortrait(); app.openYou()
+        let line = app.buttons.matching(identifier: "you.line").matching(NSPredicate(format: "label == %@", "I want to take Maya to Lisbon someday")).firstMatch
+        XCTAssertTrue(app.scrollIntoView(line), "the lowest line, scrolled to")
+        line.press(forDuration: 1.0)
+        app.buttons["you.hide"].tap()
+        XCTAssertTrue(line.waitForNonExistence(timeout: 5))
+        let undo = app.buttons["you.undo"]
+        XCTAssertTrue(undo.waitForExistence(timeout: 5))
+        XCTAssertTrue(app.waitHittable(undo, timeout: 5), "Undo is on screen without scrolling")
+        XCTAssertLessThanOrEqual(undo.frame.maxY, app.buttons["home.start"].frame.minY, "it sits above the record bar")
+        undo.tap()
+        XCTAssertTrue(line.waitForExistence(timeout: 5), "Undo brings the line back")
+    }
+
+    @MainActor
+    func testCancelOnTheDeleteDialogKeepsTheLine() {
+        let app = XCUIApplication.launchWithPortrait(); app.openYou()
+        let before = app.youLineLabels()
+        let line = app.buttons.matching(identifier: "you.line").matching(NSPredicate(format: "label == %@", "I'm the oldest of two")).firstMatch
+        line.press(forDuration: 1.0); app.buttons["you.delete"].tap()
+        XCTAssertTrue(app.buttons["row.confirmDelete"].firstMatch.waitForExistence(timeout: 5))
+        // The iOS 26 dialog is a popover: its Cancel is a tap outside it (the dismiss region); a sheet has the button.
+        let outside = app.otherElements["PopoverDismissRegion"].firstMatch
+        if outside.exists { outside.tap() } else { app.buttons["Cancel"].firstMatch.tap() }
+        XCTAssertTrue(app.buttons["row.confirmDelete"].firstMatch.waitForNonExistence(timeout: 5), "the dialog goes")
+        XCTAssertTrue(line.exists, "Cancel keeps the line")
+        XCTAssertEqual(app.youLineLabels(), before, "nothing moved")
     }
 
     @MainActor
@@ -200,11 +251,35 @@ final class YouUITests: XCTestCase {
     func testAboutIsNotOnTimeline() {
         let app = XCUIApplication.launchWithPortrait(); app.openTab("Timeline")
         XCTAssertTrue(app.any("timeline.summary").waitForExistence(timeout: 5))
-        for _ in 0..<4 { app.swipeUp() }   // the List is lazy: an About section below the fold would not exist yet
+        XCTAssertTrue(app.any("timeline.summary").label.contains("and 10 things about your life"), "the summary counts the visible ones, the hidden fact not")
+        // The List is lazy: scroll to its last row, so a section below it would be in the tree.
+        app.scrollTimelineToItsEnd(last: app.buttons.matching(identifier: "timeline.memory").matching(NSPredicate(format: "label CONTAINS %@", "Moving into Hemenway Street")).firstMatch)
         XCTAssertFalse(app.any("timeline.about").exists)
         XCTAssertFalse(app.buttons.matching(identifier: "about.row").firstMatch.exists)
-        app.swipeDown(velocity: .fast)
+    }
+
+    @MainActor
+    func testShowHiddenDoesNotCountAHiddenFactTimelineCannotShow() {
+        let app = XCUIApplication.launchWithPortrait(); app.openTab("Timeline")
+        let summary = app.any("timeline.summary")
+        XCTAssertTrue(summary.waitForExistence(timeout: 5))
+        XCTAssertTrue(summary.label.hasSuffix("and 10 things about your life"), "was “\(summary.label)”")
+        app.buttons["timeline.more"].tap()
+        let toggle = app.any("timeline.showHidden")
+        XCTAssertTrue(toggle.waitForExistence(timeout: 5))
+        toggle.tap()
+        XCTAssertTrue(summary.waitForExistence(timeout: 5))
+        XCTAssertTrue(summary.label.hasSuffix("and 10 things about your life"), "the hidden fact is not on Timeline, so it is not counted; was “\(summary.label)”")
+    }
+
+    @MainActor
+    func testTheTimelineTagMenuOffersOnlyTagsAMomentCarries() {
+        // "Family" and "School" are on facts only (they are chips on You); no moment carries a tag.
+        let app = XCUIApplication.launchWithPortrait(); app.openTab("Timeline")
         XCTAssertTrue(app.any("timeline.summary").waitForExistence(timeout: 5))
-        XCTAssertTrue(app.any("timeline.summary").label.contains("things about your life"), "the summary still counts them")
+        app.buttons["timeline.more"].tap()
+        XCTAssertTrue(app.any("timeline.showHidden").waitForExistence(timeout: 5), "the menu is open")
+        XCTAssertFalse(app.buttons["timeline.tagFilter"].exists, "no tag to filter moments by")
+        XCTAssertFalse(app.buttons["Family"].exists, "a tag only a fact carries is not offered")
     }
 }
