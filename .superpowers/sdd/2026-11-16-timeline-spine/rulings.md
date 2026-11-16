@@ -27,3 +27,11 @@ R10 (Task 5, review). At accessibility sizes a story row also shows its date abo
 Withdrawn by the builder: "the solid dot must be filled" and "stated years must not be ochre". The owner's mock-up `TL_SpineStrip` draws every mark as a ring (solid or dashed border) and every margin year in ochre text. The code matches the mock-up.
 
 Not fixed, for "After S6a": the shelf header counts a half-open moment ("before 2004") as "undated"; a story member that is also in a collection shows in both and is counted twice (as before this PR).
+
+R11 (Task 6, review, plan-mandated). `testAtTheLargestTextTheDateSitsAboveTheTitle` stays as the plan wrote it, though its label assertion holds at every text size. Why: the row's label is the same at every size by decision 12, so XCUITest cannot tell where the date is drawn; the test still proves the row is reachable and hittable at the largest size. Where the date sits is checked by Task 7's screenshot and by device check 7. Cost if wrong: a layout regression at the largest size is caught on the device, not in CI.
+
+R12 (Task 6, review, plan-mandated). `testEveryPlacedMomentIsOnTheSpine` stays as written, though it also passes on the build before the spine. Why: it is a guard for Review Focus 3 ("Nothing vanished"); a guard for kept behaviour passes before and after by design.
+
+R13 (Tasks 4+5, fix round 2). Opening a story scrolls it to the top of the list, on the spine and on the shelf. Why: on the spine a story sits higher than before, and its opened members landed under the record bar and the tab bar; `testMemoryScreenPlaysAndShowsEvidence` then tapped the tab bar. The test must not change (only three named assertions move), and members that open under the bars are a defect for a person too. Cost if wrong: the list moves when a story opens; to overrule, remove the scroll and move the test's swipe. Flagged for the owner in the final report.
+
+R14 (Tasks 4+5, fix round 2). `CheckThisTag` (in `Cards/MemoryCard.swift`, outside the plan's file list) wraps in place of a fixed size. Why: a long tag ("Check this: sometime between 1993–98?") made a member row wider than its cell and clipped the "…" menu. The spine's margin made the column narrower, so this PR exposed it. Cost if wrong: one modifier.
