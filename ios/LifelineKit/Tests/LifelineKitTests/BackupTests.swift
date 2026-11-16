@@ -515,3 +515,21 @@ private func archives(in dir: URL) throws -> [URL] {
     #expect(try Backup.entryNames(of: replaced).contains("photos/\(added)"))
     #expect(try Backup.inspect(replaced).photoFiles == 2)
 }
+
+@Test func aPhotoWhosePageWasDeletedDoesNotTravelInTheNextCopy() async throws {
+    let source = try Root(sessions: 1, memories: 1)
+    let memory = try #require(try source.store.memories.allMemories().first)
+    let picked = source.url.appending(path: "picked.jpg")
+    try GeneratedPhoto.write(to: picked, width: 600, height: 400, rgb: 0x406020)
+    let library = PhotoLibrary(root: source.url, photos: source.store.photos)
+    let photo = try await library.add(fileAt: picked, assetLocalID: nil, to: .memory(memory.id))
+    // Deleting the memory takes the link by cascade; the row and the file wait for a sweep.
+    try source.store.memories.delete(memory.id)
+    // What Settings does before a copy is made.
+    try await library.sweep()
+    let archive = source.url.appending(path: "after-delete.lifeline")
+    let manifest = try Backup.export(root: source.url, appVersion: "1.0", to: archive, database: source.db)
+    #expect(manifest.photoFiles == 0)
+    #expect(try Backup.entryNames(of: archive).allSatisfy { !$0.hasPrefix("photos/") })
+    #expect(try source.store.photos.photo(id: photo.id) == nil)
+}

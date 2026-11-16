@@ -250,6 +250,20 @@ private func properties(of file: URL) throws -> [CFString: Any] {
     #expect(try f.store.photos.photo(id: photo.id) != nil)
 }
 
+@Test func theLibrarysSweepRemovesWhatTheLaunchSweepRemoves() async throws {
+    let f = try Fixture()
+    let kept = try await f.library.add(fileAt: try f.source("kept"), assetLocalID: nil, to: .entity(f.dad.id))
+    let gone = try await f.library.add(fileAt: try f.source("gone", rgb: 0x2E7AE0), assetLocalID: nil, to: .memory(f.treeHouse.id))
+    try f.store.memories.delete(f.treeHouse.id)
+    try Data([1, 2, 3]).write(to: f.photosDir.appending(path: "\(PhotoID().rawValue).jpg"))
+    try Data([1]).write(to: f.photosDir.appending(path: ".\(PhotoID().rawValue).partial"))
+    // The same three kinds of leftover as at launch: an unlinked row and its file, a file with no row, a partial file.
+    #expect(try await f.library.sweep() == .init(rows: 1, files: 3))
+    #expect(try f.store.photos.photo(id: gone.id) == nil)
+    #expect(f.photoFiles == ["\(kept.id.rawValue).jpg"])
+    #expect(try PhotoLibrary.sweep(root: f.root, photos: f.store.photos) == .init(rows: 0, files: 0), "nothing is left for the launch sweep")
+}
+
 // MARK: - Location and thumbnails
 
 @Test func photosStayOutOfCloudBackup() throws {

@@ -77,10 +77,19 @@ public actor PhotoLibrary {
         public init(rows: Int, files: Int) { self.rows = rows; self.files = files }
     }
 
+    /// The sweep below, as one actor call with no suspension point, so it never runs between an add's file and its row.
+    /// Settings runs it before every copy is made (an export, or the safety copy before a restore is staged), so a
+    /// photo whose page was deleted in this run does not travel in the copy.
+    @discardableResult
+    public func sweep() throws -> Swept {
+        try Self.sweep(root: root, photos: photos)
+    }
+
     /// Decision 10: unlinked rows and their files; files with no row; `.partial` files. Never a row whose file is missing.
     /// Only `.jpg` and `.partial` names are the library's own; anything else in the folder stays.
-    /// It must run at launch, before any `add` can run: it is not serialised with `add`, and a sweep during an add
-    /// could remove the new file before its row exists.
+    /// It runs at launch, before any `add` can run, and through the actor's `sweep()` before a copy is made. This static
+    /// form is not serialised with `add`: a sweep during an add could remove the new file before its row exists, so any
+    /// call after launch must go through the actor.
     @discardableResult
     public static func sweep(root: URL, photos: PhotoRepository) throws -> Swept {
         let directory = try PhotoLocation.directory(under: root)
