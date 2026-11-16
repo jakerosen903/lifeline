@@ -1,6 +1,6 @@
 # Audit data fixes: stories, chapters, extractor v7 and the second read
 
-Status: draft for the owner's redline, 2026-11-16. Not approved. No code may start from this spec until the owner answers "Owner's calls".
+Status: owner's calls answered on 2026-11-16, except call 4 (`docs/DECISIONS.md`). A1 and A2 may be planned. A3 waits for call 4.
 
 This spec covers ship-order items 2 and 3 of the UI audit (`docs/specs/2026-10-26-ui-audit.md`) and the "second read" of existing memories (audit, owner's call 3; `docs/DECISIONS.md`, "Extractor v7 changes to existing memories are suggestions"). The five-sections spec depends on this work and does not design it (`docs/specs/2026-11-15-five-sections.md`, "Out of scope"). The umbrella plan calls it track A (`docs/plans/2026-11-15-sections.md`).
 
@@ -73,7 +73,7 @@ The work is three PRs. Each one is useful alone.
 
 | PR | What | Depends on |
 | --- | --- | --- |
-| A1 | Story and chapter fixes | — |
+| A1 | Story fixes and the empty-chapter repair | — |
 | A2 | Extractor v7 for new recordings, with the code rules beside it | — |
 | A3 | The second read | A2 |
 
@@ -95,26 +95,11 @@ Edge cases:
 
 ### A1: chapters
 
-1. "New chapter from here" must ask for a title before it creates the chapter. An empty title creates nothing.
-2. A chapter with no title and no members must be deleted. This runs once at launch for existing data and after every action that removes a member.
-3. A chapter with a title and no visible members stays in storage. The Timeline must not draw it and must not count it.
-4. The person must be able to rename and delete a chapter from the chapter's menu. Deleting a chapter keeps its memories; they leave the chapter. Delete asks first.
-5. A chapter keeps two ranges:
-   - the **stated range**: what the person said about the chapter ("the Boston years, 2015 to 2019"). It is stored with origin `stated` and the person's phrase as evidence.
-   - the **member span**: the span of its dated moments, computed as today.
-6. The chapter header shows the stated range when there is one. With none, it shows no range. It never shows the member span as the chapter's dates. The resolver may still use the member span as an anchor target, as it does today.
-7. The person sets the stated range with the existing "Tell me when" sheet, opened from the chapter's menu.
-8. Accepting a chapter hint on a fact, feeling or goal creates or joins the chapter as today. No change: a fact such as "we lived there four years" is often what names the era.
-9. Assigning a memory that is in a story assigns the story and every member of it. The decision "chapters → stories → moments" (`docs/DECISIONS.md`, 2026-10-22) makes the story the unit.
-10. "New chapter from here" must not be offered on a row that the Timeline does not draw inside a chapter: a shelf row and a collection row.
+The chapter rules moved to the Timeline spec (`docs/specs/2026-11-16-timeline.md`, "The model of a chapter", "Tags", "The life map" and "The chapter's sheet"). The owner chose a different model on 2026-11-16: a chapter is a name with stated years and said members, and the Timeline no longer groups moments under it. They ship as S6c.
 
-Not in A1: the per-chapter year axis, "Outside any chapter" and life periods. They belong to S6 (`docs/plans/2026-11-15-sections.md`).
+A1 keeps one chapter rule, because it is a repair and needs no new screen:
 
-Edge cases:
-
-- A stated range that does not contain a member's date is allowed. The app does not correct the person (PRINCIPLES 1).
-- Undo for delete chapter: a notice with Undo for 6 seconds, as on You.
-- The summary line counts only chapters that the Timeline draws.
+1. A chapter with no title and no members must be deleted. This runs once at launch for existing data and after every action that removes a member.
 
 ### A2: names
 
@@ -252,14 +237,14 @@ One pure function compares a kept memory with the v7 output for its segment.
 
 ## Owner's calls
 
-Each has a recommendation. The spec above assumes the recommendation.
+Each has a recommendation. The spec above assumes the recommendation. The owner took every recommendation on 2026-11-16 except two: call 4 is open, and call 7 changed to A1, then A2 after Photos merges, then A3.
 
 1. **Repairing exact duplicates: silent or asked?** Three stories with the same title, and "Ohio." beside "Ohio", exist because of bugs, not because of anything the person chose. Recommendation: merge them once, without asking, when the match keys are equal and the type is the same; show one notice at the next launch ("Joined 2 copies of Ohio."). Cost if wrong: two things the person meant to keep apart become one, and there is no entity split today. The other choice is to put them in the A3 review screen, which delays the fix until A3.
 2. **The owner's name in the packet.** Recommendation: send it. It is the only way the model can know that a spoken name is the speaker. Cost if wrong: the name reaches the provider in every call, not only when spoken.
 3. **Memories that v7 finds and v6 missed.** Recommendation: ignore them in the first second read. Offering them would put the whole archive back in front of the person as cards. Cost: some told moments stay unsorted. They are still in the recording and the transcript.
 4. **Does the second read change kinds?** v7 may call a kept `event` a `fact`. Recommendation: no. The person can change a kind on the memory page, and a kind change moves a memory between the Timeline and You, which is a large effect for a suggestion.
 5. **Where the second read's line shows.** Recommendation: on You only. The other choice is the end of the Timeline, beside the audit's "3 dates to check".
-6. **Chapter ranges.** Recommendation: the header shows no dates until the person states them (A1 chapters, rule 6). The other choice shows the member span marked as a guess ("around 2017–18"). The audit's example shows why that misleads: one dated memory stood for four years.
+6. **Chapter ranges.** Recommendation: a chapter shows no dates until the person states them (now in `docs/specs/2026-11-16-timeline.md`, "The model of a chapter", rule 5). The other choice shows the member span marked as a guess ("around 2017–18"). The audit's example shows why that misleads: one dated memory stood for four years.
 7. **Which PR first.** Recommendation: A2, then A1, then A3. A2 stops new recordings from adding to the problem, and A3 needs it. A1 is independent and smaller.
 
 ## Out of scope

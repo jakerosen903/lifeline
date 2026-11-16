@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Chapters sheet: rename, set dates, remove</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600&amp;family=Inter:wght@400;500;600&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+button{font:inherit;color:inherit;border:0;background:none;padding:0;cursor:pointer}
+input{font:inherit;color:inherit}
+</style>
+</helmet>
+<div style="width: 390px; height: 844px; box-sizing: border-box; position: relative; overflow: hidden; background: #F6F0E4; color: #332A23; font-family: Inter, system-ui, sans-serif; padding: 0 20px">
+
+  <div style="display: flex; align-items: center; justify-content: space-between; padding-top: 16px">
+    <h1 style="margin: 0; font-family: Fraunces, Georgia, serif; font-size: 26px; font-weight: 600; line-height: 44px">Chapters</h1>
+    <button style="height: 44px; padding: 0 6px; color: #56663F; font-size: 17px; font-weight: 600">Done</button>
+  </div>
+  <p style="margin: 2px 0 0; font-size: 14px; line-height: 20px; color: #6D6153">A chapter is a name you gave to a stretch of your life.</p>
+
+  <div style="margin-top: 16px; border-radius: 16px; background: #FBF7EE; padding: 0 16px">
+    <button style="display: flex; align-items: center; width: 100%; height: 64px; text-align: left; border-bottom: 1px solid #DDD3C0">
+      <span style="flex-grow: 1">
+        <span style="display: block; font-family: Fraunces, Georgia, serif; font-size: 18px; font-weight: 600">Maple Street</span>
+        <span style="display: block; font-size: 13px; color: #6D6153">1998 to 2001 · 3 moments</span>
+      </span>
+      <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#6D6153" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"></path></svg>
+    </button>
+    <button style="display: flex; align-items: center; width: 100%; height: 64px; text-align: left; border-bottom: 1px solid #DDD3C0">
+      <span style="flex-grow: 1">
+        <span style="display: block; font-family: Fraunces, Georgia, serif; font-size: 18px; font-weight: 600">Swim team</span>
+        <span style="display: block; font-size: 13px; color: #6D6153">2000 to 2003 · 2 moments</span>
+      </span>
+      <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#6D6153" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"></path></svg>
+    </button>
+    <button style="display: flex; align-items: center; width: 100%; height: 64px; text-align: left">
+      <span style="flex-grow: 1">
+        <span style="display: block; font-family: Fraunces, Georgia, serif; font-size: 18px; font-weight: 600">The Boston years</span>
+        <span style="display: block; font-size: 13px; color: #6D6153">2008 to 2012 · 3 moments</span>
+      </span>
+      <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#6D6153" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"></path></svg>
+    </button>
+  </div>
+
+  <div style="margin-top: 16px; border-radius: 16px; background: #FBF7EE; padding: 14px 16px 16px; display: flex; flex-direction: column; gap: 12px">
+    <div>
+      <div style="font-family: Fraunces, Georgia, serif; font-size: 18px; font-weight: 600">Summer jobs</div>
+      <div style="font-size: 13px; color: #6D6153">No dates yet · no moments yet</div>
+    </div>
+    <div style="display: flex; flex-direction: column; gap: 6px">
+      <label for="chapter-name" style="font-size: 13px; font-weight: 600; color: #6D6153">Name</label>
+      <input id="chapter-name" type="text" value="Summer jobs" style="height: 44px; box-sizing: border-box; padding: 0 12px; border: 1px solid #A89A85; border-radius: 10px; background: #F6F0E4; font-size: 16px">
+    </div>
+    <div style="display: flex; gap: 8px">
+      <button style="flex: 1; height: 44px; border-radius: 22px; background: #DAD9C2; color: #46532F; font-size: 15px; font-weight: 600">Say when it was</button>
+      <button style="flex: 1; height: 44px; border-radius: 22px; border: 1px solid #A89A85; color: #332A23; font-size: 15px; font-weight: 600">Remove chapter…</button>
+    </div>
+    <div style="font-size: 13px; line-height: 18px; color: #6D6153">Removing a chapter never removes a memory. Its moments stay on your timeline.</div>
+  </div>
+
+  <div style="position: absolute; left: 20px; right: 20px; bottom: 28px; padding: 12px 16px; border-radius: 16px; background: #FBF7EE; box-shadow: 0 2px 10px rgba(51,42,35,0.10); display: flex; align-items: center; gap: 12px">
+    <span style="flex-grow: 1; font-size: 15px">Removed “Untitled chapter”.</span>
+    <button style="height: 44px; padding: 0 8px; color: #56663F; font-size: 15px; font-weight: 600">Undo</button>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>
