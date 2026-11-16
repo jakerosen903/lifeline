@@ -36,3 +36,7 @@ Task 2: minor (deferred): static sweep is not serialised with add; documented "r
 Task 2: note: in aWriteThatFailsStoresNothing the throw is the .partial Data.write (Cocoa 513), not the folder setup.
 Task 2: note: drainGivesUpAtItsDeadline flaked once under load again; passes alone.
 Task 2: complete (commits dc11f8b..c644a0f, review clean; swift test 907)
+Task 3: minor (deferred): BackupTests photoBytes() repeats export's size sum (a shared bug would cancel out).
+Task 3: minor (deferred): the "nil is omitted" check uses a local JSONEncoder, not JSONEncoder.manifest.
+Task 3: minor (deferred): Backup.swift audio and photo size loops are near-duplicates.
+Task 3: complete (commits 487bbcc..3235cf6, review clean; swift test 913)
