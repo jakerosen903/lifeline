@@ -22,6 +22,8 @@ final class PeopleUITests: XCTestCase {
         XCTAssertEqual(tiles.map { $0.value as? String ?? "" }, ["my sister", "my dad", "my roommate", ""])
         XCTAssertEqual(tiles[0].frame.minY, tiles[2].frame.minY, accuracy: 1, "three to a row")
         XCTAssertEqual(app.buttons["people.sort"].label, "Most told")
+        // The hint is not readable from XCUITest; the visible title is: the sort is state the person can see.
+        XCTAssertTrue(app.staticTexts["Most told"].exists, "the current sort shows as text")
     }
 
     @MainActor

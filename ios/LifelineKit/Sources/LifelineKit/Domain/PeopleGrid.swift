@@ -1,6 +1,6 @@
 import Foundation
 
-/// How the People grid orders its tiles. Every sort breaks ties by name, ignoring case.
+/// How the People grid orders its tiles. Every sort breaks ties by name, ignoring case, then by id.
 public enum PeopleSort: String, CaseIterable, Sendable {
     case mostTold, firstInStory, byName
 
@@ -15,7 +15,8 @@ public enum PeopleSort: String, CaseIterable, Sendable {
     public func sorted(_ people: [EntitySummary]) -> [EntitySummary] {
         func nameFirst(_ a: EntitySummary, _ b: EntitySummary) -> Bool {
             let order = a.entity.title.localizedCaseInsensitiveCompare(b.entity.title)
-            return order == .orderedAscending
+            // The id is the last tiebreak, so two people with one name never swap between reads.
+            return order == .orderedSame ? a.id.rawValue < b.id.rawValue : order == .orderedAscending
         }
         return people.sorted { a, b in
             switch self {

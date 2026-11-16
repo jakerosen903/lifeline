@@ -49,3 +49,19 @@ private let all = [
     #expect(Monogram.tintIndex(for: id) == Monogram.tintIndex(for: EntityID(rawValue: id.rawValue)))
     #expect((0..<3).contains(Monogram.tintIndex(for: id)))
 }
+
+@Test func peopleWithTheSameNameKeepOneOrderByID() {
+    func twin(_ id: String) -> EntitySummary {
+        EntitySummary(entity: Entity(id: EntityID(rawValue: id), type: .person, title: "Sam"), ownWords: nil, momentRanges: [], span: .unplaced)
+    }
+    let twins = [twin("b"), twin("c"), twin("a")]
+    for sort in PeopleSort.allCases {
+        #expect(sort.sorted(twins).map(\.id.rawValue) == ["a", "b", "c"])
+        #expect(sort.sorted(twins.reversed()).map(\.id.rawValue) == ["a", "b", "c"])
+    }
+}
+
+@Test func undatedPeopleComeLastInNameOrder() {
+    let people = [person("Zoe", moments: []), person("Ann", moments: [nil]), person("Mo", moments: [1990])]
+    #expect(PeopleSort.firstInStory.sorted(people).map(\.entity.title) == ["Mo", "Ann", "Zoe"])
+}

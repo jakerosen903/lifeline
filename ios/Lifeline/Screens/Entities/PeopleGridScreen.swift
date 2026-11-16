@@ -16,7 +16,14 @@ struct PeopleGridScreen: View {
 
     var body: some View {
         let people = sort.sorted(viewModel.rows)
-        Group {
+        VStack(spacing: 0) {
+            // A row above the content, not a toolbar item: the bar shows a bare icon, and the
+            // current sort is state the person should see.
+            if !people.isEmpty {
+                sortMenu
+                    .padding(.horizontal, 16)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
             if people.isEmpty {
                 empty
             } else if textSize >= .accessibility3 {
@@ -29,7 +36,6 @@ struct PeopleGridScreen: View {
         .navigationTitle(viewModel.type.screenTitle)
         .toolbar {
             EntityTagFilterMenu(viewModel: viewModel)
-            ToolbarItem { sortMenu }
         }
         .onAppear { viewModel.refresh() }
     }
@@ -80,7 +86,14 @@ struct PeopleGridScreen: View {
                 }
                 .accessibilityIdentifier("people.sort.\(option.rawValue)")
             }
-        } label: { Label(sort.title, systemImage: "arrow.up.arrow.down") }
-            .accessibilityIdentifier("people.sort")
+        } label: {
+            Label(sort.title, systemImage: "arrow.up.arrow.down")
+                .labelStyle(.titleAndIcon).font(.subheadline.weight(.medium)).foregroundStyle(Theme.oliveText)
+                .multilineTextAlignment(.leading)
+                .frame(minHeight: 44)
+        }
+        .accessibilityLabel(sort.title)
+        .accessibilityHint("Changes the order of people")
+        .accessibilityIdentifier("people.sort")
     }
 }
