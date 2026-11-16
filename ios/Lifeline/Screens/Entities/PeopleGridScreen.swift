@@ -9,6 +9,10 @@ struct PeopleGridScreen: View {
     /// Starts on "Most told" at each launch; it is not remembered (plan decision 10).
     @State private var sort: PeopleSort = .mostTold
     @Environment(\.dynamicTypeSize) private var textSize
+    /// Absent outside the shell (a preview): then nothing watches the session cover.
+    @Environment(HomeViewModel.self) private var home: HomeViewModel?
+    /// The top page of its stack. Under a cover it stays visible: the cover sends no onDisappear.
+    @State private var isVisible = false
 
     init(deps: Dependencies) {
         _viewModel = State(initialValue: EntitiesViewModel(deps: deps, type: .person))
@@ -16,14 +20,7 @@ struct PeopleGridScreen: View {
 
     var body: some View {
         let people = sort.sorted(viewModel.rows)
-        VStack(spacing: 0) {
-            // A row above the content, not a toolbar item: the bar shows a bare icon, and the
-            // current sort is state the person should see.
-            if !people.isEmpty {
-                sortMenu
-                    .padding(.horizontal, 16)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            }
+        Group {
             if people.isEmpty {
                 empty
             } else if textSize >= .accessibility3 {
@@ -37,7 +34,10 @@ struct PeopleGridScreen: View {
         .toolbar {
             EntityTagFilterMenu(viewModel: viewModel)
         }
-        .onAppear { viewModel.refresh() }
+        .onAppear { isVisible = true; viewModel.refresh() }
+        .onDisappear { isVisible = false }
+        // A session started from this tab lands under a cover; when it closes, read what it added.
+        .onChange(of: home?.coverClosings) { if isVisible { viewModel.refresh() } }
     }
 
     private var columns: [GridItem] {
@@ -47,17 +47,21 @@ struct PeopleGridScreen: View {
 
     private func grid(_ people: [EntitySummary]) -> some View {
         ScrollView {
-            LazyVGrid(columns: columns, alignment: .leading, spacing: 20) {
-                ForEach(people) { PersonTile(summary: $0, deps: viewModel.deps) { viewModel.refresh() } }
+            VStack(alignment: .leading, spacing: 0) {
+                sortMenu.padding(.horizontal, 16)
+                LazyVGrid(columns: columns, alignment: .leading, spacing: 20) {
+                    ForEach(people) { PersonTile(summary: $0, deps: viewModel.deps) { viewModel.refresh() } }
+                }
+                .padding(.horizontal, 16).padding(.vertical, 12)
+                .accessibilityIdentifier("people.grid")
+                errorLine
             }
-            .padding(.horizontal, 16).padding(.vertical, 12)
-            .accessibilityIdentifier("people.grid")
-            errorLine
         }
     }
 
     private func list(_ people: [EntitySummary]) -> some View {
         List {
+            sortMenu.listRowBackground(Color.clear)
             ForEach(people) { PersonRow(summary: $0, deps: viewModel.deps) { viewModel.refresh() } }
             errorLine
         }
@@ -67,8 +71,11 @@ struct PeopleGridScreen: View {
 
     private var empty: some View {
         List {
-            Text(viewModel.tagFilter.map { "Nothing tagged “\($0)”." } ?? "Nothing yet. They appear as you tell stories.")
-                .foregroundStyle(Theme.secondaryText)
+            // Only after the first read: before it, the text would flash over a full grid.
+            if viewModel.isLoaded {
+                Text(viewModel.tagFilter.map { "Nothing tagged “\($0)”." } ?? "Nothing yet. They appear as you tell stories.")
+                    .foregroundStyle(Theme.secondaryText)
+            }
             errorLine
         }
         .scrollContentBackground(.hidden)
@@ -78,6 +85,9 @@ struct PeopleGridScreen: View {
         if let error = viewModel.error { Text(error).foregroundStyle(.red) }
     }
 
+    /// The first item in the scrolling content, not a pinned row: at the largest text sizes a
+    /// pinned row and the title took a third of the screen. Not a toolbar item either: the bar
+    /// shows a bare icon, and the current sort is state the person should see.
     private var sortMenu: some View {
         Menu {
             ForEach(PeopleSort.allCases, id: \.self) { option in

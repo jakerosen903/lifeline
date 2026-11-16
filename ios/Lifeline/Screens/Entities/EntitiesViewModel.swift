@@ -13,6 +13,8 @@ final class EntitiesViewModel {
     /// The owner's own page: "About you" (M7), on the You tab.
     private(set) var aboutYou: Entity?
     private(set) var error: String?
+    /// The first read has run. Until then a screen shows no "Nothing yet" text.
+    private(set) var isLoaded = false
     let deps: Dependencies
 
     init(deps: Dependencies, type: EntityType) {
@@ -21,6 +23,7 @@ final class EntitiesViewModel {
     }
 
     func refresh() {
+        defer { isLoaded = true }
         do {
             let store = deps.extractionStore
             allTags = try store.tags.all()

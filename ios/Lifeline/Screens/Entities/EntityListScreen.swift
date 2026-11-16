@@ -5,6 +5,10 @@ import SwiftUI
 struct EntityListScreen: View {
     /// Created once per presentation: a parent re-render must not reset the filter.
     @State private var viewModel: EntitiesViewModel
+    /// Absent outside the shell (a preview): then nothing watches the session cover.
+    @Environment(HomeViewModel.self) private var home: HomeViewModel?
+    /// The top page of its stack. Under a cover it stays visible: the cover sends no onDisappear.
+    @State private var isVisible = false
 
     init(deps: Dependencies, type: EntityType) {
         _viewModel = State(initialValue: EntitiesViewModel(deps: deps, type: type))
@@ -13,7 +17,8 @@ struct EntityListScreen: View {
     var body: some View {
         List {
             Section {
-                if viewModel.rows.isEmpty {
+                // Only after the first read: before it, the text would flash over a full list.
+                if viewModel.isLoaded, viewModel.rows.isEmpty {
                     Text(viewModel.tagFilter == nil ? "Nothing yet. They appear as you tell stories." : "Nothing tagged “\(viewModel.tagFilter!)”.")
                         .foregroundStyle(Theme.secondaryText)
                 }
@@ -25,7 +30,10 @@ struct EntityListScreen: View {
         .linenBackground()
         .navigationTitle(viewModel.type.screenTitle)
         .toolbar { EntityTagFilterMenu(viewModel: viewModel) }
-        .onAppear { viewModel.refresh() }
+        .onAppear { isVisible = true; viewModel.refresh() }
+        .onDisappear { isVisible = false }
+        // A session started from this tab lands under a cover; when it closes, read what it added.
+        .onChange(of: home?.coverClosings) { if isVisible { viewModel.refresh() } }
     }
 }
 
