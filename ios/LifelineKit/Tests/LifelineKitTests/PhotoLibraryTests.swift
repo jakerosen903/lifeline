@@ -306,3 +306,27 @@ private func properties(of file: URL) throws -> [CFString: Any] {
     try Data("abc".utf8).write(to: file)
     #expect(try PhotoImport.sha256(of: file) == "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad")
 }
+
+// MARK: - The picked copy
+
+@Test func aPickedCopyIsNamedSoLaunchCanFindIt() {
+    let folder = URL(fileURLWithPath: "/tmp/x", isDirectory: true)
+    let heic = PickedPhotoCopy.url(in: folder, extension: "heic")
+    #expect(heic.deletingLastPathComponent().path == folder.path)
+    #expect(heic.lastPathComponent.hasPrefix(PickedPhotoCopy.prefix) && heic.pathExtension == "heic")
+    #expect(PickedPhotoCopy.url(in: folder, extension: "").pathExtension.isEmpty)
+    #expect(PickedPhotoCopy.url(in: folder, extension: "jpg") != PickedPhotoCopy.url(in: folder, extension: "jpg"), "a fresh name each time")
+}
+
+@Test func launchRemovesPickedCopiesLeftByAKill() throws {
+    let tmp = FileManager.default.temporaryDirectory.appending(path: "picked-test-\(UUID().uuidString)", directoryHint: .isDirectory)
+    try FileManager.default.createDirectory(at: tmp, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: tmp) }
+    // The full-resolution original, with its EXIF and GPS, outlives a kill during the import.
+    try Data("x".utf8).write(to: PickedPhotoCopy.url(in: tmp, extension: "heic"))
+    try Data("x".utf8).write(to: PickedPhotoCopy.url(in: tmp, extension: ""))
+    for name in ["Lifeline-2026-11-16.lifeline", "notes.txt", "pickedup.txt"] { try Data("x".utf8).write(to: tmp.appending(path: name)) }
+    #expect(PickedPhotoCopy.removeLeftovers(in: tmp) == 2)
+    #expect(try FileManager.default.contentsOfDirectory(atPath: tmp.path).sorted() == ["Lifeline-2026-11-16.lifeline", "notes.txt", "pickedup.txt"])
+    #expect(PickedPhotoCopy.removeLeftovers(in: tmp.appending(path: "missing")) == 0, "a folder that cannot be read removes nothing")
+}

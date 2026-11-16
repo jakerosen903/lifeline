@@ -14,6 +14,9 @@ final class PhotoShelf {
     private var adds = InFlightCount()
     /// "Adding the photo…" shows while this is true (decision 21).
     var isAdding: Bool { adds.isActive }
+    /// Counts finished adds. The page passes it to its photos as `photoReloadKey`: an add can write a missing file
+    /// back with the same name, and the open page must then load it.
+    private(set) var addsFinished = 0
     @ObservationIgnored private let deps: Dependencies
     @ObservationIgnored private let onError: (String) -> Void
 
@@ -41,6 +44,7 @@ final class PhotoShelf {
             onError("Could not add this photo: \(error.localizedDescription)")
         }
         load()
+        addsFinished += 1
     }
 
     func makeCover(_ photo: PhotoID) async {

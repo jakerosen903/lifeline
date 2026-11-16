@@ -5,7 +5,7 @@ import UniformTypeIdentifiers
 
 extension View {
     /// "Add a photo": the system picker, one image at a time, then the picked file to `onFile`. `shelf` shows
-    /// "Adding the photo…" from the moment the picked item arrives.
+    /// "Adding the photo…" from the moment the picked item arrives, and its finished adds reload the page's photos.
     /// Under `-uiTesting-pickPhoto <path>` the picker is skipped and that file goes to `onFile` at once.
     func addPhotoFlow(isPresented: Binding<Bool>, deps: Dependencies, shelf: PhotoShelf?, onFile: @escaping (URL, String?) async -> Void,
                       onError: @escaping (String) -> Void) -> some View {
@@ -24,8 +24,13 @@ struct AddPhotoFlow: ViewModifier {
     let onError: (String) -> Void
     @State private var selection: PhotosPickerItem?
 
-    @ViewBuilder
     func body(content: Content) -> some View {
+        // A finished add can write a missing file back under the same name; the page's photos load again.
+        picker(content).environment(\.photoReloadKey, shelf?.addsFinished ?? 0)
+    }
+
+    @ViewBuilder
+    private func picker(_ content: Content) -> some View {
         if let pickPhotoPath {
             // UI tests cannot drive the out-of-process picker (decision 22). The test owns this file; it is not removed.
             content.onChange(of: isPresented) { _, presented in
@@ -65,14 +70,13 @@ struct AddPhotoFlow: ViewModifier {
 }
 
 /// The picked image as a file. The system's file lives only while the importing closure runs, so it is copied
-/// into the temporary folder under a fresh name that keeps its extension.
+/// into the temporary folder under a fresh name that keeps its extension. Launch removes a copy a kill left behind.
 struct PickedPhotoFile: Transferable {
     let url: URL
 
     static var transferRepresentation: some TransferRepresentation {
         FileRepresentation(importedContentType: .image) { received in
-            let ext = received.file.pathExtension
-            let copy = FileManager.default.temporaryDirectory.appending(path: "picked-\(UUID().uuidString)" + (ext.isEmpty ? "" : ".\(ext)"))
+            let copy = PickedPhotoCopy.url(in: FileManager.default.temporaryDirectory, extension: received.file.pathExtension)
             try FileManager.default.copyItem(at: received.file, to: copy)
             return PickedPhotoFile(url: copy)
         }

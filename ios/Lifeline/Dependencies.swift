@@ -130,6 +130,8 @@ struct Dependencies {
         if try Backup.applyPendingRestore(root: root, safetyCopyDirectory: try Backup.safetyCopyDirectory()) { print("[backup] restored a copy at launch") }
         // An export the share sheet left behind is a full copy of everything; it does not outlive the launch.
         Backup.removeTemporaryExports()
+        // So does a picked photo's full-resolution copy (with its EXIF and GPS) that a kill left mid-import.
+        PickedPhotoCopy.removeLeftovers()
         let db = try AppDatabase.open(at: root.appending(path: "Lifeline/lifeline.sqlite"))
         sweepPhotos(root: root, db: db)
         let sessions = SessionRepository(db)
