@@ -110,6 +110,16 @@ extension XCUIApplication {
         return app
     }
 
+    /// Launches with `-uiTesting-seedSpine`: Jordan (born 1990) with six placed moments, a gap of three years, one named
+    /// chapter, one chapter without a title and one undated moment. First open is done; do not call `skipFirstOpen()`.
+    static func launchWithSpine(_ extra: [String] = []) -> XCUIApplication {
+        let app = XCUIApplication()
+        app.launchArguments += ["-uiTesting", "-uiTesting-seedSpine"] + extra
+        app.launch()
+        XCTAssertTrue(app.waitHittable(app.buttons["home.start"], timeout: 15), "the seeded app lands on the timeline")
+        return app
+    }
+
     /// The You tab, once its header is up.
     func openYou() {
         openTab("You")

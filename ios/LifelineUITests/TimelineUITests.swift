@@ -47,7 +47,7 @@ final class TimelineUITests: XCTestCase {
         let memory = app.buttons.matching(identifier: "timeline.memory").matching(NSPredicate(format: "label CONTAINS %@", "The blue door")).firstMatch
         XCTAssertTrue(reveal(memory, in: app))
         XCTAssertTrue(memory.label.contains("no date yet"), memory.label)
-        XCTAssertFalse(app.otherElements["timeline.axis"].exists, "no year axis when nothing is placed")
+        XCTAssertFalse(app.any("timeline.period").exists, "no waypoint when nothing is placed")
         XCTAssertTrue(app.buttons["home.start"].exists)
     }
 
@@ -66,7 +66,7 @@ final class TimelineUITests: XCTestCase {
         let memory = app.buttons.matching(identifier: "timeline.memory").matching(NSPredicate(format: "label CONTAINS %@", "The blue door")).firstMatch
         XCTAssertTrue(reveal(memory, in: app))
         XCTAssertTrue(memory.label.contains("around"), "a placed guess reads as a guess: \(memory.label)")
-        XCTAssertTrue(app.otherElements["timeline.axis"].exists, "a placed memory brings the year axis")
+        XCTAssertTrue(app.any("timeline.period").waitForExistence(timeout: 3), "a placed memory brings its period")
     }
 
 
