@@ -21,3 +21,5 @@ Pre-flight (one row for each task, one for each pair that shares a file or an in
 | 4 → 5 | SpineRow, MemoryRow.chapterTitle; no `axis`, no `newChapter` | Agree. May need one commit; the plan allows it. |
 | 5 → 6 | Identifiers timeline.period, timeline.gap, timeline.tag | Agree. |
 | 4, 6 and Photos | Dependencies.swift, UITestSeed.swift | Edits stay small and at the end of each block (owner's rule). |
+Task 1: complete (commits 83503e9..6bb546b, review clean; swift test 867). Minor, carried to the final review: the decade uses Double division where integer floor division would do; no test at age -1; a test pins "The -10s" for a negative year.
+Note: ExtractionQueueTests.drainGivesUpAtItsDeadline failed once in Task 2's full run and passed on rerun; not touched by this plan. It is the likely baseline flake.
