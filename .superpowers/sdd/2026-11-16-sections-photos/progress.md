@@ -40,3 +40,12 @@ Task 3: minor (deferred): BackupTests photoBytes() repeats export's size sum (a 
 Task 3: minor (deferred): the "nil is omitted" check uses a local JSONEncoder, not JSONEncoder.manifest.
 Task 3: minor (deferred): Backup.swift audio and photo size loops are near-duplicates.
 Task 3: complete (commits 487bbcc..3235cf6, review clean; swift test 913)
+Task 4: minor (deferred): PhotoViewer Done is .plain with no foregroundStyle — system primary, not a Theme text colour (Global Constraints). Fix in the final wave.
+Task 4: minor (deferred): PhotoShelf.load failure copy "Could not show the photos: …" is not in the plan's copy list and uses the photo-action slot. Final wave: send load failures to the page's existing error line.
+Task 4: minor (deferred): "Adding the photo…" row and an existing cover show together, progress above the cover.
+Task 4: minor (deferred): UITestSeed.writePhotos returns silently when Jordan, Maya or "The tree house" is missing; should throw.
+Task 4: minor (deferred): UITestSeed blocks main on a semaphore around a default-priority detached task (test-only; priority-inversion warning).
+Task 4: minor (deferred): viewer buttons are not disabled while an action is awaited (double tap repeats an idempotent call).
+Task 4: minor (deferred): EntityViewModel binds shelf.onError after init through a captured local.
+Task 4: note: kit 914; UI one run: PhotosUITests 7/0, EntityPageUITests 8/0, EntitiesUITests 2/0, ShellUITests 13/0, YouUITests 22/0.
+Task 4: complete (commits 4fa3d7a..0db34d7, review clean; 4 rulings in rulings.md)
