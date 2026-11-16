@@ -2,6 +2,19 @@
 
 One entry per decision. Newest first. Status is Decided, Open, or Superseded.
 
+## 2026-11-16 · S6a: rulings made while building the spine
+
+**Status:** Decided by the builder. The owner can overrule each one. Source: `docs/plans/2026-11-16-timeline-spine.md`, ledger `.superpowers/sdd/2026-11-16-timeline-spine/rulings.md`.
+
+**Decision.**
+
+- A gap is measured from the latest end of all the moments above it, not only from the moment directly above. Example: 2000–10, then 2003, then 2012. The gap above 2012 is 2 years, not 9.
+- The margin leaves out the years only when the moment above shows the same years and the same qualifier. A guess in the same year as a stated date keeps its word "around".
+
+**Why.** A label of "9 years" across years that an earlier moment covers states something false about the person's life. A guess whose word is hidden reads as a fact (PRINCIPLES 5).
+
+**Consequences.** Each ruling is one line in `SpineLayout` and one test. To overrule one, change the line and its test.
+
 ## 2026-11-16 · The Timeline is a spine; a chapter is a tag, a "During" line and a bar on the life map
 
 **Status:** Decided by the owner from mock-ups. Source: `docs/specs/2026-11-16-timeline.md`. Supersedes in part "The timeline groups moments into computed life periods" (2026-10-26) and "Archive structure: chapters → stories → moments" (2026-10-22).
