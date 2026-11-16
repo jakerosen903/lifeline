@@ -13,6 +13,14 @@ One entry per decision. Newest first. Status is Decided, Open, or Superseded.
 
 - Owner, 2026-11-16: for a confirmed relation ("before Graduation (2004)") the margin shows no years. The row shows the full text and the mark stays a dashed capsule. This changes the plan's decision 4.
 - Owner, 2026-11-16: a story of one year has a solid dot only when every dated member reads as said. Otherwise it has a dashed dot and "around". This changes the plan's decision 8.
+- An open story that is the last stop keeps the spine beside its members, and the spine ends at the last member (R7).
+- A spine row keeps the age ("age ~7") on its date line, so the person sees why a guess sits where it does (R8).
+- The "in your voice" length sits on its own line on a spine row, so the title has the full width (R9).
+- Opening a story scrolls it to the top of the list. Opened members landed under the record bar. The owner can overrule this (R13).
+- The Check-this tag wraps. A long tag pushed the "..." menu off the row (R14).
+- A tap on a tag does nothing until S6c makes the tag a button (R15).
+- A story's members are list rows of their own, so each long-press menu belongs to one member (R16).
+- Two UI tests that the plan wrote also pass on the old build, and they stay as written. One is a guard for kept behaviour (R12). The other cannot see where the date sits, so that is checked on the device at the largest text size (R11).
 - Owner, 2026-11-16: "New chapter from here" goes with no replacement until S6c (decision 2), and a moment in a collection stays off the spine (decision 9). Known cost of decision 9: a gap label can cover years that hold collection moments.
 
 **Why.** A label of "9 years" across years that an earlier moment covers states something false about the person's life. A guess whose word is hidden reads as a fact (PRINCIPLES 5).

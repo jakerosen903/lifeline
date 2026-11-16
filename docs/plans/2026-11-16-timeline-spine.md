@@ -316,5 +316,8 @@ Read each of the three tests in full before you change it. If the surrounding te
 ## After S6a
 
 - **Collections (owner's call).** Should a dated moment that is in a collection also sit on the spine? Decision 9 keeps it off. If yes, the collection section must not repeat it, or must show it as a link.
+- **Shelf count.** The shelf header counts a half-open moment ("before 2004") as "undated".
+- **Collection and story.** A story member that is also in a collection shows in both places and is counted twice in the summary. This was so before this PR.
+- **UI-test seed.** A seed with a story, a relation and a range of years would let the open-story and capsule cases run in CI.
 - **S6b:** the pinned card. `spine` already holds what the frame needs: the years of the rows on screen.
 - **S6c:** the tag becomes a button; the life map; the chapter's sheet; "Add to a chapter…"; `chapter.range` holds stated years only; empty untitled chapters are deleted.
