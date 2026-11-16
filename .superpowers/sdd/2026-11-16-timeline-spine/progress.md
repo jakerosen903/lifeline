@@ -23,3 +23,6 @@ Pre-flight (one row for each task, one for each pair that shares a file or an in
 | 4, 6 and Photos | Dependencies.swift, UITestSeed.swift | Edits stay small and at the end of each block (owner's rule). |
 Task 1: complete (commits 83503e9..6bb546b, review clean; swift test 867). Minor, carried to the final review: the decade uses Double division where integer floor division would do; no test at age -1; a test pins "The -10s" for a negative year.
 Note: ExtractionQueueTests.drainGivesUpAtItsDeadline failed once in Task 2's full run and passed on rerun; not touched by this plan. It is the likely baseline flake.
+Task 2: complete (commits 6bb546b..3299af8, review clean; swift test 884). Rulings R1, R2, R3 applied. Minor, carried to the final review: the literal "around" is written twice in SpineLayout; no test for a "probably" range beside the margin qualifier.
+Task 3: complete (commits 7700dbf..b932cfd, review clean; swift test 884). The app target does not compile from here until Tasks 4 and 5.
+Tasks 1 to 3 done. Stopped for the owner: the report on the 12 decisions. R1 and R2 are also in docs/DECISIONS.md.
