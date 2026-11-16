@@ -20,7 +20,7 @@ Most journaling tools ask you to write. Most family-history tools ask you to fil
 4. **Kept.** Keep, change or dismiss a card whenever you like, or never. Nothing merges, groups or gets a title without your tap.
 5. **Placed.** Moments land on a timeline as honest ranges (“during the Boston years”), inside stories and chapters, or on the shelf until a date turns up. Things that are not moments (a first car, a grandmother, a belief) become details on pages for the people, places, things and ideas they are about.
 
-**The shape of the app.** The app opens on five tabs: Timeline, People, Places, Things and You. A record bar sits above the tab bar on every tab. Its label names the page: “Tell a story”, “Tell a story about Maya” or “Tell a story about yourself”. Tap the bar to start a quick story. Its menu holds “Settle in”. A session started from a page records that page as its subject and opens with a question about it. Sessions is a labeled button on Timeline. Settings is on You. “Names you mentioned” is in the overflow menu on People. The pages for people, places and things open from their tabs.
+**The shape of the app.** The app opens on five tabs: Timeline, People, Places, Things and You. A record bar sits above the tab bar on every tab. Its label names the page: “Tell a story”, “Tell a story about Maya” or “Tell a story about yourself”. Tap the bar to start a quick story. Its menu holds “Settle in”. A session started from a page records that page as its subject and opens with a question about it. Sessions is a labeled button on Timeline. Settings is on You. “Names you mentioned” is in the overflow menu on People. People is a grid of letter tiles. Each tile shows the name and the person’s own words, such as “my sister”. A labeled row above the grid sorts it: “Most told”, “First in your story” or “By name”. The sort starts on “Most told” at each launch. The pages for people, places and things open from their tabs.
 
 The result is three things at once: a **journal** for revisiting fond memories, an **autobiography** you can replay in your own voice, and, later, a **family record** where several people’s versions of the same Christmas sit side by side.
 
@@ -96,7 +96,7 @@ A session is when you recorded. A moment is a scene you described, with its own 
 
 ### Not everything is a moment
 
-Much of a life story is not an event at a time: the house with the blue door, a grandmother who was Portuguese, a belief about hard work. These are kept as details of an entity, one of four kinds: People, Places, Things and Ideas. Each entity has a page with its details first, in the person’s words, then the moments it appears in. An idea keeps its moments in order, so “I used to think X” and “now I think Y” sit together, and the app never judges the change. Statements about the person themself collect under “About you”. Nothing is reclassified without a tap.
+Much of a life story is not an event at a time: the house with the blue door, a grandmother who was Portuguese, a belief about hard work. These are kept as details of an entity, one of four kinds: People, Places, Things and Ideas. Each entity has a page. The page shows, from top to bottom: the type, the title, the person’s own words, a span only when the person gave dates, and Play. Then it shows the life strip, “What you’ve said about them”, “Often with”, the moments in date order, and Tags. A section with nothing in it does not show. A page with nothing told shows one line: “Stories you tell about {title} will show here.” An idea keeps its moments in order, so “I used to think X” and “now I think Y” sit together, and the app never judges the change. Statements about the person themself collect under “About you”. Nothing is reclassified without a tap.
 
 ### People are resolved, not guessed
 
@@ -210,6 +210,12 @@ Each memory has a kind: `event`, `other`, `fact`, `feeling` or `goal`. Events an
 An entity is a person, a place, a thing or an idea. One table holds all four. One link table connects memories to entities, with the relation “detail” or “mention”. A person keeps one extra record for what only a person has: the owner flag and a birth date. Every entity comes from something the person said and has a span that plays.
 
 The extractor (v6) names entities in each memory. A named entity that is on file links to the memory. Otherwise the app matches by type and normalized title, or makes a new one. An idea’s title must be at most 8 consecutive words the person said. If no such quote exists, the title is “An idea you mentioned on {date}”. The app never asks for a date on a place or a thing. The person can add one.
+
+A page shows the life strip below Play. The strip is an axis from the birth year to now, with one mark for each moment. A mark for a guessed date is hollow. Under the axis, one sentence says the same in words, such as “In 4 moments, from 1999 to 2003”. A guess reads “around” or “between”. A person with no told moments has no strip.
+
+“Often with” lists the other entities that share two or more told moments with this one. Each chip shows a count. A chip opens that entity’s page. The list never shows the owner. It creates no link. It shows only what the person told.
+
+A quote on a list or a page hides filler words: “um”, “uh” and “erm”; “like” between two commas; “you know” after a comma; and a word said twice in a row, once. The memory page and the audio keep every word. The stored text never changes.
 
 Domains (home, family, work, travel, and anything else the person says) are free-text tags on any element. There is no fixed list.
 
