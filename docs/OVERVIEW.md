@@ -20,6 +20,8 @@ Most journaling tools ask you to write. Most family-history tools ask you to fil
 4. **Kept.** Keep, change or dismiss a card whenever you like, or never. Nothing merges, groups or gets a title without your tap.
 5. **Placed.** Moments land on a timeline as honest ranges (“during the Boston years”), inside stories and chapters, or on the shelf until a date turns up. Things that are not moments (a first car, a grandmother, a belief) become details on pages for the people, places, things and ideas they are about.
 
+**The shape of the app.** The app opens on five tabs: Timeline, People, Places, Things and You. A record bar sits above the tab bar on every tab. Its label names the page: “Tell a story”, “Tell a story about Maya” or “Tell a story about yourself”. Tap the bar to start a quick story. Its menu holds “Settle in”. A session started from a page records that page as its subject and opens with a question about it. Sessions is a labeled button on Timeline. Settings is on You. “Names you mentioned” is in the overflow menu on People. The pages for people, places and things open from their tabs.
+
 The result is three things at once: a **journal** for revisiting fond memories, an **autobiography** you can replay in your own voice, and, later, a **family record** where several people’s versions of the same Christmas sit side by side.
 
 The shape changed on the way. The first design imagined 30 to 60 minute oral-history sittings led by a spoken interviewer. Real use was a few minutes at a time, and a design review warned that cards, people, dates and session review stacked together would feel like maintaining a database. Both pushed the product toward a short daily practice in which keeping the story comes first and organizing it is optional. The interviewer is now coming back (M8), in a much quieter form: it reflects more than it asks, never fills a pause, and stops the moment you speak.
@@ -262,7 +264,7 @@ The voice is on-device (`AVSpeechSynthesizer`), through the same audio engine as
 - **Phase 2: props.** Favorite photos as prompts and anchors (PhotoKit gives dates and places; people are tagged by hand; a face model only after an evaluation against those tags), then music from an era.
 - **Phase 3: family.** Per-memory sharing, several perspectives on one event, questions for each other, and a read-only web viewer.
 
-> **Next.** Merge M8’s three pull requests in order and run its device checklist: echo, barge-in within half a second, voice quality, and the safety gate. Run the recording study now that V1 exists: 5 to 8 people, ten minutes each, scored with the app’s evaluation command. Settle the open product questions below, starting with what a second user needs. Engineering meanwhile tunes the starting numbers on real recordings. Then choose the next build: replay (M9) or the one-photo prompt.
+> **Next.** Merge the shell pull request, then run its device checklist (`docs/plans/2026-11-15-sections-device-check.md`). Then build the next parts of the five-sections plan (`docs/plans/2026-11-15-sections.md`). Merge M8’s three pull requests in order and run its device checklist: echo, barge-in within half a second, voice quality, and the safety gate. Run the recording study now that V1 exists: 5 to 8 people, ten minutes each, scored with the app’s evaluation command. Settle the open product questions below, starting with what a second user needs. Engineering meanwhile tunes the starting numbers on real recordings. Then choose the next build: replay (M9) or the one-photo prompt.
 
 ### Open questions
 
