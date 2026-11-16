@@ -49,3 +49,8 @@ Task 4: minor (deferred): viewer buttons are not disabled while an action is awa
 Task 4: minor (deferred): EntityViewModel binds shelf.onError after init through a captured local.
 Task 4: note: kit 914; UI one run: PhotosUITests 7/0, EntityPageUITests 8/0, EntitiesUITests 2/0, ShellUITests 13/0, YouUITests 22/0.
 Task 4: complete (commits 4fa3d7a..0db34d7, review clean; 4 rulings in rulings.md)
+Task 5: cannot-verify checked: PhotoImageView loads in .task(id:) and PhotoImageCache is an actor over NSCache (grep at 1d68cf9). OK.
+Task 5: minor (deferred): colour(of:at:) records an XCTFail per poll inside waitForColour on a screenshot failure.
+Task 5: minor (deferred): EntitiesViewModel.refresh leaves covers stale when covers(type:) throws after rows updated.
+Task 5: note: kit 914 (two known timing flakes under load, pass alone); UI one run: PeopleUITests 10/0, PhotosUITests 7/0, ShellUITests 13/0.
+Task 5: complete (commits 1a0ad6d..1d68cf9, review clean; 2 rulings in rulings.md)
