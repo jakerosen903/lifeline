@@ -82,3 +82,10 @@ import Testing
     #expect(ReadableQuote.text("we paid -5 or more", maxWords: 3) == "We paid -5…")
     #expect(ReadableQuote.text("we left, and then, so", maxWords: 3) == "We left, and…")
 }
+
+@Test func aRealQuestionAtTheEndKeepsItsWords() {
+    #expect(ReadableQuote.text("Do you know?") == "Do you know?")
+    #expect(ReadableQuote.text("I asked her, do you know?") == "I asked her, do you know?")
+    #expect(ReadableQuote.text("it was hard, you know?") == "It was hard.")
+    #expect(ReadableQuote.text("Did she know, you know.") == "Did she know.")
+}

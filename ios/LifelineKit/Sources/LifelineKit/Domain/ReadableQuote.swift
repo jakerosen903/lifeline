@@ -6,7 +6,9 @@ import Foundation
 /// Rules, in this order: fragments, fillers, repeats, the end comma, the capital.
 /// - A fragment is a token made only of dashes, dots and commas.
 /// - Fillers: "um", "uh" and "erm"; "like" only when a comma stands on both sides (", like,"),
-///   because "like" with a comma on one side may be the person's word; "you know" only when a comma follows it or it ends the quote. A removed filler
+///   because "like" with a comma on one side may be the person's word; "you know" only when a comma
+///   follows it, or when it ends the quote and the word before it ends with a comma ("it was hard,
+///   you know?" becomes "It was hard."; "Do you know?" is a real question and stays). A removed filler
 ///   takes its trailing comma with it. A comma before it stays. A "." or "…" it carried moves to
 ///   the word before, never doubled. A "?" or "!" it carried becomes ".", so a statement never
 ///   turns into a question or an exclamation.
@@ -59,7 +61,7 @@ public enum ReadableQuote {
             } else if word == "like", token.hasSuffix(","), kept.last?.hasSuffix(",") == true {
                 drop(token); i += 1
             } else if word == "you", !token.hasSuffix(","), i + 1 < tokens.count, core(tokens[i + 1]) == "know",
-                      tokens[i + 1].hasSuffix(",") || i + 2 == tokens.count {
+                      tokens[i + 1].hasSuffix(",") || (i + 2 == tokens.count && kept.last?.hasSuffix(",") == true) {
                 drop(tokens[i + 1]); i += 2
             } else {
                 kept.append(token); i += 1
