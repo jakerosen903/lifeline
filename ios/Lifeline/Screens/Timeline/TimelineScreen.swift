@@ -152,7 +152,7 @@ struct TimelineScreen: View {
                 ForEach(viewModel.spine) { row in
                     SpineRowView(row: row, isFirst: row.id == viewModel.spine.first?.id, isLast: row.id == viewModel.spine.last?.id,
                                  expanded: storyID(of: row).map { viewModel.expandedStories.contains($0) } ?? false,
-                                 onToggleStory: { storyID(of: row).map { viewModel.toggleStory($0) } },
+                                 onToggleStory: { if let id = storyID(of: row) { viewModel.toggleStory(id) } },
                                  actions: rowActions, storyActions: storyActions)
                 }
                 .listRowSeparator(.hidden)

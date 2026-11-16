@@ -10,13 +10,28 @@ extension VerticalAlignment {
     static let spineMark = VerticalAlignment(SpineMarkLine.self)
 }
 
+extension View {
+    /// Puts the spine's mark at this text's first line, however far the text wraps. Off the spine it does nothing.
+    func spineMarkOnFirstLine() -> some View { modifier(SpineMarkOnFirstLine()) }
+}
+
+/// The `spineMark` guide on a text: its first baseline, raised by about half a capital to the line's middle.
+private struct SpineMarkOnFirstLine: ViewModifier {
+    @ScaledMetric(relativeTo: .headline) private var lift: CGFloat = 6
+
+    func body(content: Content) -> some View {
+        content.alignmentGuide(.spineMark) { [lift] in $0[.firstTextBaseline] - lift }
+    }
+}
+
 /// One stop on the spine, top to bottom: the gap above it, the period waypoint that starts at it,
 /// then the row itself: the margin with the years, the mark on the spine, and the moment or story.
 /// An open story's members follow as list rows of their own, beside the spine, without marks.
 ///
 /// The spine is one 2-point ochre line. Each part draws its own piece at the same x, and the list
 /// rows touch (the screen gives them no vertical insets), so the pieces join into one line. It
-/// starts at the first stop's mark and ends at the last stop's mark.
+/// starts at the first stop's mark and ends at the last stop's mark, or, when the last stop is an
+/// open story, at the bottom of its last member.
 struct SpineRowView: View {
     let row: SpineRow
     let isFirst: Bool
@@ -35,17 +50,23 @@ struct SpineRowView: View {
             if let period = row.stop.periodAbove { SpineWaypoint(period: period, geometry: geometry, drawsSpine: !isFirst) }
             stopRow
         }
-        if case .story(let story) = row.content, expanded {
-            ForEach(story.members) { member in
-                // Members carry no mark and keep their full date text in the row, as off the spine.
-                MemoryRowView(row: member, actions: actions)
-                    .padding(.leading, geometry.contentLeading + 16)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    // After the last stop the spine has ended; it runs on beside members only towards a next stop.
-                    .background(alignment: .leading) { if !isLast { SpineLine(dashed: false, x: geometry.spineX) } }
-            }
+        ForEach(openMembers) { member in
+            // Members carry no mark and keep their full date text in the row, as off the spine.
+            MemoryRowView(row: member, actions: actions)
+                .padding(.leading, geometry.contentLeading + 16)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(alignment: .leading) { SpineLine(dashed: false, x: geometry.spineX) }
         }
     }
+
+    /// An open story's members; none for a moment or a folded story.
+    private var openMembers: [MemoryRow] {
+        guard case .story(let story) = row.content, expanded else { return [] }
+        return story.members
+    }
+
+    /// The spine runs on below the mark towards a next stop, or beside an open story's members.
+    private var spineRunsOnBelowMark: Bool { !isLast || !openMembers.isEmpty }
 
     /// The margin closes at the accessibility text sizes; the row then writes the full date itself.
     private var geometry: SpineGeometry {
@@ -71,7 +92,7 @@ struct SpineRowView: View {
                 if let anchor {
                     let markY = proxy[anchor].y
                     let top = isFirst ? markY : 0
-                    let bottom = isLast ? markY : proxy.size.height
+                    let bottom = spineRunsOnBelowMark ? proxy.size.height : markY
                     SpineLine(dashed: false, x: geometry.spineX)
                         .frame(height: max(0, bottom - top))
                         .offset(y: top)
@@ -104,7 +125,7 @@ struct SpineRowView: View {
         case .memory(let memory):
             MemoryRowView(row: memory, actions: actions, placement: .spine(dateText: row.stop.rowDateText))
         case .story(let story):
-            StoryRowView(row: story, expanded: expanded, onToggle: onToggleStory, storyActions: storyActions)
+            StoryRowView(row: story, expanded: expanded, onToggle: onToggleStory, storyActions: storyActions, isOnSpine: true)
         }
     }
 }
@@ -154,7 +175,8 @@ private struct SpineWaypoint: View {
     /// False above the first stop: the spine starts at its mark.
     let drawsSpine: Bool
 
-    private var copy: String { period.byAge ? "\(period.name) · by your age" : period.name }
+    /// What follows the name: " · by your age" for a period of the person's age, nothing for a decade.
+    private var suffix: String { period.byAge ? " · by your age" : "" }
 
     var body: some View {
         label
@@ -165,16 +187,14 @@ private struct SpineWaypoint: View {
             .padding(.leading, geometry.contentLeading)
             .frame(maxWidth: .infinity, alignment: .leading)
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel(copy)
+            .accessibilityLabel(period.name + suffix)
             .accessibilityAddTraits(.isHeader)
             .accessibilityIdentifier("timeline.period")
             .background(alignment: .leading) { if drawsSpine { SpineLine(dashed: false, x: geometry.spineX) } }
     }
 
-    private var label: Text {
-        let name = Text(period.name).fontWeight(.semibold)
-        return period.byAge ? Text("\(name) · by your age") : name
-    }
+    /// The same words as the accessibility label, with the name in semibold.
+    private var label: Text { Text("\(Text(period.name).fontWeight(.semibold))\(suffix)") }
 }
 
 /// A piece of the spine: the full height of whatever it is behind, centred on `x`.
