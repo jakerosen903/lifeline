@@ -168,6 +168,28 @@ final class YouUITests: XCTestCase {
     }
 
     @MainActor
+    func testAPlayErrorLeavesAnOpenUndoInPlace() {
+        let app = XCUIApplication.launchWithPortrait(); app.openYou()
+        let lines = app.buttons.matching(identifier: "you.line")
+        let first = lines.firstMatch
+        XCTAssertTrue(first.waitForExistence(timeout: 5))
+        let hiddenLabel = first.label
+        let before = app.youLineLabels().count
+        first.press(forDuration: 1.0)
+        app.buttons["you.hide"].tap()
+        let undo = app.buttons["you.undo"]
+        XCTAssertTrue(undo.waitForExistence(timeout: 5))
+        XCTAssertEqual(app.youLineLabels().count, before - 1, "the line is hidden")
+        app.buttons.matching(identifier: "you.play").firstMatch.tap()   // the seed never writes seed.m4a, so this fails
+        XCTAssertTrue(app.any("you.error").waitForExistence(timeout: 5), "the play error shows")
+        XCTAssertTrue(undo.exists, "a play tap does not take Undo away")
+        XCTAssertTrue(app.waitHittable(undo, timeout: 5))
+        undo.tap()
+        XCTAssertTrue(app.buttons.matching(identifier: "you.line").matching(NSPredicate(format: "label == %@", hiddenLabel)).firstMatch.waitForExistence(timeout: 5),
+                      "Undo brings the hidden line back")
+    }
+
+    @MainActor
     func testHidingALineFarDownShowsUndoWithoutScrolling() {
         let app = XCUIApplication.launchWithPortrait(); app.openYou()
         let line = app.buttons.matching(identifier: "you.line").matching(NSPredicate(format: "label == %@", "I want to take Maya to Lisbon someday")).firstMatch

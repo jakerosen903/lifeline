@@ -173,7 +173,8 @@ final class YouViewModel {
     /// Plays the line's telling; a second tap on the playing line stops it. A tap that cannot play says why
     /// and changes nothing else. A telling is not checked to be non-empty when it is read, so an empty span reaches here.
     func togglePlayback(_ line: PortraitLine) {
-        clearSlot()
+        // A play tap clears an old error only. "Hidden." and its Undo stay, so a tap never takes the way back.
+        if case .error = notice { notice = nil }
         if isPlaying(line) { stop(); return }
         guard let telling = line.telling else { return }
         do {

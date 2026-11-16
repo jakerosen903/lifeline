@@ -32,3 +32,11 @@ private func memory(_ title: String, kind: MemoryKind, hidden: Bool = false, flo
             "a tag only a fact or an entity carries is not offered; once each, ignoring case, sorted ignoring case")
     #expect(TimelineSummary.menuTags(tags, moments: []).isEmpty)
 }
+
+@Test func aTagFilterTurnsOffWhenNoMomentCarriesItsTag() {
+    #expect(TimelineSummary.filter("Summer", offered: ["family", "Summer"]) == "Summer")
+    #expect(TimelineSummary.filter("summer", offered: ["Summer"]) == "summer", "case does not matter")
+    #expect(TimelineSummary.filter("Summer", offered: ["family"]) == nil, "the last moment with the tag is gone")
+    #expect(TimelineSummary.filter("Summer", offered: []) == nil, "no tag is offered, so no menu shows to clear it")
+    #expect(TimelineSummary.filter(nil, offered: []) == nil)
+}

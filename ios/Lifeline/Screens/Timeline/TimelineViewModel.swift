@@ -156,6 +156,9 @@ final class TimelineViewModel {
             let listed = try (showHidden ? store.memories.allMemories() : store.memories.visibleMemories()).filter { !$0.isFloating }
             // The menu offers only tags a moment carries: a tag only on facts would filter to an empty Timeline (S3).
             allTags = TimelineSummary.menuTags(try store.tags.tagsByElement(.memory), moments: listed)
+            // A filter whose tag no moment carries any more (the last one was hidden or deleted) turns itself off;
+            // the menu that could clear it may be gone. Setting it reads again, so this pass ends here.
+            if tagFilter != TimelineSummary.filter(tagFilter, offered: allTags) { tagFilter = nil; return }
             // Only moments are on the timeline; the rest are counted, never drawn (M7, S3). The count is of visible
             // ones, whatever the filter: Timeline cannot show a hidden fact, so it must not count one.
             aboutCount = TimelineSummary.thingsAboutYourLife(listed)

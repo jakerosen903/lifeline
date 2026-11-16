@@ -76,6 +76,13 @@ enum UITestSeed {
         _ = try store.entities.insert(type: .idea, title: "Telling the truth")
     }
 
+    /// Under `-uiTesting-seedTaggedMoment`, after a seed that has "Maya's graduation": exactly one moment carries a
+    /// tag ("Graduations"). It is a separate flag so the seeds other tests count on keep their tags as they are.
+    static func tagOneMoment(store: ExtractionStore) throws {
+        guard let moment = try store.memories.allMemories().first(where: { $0.title == "Maya's graduation" }) else { return }
+        try store.tags.tag(.memory, moment.id.rawValue, "Graduations")
+    }
+
     /// The family behind `writePeople`, and the session it was told in, for a seed that tells more after it.
     private static func people(store: ExtractionStore, profile: ProfileRepository, sessions: SessionRepository) throws -> SeedSession? {
         let birth = Calendar.current.date(from: DateComponents(year: 1990, month: 6, day: 1))

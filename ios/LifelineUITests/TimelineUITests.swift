@@ -182,4 +182,27 @@ final class TimelineUITests: XCTestCase {
         app.openSessions()
         XCTAssertTrue(app.buttons["home.sessionRow"].firstMatch.waitForExistence(timeout: 5))
     }
+
+    /// One moment carries the tag "Graduations" (`-uiTesting-seedTaggedMoment`). Hiding it leaves no moment with
+    /// that tag, so the filter must turn itself off: the other moments show and the empty state does not.
+    @MainActor
+    func testAFilterTurnsOffWhenItsLastMomentIsHidden() {
+        let app = XCUIApplication.launchWithPortrait(["-uiTesting-seedTaggedMoment"]); app.openTab("Timeline")
+        app.buttons["timeline.more"].tap()
+        let filter = app.buttons["timeline.tagFilter"]
+        XCTAssertTrue(filter.waitForExistence(timeout: 5), "one moment carries a tag, so the menu is offered")
+        filter.tap()
+        app.buttons["Graduations"].tap()
+        let rows = app.buttons.matching(identifier: "timeline.memory")
+        XCTAssertTrue(rows.firstMatch.waitForExistence(timeout: 5))
+        XCTAssertEqual(rows.count, 1, "only the tagged moment shows")
+        app.buttons["row.more"].firstMatch.tap()
+        app.buttons["row.hide"].tap()
+        XCTAssertTrue(rows.firstMatch.waitForExistence(timeout: 5), "the filter is off, so the other moments show")
+        XCTAssertGreaterThan(rows.count, 1, "the moments that are left")
+        XCTAssertFalse(app.staticTexts["Tap “Tell a story” and tell me about the house you grew up in."].exists, "not the first-story empty state")
+        app.buttons["timeline.more"].tap()
+        XCTAssertTrue(app.any("timeline.showHidden").waitForExistence(timeout: 5), "the menu is open")
+        XCTAssertFalse(app.buttons["timeline.tagFilter"].exists, "no moment carries a tag now, so no tag menu shows")
+    }
 }

@@ -258,6 +258,7 @@ struct Dependencies {
         if args.contains("-uiTesting-seedPerson") { try UITestSeed.writePersonOnly(store: store) }
         if args.contains("-uiTesting-seedPeople") { try UITestSeed.writePeople(store: store, profile: deps.profile, sessions: deps.sessions) }
         if args.contains("-uiTesting-seedPortrait") { try UITestSeed.writePortrait(store: store, profile: deps.profile, sessions: deps.sessions) }
+        if args.contains("-uiTesting-seedTaggedMoment") { try UITestSeed.tagOneMoment(store: store) }
         if args.contains("-uiTesting-noOwner") { try UITestSeed.writeProfileWithoutOwner(profile: deps.profile, store: store) }
         return deps
     }

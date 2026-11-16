@@ -27,4 +27,11 @@ public enum TimelineSummary {
         let once = moments.filter(\.isMoment).flatMap { tagsByMemory[$0.id.rawValue] ?? [] }.filter { seen.insert($0.lowercased()).inserted }
         return once.sorted { $0.lowercased() < $1.lowercased() }
     }
+
+    /// The filter to keep once the menu is known: a tag no moment carries any more turns off, because the menu
+    /// that could clear it may be gone too. Case does not matter.
+    public static func filter(_ chosen: String?, offered: [String]) -> String? {
+        guard let chosen else { return nil }
+        return offered.contains { $0.lowercased() == chosen.lowercased() } ? chosen : nil
+    }
 }
