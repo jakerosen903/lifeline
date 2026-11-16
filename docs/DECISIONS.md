@@ -6,7 +6,7 @@ One entry per decision. Newest first. Status is Decided, Open, or Superseded.
 
 **Status:** Decided. Builds on the five-sections decision of 2026-11-15.
 
-**Source:** `docs/plans/2026-11-16-sections-photos.md`, decisions 2, 3, 4, 6, 8, 10, 15 and 20. The rulings made while building it are below. The owner approved the v13 schema on 2026-11-16. The schema is `photo_link` with `entity_id` and `memory_id`.
+**Source:** `docs/plans/2026-11-16-sections-photos.md`, decisions 2, 3, 4, 6, 7, 8, 10, 11, 15 and 20. The rulings made while building it are below. The owner approved the v13 schema on 2026-11-16. The schema is `photo_link` with `entity_id` and `memory_id`.
 
 **Decision.** A person, place or thing page, a memory page and You can hold photos. The first photo is the cover. A cover shows as the page header and as the face of the People tile.
 
@@ -20,7 +20,7 @@ One entry per decision. Newest first. Status is Decided, Open, or Superseded.
 - **A pre-S4 build refuses a post-S4 copy.** The copy has schema v13. A build from before S4 shows “This copy was made by a newer version of Lifeline.” A copy from before S4 restores and has no photos.
 - **One copy per photo (decision 7).** The SHA-256 of the picked file identifies a photo. The same photo added to a second page links the one copy to both pages. The same photo added again to the same page changes nothing. Cost: two pages share one file, so removing the photo from one page must keep the file for the other.
 - **A merge moves photos (decision 11).** A merge of two memories moves the source memory’s photos to the target. A source cover becomes an attached photo when the target has a cover. Undoing the merge does not move the photos back. Cost: an undone merge leaves the photos on the target.
-- **Photos on the strip wait.** No Timeline row, Things tile, search result or map uses a photo yet (S5 to S8).
+- **Photos stay on their pages for now.** No Timeline row, Things tile, search result or map uses a photo yet (S5 to S8).
 
 **Rulings made while building (2026-11-16).** Each ruling has its cost.
 
@@ -34,6 +34,17 @@ One entry per decision. Newest first. Status is Decided, Open, or Superseded.
   - `testAMemoryShowsItsPhotos` reveals its row and waits for `memory.range`. The row is off screen in a lazy list, and “The tree house” is an event, so its page shows the range and no kind.
 - **The pixel-colour tests poll for up to 10 seconds.** They poll before the unchanged colour assertion. Why: the image decodes off the main thread, so an immediate screenshot is a race. Cost: none. A wrong colour still fails.
 - **Two extra failure tests.** A foreign-key failure at the row insert and a failure at the file write prove that a failed add stores nothing. Cost: two more tests.
+
+**Rulings from the final review (2026-11-16).** Each ruling has its cost.
+
+- **The sweep also runs before every copy.** Settings runs the sweep before an export and before a restore is staged, through the photo library, so it cannot run between an add's file and its row. Why: a photo whose memory or session was deleted in this run keeps its row and file until the next launch, and a copy made before then would carry it. The copy is the one thing that leaves the phone. Cost: a short pause before each copy. A sweep that fails is logged and does not stop the copy.
+- **"Adding the photo…" starts when the picked item arrives.** It shows before the system hands the file over, which takes seconds for a photo in iCloud, and it clears on every exit. A count keeps it on while a second pick is still running. Cost: none known. Device check item 2 confirms it.
+
+**The owner must see:**
+
+- The delete dialogs for a memory or a session do not say that its photos go too.
+- A photo whose stored file is missing shows an empty frame as a page header. A tile shows its letter.
+- `PhotoShelf.load` has one failure string outside the plan's copy list: "Could not show the photos: {reason}".
 
 **Why.** A life has faces and places. The person recognizes them by sight (P1). The person keeps the photos and decides which one leads (P2). The app shows only what the file says. The app never describes a photo and never guesses from it (P5). Photos stay on the phone, as audio does (data posture).
 

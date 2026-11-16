@@ -274,9 +274,9 @@ The app excludes every `.lifeline` file and the audio folder and the photos fold
 
 The person adds a photo one at a time with the system picker, from “Add a photo” in the “…” menu of a person, place or thing page, a memory page, or You. The app asks for no photo-library permission and makes no network call for a photo.
 
-The app keeps one copy of the photo, as a JPEG of quality 0.85 and at most 2048 pixels on the long edge, in `photos/` next to the audio. The copy has no metadata: no GPS, no EXIF and no orientation flag. The app reads two things from the picked file: the date taken (`DateTimeOriginal`) and the GPS position. It keeps both only in the database, with the origin `exif`.
+The app keeps one copy of the photo, as a JPEG of quality 0.85 and at most 2048 pixels on the long edge, in `photos/` next to the audio. The copy has no metadata: no GPS, no EXIF and no orientation flag. The app reads two things from the picked file: the date taken (`DateTimeOriginal`) and the GPS position. It keeps both only in the database, with the origin `exif`. The app shows the date as “taken 14 June 2012”. It does nothing with the position. Neither value changes a memory, a range or a place.
 
-The app stores one copy per photo. The SHA-256 of the picked file identifies the photo. The same photo added to a second page links the one copy to both pages. The same photo added again to the same page changes nothing. If the stored file is missing, the second add writes the file again. That is how the person repairs a photo that does not show. The app shows the date as “taken 14 June 2012”. It does nothing with the position. Neither value changes a memory, a range or a place. Deleting the original in the Photos app changes nothing in Lifeline.
+The app stores one copy per photo. The SHA-256 of the picked file identifies the photo. The same photo added to a second page links the one copy to both pages. The same photo added again to the same page changes nothing. If the stored file is missing, the second add writes the file again. That is how the person repairs a photo that does not show. Deleting the original in the Photos app changes nothing in Lifeline.
 
 The first photo on a page is its cover. The cover shows as the page header, as the face of the person’s tile on People, and on You. A page with two or more photos also shows a Photos row. A memory page has no header. Its Photos row sits after the “In your voice” card and before “In this memory”, and shows with one photo or more. A tap opens the viewer. The viewer offers “Make this the cover” (when the photo is not the cover), “Remove photo…” and “Done”. Removing a photo takes it off this page only. When a removed cover leaves other photos, the oldest-added photo becomes the cover. When the last photo goes, the tile shows its letter again and the page has no header. When the cover changes, the page scrolls to its top and shows the new cover. The owner must confirm this (see DECISIONS).
 
@@ -284,9 +284,9 @@ A merge of two memories moves the source memory’s photos to the target. A sour
 
 Photos on the life strip of You wait for a later spec. That spec must say where a photo’s date may place it.
 
-A launch sweep removes what a failure or a kill leaves behind: a photo with no link, a file with no row, and a half-written `.partial` file. The sweep never deletes a row because its file is missing.
+A sweep removes what a delete, a failure or a kill leaves behind: a photo with no link, a file with no row, and a half-written `.partial` file. The sweep runs at launch. It also runs before a copy is made: before an export and before a restore is staged. So a photo whose page was deleted does not travel in a copy. The sweep never deletes a row because its file is missing.
 
-The photos folder is part of the `.lifeline` copy and is out of the phone’s cloud backup, as audio is.
+The photos folder is part of the `.lifeline` copy and is out of the phone’s cloud backup, as audio is. A restore that waits for the next launch is out of the cloud backup too.
 
 ### 10. The spoken interviewer (M8, in review)
 
