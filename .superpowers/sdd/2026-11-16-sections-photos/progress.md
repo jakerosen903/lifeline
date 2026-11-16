@@ -67,3 +67,5 @@ Task 7: minor (deferred): OVERVIEW "Photos": the caption sentence sits in the SH
 Task 7: note: "undoing a merge leaves the photos on the target" is stated from plan decision 11, not verified in code — final review to check.
 Task 7: note: letter-tile tint differs between before/after People screenshots because the tint derives from the entity id, random at each seed; this branch does not touch it.
 Task 7: complete (commits 237ff36..9334904, review clean; swift test 914)
+Final review (whole branch, 77d0440..443cb17): 0 Critical, 2 Important (I1 adding line not shown during hand-over; I2 a deleted page's photo travels in the next export), 6 Minor (M1 unmerge test; M2 picked-* temp file after a kill; M3 Done colour; M4 staging photos not excluded until relaunch; M5 placeholder flash and repaired file not reloaded; M6 docs). Full text: final-review.md. Deferred-minor triage: fix now = T4 Done colour, T7 two doc lines; the rest leave. No ruling judged wrong. "Undo of a merge leaves photos on the target" verified by reading MergeActions.swift and MemoryRepository.swift.
+Final review: one fix wave dispatched (I1, I2, M1–M6). FIX_BASE recorded below.
