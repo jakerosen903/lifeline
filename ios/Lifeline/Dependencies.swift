@@ -42,6 +42,8 @@ struct Dependencies {
     let duplicates: DuplicatePass
     /// What is still sorting, for the status line (M6).
     let reporter: SortingReporter
+    /// The photo files and their rows (S4): adds a picked photo, removes one, sets a cover.
+    let photos: PhotoLibrary
     /// Under `-uiTesting-restoreFrom <path>`: Restore stages this file without the picker.
     var restoreFromPath: String? = nil
     /// Under `-uiTesting`: Export keeps the file in Documents and shows no share sheet, which a UI test cannot drive.
@@ -175,7 +177,8 @@ struct Dependencies {
             matcher: matcher,
             reconcile: reconcile,
             duplicates: DuplicatePass(store: store, matcher: matcher, reconcile: reconcile, actions: actions, reporter: reporter, log: { print($0) }),
-            reporter: reporter)
+            reporter: reporter,
+            photos: PhotoLibrary(root: root, photos: store.photos))
     }
 
     /// Fresh temp database, scripted voice and extraction, in-memory secrets with a fake key.
@@ -251,12 +254,16 @@ struct Dependencies {
                     else { try? data.write(to: url) }
                 }
             }),
-            reporter: reporter)
+            reporter: reporter,
+            photos: PhotoLibrary(root: root, photos: store.photos))
         if let i = args.firstIndex(of: "-uiTesting-restoreFrom"), i + 1 < args.count { deps.restoreFromPath = args[i + 1] }
         deps.exportWithoutShareSheet = true
         if args.contains("-uiTesting-seed") { try UITestSeed.write(sessions: deps.sessions, store: store) }
         if args.contains("-uiTesting-seedPerson") { try UITestSeed.writePersonOnly(store: store) }
         if args.contains("-uiTesting-seedPeople") { try UITestSeed.writePeople(store: store, profile: deps.profile, sessions: deps.sessions) }
+        if args.contains("-uiTesting-seedPhotos") {
+            try UITestSeed.writePhotos(store: store, profile: deps.profile, sessions: deps.sessions, library: deps.photos)
+        }
         if args.contains("-uiTesting-seedPortrait") { try UITestSeed.writePortrait(store: store, profile: deps.profile, sessions: deps.sessions) }
         if args.contains("-uiTesting-seedTaggedMoment") { try UITestSeed.tagOneMoment(store: store) }
         if args.contains("-uiTesting-noOwner") { try UITestSeed.writeProfileWithoutOwner(profile: deps.profile, store: store) }
