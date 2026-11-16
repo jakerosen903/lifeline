@@ -100,6 +100,33 @@ private struct Env {
     #expect(try env.store.stories.story(of: b.id)?.id == target.id)
 }
 
+@Test func mergeKeepsAChapterThatOnlyTheLeavingStoryHad() throws {
+    let env = try Env()
+    let a = try env.kept("we packed the car"), b = try env.kept("the tire went flat")
+    let boston = try env.store.chapters.insertChapter(title: "The Boston years")
+    let target = try env.store.stories.insert(title: "The road trip", chapterID: nil)
+    let source = try env.store.stories.insert(title: "The road trip", chapterID: boston.id)
+    try env.store.stories.add(memory: a.id, to: target.id)
+    try env.store.stories.add(memory: b.id, to: source.id)
+    try env.store.stories.merge(source.id, into: target.id)
+    #expect(try env.store.stories.story(id: target.id)?.chapterID == boston.id, "the story that stays had no chapter, so it takes this one")
+    #expect(try env.members(target.id) == [a.id, b.id])
+}
+
+@Test func mergeKeepsTheStayingStorysOwnChapter() throws {
+    let env = try Env()
+    let a = try env.kept("we packed the car"), b = try env.kept("the tire went flat")
+    let boston = try env.store.chapters.insertChapter(title: "The Boston years")
+    let home = try env.store.chapters.insertChapter(title: "Back home")
+    let target = try env.store.stories.insert(title: "The road trip", chapterID: boston.id)
+    let source = try env.store.stories.insert(title: "The road trip", chapterID: home.id)
+    try env.store.stories.add(memory: a.id, to: target.id)
+    try env.store.stories.add(memory: b.id, to: source.id)
+    try env.store.stories.merge(source.id, into: target.id)
+    #expect(try env.store.stories.story(id: target.id)?.chapterID == boston.id, "it keeps its own chapter when both have one")
+    #expect(try env.store.chapters.chapter(id: home.id) != nil, "the other chapter has a title and stays")
+}
+
 @Test func mergeWithAMissingOrSameStoryChangesNothing() throws {
     let env = try Env()
     let a = try env.kept("we packed the car")
@@ -169,6 +196,15 @@ private struct Env {
     #expect(left == Set([namedEmpty.id, untitledWithAMemory.id]), "a named chapter stays; so does one that holds a memory")
     #expect(!left.contains(untitledEmpty.id) && !left.contains(blankEmpty.id))
     #expect(try env.store.memories.fetch(a.id)?.chapterID == untitledWithAMemory.id, "no memory is touched")
+}
+
+@Test func anUntitledChapterThatAStoryIsFiledInIsKept() throws {
+    let env = try Env()
+    let untitled = try env.store.chapters.insertChapter(title: nil)
+    let story = try env.store.stories.insert(title: "The road trip", chapterID: untitled.id)
+    #expect(try env.store.chapters.deleteEmptyUntitled() == 0)
+    #expect(try env.store.chapters.chapter(id: untitled.id) != nil, "no memory is in it, but a story points at it")
+    #expect(try env.store.stories.story(id: story.id)?.chapterID == untitled.id, "the story's chapter is not cleared")
 }
 
 @Test func movingTheLastMemoryOutRemovesAnUntitledChapter() throws {

@@ -81,7 +81,7 @@ The work is three PRs. Each one is useful alone.
 
 1. Accepting a story hint must reuse a story with the same match key (see A2, "Names") before it creates one. The memory joins that story.
 2. When two or more stories share a match key, the newest telling joins the story that was created first.
-3. `StoryRepository` must offer one function that merges story B into story A: it moves B's members to the end of A in their order, keeps A's title and chapter, and deletes B. It must be one transaction.
+3. `StoryRepository` must offer one function that merges story B into story A: it moves B's members to the end of A in their order, keeps A's title, keeps A's chapter (or takes B's when A has none), and deletes B. It must be one transaction.
 4. Existing duplicates must be repaired. See owner's call 1.
 5. A story with one member stays allowed in storage. The Timeline already hides it. Rule 1 lets a second memory join it later.
 6. The minted `story_ref` ids stay per session. Rule 1 makes the title the link across sessions, so no stored id map is needed.
@@ -99,7 +99,7 @@ The chapter rules moved to the Timeline spec (`docs/specs/2026-11-16-timeline.md
 
 A1 keeps one chapter rule, because it is a repair and needs no new screen:
 
-1. A chapter with no title and no members must be deleted. This runs once at launch for existing data and after every action that removes a member.
+1. A chapter with no title, no member and no story filed in it must be deleted. This runs once at launch for existing data and after a memory changes chapter.
 
 ### A2: names
 

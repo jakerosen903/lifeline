@@ -38,14 +38,19 @@ public struct StoryRepository: Sendable {
     }
 
     /// Moves every member of `source` to the end of `target`, in their order, and deletes
-    /// `source`. `target` keeps its title and chapter. One transaction: a kill part-way leaves
-    /// both stories as they were. Does nothing when either story is gone or they are the same.
+    /// `source`. `target` keeps its title. It keeps its chapter too; when it has none it takes
+    /// `source`'s, so no chapter placement is lost. One transaction: a kill part-way leaves both
+    /// stories as they were. Does nothing when either story is gone or they are the same.
     public func merge(_ source: StoryID, into target: StoryID) throws {
         try db.writer.write { try Self.merge(source, into: target, in: $0) }
     }
 
     static func merge(_ source: StoryID, into target: StoryID, in db: Database) throws {
-        guard source != target, try Story.exists(db, key: source.rawValue), try Story.exists(db, key: target.rawValue) else { return }
+        guard source != target, let leaving = try Story.fetchOne(db, key: source.rawValue),
+              let staying = try Story.fetchOne(db, key: target.rawValue) else { return }
+        if staying.chapterID == nil, let chapter = leaving.chapterID {
+            try db.execute(sql: "update story set chapter_id = ? where id = ?", arguments: [chapter.rawValue, target.rawValue])
+        }
         let last = try Int.fetchOne(db, sql: "select max(\"order\") from story_moment where story_id = ?", arguments: [target.rawValue]) ?? -1
         let moving = try String.fetchAll(db, sql: "select memory_id from story_moment where story_id = ? order by \"order\", rowid", arguments: [source.rawValue])
         for (offset, memory) in moving.enumerated() {
