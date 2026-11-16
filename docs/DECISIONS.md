@@ -22,6 +22,8 @@ One entry per decision. Newest first. Status is Decided, Open, or Superseded.
 
 When a kept card closes, the follow-ups nobody answered are dismissed. A card closes on "Done" and also when the person acts on another memory card, so follow-ups could go with no tap on them. The app now shows "{n} suggestions dismissed." with Undo for 6 seconds whenever a close dismissed something. Undo makes the follow-ups pending again and brings the card back.
 
+Closes inside one 6-second window add up: one Undo takes all of them back. The close writes its dismissals in one transaction, and Undo writes its restores in one transaction, so a failure or a kill leaves every follow-up of that write as it was (PRINCIPLES 4).
+
 **Why.** Unanswered follow-ups must not pile up in "Waiting for you": that backlog is what the UI audit removed. So the close still dismisses them. But a dismissal the person did not choose must be one they can take back (PRINCIPLES 9).
 
 **Not chosen.** Leaving unanswered follow-ups pending: one leftover card for each kept memory. Keeping the silent dismissal: no way back.

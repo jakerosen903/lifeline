@@ -142,3 +142,61 @@ private struct Env {
     #expect(try env.store.tags.tags(of: .memory, kept.memory.id.rawValue).isEmpty)
     #expect(try env.store.tags.all().isEmpty)
 }
+
+// MARK: - A kept card's close and its Undo are one write each
+
+@Test func dismissAllDismissesEveryPendingSuggestionAndSkipsAnAnsweredOne() throws {
+    let env = try Env()
+    let memory = try env.memoryCandidate()
+    let a = try env.hintCandidate(for: memory, kind: .domain, phrase: "travel", ordinal: 1)
+    let b = try env.hintCandidate(for: memory, kind: .domain, phrase: "family", ordinal: 2)
+    let answered = try env.hintCandidate(for: memory, kind: .domain, phrase: "work", ordinal: 3)
+    try env.store.candidates.setStatus(answered.id, .accepted)
+    let dismissed = try env.actions.dismissAll([a, b, answered])
+    #expect(dismissed.map(\.id) == [a.id, b.id], "only what was still pending is reported, so Undo never touches the answered one")
+    #expect(try env.store.candidates.fetch(a.id)?.status == .dismissed)
+    #expect(try env.store.candidates.fetch(b.id)?.status == .dismissed)
+    #expect(try env.store.candidates.fetch(answered.id)?.status == .accepted)
+}
+
+@Test func restoreAllBringsEverySuggestionBack() throws {
+    let env = try Env()
+    let memory = try env.memoryCandidate()
+    let a = try env.hintCandidate(for: memory, kind: .domain, phrase: "travel", ordinal: 1)
+    let b = try env.hintCandidate(for: memory, kind: .domain, phrase: "family", ordinal: 2)
+    let dismissed = try env.actions.dismissAll([a, b])
+    try env.actions.restoreAll(dismissed)
+    #expect(try env.store.candidates.fetch(a.id)?.status == .pending)
+    #expect(try env.store.candidates.fetch(b.id)?.status == .pending)
+}
+
+@Test func restoreAllIsOneTransaction() throws {
+    // The second row cannot come back (it is no longer dismissed), so the first must not either.
+    let env = try Env()
+    let memory = try env.memoryCandidate()
+    let a = try env.hintCandidate(for: memory, kind: .domain, phrase: "travel", ordinal: 1)
+    let b = try env.hintCandidate(for: memory, kind: .domain, phrase: "family", ordinal: 2)
+    let dismissed = try env.actions.dismissAll([a, b])
+    try env.store.candidates.setStatus(b.id, .accepted)
+    #expect(throws: CandidateActions.Error.notDismissed) { try env.actions.restoreAll(dismissed) }
+    #expect(try env.store.candidates.fetch(a.id)?.status == .dismissed, "nothing partial landed")
+    #expect(try env.store.candidates.fetch(b.id)?.status == .accepted)
+}
+
+@Test func restoreAllLeavesAValidatorRejectionOut() throws {
+    let env = try Env()
+    let memory = try env.memoryCandidate()
+    let a = try env.hintCandidate(for: memory, kind: .domain, phrase: "travel", ordinal: 1)
+    try env.store.candidates.setStatus(a.id, .dismissed, rejection: "quote not in segment")
+    #expect(throws: CandidateActions.Error.notDismissed) { try env.actions.restoreAll([a]) }
+    #expect(try env.store.candidates.fetch(a.id)?.status == .dismissed)
+}
+
+@Test func restoreAllRefusesAMemoryOrAPerson() throws {
+    // A person candidate also needs its mention reopened; `restore` does that, one at a time.
+    let env = try Env()
+    let memory = try env.memoryCandidate()
+    try env.actions.dismiss(memory)
+    #expect(throws: CandidateActions.Error.wrongKind) { try env.actions.restoreAll([memory]) }
+    #expect(try env.store.candidates.fetch(memory.id)?.status == .dismissed)
+}

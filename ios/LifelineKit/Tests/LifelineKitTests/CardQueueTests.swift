@@ -519,3 +519,29 @@ private func ids(_ candidates: Candidate...) -> [String] { candidates.map(\.id.r
     for card in close.undoable { queue.reopenKept(card) }
     #expect(queue.closeAllKept().dismiss.map(\.id) == ids(ha), "untouched store cards stay on a memory action; a reopened one closes")
 }
+
+@Test func aSecondCloseInTheWindowKeepsTheFirstClosesUndo() throws {
+    let s = SegmentID()
+    let a = try memory(s, 0, title: "A"), ha = try hint(s, 1, for: a)
+    let b = try memory(s, 2, title: "B"), hb = try hint(s, 3, for: b, phrase: "travel")
+    var queue = CardQueue()
+    queue.apply(.candidates([a, ha, b, hb], segment: s))
+    queue.memoryAccepted(a.id.rawValue)
+    let first = queue.closeKept(a.id.rawValue)
+    queue.memoryAccepted(b.id.rawValue)
+    let second = queue.closeKept(b.id.rawValue)
+
+    var undo = KeptCloseUndo()
+    #expect(undo.isEmpty && undo.notice == nil)
+    undo.add(cards: first.undoable, dismissed: [ha])
+    #expect(undo.notice == "1 suggestion dismissed.")
+    undo.add(cards: second.undoable, dismissed: [hb])
+    #expect(undo.notice == "2 suggestions dismissed.")
+    #expect(undo.cards.map(\.memoryCandidateID) == ids(a, b), "one Undo reopens both cards")
+    #expect(undo.dismissed.map(\.id) == [ha.id, hb.id])
+
+    // A close that dismissed nothing changes nothing, and the same close twice is counted once.
+    undo.add(cards: second.undoable, dismissed: [])
+    undo.add(cards: second.undoable, dismissed: [hb])
+    #expect(undo.cards.count == 2 && undo.dismissed.count == 2)
+}
