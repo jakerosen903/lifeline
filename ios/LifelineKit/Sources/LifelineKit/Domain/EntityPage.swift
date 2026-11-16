@@ -14,11 +14,17 @@ public enum EntityPage {
         return said ? "from \(first) to \(last)" : "between \(first) and \(last)"
     }
 
-    /// The memory's quote cleaned for reading, or its title when the cleanup leaves nothing
-    /// ("um, uh"), so a row is never blank and VoiceOver never reads an empty label.
-    public static func readableQuote(of memory: Memory, maxWords: Int? = nil) -> String {
+    /// The person's own words, cleaned for reading, or nil when the cleanup leaves nothing
+    /// ("um, uh"). Only these may be shown in quotation marks: a title is not something said.
+    public static func ownWordsQuote(of memory: Memory, maxWords: Int? = nil) -> String? {
         let quote = ReadableQuote.text(memory.summaryQuote, maxWords: maxWords)
-        return quote.isEmpty ? memory.title : quote
+        return quote.isEmpty ? nil : quote
+    }
+
+    /// The text for a row that is not marked as a quote: the person's words, or the memory's
+    /// title when there are none, so a row is never blank and VoiceOver never reads an empty label.
+    public static func readableQuote(of memory: Memory, maxWords: Int? = nil) -> String {
+        ownWordsQuote(of: memory, maxWords: maxWords) ?? memory.title
     }
 
     /// An idea's page reads top to bottom (Goal 4): everything linked, details and moments, by

@@ -195,7 +195,7 @@ struct EntityScreen: View {
     private func line(_ memory: Memory) -> some View {
         NavigationLink { open(memory) } label: {
             VStack(alignment: .leading, spacing: 2) {
-                Text("“\(EntityPage.readableQuote(of: memory))”").font(.system(.body, design: .serif)).foregroundStyle(Theme.ink).lineLimit(2)
+                Text(EntityPage.ownWordsQuote(of: memory).map { "“\($0)”" } ?? memory.title).font(.system(.body, design: .serif)).foregroundStyle(Theme.ink).lineLimit(2)
                 if memory.isMoment, memory.range.isDated {
                     Text(memory.range.displayText).font(.footnote).foregroundStyle(Theme.ochreText)
                 }

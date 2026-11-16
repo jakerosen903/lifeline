@@ -108,14 +108,17 @@ private func page(_ title: String, kind: MemoryKind = .event, year: Int? = nil, 
 
 // Final review: a quote made only of fillers never shows an empty row.
 
-@Test func aQuoteOfOnlyFillersFallsBackToTheTitle() {
+@Test func aQuoteOfOnlyFillersHasNoOwnWordsSoCallersShowTheTitleUnquoted() {
     let fillers = page("Rainy afternoons", kind: .fact, told: 1)
     var onlyFillers = fillers
     onlyFillers.summaryQuote = "um, uh"
+    #expect(EntityPage.ownWordsQuote(of: onlyFillers) == nil)
     #expect(EntityPage.readableQuote(of: onlyFillers) == "Rainy afternoons")
     var spoken = fillers
     spoken.summaryQuote = "um, it rained, you know, every day"
+    #expect(EntityPage.ownWordsQuote(of: spoken) == "It rained, every day")
     #expect(EntityPage.readableQuote(of: spoken) == "It rained, every day")
+    #expect(EntityPage.ownWordsQuote(of: spoken, maxWords: 2) == "It rained…")
     #expect(EntityPage.readableQuote(of: spoken, maxWords: 2) == "It rained…")
 }
 

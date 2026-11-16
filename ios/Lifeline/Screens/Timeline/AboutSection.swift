@@ -11,17 +11,19 @@ struct AboutSection: View {
         Section {
             ForEach(rows) { row in
                 HStack(alignment: .top, spacing: 8) {
-                    let quote = EntityPage.readableQuote(of: row.memory, maxWords: 40)
+                    let quote = EntityPage.ownWordsQuote(of: row.memory, maxWords: 40)
                     Button { actions.open(row) } label: {
                         VStack(alignment: .leading, spacing: 4) {
                             Text(row.memory.title).font(.system(.body, design: .serif)).foregroundStyle(Theme.ink)
-                            Text("“\(quote)”").font(.footnote).foregroundStyle(Theme.secondaryText)
+                            if let quote {
+                                Text("“\(quote)”").font(.footnote).foregroundStyle(Theme.secondaryText)
+                            }
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.vertical, 6)
                         .accessibilityElement(children: .ignore)
                         .accessibilityLabel(row.memory.title)
-                        .accessibilityValue(quote)
+                        .accessibilityValue(quote ?? "")
                     }
                     .buttonStyle(.plain)
                     .accessibilityIdentifier("about.row")
