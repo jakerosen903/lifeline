@@ -1,5 +1,8 @@
 import XCTest
 
+/// A class in the UI test bundle, so `Bundle(for:)` finds the bundled fixtures.
+private final class FixtureBundle {}
+
 extension XCUIApplication {
     /// First open: "Add a little context" then Skip, which saves an empty profile and leads home.
     func skipFirstOpen() {
@@ -108,6 +111,35 @@ extension XCUIApplication {
         app.launch()
         XCTAssertTrue(app.waitHittable(app.buttons["home.start"], timeout: 15), "the seeded app lands on the timeline")
         return app
+    }
+
+    /// Launches with `-uiTesting-seedPhotos`: the invented family, then generated photos. Maya has two (a dated
+    /// landscape cover, then an undated portrait), "The tree house" one, Jordan one; Dad, Sam and Lena none.
+    /// First open is done; do not call `skipFirstOpen()`.
+    static func launchWithPhotos(_ extra: [String] = []) -> XCUIApplication {
+        let app = XCUIApplication()
+        app.launchArguments += ["-uiTesting", "-uiTesting-seedPhotos"] + extra
+        app.launch()
+        XCTAssertTrue(app.waitHittable(app.buttons["home.start"], timeout: 15), "the seeded app lands on the timeline")
+        return app
+    }
+
+    /// A copy of a bundled fixture in the temporary folder, for a launch argument such as `-uiTesting-pickPhoto`.
+    static func fixturePath(_ name: String, ext: String) throws -> String {
+        let url = try XCTUnwrap(Bundle(for: FixtureBundle.self).url(forResource: name, withExtension: ext), "fixture \(name).\(ext) in the UI test bundle")
+        let dest = FileManager.default.temporaryDirectory.appending(path: "\(name)-\(UUID().uuidString).\(ext)")
+        try FileManager.default.copyItem(at: url, to: dest)
+        return dest.path
+    }
+
+    /// Opens a page's "…" menu, then taps "Add a photo" in it.
+    func addPhotoFromMenu(_ menu: String, _ item: String) {
+        let more = buttons[menu]
+        XCTAssertTrue(waitHittable(more, timeout: 10), "the page's menu is on screen")
+        more.tap()
+        let add = buttons[item]
+        XCTAssertTrue(waitHittable(add, timeout: 5), "Add a photo is in the menu")
+        add.tap()
     }
 
     /// The You tab, once its header is up.

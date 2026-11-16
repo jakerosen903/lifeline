@@ -44,6 +44,10 @@ struct Dependencies {
     let reporter: SortingReporter
     /// The photo files and their rows (S4): adds a picked photo, removes one, sets a cover.
     let photos: PhotoLibrary
+    /// Decoded photos for display, shared by every screen so each image decodes once.
+    let photoImages: PhotoImageCache
+    /// Under `-uiTesting-pickPhoto <path>`: "Add a photo" adds this file without the picker (decision 22).
+    var pickPhotoPath: String? = nil
     /// Under `-uiTesting-restoreFrom <path>`: Restore stages this file without the picker.
     var restoreFromPath: String? = nil
     /// Under `-uiTesting`: Export keeps the file in Documents and shows no share sheet, which a UI test cannot drive.
@@ -127,6 +131,7 @@ struct Dependencies {
         // An export the share sheet left behind is a full copy of everything; it does not outlive the launch.
         Backup.removeTemporaryExports()
         let db = try AppDatabase.open(at: root.appending(path: "Lifeline/lifeline.sqlite"))
+        sweepPhotos(root: root, db: db)
         let sessions = SessionRepository(db)
         let pauseLog = PauseLog(url: root.appending(path: "Lifeline/pauses.log"))
         let secrets = KeychainSecretStore()
@@ -136,6 +141,7 @@ struct Dependencies {
         let actions = CandidateActions(store: store, matcher: matcher)
         let reconcile = AnthropicReconcileService(apiKey: { try? secrets.read(.anthropicAPIKey) })
         let reporter = SortingReporter()
+        let library = PhotoLibrary(root: root, photos: store.photos)
         return Dependencies(
             sessions: sessions,
             profile: ProfileRepository(db),
@@ -178,7 +184,8 @@ struct Dependencies {
             reconcile: reconcile,
             duplicates: DuplicatePass(store: store, matcher: matcher, reconcile: reconcile, actions: actions, reporter: reporter, log: { print($0) }),
             reporter: reporter,
-            photos: PhotoLibrary(root: root, photos: store.photos))
+            photos: library,
+            photoImages: PhotoImageCache(library: library))
     }
 
     /// Fresh temp database, scripted voice and extraction, in-memory secrets with a fake key.
@@ -194,6 +201,7 @@ struct Dependencies {
         }
         if try Backup.applyPendingRestore(root: root, safetyCopyDirectory: try Backup.safetyCopyDirectory()) { print("[backup] restored a copy at launch") }
         let db = try AppDatabase.open(at: root.appending(path: "Lifeline/lifeline.sqlite"))
+        sweepPhotos(root: root, db: db)
         let store = ExtractionStore(db)
         // `-uiTesting-slowExtract`: seconds per segment, for tests that watch sorting go on; `-uiTesting-noKey`:
         // an empty key store, and a scripted service that refuses to sort without one, as the live one does.
@@ -209,6 +217,7 @@ struct Dependencies {
         let reporter = SortingReporter()
         // Every UI test starts from the default "Lifeline speaks"; a test that turns it off must not leave it off.
         UserDefaults.standard.removeObject(forKey: LifelineSpeaks.key)
+        let library = PhotoLibrary(root: root, photos: store.photos)
         var deps = Dependencies(
             sessions: SessionRepository(db),
             profile: ProfileRepository(db),
@@ -255,9 +264,11 @@ struct Dependencies {
                 }
             }),
             reporter: reporter,
-            photos: PhotoLibrary(root: root, photos: store.photos))
+            photos: library,
+            photoImages: PhotoImageCache(library: library))
         if let i = args.firstIndex(of: "-uiTesting-restoreFrom"), i + 1 < args.count { deps.restoreFromPath = args[i + 1] }
         deps.exportWithoutShareSheet = true
+        if let i = args.firstIndex(of: "-uiTesting-pickPhoto"), i + 1 < args.count { deps.pickPhotoPath = args[i + 1] }
         if args.contains("-uiTesting-seed") { try UITestSeed.write(sessions: deps.sessions, store: store) }
         if args.contains("-uiTesting-seedPerson") { try UITestSeed.writePersonOnly(store: store) }
         if args.contains("-uiTesting-seedPeople") { try UITestSeed.writePeople(store: store, profile: deps.profile, sessions: deps.sessions) }
@@ -268,6 +279,18 @@ struct Dependencies {
         if args.contains("-uiTesting-seedTaggedMoment") { try UITestSeed.tagOneMoment(store: store) }
         if args.contains("-uiTesting-noOwner") { try UITestSeed.writeProfileWithoutOwner(profile: deps.profile, store: store) }
         return deps
+    }
+
+    /// Decision 10: files and rows a kill left behind go now, after the database opens and before any screen can
+    /// add a photo (the sweep is not serialised with `add`). A failed sweep is logged and never stops launch:
+    /// whatever it left, the next launch tries again.
+    private static func sweepPhotos(root: URL, db: AppDatabase) {
+        do {
+            let swept = try PhotoLibrary.sweep(root: root, photos: PhotoRepository(db))
+            if swept.rows + swept.files > 0 { print("[photos] sweep removed \(swept.rows) rows and \(swept.files) files") }
+        } catch {
+            print("[photos] sweep failed: \(error)")
+        }
     }
 }
 

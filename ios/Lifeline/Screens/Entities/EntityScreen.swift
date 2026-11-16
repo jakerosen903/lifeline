@@ -21,6 +21,9 @@ struct EntityScreen: View {
     @State private var draftTag = ""
     /// The page an "Often with" chip opened.
     @State private var opened: Entity?
+    @State private var addingPhoto = false
+    /// The photo open in the viewer.
+    @State private var viewing: PlacedPhoto?
     @Environment(\.dismiss) private var dismiss
     /// Absent outside the shell (a preview): then nothing watches the session cover.
     @Environment(HomeViewModel.self) private var home: HomeViewModel?
@@ -28,91 +31,105 @@ struct EntityScreen: View {
     @State private var isVisible = false
 
     var body: some View {
-        List {
-            Section {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text(viewModel.entity.type.singular)
-                        .font(.footnote.weight(.semibold)).foregroundStyle(Theme.oliveText)
-                    Text(viewModel.entity.title).titleStyle().accessibilityIdentifier("entity.title")
-                    if let ownWords = viewModel.ownWords {
-                        Text(ownWords).font(.subheadline).foregroundStyle(Theme.secondaryText)
-                            .accessibilityIdentifier("entity.ownWords")
-                    }
-                    if let span = viewModel.statedSpanText {
-                        Text(span).font(.subheadline.weight(.semibold)).foregroundStyle(Theme.ochreText)
-                            .accessibilityIdentifier("entity.span")
-                    }
-                    if viewModel.firstTelling != nil {
-                        // The 44-point frame sits in the label: outside the Button it grows the row,
-                        // not the area a tap reaches.
-                        Button { viewModel.togglePlayback() } label: {
-                            Label(viewModel.isPlaying ? "Stop" : "Play", systemImage: viewModel.isPlaying ? "stop.circle.fill" : "play.circle.fill")
-                                .frame(minHeight: 44)
-                                .contentShape(Rectangle())
+        ScrollViewReader { proxy in
+            List {
+                Section {
+                    VStack(alignment: .leading, spacing: 6) {
+                        // No photo, no frame: the page looks complete without one.
+                        if hasPhotos, viewModel.shelf.isAdding || viewModel.shelf.cover != nil { photoHeader.padding(.bottom, 10) }
+                        Text(viewModel.entity.type.singular)
+                            .font(.footnote.weight(.semibold)).foregroundStyle(Theme.oliveText)
+                        Text(viewModel.entity.title).titleStyle().accessibilityIdentifier("entity.title")
+                        if let ownWords = viewModel.ownWords {
+                            Text(ownWords).font(.subheadline).foregroundStyle(Theme.secondaryText)
+                                .accessibilityIdentifier("entity.ownWords")
                         }
-                        .buttonStyle(.borderless).tint(Theme.oliveText)
-                        .accessibilityIdentifier("entity.play")
+                        if let span = viewModel.statedSpanText {
+                            Text(span).font(.subheadline.weight(.semibold)).foregroundStyle(Theme.ochreText)
+                                .accessibilityIdentifier("entity.span")
+                        }
+                        if viewModel.firstTelling != nil {
+                            // The 44-point frame sits in the label: outside the Button it grows the row,
+                            // not the area a tap reaches.
+                            Button { viewModel.togglePlayback() } label: {
+                                Label(viewModel.isPlaying ? "Stop" : "Play", systemImage: viewModel.isPlaying ? "stop.circle.fill" : "play.circle.fill")
+                                    .frame(minHeight: 44)
+                                    .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.borderless).tint(Theme.oliveText)
+                            .accessibilityIdentifier("entity.play")
+                        }
+                        if let strip = viewModel.strip, strip.sentence != nil {
+                            LifeStripView(strip: strip)
+                        }
                     }
-                    if let strip = viewModel.strip, strip.sentence != nil {
-                        LifeStripView(strip: strip)
+                    .listRowBackground(Color.clear)
+                    .id(Self.top)
+                }
+
+                if viewModel.entity.type == .idea {
+                    if !viewModel.ideaLines.isEmpty {
+                        Section {
+                            ForEach(viewModel.ideaLines) { memory in line(memory) }
+                        } header: { Text("Over time").sectionHeadingStyle() }
+                    }
+                } else {
+                    if !viewModel.said.isEmpty {
+                        Section {
+                            ForEach(viewModel.said) { memory in detail(memory) }
+                        } header: { Text(EntityPage.saidHeading(viewModel.entity.type, isOwner: viewModel.isOwner)).sectionHeadingStyle() }
                     }
                 }
-                .listRowBackground(Color.clear)
-            }
 
-            if viewModel.entity.type == .idea {
-                if !viewModel.ideaLines.isEmpty {
+                if !viewModel.oftenWith.isEmpty {
+                    OftenWithSection(items: viewModel.oftenWith) { opened = $0 }
+                }
+
+                if hasPhotos, viewModel.shelf.photos.count >= 2 {
                     Section {
-                        ForEach(viewModel.ideaLines) { memory in line(memory) }
-                    } header: { Text("Over time").sectionHeadingStyle() }
+                        PhotoRow(photos: viewModel.shelf.photos, label: viewModel.photoLabel, cache: viewModel.deps.photoImages) { viewing = $0 }
+                            .listRowBackground(Color.clear)
+                    }
                 }
-            } else {
-                if !viewModel.said.isEmpty {
+
+                if viewModel.entity.type != .idea, !viewModel.moments.isEmpty {
                     Section {
-                        ForEach(viewModel.said) { memory in detail(memory) }
-                    } header: { Text(EntityPage.saidHeading(viewModel.entity.type, isOwner: viewModel.isOwner)).sectionHeadingStyle() }
+                        ForEach(viewModel.moments) { memory in moment(memory) }
+                    } header: { Text(EntityPage.momentsHeading(title: viewModel.entity.title, isOwner: viewModel.isOwner)).sectionHeadingStyle() }
                 }
-            }
 
-            if !viewModel.oftenWith.isEmpty {
-                OftenWithSection(items: viewModel.oftenWith) { opened = $0 }
-            }
-
-            if viewModel.entity.type != .idea, !viewModel.moments.isEmpty {
-                Section {
-                    ForEach(viewModel.moments) { memory in moment(memory) }
-                } header: { Text(EntityPage.momentsHeading(title: viewModel.entity.title, isOwner: viewModel.isOwner)).sectionHeadingStyle() }
-            }
-
-            if showsInvitation {
-                Section {
-                    Text(EntityPage.invitation(title: viewModel.entity.title, isOwner: viewModel.isOwner))
-                        .font(.body).foregroundStyle(Theme.secondaryText)
-                        .accessibilityIdentifier("entity.invite")
-                        .listRowBackground(Color.clear)
+                if showsInvitation {
+                    Section {
+                        Text(EntityPage.invitation(title: viewModel.entity.title, isOwner: viewModel.isOwner))
+                            .font(.body).foregroundStyle(Theme.secondaryText)
+                            .accessibilityIdentifier("entity.invite")
+                            .listRowBackground(Color.clear)
+                    }
                 }
-            }
 
-            // The heading sits in the row, not the section header: a List row whose only element is one
-            // button is read as that button, the size of the whole row.
-            Section {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Tags").sectionHeadingStyle()
-                    FlowLayout(spacing: 6) {
-                        ForEach(viewModel.tags, id: \.self) { tag in
-                            Button { viewModel.removeTag(tag) } label: { TagPill(title: tag, systemImage: "xmark", tint: Theme.secondaryText) }
+                // The heading sits in the row, not the section header: a List row whose only element is one
+                // button is read as that button, the size of the whole row.
+                Section {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Tags").sectionHeadingStyle()
+                        FlowLayout(spacing: 6) {
+                            ForEach(viewModel.tags, id: \.self) { tag in
+                                Button { viewModel.removeTag(tag) } label: { TagPill(title: tag, systemImage: "xmark", tint: Theme.secondaryText) }
+                                    .buttonStyle(.borderless)
+                                    .accessibilityIdentifier("entity.tag")
+                            }
+                            Button { draftTag = ""; addingTag = true } label: { TagPill(title: "Add a tag", systemImage: "tag", tint: Theme.oliveOnFill) }
                                 .buttonStyle(.borderless)
-                                .accessibilityIdentifier("entity.tag")
+                                .accessibilityIdentifier("entity.addTag")
                         }
-                        Button { draftTag = ""; addingTag = true } label: { TagPill(title: "Add a tag", systemImage: "tag", tint: Theme.oliveOnFill) }
-                            .buttonStyle(.borderless)
-                            .accessibilityIdentifier("entity.addTag")
                     }
+                    .listRowBackground(Color.clear)
                 }
-                .listRowBackground(Color.clear)
-            }
 
-            if let error = viewModel.error { Text(error).foregroundStyle(.red) }
+                if let error = viewModel.error { Text(error).foregroundStyle(.red) }
+            }
+            // A new cover is the page's news: the page goes back to the top, where the cover is.
+            .onChange(of: viewModel.shelf.cover?.id) { withAnimation { proxy.scrollTo(Self.top, anchor: .top) } }
         }
         .scrollContentBackground(.hidden)
         .navigationDestination(item: $opened) { other in
@@ -122,6 +139,10 @@ struct EntityScreen: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             Menu {
+                if hasPhotos {
+                    Button("Add a photo", systemImage: "photo") { viewModel.clearPhotoError(); addingPhoto = true }
+                        .accessibilityIdentifier("entity.addPhoto")
+                }
                 Button("Change the name", systemImage: "pencil") { draftTitle = viewModel.entity.title; renaming = true }
                     .accessibilityIdentifier("entity.rename")
                 if viewModel.canAddDates {
@@ -145,12 +166,59 @@ struct EntityScreen: View {
             TellMeWhenSheet(title: viewModel.entity.title, birthDate: try? viewModel.deps.extractionStore.profile.ownerBirthDate(),
                             heading: "From when to when?") { viewModel.addDates($0) }
         }
+        .addPhotoFlow(isPresented: $addingPhoto, deps: viewModel.deps,
+                      onFile: { file, assetID in await viewModel.addPhoto(fileAt: file, assetLocalID: assetID); onChange() },
+                      onError: { viewModel.photoFailed($0) })
+        .sheet(item: $viewing) { placed in
+            PhotoViewer(photo: placed, label: viewModel.photoLabel, canMakeCover: !placed.isCover, cache: viewModel.deps.photoImages,
+                        onMakeCover: { await viewModel.makeCover(placed.id); onChange() },
+                        onRemove: { await viewModel.removePhoto(placed.id); onChange() })
+        }
+        // The one slot pinned above the record bar (decision 21): wherever the page is scrolled, the message is on screen.
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            if let message = viewModel.photoError {
+                ErrorLine(text: message).font(.footnote).accessibilityIdentifier("photo.error")
+                    .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                    .padding(.horizontal, 16).padding(.vertical, 10)
+                    .background(RoundedRectangle(cornerRadius: 14).fill(Theme.sand))
+                    .padding(.horizontal, 16).padding(.bottom, 8)
+                    .transition(.opacity)
+            }
+        }
+        .animation(.default, value: viewModel.photoError)
+        .onChange(of: viewModel.photoError) { _, message in
+            if let message { AccessibilityNotification.Announcement(message).post() }
+        }
         .onAppear { isVisible = true; viewModel.refresh() }
-        .onDisappear { isVisible = false; viewModel.stop() }
+        .onDisappear { isVisible = false; viewModel.stop(); viewModel.clearPhotoError() }
         // A session started here lands under a cover; when it closes, read what it added.
         .onChange(of: home?.coverClosings) { if isVisible { viewModel.refresh() } }
         .sessionContext(viewModel.subject)
         .onChange(of: viewModel.isGone) { if viewModel.isGone { onChange(); dismiss() } }
+    }
+
+    /// The header row's id, for the scroll back to the cover.
+    private static let top = "entity.top"
+
+    /// Photos hang on a person, place or thing. An idea keeps its layout.
+    private var hasPhotos: Bool { viewModel.entity.type != .idea }
+
+    /// The cover, or "Adding the photo…" where a first photo will go. Neither shows on a page without a photo.
+    @ViewBuilder private var photoHeader: some View {
+        if viewModel.shelf.isAdding {
+            HStack(spacing: 10) {
+                ProgressView()
+                Text("Adding the photo…").font(.footnote).foregroundStyle(Theme.secondaryText)
+            }
+            .frame(minHeight: 44)
+            .accessibilityElement(children: .combine)
+            .accessibilityIdentifier("photo.adding")
+        }
+        if let cover = viewModel.shelf.cover {
+            PhotoHeader(cover: cover, label: viewModel.photoLabel, cache: viewModel.deps.photoImages) {
+                viewing = viewModel.shelf.photos.first(where: \.isCover)
+            }
+        }
     }
 
     /// Waits for the first load, so the first frame never says "nothing here" about a full page.
