@@ -2,6 +2,20 @@
 
 One entry per decision. Newest first. Status is Decided, Open, or Superseded.
 
+## 2026-11-15 · Five sections: Timeline, People, Places, Things, You
+
+**Status:** Decided. Supersedes owner's call 4 of the UI audit of 2026-10-26 (a tab bar of Timeline, People, Sessions, Settings). Source: the owner's approval of `docs/specs/2026-11-15-five-sections.md`.
+
+**Decision.** The app has five tabs and search. Timeline stays home. People is a grid of faces, Places is a map, Things is a shelf, and You is a portrait in the person's own words. Sessions is a labeled button on Timeline. Settings is a labeled button on You. The record bar sits above the tabs on every tab and names the page the person is on.
+
+- The tabs ship first with the current lists inside them. Each section gets its own shape in a later step, when its data exists.
+- A session started from a page records that page as its subject and opens with a question about it. The app links nothing the person did not say.
+- A computed life period is named by age only ("Childhood", "Teens", "Twenties"). Any other name comes from the person.
+- The person picks photos one at a time with the system picker. The app keeps a copy in its own folder, includes it in backup export, and keeps it out of the phone's cloud backup, as it does audio.
+- The app may show an Apple map and send the place searches the person types to Apple. Lookups the app starts itself stay off.
+
+**Why.** After a month of use, one screen carried everything and six unlabeled icons led away from it (audit F7, F9). Each kind of thing in a life needs its own way of being seen, and every one of them must lead back to telling (P1, P2). No screen may ask the person to complete a record (P9), and no inferred span, location or name may show as fact (P5).
+
 ## 2026-11-15 · A kept card's close can be undone
 
 **Status:** Decided by the owner. Source: the review of PR #18 (`CardHandler.close`); `docs/specs/2026-10-26-cards-follow-ups.md`, rules 9 and 11.

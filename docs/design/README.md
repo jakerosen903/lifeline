@@ -72,3 +72,9 @@ These supersede the matching Phase 1 screens. See `docs/DECISIONS.md`, entries d
 | R7_Privacy.dc.html | Hide from timeline · Exclude from AI processing · Share… · Delete…; Local-only before recording | — |
 | R8_Chapter.dc.html | Chapter → stories; years as an optional lens; Listen at this level | Z2 |
 | R9_Story.dc.html | Story → moments with original audio; shape the story; add a moment | Z3 |
+
+## Sections (2026-11-15)
+
+| File | Screen |
+| --- | --- |
+| Sections.html | Timeline, People, Places, Things, an entity page with and without a photo, and You as a portrait. Plain HTML, not a canvas export. Spec: `docs/specs/2026-11-15-five-sections.md` |
