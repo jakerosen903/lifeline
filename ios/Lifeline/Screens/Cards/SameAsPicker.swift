@@ -34,7 +34,7 @@ struct SameAsPicker: View {
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(match.title).font(.system(.body, design: .serif)).foregroundStyle(Theme.ink)
                                 if let date = match.recordedAt {
-                                    Text("recorded " + date.formatted(.dateTime.month(.abbreviated).day().year())).font(.caption).foregroundStyle(Theme.stone)
+                                    Text("recorded " + date.formatted(.dateTime.month(.abbreviated).day().year())).font(.caption).foregroundStyle(Theme.secondaryText)
                                 }
                             }
                             if multi {
@@ -48,7 +48,7 @@ struct SameAsPicker: View {
                     .accessibilityIdentifier("picker.match")
                 }
                 Button("None of these") { onChoose([]) }
-                    .foregroundStyle(Theme.stone)
+                    .foregroundStyle(Theme.secondaryText)
                     .accessibilityIdentifier("picker.none")
             }
             .searchable(text: $search, prompt: "Search your memories")

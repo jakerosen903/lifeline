@@ -29,6 +29,22 @@ private func waitUntil(_ cond: @escaping () async -> Bool, timeoutMs: Int = 2_00
     #expect(await voice.audioURL?.lastPathComponent == "\(id.rawValue).m4a")
 }
 
+@Test func startStoresTheSubjectAndOrigin() async throws {
+    let db = try AppDatabase.inMemory(); let repo = SessionRepository(db); let voice = FakeVoiceSession()
+    let maya = try EntityRepository(db).insert(type: .person, title: "Maya")
+    let rec = makeRecorder(voice: voice, repo: repo, db: db)
+    let id = try await rec.start(subject: maya.id, startedFrom: .page)
+    let row = try #require(try repo.fetch(id))
+    #expect(row.subjectEntityID == maya.id && row.startedFrom == .page)
+}
+
+@Test func startWithoutASubjectReadsAsFromATab() async throws {
+    let db = try AppDatabase.inMemory(); let repo = SessionRepository(db); let voice = FakeVoiceSession()
+    let rec = makeRecorder(voice: voice, repo: repo, db: db)
+    let row = try #require(try repo.fetch(try await rec.start()))
+    #expect(row.subjectEntityID == nil && row.startedFrom == .tab)
+}
+
 @Test func startFailureRemovesTheOrphanRow() async throws {
     let db = try AppDatabase.inMemory(); let repo = SessionRepository(db); let voice = FakeVoiceSession()
     await voice.setFailOnStart()

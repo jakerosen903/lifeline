@@ -17,6 +17,13 @@ final class EntitiesUITests: XCTestCase {
             XCTAssertTrue(add.waitForExistence(timeout: 20), "a memory card arrives")
             add.tap()
         }
+        // A tap sent while a card is still moving can be lost, or land on the card before it: keep what is left.
+        var stragglers = 0
+        while app.buttons["card.add"].firstMatch.waitForExistence(timeout: 3), stragglers < 3 {
+            app.buttons["card.add"].firstMatch.tap()
+            stragglers += 1
+        }
+        XCTAssertFalse(app.buttons["card.add"].firstMatch.exists, "every card was kept")
         XCTAssertFalse(app.any("card.followUp").exists, "nothing in the script is a question")
         XCTAssertFalse(app.staticTexts["entity.title"].exists, "Keep never leaves the session")
         app.finishSession()
@@ -24,19 +31,11 @@ final class EntitiesUITests: XCTestCase {
     }
 
     @MainActor
-    private func openEntities(_ app: XCUIApplication, segment: String) {
-        app.buttons["timeline.entities"].tap()
-        let control = app.segmentedControls["entities.type"]
-        XCTAssertTrue(control.waitForExistence(timeout: 5))
-        control.buttons[segment].tap()
-    }
-
-    @MainActor
     func testEntityPagesShowDetailsAboveMomentsAndIdeasInOrder() {
         let app = launchAndRecord()
 
         // The shed was linked by its memory's Keep; its page is in Things.
-        openEntities(app, segment: "Things")
+        app.openEntities("Things")
         let shed = app.buttons.matching(identifier: "entities.row").matching(NSPredicate(format: "label == %@", "the old shed")).firstMatch
         XCTAssertTrue(shed.waitForExistence(timeout: 5))
         shed.tap()
@@ -44,7 +43,7 @@ final class EntitiesUITests: XCTestCase {
         XCTAssertEqual(app.staticTexts["entity.title"].label, "the old shed")
         XCTAssertTrue(app.staticTexts["no dates yet"].exists, "nobody asks when")
         app.navigationBars.buttons.firstMatch.tap()
-        XCTAssertTrue(app.segmentedControls["entities.type"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.navigationBars["Things"].waitForExistence(timeout: 5), "back on the Things list")
 
         // The house: the detail first, the moment below, its span from the moment.
         let house = app.buttons.matching(identifier: "entities.row").matching(NSPredicate(format: "label == %@", "the house")).firstMatch
@@ -60,7 +59,7 @@ final class EntitiesUITests: XCTestCase {
         app.navigationBars.buttons.firstMatch.tap()
 
         // Two ideas that share words are two ideas: each Keep makes its own, reused by id only.
-        app.segmentedControls["entities.type"].buttons["Ideas"].tap()
+        app.openEntities("Ideas")
         let ideas = app.buttons.matching(identifier: "entities.row").matching(NSPredicate(format: "label == %@", "hard work"))
         XCTAssertTrue(ideas.firstMatch.waitForExistence(timeout: 5))
         let both = XCTNSPredicateExpectation(predicate: NSPredicate(format: "count == 2"), object: ideas)
@@ -82,7 +81,7 @@ final class EntitiesUITests: XCTestCase {
     func testThingsFilterByDomainTag() {
         let app = launchAndRecord()
         // Keep linked both things; Things lists them.
-        openEntities(app, segment: "Things")
+        app.openEntities("Things")
         let rows = app.buttons.matching(identifier: "entities.row")
         XCTAssertTrue(rows.firstMatch.waitForExistence(timeout: 5))
         XCTAssertEqual(rows.count, 2, "the house and the shed")

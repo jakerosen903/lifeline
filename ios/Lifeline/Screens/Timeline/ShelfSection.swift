@@ -25,7 +25,7 @@ struct ShelfSection: View {
             HStack {
                 Text(title).font(.system(.title3, design: .serif)).foregroundStyle(Theme.ink).textCase(nil)
                 Spacer()
-                Text("\(memories.count + stories.reduce(0) { $0 + $1.members.count }) undated").font(.caption).foregroundStyle(Theme.stone)
+                Text("\(memories.count + stories.reduce(0) { $0 + $1.members.count }) undated").font(.caption).foregroundStyle(Theme.secondaryText)
             }
             .accessibilityElement(children: .combine)
             .accessibilityIdentifier("timeline.shelf")

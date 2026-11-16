@@ -14,7 +14,7 @@ struct AboutSection: View {
                     Button { actions.open(row) } label: {
                         VStack(alignment: .leading, spacing: 4) {
                             Text(row.memory.title).font(.system(.body, design: .serif)).foregroundStyle(Theme.ink)
-                            Text("“\(row.memory.summaryQuote)”").font(.footnote).foregroundStyle(Theme.stone).lineLimit(3)
+                            Text("“\(row.memory.summaryQuote)”").font(.footnote).foregroundStyle(Theme.secondaryText).lineLimit(3)
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.vertical, 6)
@@ -27,7 +27,7 @@ struct AboutSection: View {
                         Button("Hide from timeline", systemImage: "eye.slash") { actions.hide(row) }
                         Button("Delete…", systemImage: "trash", role: .destructive) { actions.delete(row) }
                     } label: {
-                        Image(systemName: "ellipsis.circle").font(.title3).foregroundStyle(Theme.stone).padding(.top, 8)
+                        Image(systemName: "ellipsis.circle").font(.title3).foregroundStyle(Theme.secondaryText).padding(.top, 8)
                     }
                     .buttonStyle(.borderless)
                     .accessibilityIdentifier("about.more")
@@ -37,7 +37,7 @@ struct AboutSection: View {
             HStack {
                 Text("About").font(.system(.title3, design: .serif)).foregroundStyle(Theme.ink).textCase(nil)
                 Spacer()
-                Text(rows.count == 1 ? "1 thing about your life" : "\(rows.count) things about your life").font(.caption).foregroundStyle(Theme.stone)
+                Text(rows.count == 1 ? "1 thing about your life" : "\(rows.count) things about your life").font(.caption).foregroundStyle(Theme.secondaryText)
             }
             .accessibilityElement(children: .combine)
             .accessibilityIdentifier("timeline.about")

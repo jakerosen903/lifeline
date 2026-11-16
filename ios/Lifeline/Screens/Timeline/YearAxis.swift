@@ -8,11 +8,11 @@ struct YearAxis: View {
         GeometryReader { geo in
             let labels = Self.labels(for: years)
             ZStack(alignment: .topLeading) {
-                Rectangle().fill(Theme.stone.opacity(0.4)).frame(height: 1).offset(y: 14)
+                Rectangle().fill(Theme.hairline.opacity(0.4)).frame(height: 1).offset(y: 14)
                 ForEach(labels, id: \.self) { year in
                     Text(String(year))
                         .font(.caption2.monospacedDigit())
-                        .foregroundStyle(Theme.stone)
+                        .foregroundStyle(Theme.secondaryText)
                         .position(x: Self.x(for: year, in: years, width: geo.size.width), y: 6)
                 }
             }

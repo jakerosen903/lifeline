@@ -23,8 +23,7 @@ final class ExtractionUITests: XCTestCase {
         XCTAssertFalse(blueDoorCard.waitForExistence(timeout: 2), "the card goes once added")
         app.finishSession()
 
-        XCTAssertTrue(app.buttons["timeline.sessions"].waitForExistence(timeout: 10))
-        app.buttons["timeline.sessions"].tap()
+        app.openSessions()
         let row = app.buttons["home.sessionRow"].firstMatch
         XCTAssertTrue(row.waitForExistence(timeout: 5))
         row.tap()
@@ -51,8 +50,7 @@ final class ExtractionUITests: XCTestCase {
         XCTAssertTrue(app.buttons["card.newPerson"].firstMatch.waitForExistence(timeout: 5))
         app.buttons["card.newPerson"].firstMatch.tap()
         app.finishSession()
-        XCTAssertTrue(app.buttons["home.people"].waitForExistence(timeout: 5))
-        app.buttons["home.people"].tap()
+        app.openNamesQueue()
         let person = app.buttons["people.row"].firstMatch
         XCTAssertTrue(person.waitForExistence(timeout: 5))
         XCTAssertTrue(person.label.contains("Maya"))
@@ -76,8 +74,7 @@ final class ExtractionUITests: XCTestCase {
         app.startSession()
         XCTAssertTrue(app.staticTexts["Sounds like a memory"].waitForExistence(timeout: 15))
         app.finishSession()
-        XCTAssertTrue(app.buttons["timeline.sessions"].waitForExistence(timeout: 10))
-        app.buttons["timeline.sessions"].tap()
+        app.openSessions()
         let row = app.buttons["home.sessionRow"].firstMatch
         XCTAssertTrue(row.waitForExistence(timeout: 5))
         row.tap()
@@ -87,7 +84,7 @@ final class ExtractionUITests: XCTestCase {
     @MainActor
     func testSettingsSavesAKeyState() {
         let app = launchToHome()
-        app.buttons["home.settings"].tap()
+        app.openSettings()
         let field = app.textFields["settings.apiKey"]
         XCTAssertTrue(field.waitForExistence(timeout: 5))
         field.tap()

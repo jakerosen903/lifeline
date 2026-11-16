@@ -37,20 +37,20 @@ struct SessionDetailScreen: View {
                         } label: {
                         VStack(alignment: .leading, spacing: 4) {
                             if row.kind != .event && row.kind != .other {
-                                Text(row.kind.cardLabel).font(.caption2.weight(.semibold)).foregroundStyle(Theme.olive)
+                                Text(row.kind.cardLabel).font(.caption2.weight(.semibold)).foregroundStyle(Theme.oliveText)
                             }
                             Text(row.memory.title)
                                 .font(.system(.headline, design: .serif))
                                 .foregroundStyle(Theme.ink)
                             Text("“\(row.memory.summaryQuote)”")
                                 .font(.system(.subheadline, design: .serif))
-                                .foregroundStyle(Theme.stone)
+                                .foregroundStyle(Theme.secondaryText)
                                 .lineLimit(3)
                             if !row.anchors.isEmpty {
-                                Text(row.anchors.joined(separator: " · ")).font(.caption).foregroundStyle(Theme.ochre)
+                                Text(row.anchors.joined(separator: " · ")).font(.caption).foregroundStyle(Theme.ochreText)
                             }
                             if !row.people.isEmpty {
-                                Text(row.people.joined(separator: ", ")).font(.caption).foregroundStyle(Theme.olive)
+                                Text(row.people.joined(separator: ", ")).font(.caption).foregroundStyle(Theme.oliveText)
                             }
                         }
                         .padding(.vertical, 4)
@@ -78,7 +78,7 @@ struct SessionDetailScreen: View {
                         HStack {
                             Text(CandidatePayload.memory(candidate)?.title ?? CandidatePayload.mention(candidate)?.text ?? "")
                                 .font(.system(.subheadline, design: .serif))
-                                .foregroundStyle(Theme.stone)
+                                .foregroundStyle(Theme.secondaryText)
                             Spacer()
                             Button("Bring back") { viewModel.bringBack(candidate) }
                                 .buttonStyle(.bordered)
@@ -116,7 +116,7 @@ struct SessionDetailScreen: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(Format.duration(ms: segment.startMs))
                         .font(.caption.monospacedDigit())
-                        .foregroundStyle(Theme.ochre)
+                        .foregroundStyle(Theme.ochreText)
                     Text(segment.text)
                         .font(.system(.body, design: .serif))
                         .foregroundStyle(Theme.ink)

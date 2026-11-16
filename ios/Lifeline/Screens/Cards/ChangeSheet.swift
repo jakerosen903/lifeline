@@ -31,7 +31,7 @@ struct ChangeSheet: View {
                         .disabled(!viewModel.canSaveTitle)
                         .accessibilityIdentifier("change.saveTitle")
                     Text("“\(viewModel.memory.summaryQuote)”")
-                        .font(.footnote).foregroundStyle(Theme.stone)
+                        .font(.footnote).foregroundStyle(Theme.secondaryText)
                 }
 
                 Section("Who was there") {
@@ -41,7 +41,7 @@ struct ChangeSheet: View {
                             Spacer()
                             Button("Remove") { viewModel.remove(person) }
                                 .buttonStyle(.borderless)
-                                .foregroundStyle(Theme.stone)
+                                .foregroundStyle(Theme.secondaryText)
                                 .accessibilityIdentifier("change.removePerson")
                         }
                     }
@@ -72,9 +72,9 @@ struct ChangeSheet: View {
                         showWhen.toggle()
                     } label: {
                         HStack {
-                            Text(viewModel.when.rangeText).foregroundStyle(viewModel.when.isGuess ? Theme.ochre : Theme.ink)
+                            Text(viewModel.when.rangeText).foregroundStyle(viewModel.when.isGuess ? Theme.ochreText : Theme.ink)
                             Spacer()
-                            Image(systemName: showWhen ? "chevron.up" : "chevron.down").foregroundStyle(Theme.stone)
+                            Image(systemName: showWhen ? "chevron.up" : "chevron.down").foregroundStyle(Theme.secondaryText)
                         }
                     }
                     .buttonStyle(.borderless)
@@ -150,7 +150,7 @@ struct ChangeSheet: View {
                         HStack {
                             Text(ChangeViewModel.kindChoices.first { $0.kind == viewModel.shownKind }?.label ?? "A moment").foregroundStyle(Theme.ink)
                             Spacer()
-                            Image(systemName: "chevron.up.chevron.down").foregroundStyle(Theme.stone)
+                            Image(systemName: "chevron.up.chevron.down").foregroundStyle(Theme.secondaryText)
                         }
                     }
                     .accessibilityIdentifier("change.kind")
@@ -171,7 +171,7 @@ struct ChangeSheet: View {
                             }
                         } label: {
                             HStack {
-                                Text("About whom or what?").foregroundStyle(Theme.stone)
+                                Text("About whom or what?").foregroundStyle(Theme.secondaryText)
                                 Spacer()
                                 Text(viewModel.aboutLabel).foregroundStyle(Theme.ink)
                             }
@@ -214,9 +214,9 @@ struct ChangeSheet: View {
         HStack {
             Text(title)
             Spacer()
-            Text("later").font(.caption).foregroundStyle(Theme.stone)
+            Text("later").font(.caption).foregroundStyle(Theme.secondaryText)
         }
-        .foregroundStyle(Theme.stone)
+        .foregroundStyle(Theme.secondaryText)
         .accessibilityElement(children: .combine)
         .accessibilityIdentifier("change.later")
     }

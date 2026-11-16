@@ -1,8 +1,8 @@
 import Foundation
 import LifelineKit
 
-/// People, Places, Things and Ideas: one screen, one segment per type (M7). A free-text tag
-/// narrows any of them.
+/// The rows of one kind of entity: People, Places and Things each have a tab; ideas list on You.
+/// A free-text tag narrows any of them. The owner is never a row: their page is "About you" on You.
 @MainActor
 @Observable
 final class EntitiesViewModel {
@@ -13,16 +13,16 @@ final class EntitiesViewModel {
         var id: EntityID { entity.id }
     }
 
-    var type: EntityType = .thing { didSet { refresh() } }
+    let type: EntityType
     var tagFilter: String? { didSet { refresh() } }
     private(set) var rows: [Row] = []
     private(set) var allTags: [String] = []
-    /// The owner's own page: "About you" (M7), in the People segment.
+    /// The owner's own page: "About you" (M7), on the You tab.
     private(set) var aboutYou: Entity?
     private(set) var error: String?
     let deps: Dependencies
 
-    init(deps: Dependencies, type: EntityType = .thing) {
+    init(deps: Dependencies, type: EntityType) {
         self.deps = deps
         self.type = type
         refresh()

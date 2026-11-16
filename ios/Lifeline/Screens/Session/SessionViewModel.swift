@@ -42,6 +42,8 @@ final class SessionViewModel: Identifiable {
     var cardQueue: CardQueue { flow.queue }
 
     let deps: Dependencies
+    /// The page this session is about, if it started from one.
+    let subject: SessionSubject?
     private var recorder: SessionRecorder?
     private var queue: ExtractionQueue?
     /// Everything the interviewer loop hears, in order. Finished when the session ends.
@@ -54,11 +56,12 @@ final class SessionViewModel: Identifiable {
     private var segmentsSeen = 0
     private var declinedOffers = 0
 
-    init(deps: Dependencies, kind: SessionKind = .quick) {
+    init(deps: Dependencies, kind: SessionKind = .quick, subject: SessionSubject? = nil) {
         self.deps = deps
+        self.subject = subject
         self.kind = kind
         flow = CardFlow(deps: deps)
-        let opening = deps.opening()
+        let opening = deps.opening(subject: subject)
         let arc = SessionArc(kind: kind, config: deps.arcConfig, startedAt: .now)
         self.opening = opening
         self.arc = arc
@@ -135,7 +138,7 @@ final class SessionViewModel: Identifiable {
         }
         do {
             let captureStart = ContinuousClock.now
-            try await recorder.start(id: sessionID, kind: kind)
+            try await recorder.start(id: sessionID, kind: kind, subject: subject?.entityID, startedFrom: subject == nil ? .tab : .page)  // Rule: a session with a subject started on a page; none, on a tab.
             if speaks { startInterviewer(inputs: inputs, recorder: recorder, session: sessionID, captureStart: captureStart) }
             arc = SessionArc(kind: kind, config: deps.arcConfig, startedAt: startedAt)
             persistLog()
@@ -319,6 +322,7 @@ final class SessionViewModel: Identifiable {
 
     private func offerNextPrompt() {
         guard kind == .settleIn, !arc.heavy, !state.isSpeaking, nextPrompt == nil, !isStopping else { return }
+        // No subject on purpose: the page the session started from shapes only its opening question.
         let next = deps.opening().main
         guard next != opening.main else { return }
         nextPrompt = next

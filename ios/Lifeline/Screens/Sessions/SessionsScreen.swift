@@ -9,7 +9,7 @@ struct SessionsScreen: View {
         List {
             if viewModel.rows.isEmpty {
                 ContentUnavailableView("No sessions yet", systemImage: "waveform",
-                                       description: Text("Tap Start on the timeline and tell me about the house you grew up in."))
+                                       description: Text("Tap “Tell a story” and tell me about the house you grew up in."))
                     .listRowBackground(Color.clear)
             }
             ForEach(viewModel.rows) { row in
@@ -20,10 +20,10 @@ struct SessionsScreen: View {
                         Text(row.session.startedAt, format: .dateTime.weekday(.wide).month().day().hour().minute())
                             .font(.system(.headline, design: .serif))
                         Text("\(row.durationText) · \(row.segmentCount) moments")
-                            .font(.subheadline).foregroundStyle(Theme.stone)
+                            .font(.subheadline).foregroundStyle(Theme.secondaryText)
                         if row.pendingCount > 0 {
                             Label(row.pendingCount == 1 ? "1 moment still to sort" : "\(row.pendingCount) moments still to sort", systemImage: "arrow.triangle.2.circlepath")
-                                .font(.caption).foregroundStyle(Theme.ochre)
+                                .font(.caption).foregroundStyle(Theme.ochreText)
                                 .accessibilityIdentifier("sessions.sorting")
                         }
                     }

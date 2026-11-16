@@ -16,6 +16,8 @@ final class EntityViewModel {
     private(set) var tags: [String] = []
     private(set) var firstTelling: (span: EntitySpan, session: Session)?
     private(set) var isGone = false
+    /// The owner's own page ("About you"): a session from here is about "yourself".
+    private(set) var isOwner = false
     private(set) var error: String?
     let player = SegmentPlayer()
     let deps: Dependencies
@@ -29,12 +31,16 @@ final class EntityViewModel {
     /// "Add dates" is offered only on a place or a thing, and only as the person's own action.
     var canAddDates: Bool { entity.type == .place || entity.type == .thing }
     var isPlaying: Bool { player.isPlaying }
+    /// What a session started from this page is about.
+    var subject: SessionSubject { SessionSubject(entityID: entity.id, title: entity.title, isOwner: isOwner, excludedFromAI: entity.excludedFromAI) }
 
     func refresh() {
         do {
             let store = deps.extractionStore
             guard let current = try store.entities.entity(id: entity.id) else { isGone = true; return }
             entity = current
+            // A failed owner lookup costs only the bar's wording, never the page.
+            isOwner = (try? store.profile.owner()?.entityID) == entity.id
             details = try store.entities.details(of: entity.id).filter { !$0.hiddenFromTimeline }
             moments = try store.entities.moments(of: entity.id).filter { !$0.hiddenFromTimeline }
             if entity.type == .idea {
