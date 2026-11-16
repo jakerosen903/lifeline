@@ -39,3 +39,9 @@ R14 (Tasks 4+5, fix round 2). `CheckThisTag` (in `Cards/MemoryCard.swift`, outsi
 R15 (Tasks 4+5, fix round 2 re-review). The chapter tag and the Check-this tags inside a row do not open the memory when tapped; the row's text block, full width, does. Why: the tags must stay their own accessibility elements (Task 6 counts `timeline.tag`; an existing test reads `card.checkThis`), and S6c makes the tag a button of its own. Cost if wrong: a tap on a tag does nothing until S6c.
 
 R16 (Tasks 4+5, fix round 2 re-review). An open story's members go back to list rows of their own on the spine, as on the shelf. The `ViewThatFits` change to off-spine titles comes out. Why: neither was needed for the finding. Several context menus (Hide, Exclude, Delete) in one list cell can lift the wrong member; the title change alters every shelf and collection row, outside this PR.
+
+R17 (final review, Important 1). The qualifier "around" is also set for a capsule when the date text is "around {years}" (an age guess that crosses two calendar years, "around 1999–2000"). Why: without it the margin showed "1999–2000" with no word and the row showed no text, the same as a stated range (PRINCIPLES 5, decision 4). Cost if wrong: one condition and one test.
+
+R18 (final review, Important 2). A gap that is measured from or to the band of a confirmed relation has no label and is not dashed; its length is kept. Why: the edge of that band is the builder's slack (R4), so "9 years" would state a number the person never gave. The waypoint above a relation still comes from the start of its band; that cost is recorded in "After S6a". Cost if wrong: one condition and two tests.
+
+R19 (final review). The first full UI run was stopped when the final review asked for kit and view fixes. The one full UI run is made after the fix wave, on the final code.
