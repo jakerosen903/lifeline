@@ -6,7 +6,8 @@ import Testing
 @Test func fillerWordsAndRepeatsAreHidden() {
     #expect(ReadableQuote.text("we, we, -... spent a lot of time together, um, you know, a few summers") == "We spent a lot of time together, a few summers")
     #expect(ReadableQuote.text("um I was uh eight") == "I was eight")
-    #expect(ReadableQuote.text("it was like, huge") == "It was huge")
+    // "like" with a comma on one side only may be the person's word, so it stays.
+    #expect(ReadableQuote.text("it was like, huge") == "It was like, huge")
     #expect(ReadableQuote.text("um, two years younger than me, you know") == "Two years younger than me")
     #expect(ReadableQuote.text("the the house had a blue door") == "The house had a blue door")
     #expect(ReadableQuote.text("and it rained, you know") == "And it rained")
@@ -68,8 +69,10 @@ import Testing
 @Test func theVerbLikeSurvives() {
     #expect(ReadableQuote.text("I like, really like, dogs") == "I like, really like, dogs")
     #expect(ReadableQuote.text("it was, like, huge") == "It was, huge")
-    #expect(ReadableQuote.text("it was like, huge") == "It was huge")
+    // "like" with a comma on one side only may be the person's word, so it stays.
+    #expect(ReadableQuote.text("it was like, huge") == "It was like, huge")
     #expect(ReadableQuote.text("we ran, like, a mile") == "We ran, a mile")
+    #expect(ReadableQuote.text("what she was like, I can't say") == "What she was like, I can't say")
 }
 
 @Test func edgesOfTheCleanup() {

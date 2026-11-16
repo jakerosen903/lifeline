@@ -5,9 +5,8 @@ import Foundation
 ///
 /// Rules, in this order: fragments, fillers, repeats, the end comma, the capital.
 /// - A fragment is a token made only of dashes, dots and commas.
-/// - Fillers: "um", "uh" and "erm"; "like" only when a comma follows it and it is not the verb:
-///   the word before it ends with a comma too (", like,") or is a form of "be" ("it was like,
-///   huge"); "you know" only when a comma follows it or it ends the quote. A removed filler
+/// - Fillers: "um", "uh" and "erm"; "like" only when a comma stands on both sides (", like,"),
+///   because "like" with a comma on one side may be the person's word; "you know" only when a comma follows it or it ends the quote. A removed filler
 ///   takes its trailing comma with it. A comma before it stays. A "." or "…" it carried moves to
 ///   the word before, never doubled. A "?" or "!" it carried becomes ".", so a statement never
 ///   turns into a question or an exclamation.
@@ -33,7 +32,6 @@ public enum ReadableQuote {
     // MARK: - Rules
 
     private static let fillerSounds: Set<String> = ["um", "uh", "erm"]
-    private static let beForms: Set<String> = ["was", "is", "were", "are", "am", "be", "been", "being", "it's", "that's"]
     private static let closers: Set<Character> = ["\"", "\u{201D}", "'", "\u{2019}", "\u{00BB}", ")", "]"]
     private static let repeatable: Set<String> = ["had", "that"]
     private static let fragmentMarks = CharacterSet(charactersIn: "-\u{2013}\u{2014}.\u{2026},")
@@ -58,8 +56,7 @@ public enum ReadableQuote {
             let token = tokens[i], word = core(token)
             if fillerSounds.contains(word) {
                 drop(token); i += 1
-            } else if word == "like", token.hasSuffix(","), let before = kept.last,
-                      before.hasSuffix(",") || beForms.contains(core(before)) {
+            } else if word == "like", token.hasSuffix(","), kept.last?.hasSuffix(",") == true {
                 drop(token); i += 1
             } else if word == "you", !token.hasSuffix(","), i + 1 < tokens.count, core(tokens[i + 1]) == "know",
                       tokens[i + 1].hasSuffix(",") || i + 2 == tokens.count {
