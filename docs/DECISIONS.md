@@ -4,7 +4,9 @@ One entry per decision. Newest first. Status is Decided, Open, or Superseded.
 
 ## 2026-11-16 · Photos on pages, kept on the phone (S4)
 
-**Status:** Decided. Builds on the five-sections decision of 2026-11-15. Source: `docs/plans/2026-11-16-sections-photos.md`, decisions 2, 3, 4, 6, 8, 10, 15 and 20, and the rulings made while building it. The owner approved the v13 schema (`photo_link` with `entity_id` and `memory_id`) on 2026-11-16.
+**Status:** Decided. Builds on the five-sections decision of 2026-11-15.
+
+**Source:** `docs/plans/2026-11-16-sections-photos.md`, decisions 2, 3, 4, 6, 8, 10, 15 and 20. The rulings made while building it are below. The owner approved the v13 schema on 2026-11-16. The schema is `photo_link` with `entity_id` and `memory_id`.
 
 **Decision.** A person, place or thing page, a memory page and You can hold photos. The first photo is the cover. A cover shows as the page header and as the face of the People tile.
 
@@ -16,7 +18,8 @@ One entry per decision. Newest first. Status is Decided, Open, or Superseded.
 - **You (decision 15).** You shows the owner’s cover and a “…” menu with “Add a photo”. Photos on the strip wait.
 - **Backup (decision 20).** The copy holds `photos/*.jpg`, stored without compression. The manifest gets optional `photoFiles` and `photoBytes`.
 - **A pre-S4 build refuses a post-S4 copy.** The copy has schema v13. A build from before S4 shows “This copy was made by a newer version of Lifeline.” A copy from before S4 restores and has no photos.
-- **Photos stay on the target after an undone merge (decision 11).** Cost: undoing a merge does not move the photos back.
+- **One copy per photo (decision 7).** The SHA-256 of the picked file identifies a photo. The same photo added to a second page links the one copy to both pages. The same photo added again to the same page changes nothing. Cost: two pages share one file, so removing the photo from one page must keep the file for the other.
+- **A merge moves photos (decision 11).** A merge of two memories moves the source memory’s photos to the target. A source cover becomes an attached photo when the target has a cover. Undoing the merge does not move the photos back. Cost: an undone merge leaves the photos on the target.
 - **Photos on the strip wait.** No Timeline row, Things tile, search result or map uses a photo yet (S5 to S8).
 
 **Rulings made while building (2026-11-16).** Each ruling has its cost.
@@ -29,9 +32,10 @@ One entry per decision. Newest first. Status is Decided, Open, or Superseded.
   - The viewer caption query is scoped to `photo.viewer`, because the page’s caption under the sheet has the same identifier.
   - The list cover sample is at x=0.1, not 0.04. At 0.04 the point lands on the row’s inset, before the face.
   - `testAMemoryShowsItsPhotos` reveals its row and waits for `memory.range`. The row is off screen in a lazy list, and “The tree house” is an event, so its page shows the range and no kind.
+- **The pixel-colour tests poll for up to 10 seconds.** They poll before the unchanged colour assertion. Why: the image decodes off the main thread, so an immediate screenshot is a race. Cost: none. A wrong colour still fails.
 - **Two extra failure tests.** A foreign-key failure at the row insert and a failure at the file write prove that a failed add stores nothing. Cost: two more tests.
 
-**Why.** A life has faces and places, and the person recognizes them by sight (P1). The person keeps the photos and decides which one leads (P2). The app shows only what the file says and never describes a photo or guesses from it (P5). Photos stay on the phone like audio (data posture).
+**Why.** A life has faces and places. The person recognizes them by sight (P1). The person keeps the photos and decides which one leads (P2). The app shows only what the file says. The app never describes a photo and never guesses from it (P5). Photos stay on the phone, as audio does (data posture).
 
 **Costs.** The app re-encodes every photo. Metadata does not feed any other feature yet. The schema is permanent once v13 ships. S4 builds storage and display, not the “one photo, one story” prompt.
 
