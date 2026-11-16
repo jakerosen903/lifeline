@@ -120,51 +120,48 @@ final class CardHandler {
     }
 
     /// Suggestions dismissed moments ago by a kept card's close, while Undo is still offered.
-    private(set) var keptClosedNotice: String?
-    private var recentKeptClose: (cards: [KeptCard], dismissed: [Candidate])?
+    var keptClosedNotice: String? { recentKeptClose.notice }
+    private var recentKeptClose = KeptCloseUndo()
     private var keptCloseTimer: Task<Void, Never>?
 
-    /// A kept card closed: the hints and entities nobody answered are dismissed, as "Not quite"
-    /// did; a person nobody answered becomes an open mention for the People queue. When anything
-    /// was dismissed the notice offers Undo for the usual window, because a card can close on
-    /// another card's tap and the person must be able to take that back. A close that dismissed
-    /// nothing shows nothing and leaves an earlier notice standing.
+    /// A kept card closed: the hints and entities nobody answered are dismissed in one write, as
+    /// "Not quite" did; a person nobody answered becomes an open mention for the People queue.
+    /// When anything was dismissed the notice offers Undo for the usual window, because a card
+    /// can close on another card's tap and the person must be able to take that back. A second
+    /// close inside the window adds to the first and restarts the window, so one Undo takes both
+    /// back. A close that dismissed nothing shows nothing and leaves an earlier notice standing.
     func close(_ closing: KeptClose) {
-        var dismissed: [Candidate] = []
-        for card in closing.dismiss {
+        let candidates = closing.dismiss.compactMap { card -> Candidate? in
             switch card {
-            case .hint(let candidate, _), .entity(let candidate, _):
-                if attempt("Could not dismiss that", { try deps.actions.dismiss(candidate) }) { dismissed.append(candidate) }
-            case .memory, .whoIsThis, .kept:
-                break
+            case .hint(let candidate, _), .entity(let candidate, _): candidate
+            case .memory, .whoIsThis, .kept: nil
             }
+        }
+        var dismissed: [Candidate] = []
+        if !candidates.isEmpty {
+            _ = attempt("Could not dismiss that") { dismissed = try deps.actions.dismissAll(candidates) }
         }
         for card in closing.openAsMention { shown(card) }
         guard !dismissed.isEmpty else { return }
-        recentKeptClose = (closing.undoable, dismissed)
-        keptClosedNotice = dismissed.count == 1 ? "1 suggestion dismissed." : "\(dismissed.count) suggestions dismissed."
+        recentKeptClose.add(cards: closing.undoable, dismissed: dismissed)
         keptCloseTimer?.cancel()
         keptCloseTimer = Task { [weak self] in
             try? await Task.sleep(for: Self.undoWindow)
             guard !Task.isCancelled else { return }
-            self?.keptClosedNotice = nil
-            self?.recentKeptClose = nil
+            self?.recentKeptClose = KeptCloseUndo()
         }
     }
 
-    /// Takes the last close back: every suggestion it dismissed waits again, and the kept cards
-    /// are returned for the caller's stack. A name that went to the People queue stays there too;
-    /// its chip answers the same mention.
+    /// Takes the recent closes back: every suggestion they dismissed waits again, in one write,
+    /// and the kept cards are returned for the caller's stack. When the write fails nothing
+    /// changes and the notice stays, so the person can try again inside the window. A name that
+    /// went to the People queue stays there too; its chip answers the same mention.
     func undoKeptClose() -> [KeptCard] {
-        guard let recent = recentKeptClose else { return [] }
+        let recent = recentKeptClose
+        guard !recent.isEmpty, attempt("Could not bring that back", { try deps.actions.restoreAll(recent.dismissed) }) else { return [] }
         keptCloseTimer?.cancel()
-        keptClosedNotice = nil
-        recentKeptClose = nil
-        var restored = false
-        for candidate in recent.dismissed {
-            if attempt("Could not bring that back", { try deps.actions.restore(candidate) }) { restored = true }
-        }
-        return restored ? recent.cards : []
+        recentKeptClose = KeptCloseUndo()
+        return recent.cards
     }
 
     /// Dismiss never touches the recording; for a few seconds it can be undone.
