@@ -27,10 +27,14 @@ struct YouScreen: View {
                 if let portrait = viewModel.portrait {
                     PortraitHeader(portrait: portrait, deps: viewModel.deps, onChange: changed)
                     if let lead = viewModel.lead {
-                        Text(lead.drawnText).font(.system(.title, design: .serif)).foregroundStyle(Theme.ink)
-                            .fixedSize(horizontal: false, vertical: true)
-                            .accessibilityLabel(lead.text)
-                            .accessibilityIdentifier("you.lead")
+                        // 12.3333, not 12: at 12 the chips below land where the accessibility frame reads 43.99999999999994 high (float noise, not a layout fault).
+                        VStack(alignment: .leading, spacing: 12.3333) {
+                            Text(lead.drawnText).font(.system(.title, design: .serif)).foregroundStyle(Theme.ink)
+                                .fixedSize(horizontal: false, vertical: true)
+                                .accessibilityLabel(lead.text)
+                                .accessibilityIdentifier("you.lead")
+                            PortraitLeadPlayButton(line: lead, viewModel: viewModel)
+                        }
                     }
                     parts
                     if viewModel.isLoaded, portrait.isEmpty {
@@ -68,7 +72,9 @@ struct YouScreen: View {
         // The root appeared (tab selected, or back from a pushed page): a fresh lead (decision 8).
         // While a tag is chosen the lead stays (decisions 8 and 12): a new lead must not take the only fact with that tag.
         .onAppear { isVisible = true; viewModel.refresh(newLead: viewModel.tag == nil) }
-        .onDisappear { isVisible = false }
+        .onDisappear { isVisible = false; viewModel.stop() }
+        // A recording starting under the cover must not talk over this page's player.
+        .onChange(of: home?.presented != nil) { _, covered in if covered { viewModel.stop() } }
         // A story told from here lands under a cover; when it closes, read what it added and keep the lead.
         .onChange(of: home?.coverClosings) { if isVisible { viewModel.refresh(newLead: false) } }
         .sessionContext(viewModel.ownerSubject)
@@ -86,14 +92,14 @@ struct YouScreen: View {
                     PortraitChips(tags: viewModel.tags, chosen: $viewModel.tag)
                 }
                 ForEach(who) { line in
-                    PortraitSaidRow(line: line, note: line.tags.isEmpty ? nil : line.tags.joined(separator: ", "), deps: deps, onChange: changed)
+                    PortraitSaidRow(line: line, note: line.tags.isEmpty ? nil : line.tags.joined(separator: ", "), viewModel: viewModel, onChange: changed)
                 }
             }
         }
         let felt = viewModel.lines(.howItFelt)
         if !felt.isEmpty {
             PortraitPart(heading: "How it felt") {
-                ForEach(felt) { line in PortraitFeelingCard(line: line, deps: deps, onChange: changed) }
+                ForEach(felt) { line in PortraitFeelingCard(line: line, viewModel: viewModel, onChange: changed) }
             }
         }
         let ideas = viewModel.lines(.whatYouThink)
@@ -106,7 +112,7 @@ struct YouScreen: View {
         if !hopes.isEmpty {
             PortraitPart(heading: "What you're hoping for") {
                 ForEach(hopes) { line in
-                    PortraitSaidRow(line: line, note: viewModel.saidWhen(line), deps: deps, onChange: changed)
+                    PortraitSaidRow(line: line, note: viewModel.saidWhen(line), viewModel: viewModel, onChange: changed)
                 }
             }
         }

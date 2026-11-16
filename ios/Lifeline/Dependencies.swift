@@ -81,6 +81,10 @@ struct Dependencies {
         try AudioLocation.directory(under: audioRoot).appending(path: session.audioPath)
     }
 
+    func audioURL(for telling: Telling) throws -> URL {
+        try AudioLocation.directory(under: audioRoot).appending(path: telling.audioPath)
+    }
+
     /// The interviewer's context, read from the store at call time: this session's segments not excluded
     /// from AI, the turns spoken so far, and the question and stage on screen. The segments' text is also
     /// returned as the session's words, which the client checks a reply against; it is not sent.

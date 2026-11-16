@@ -35,11 +35,13 @@ struct PortraitSaidRow: View {
     let line: PortraitLine
     /// Tags for a fact, "said in October" for a goal; nil shows nothing.
     let note: String?
-    let deps: Dependencies
+    let viewModel: YouViewModel
     let onChange: () -> Void
 
     var body: some View {
+        let deps = viewModel.deps
         if let memory = line.memory {
+            HStack(alignment: .center, spacing: 0) {
             NavigationLink {
                 MemoryScreen(viewModel: MemoryViewModel(memory: memory, deps: deps), deps: deps, onChange: onChange)
             } label: {
@@ -62,8 +64,11 @@ struct PortraitSaidRow: View {
                 .accessibilityValue(note ?? "")
             }
             .buttonStyle(.plain)
-            .overlay(alignment: .bottom) { Rectangle().fill(Theme.hairline).frame(height: 1) }
             .accessibilityIdentifier("you.line")
+            // Beside the link, never inside it: nested controls swallow taps and merge for VoiceOver.
+            PlayLineButton(line: line, viewModel: viewModel)
+            }
+            .overlay(alignment: .bottom) { Rectangle().fill(Theme.hairline).frame(height: 1) }
         }
     }
 }
@@ -72,12 +77,14 @@ struct PortraitSaidRow: View {
 /// when the words named it, which opens that page.
 struct PortraitFeelingCard: View {
     let line: PortraitLine
-    let deps: Dependencies
+    let viewModel: YouViewModel
     let onChange: () -> Void
 
     var body: some View {
+        let deps = viewModel.deps
         VStack(alignment: .leading, spacing: 0) {
             if let memory = line.memory {
+                HStack(alignment: .center, spacing: 0) {
                 NavigationLink {
                     MemoryScreen(viewModel: MemoryViewModel(memory: memory, deps: deps), deps: deps, onChange: onChange)
                 } label: {
@@ -89,6 +96,8 @@ struct PortraitFeelingCard: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityIdentifier("you.line")
+                PlayLineButton(line: line, viewModel: viewModel)
+                }
             }
             if let about = line.about {
                 NavigationLink {
@@ -183,5 +192,53 @@ private struct PortraitChip: View {
         .buttonStyle(.plain)
         .accessibilityLabel(title)
         .accessibilityAddTraits(isSelected ? .isSelected : [])
+    }
+}
+
+/// A line's own play control: its telling only, one line at a time. Shown only for a line with a recording.
+/// Beside the row's link, never inside it. The 44-point frame and hit area are in the label.
+struct PlayLineButton: View {
+    let line: PortraitLine
+    let viewModel: YouViewModel
+
+    var body: some View {
+        if line.telling != nil {
+            let playing = viewModel.isPlaying(line)
+            Button { viewModel.togglePlayback(line) } label: {
+                Image(systemName: playing ? "stop.circle" : "play.circle").font(.title2)
+                    .foregroundStyle(Theme.oliveText)
+                    .frame(minWidth: 44, minHeight: 44)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.borderless)
+            .accessibilityLabel(playing ? "Stop" : "Hear yourself say it")
+            .accessibilityIdentifier("you.play")
+        }
+    }
+}
+
+/// The lead's control: "Hear yourself say it, 0:04", or "Stop" while it plays.
+struct PortraitLeadPlayButton: View {
+    let line: PortraitLine
+    let viewModel: YouViewModel
+
+    var body: some View {
+        if let telling = line.telling {
+            let playing = viewModel.isPlaying(line)
+            Button { viewModel.togglePlayback(line) } label: {
+                Group {
+                    if playing {
+                        Label("Stop", systemImage: "stop.fill")
+                    } else {
+                        Label("Hear yourself say it, \(Format.duration(ms: telling.range.end - telling.range.start))", systemImage: "play.fill")
+                    }
+                }
+                .frame(minHeight: 44)
+            }
+            .buttonStyle(.bordered)
+            .buttonBorderShape(.capsule)
+            .tint(Theme.oliveOnFill)
+            .accessibilityIdentifier("you.lead.play")
+        }
     }
 }

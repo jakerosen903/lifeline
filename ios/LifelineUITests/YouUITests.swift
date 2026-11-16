@@ -99,4 +99,32 @@ final class YouUITests: XCTestCase {
         XCTAssertGreaterThan(lead.frame.height, 120, "the lead wraps onto several lines, never truncates")
         for chip in app.buttons.matching(identifier: "you.tag").allElementsBoundByIndex { XCTAssertGreaterThanOrEqual(chip.frame.height, 44) }
     }
+
+    @MainActor
+    func testEveryLineWithARecordingHasAPlayControl() {
+        let app = XCUIApplication.launchWithPortrait(); app.openYou()
+        XCTAssertEqual(app.buttons["you.lead.play"].label, "Hear yourself say it, 0:04")
+        XCTAssertEqual(app.buttons.matching(identifier: "you.play").count, 6, "six lines with a recording; the idea has none")
+        XCTAssertEqual(app.buttons.matching(identifier: "you.play").firstMatch.label, "Hear yourself say it")
+    }
+
+    @MainActor
+    func testEveryPlayControlIsFullSize() {
+        let app = XCUIApplication.launchWithPortrait(["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"]); app.openYou()
+        for play in app.buttons.matching(identifier: "you.play").allElementsBoundByIndex {
+            XCTAssertGreaterThanOrEqual(play.frame.width, 44); XCTAssertGreaterThanOrEqual(play.frame.height, 44)
+        }
+        XCTAssertGreaterThanOrEqual(app.buttons["you.lead.play"].frame.height, 44)
+    }
+
+    @MainActor
+    func testAMissingRecordingSaysSoAndKeepsThePage() {
+        let app = XCUIApplication.launchWithPortrait(); app.openYou()   // the seed never writes seed.m4a
+        app.buttons.matching(identifier: "you.play").firstMatch.tap()
+        let error = app.any("you.error")
+        XCTAssertTrue(error.waitForExistence(timeout: 5))
+        XCTAssertTrue(error.label.hasPrefix("Could not play this: "))
+        XCTAssertEqual(app.youLineLabels().count, 6, "the page stays as it was")
+        XCTAssertEqual(app.buttons.matching(identifier: "you.play").firstMatch.label, "Hear yourself say it", "nothing is playing")
+    }
 }

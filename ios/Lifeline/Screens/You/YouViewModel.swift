@@ -14,6 +14,9 @@ final class YouViewModel {
     private(set) var isLoaded = false
     private(set) var error: String?
     let deps: Dependencies
+    /// The one player: a line plays its own telling, and starting another stops the first.
+    let player = SegmentPlayer()
+    private(set) var playingLineID: PortraitLine.ID?
 
     /// Reads nothing: the page reads when it appears.
     init(deps: Dependencies) {
@@ -52,5 +55,33 @@ final class YouViewModel {
     /// A goal's "said in October": the session's start, which the app knows.
     func saidWhen(_ line: PortraitLine) -> String? {
         line.telling.map { Portrait.saidWhen($0.toldAt, now: .now, calendar: .current) }
+    }
+
+    func isPlaying(_ line: PortraitLine) -> Bool {
+        playingLineID == line.id && player.playingRange != nil
+    }
+
+    /// Plays the line's telling; a second tap on the playing line stops it. A failure says so and changes nothing else.
+    func togglePlayback(_ line: PortraitLine) {
+        if isPlaying(line) { stop(); return }
+        guard let telling = line.telling else { return }
+        do {
+            let url = try deps.audioURL(for: telling)
+            // Say what failed: a missing file otherwise reads as an OSStatus number.
+            guard FileManager.default.fileExists(atPath: url.path) else {
+                self.error = "Could not play this: the recording could not be found."
+                return
+            }
+            try deps.activatePlayback()
+            try player.play(url: url, range: telling.range)
+            playingLineID = line.id
+        } catch {
+            self.error = "Could not play this: \(error.localizedDescription)"
+        }
+    }
+
+    func stop() {
+        player.stop()
+        playingLineID = nil
     }
 }
