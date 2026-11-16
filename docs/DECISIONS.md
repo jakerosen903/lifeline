@@ -17,6 +17,14 @@ One entry per decision. Newest first. Status is Decided, Open, or Superseded.
 
 **Consequences.** `chapter.range` holds stated years only. The chapters in the owner's archive show under "Not placed in time yet" until the owner says when. The chapter rules in the audit data fixes spec move to S6. S6 is specified ahead of the ship order and of the two-week watch.
 
+## 2026-11-16 · A feeling has no title, and "our parents" is not one person
+
+**Status:** Decided by the owner. Source: `docs/specs/2026-11-16-audit-data-fixes.md`, "A2: titles", "A2: groups of people" and "A2: the Change sheet for what is not a moment".
+
+**Decision.** A fact, a feeling or a goal shows as the person's quote, with no composed title. A phrase that names more than one person is a group: its card takes several people or "Leave it as said", and the phrase is never saved as a name for one person. A person's page lists the other names the app holds, each with "Remove". The Change sheet asks about a scene only for a moment.
+
+**Why.** The owner said of a friend, "I think we had some of our most formative experiences together". The app showed it with the title "our most formative experiences together" and asked "Who was there". In the same story "our parents" raised "Who's this?", took one answer, and saved the phrase as a name for the owner's father.
+
 ## 2026-11-16 · Owner's calls on the audit data fixes
 
 **Status:** Decided by the owner, except call 4. Source: `docs/specs/2026-11-16-audit-data-fixes.md`, "Owner's calls".
