@@ -14,7 +14,7 @@ Status: V1 built through M7, in daily use on Jake’s iPhone; M8, the spoken int
 
 Most journaling tools ask you to write. Most family-history tools ask you to fill in forms. Lifeline asks you to tell one story out loud, the way you would over lunch, and does the organizing itself, only when you agree to it. The intended rhythm is a few minutes a day, with the timeline growing over weeks rather than in one long sitting.
 
-1. **Talk.** Choose “Tell a quick story” (one prompt, done when you are) or “Settle in” (more of a conversation: the next question arrives when the room goes quiet). One speaker. The screen can lock. With M8, the app can also speak a little: the opening, a short reflection now and then, and never over you.
+1. **Talk.** On first open, choose “Tell a quick story” (one prompt, done when you are) or “Settle in” (more of a conversation: the next question arrives when the room goes quiet). Later, tap the record bar for a quick story, or its menu for “Settle in”. One speaker. The screen can lock. With M8, the app can also speak a little: the opening, a short reflection now and then, and never over you.
 2. **Saved.** The audio and an on-device transcript are written as you speak. Finishing never waits for anything else.
 3. **Sorted.** In the background, each completed thought goes to the extractor with the context it needs and comes back as possible memories.
 4. **Kept.** Keep, change or dismiss a card whenever you like, or never. Nothing merges, groups or gets a title without your tap.
@@ -264,7 +264,15 @@ The voice is on-device (`AVSpeechSynthesizer`), through the same audio engine as
 - **Phase 2: props.** Favorite photos as prompts and anchors (PhotoKit gives dates and places; people are tagged by hand; a face model only after an evaluation against those tags), then music from an era.
 - **Phase 3: family.** Per-memory sharing, several perspectives on one event, questions for each other, and a read-only web viewer.
 
-> **Next.** Merge the shell pull request, then run its device checklist (`docs/plans/2026-11-15-sections-device-check.md`). Then build the next parts of the five-sections plan (`docs/plans/2026-11-15-sections.md`). Merge M8’s three pull requests in order and run its device checklist: echo, barge-in within half a second, voice quality, and the safety gate. Run the recording study now that V1 exists: 5 to 8 people, ten minutes each, scored with the app’s evaluation command. Settle the open product questions below, starting with what a second user needs. Engineering meanwhile tunes the starting numbers on real recordings. Then choose the next build: replay (M9) or the one-photo prompt.
+> **Next.**
+>
+> - Merge the shell pull request, then run its device checklist (`docs/plans/2026-11-15-sections-device-check.md`).
+> - Build the next parts of the five-sections plan (`docs/plans/2026-11-15-sections.md`).
+> - Merge M8’s three pull requests in order. Run its device checklist: echo, barge-in within half a second, voice quality, and the safety gate.
+> - Run the recording study now that V1 exists: 5 to 8 people, ten minutes each, scored with the app’s evaluation command.
+> - Settle the open product questions below, starting with what a second user needs.
+> - Engineering meanwhile tunes the starting numbers on real recordings.
+> - Then choose the next build: replay (M9) or the one-photo prompt.
 
 ### Open questions
 
