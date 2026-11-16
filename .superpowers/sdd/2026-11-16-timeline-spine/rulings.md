@@ -15,3 +15,15 @@ R4 (owner, decision 4). For a confirmed relation the margin shows no years and n
 R5 (owner, decision 8). `SpineLayout.storyRange(members:)` gives a story's range for layout only: the span over the dated members; when that span is one year and every dated member reads as said, it is that year as stated, so the mark is a solid dot; otherwise the derived span, so one year is a dashed dot with "around". It is never stored. Cost if wrong: one function and its tests.
 
 R6 (Tasks 4 and 5). One implementer does Tasks 4 and 5 on one build cycle, as the plan's Task 4 Step 1 allows. Two commits if each compiles, else one, and the ledger says which.
+
+R7 (Task 5, review). When an open story is the last stop, the spine continues beside its members and ends at the bottom of the last member. Why: the Task 5 edge case and device check 10 say "the spine continues beside them"; "the last row's line ends at its mark" is the general rule and the open story is the named exception. Cost if wrong: one condition in `SpineRowView`.
+
+R8 (Task 5, review). A spine row shows the age text ("age ~7") on its date line also when the margin holds the years. Why: before this PR the age was visible on the row; it says why the guess is where it is (PRINCIPLES 5). The plan does not mention it, so it must not vanish. Cost if wrong: one line of layout.
+
+R9 (Task 5, review). On a spine row the "in your voice" length sits on its own line under the people line, at every text size, so the title has the full width. Why: with the margin in place, most two-word titles wrapped beside the length. The spec keeps the length; it does not say where. Shelf and collection rows do not change. Cost if wrong: layout only.
+
+R10 (Task 5, review). At accessibility sizes a story row also shows its date above its title: the brief says "for every row".
+
+Withdrawn by the builder: "the solid dot must be filled" and "stated years must not be ochre". The owner's mock-up `TL_SpineStrip` draws every mark as a ring (solid or dashed border) and every margin year in ochre text. The code matches the mock-up.
+
+Not fixed, for "After S6a": the shelf header counts a half-open moment ("before 2004") as "undated"; a story member that is also in a collection shows in both and is counted twice (as before this PR).
