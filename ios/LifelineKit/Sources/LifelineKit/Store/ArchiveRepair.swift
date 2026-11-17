@@ -2,7 +2,21 @@ import Foundation
 
 /// Repairs that earlier versions of the app made necessary. Each one is safe to run again: a
 /// second run finds nothing to do. The app runs them once at launch and shows `notice` once.
+///
+/// Each step is its own write. A step that fails changes nothing and is reported in `failures`; the
+/// steps before it stay done, the steps after it still run, and the next launch tries it again.
 public enum ArchiveRepair {
+    /// One repair, in the order `run` makes them.
+    public enum Step: String, Sendable, Equatable {
+        case stories, entities, collections, chapters
+    }
+
+    /// A step that threw, with the error's text for the log. The text never goes on screen.
+    public struct Failure: Sendable, Equatable {
+        public var step: Step
+        public var message: String
+    }
+
     public struct Report: Sendable, Equatable {
         /// Stories that had the same title and are now one, with how many copies there were.
         public var joinedStories: [StoryRepository.MergedTitle] = []
@@ -12,6 +26,8 @@ public enum ArchiveRepair {
         public var joinedCollections: [StoryRepository.MergedTitle] = []
         /// Chapters with no title and no memory. They held nothing, so the notice leaves them out.
         public var removedChapters = 0
+        /// Steps that failed. What the other steps joined is still in the report and in `notice`.
+        public var failures: [Failure] = []
 
         /// One sentence for the person, or nil when nothing was joined.
         public var notice: String? {
@@ -27,11 +43,25 @@ public enum ArchiveRepair {
         }
     }
 
+    /// Never throws: a failed step must not hide what the steps before it already changed.
     @discardableResult
-    public static func run(_ store: ExtractionStore) throws -> Report {
-        Report(joinedStories: try store.stories.mergeDuplicateTitles(),
-               joinedEntities: try store.entities.mergeDuplicateTitles(),
-               joinedCollections: try store.chapters.mergeDuplicateCollections(),
-               removedChapters: try store.chapters.deleteEmptyUntitled())
+    public static func run(_ store: ExtractionStore) -> Report {
+        var report = Report()
+        /// The step's result, or `fallback` with the failure noted.
+        func attempt<T>(_ step: Step, or fallback: T, _ body: () throws -> T) -> T {
+            do { return try body() } catch {
+                report.failures.append(Failure(step: step, message: "\(error)"))
+                return fallback
+            }
+        }
+        let stories = attempt(.stories, or: []) { try store.stories.mergeDuplicateTitles() }
+        let entities = attempt(.entities, or: []) { try store.entities.mergeDuplicateTitles() }
+        let collections = attempt(.collections, or: []) { try store.chapters.mergeDuplicateCollections() }
+        let chapters = attempt(.chapters, or: 0) { try store.chapters.deleteEmptyUntitled() }
+        report.joinedStories = stories
+        report.joinedEntities = entities
+        report.joinedCollections = collections
+        report.removedChapters = chapters
+        return report
     }
 }

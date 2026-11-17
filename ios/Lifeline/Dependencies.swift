@@ -195,21 +195,18 @@ struct Dependencies {
     }
 
     /// Repairs what earlier versions left in the archive (audit A1 and A2), before any screen reads it. A second run
-    /// finds nothing, so every launch can call it. A failure must not keep the person out of their archive:
-    /// it is logged, the data stays as it was, and the next launch tries again.
+    /// finds nothing, so every launch can call it. A failure must not keep the person out of their archive: the
+    /// step that failed is logged and changes nothing, and the next launch tries it again. The notice still says
+    /// what the other steps joined, so a change to the person's stories is never silent.
     private static func repairArchive(_ store: ExtractionStore) -> String? {
-        do {
-            let report = try ArchiveRepair.run(store)
-            // Counts only: a title or a name never goes to the log.
-            if report.notice != nil || report.removedChapters > 0 {
-                print("[repair] joined \(report.joinedStories.count) story titles, \(report.joinedEntities.count) names and "
-                      + "\(report.joinedCollections.count) collection titles; removed \(report.removedChapters) empty chapters")
-            }
-            return report.notice
-        } catch {
-            print("[repair] failed: \(error)")
-            return nil
+        let report = ArchiveRepair.run(store)
+        // Counts only: a title or a name never goes to the log.
+        if report.notice != nil || report.removedChapters > 0 {
+            print("[repair] joined \(report.joinedStories.count) story titles, \(report.joinedEntities.count) names and "
+                  + "\(report.joinedCollections.count) collection titles; removed \(report.removedChapters) empty chapters")
         }
+        for failure in report.failures { print("[repair] \(failure.step.rawValue) failed: \(failure.message)") }
+        return report.notice
     }
 
     /// Fresh temp database, scripted voice and extraction, in-memory secrets with a fake key.
