@@ -77,6 +77,30 @@ private struct Env {
     #expect(merged.hiddenFromTimeline && merged.excludedFromAI, "hidden or excluded on either side stays so")
 }
 
+@Test func mergeNeverDropsADetailLineOrDates() throws {
+    let env = try Env()
+    let first = Entity(type: .place, title: "Ohio", detailText: "where we grew up", createdAt: Date(timeIntervalSince1970: 1_000))
+    let second = Entity(type: .place, title: "Ohio.", detailText: "flat and green", createdAt: Date(timeIntervalSince1970: 2_000))
+    let third = Entity(type: .thing, title: "The car", createdAt: Date(timeIntervalSince1970: 3_000), range: .stated(year: 1998))
+    let fourth = Entity(type: .thing, title: "the car", createdAt: Date(timeIntervalSince1970: 4_000), range: .stated(year: 2004))
+    let fifth = Entity(type: .place, title: "Andover", createdAt: Date(timeIntervalSince1970: 5_000))
+    let sixth = Entity(type: .place, title: "andover", detailText: "the old mill town", createdAt: Date(timeIntervalSince1970: 6_000), range: .stated(year: 2001))
+    var write = EntityRepository.Write()
+    write.entities = [first, second, third, fourth, fifth, sixth]
+    try env.store.entities.apply(write)
+
+    #expect(try !env.store.entities.merge(second.id, into: first.id), "two different detail lines: neither is dropped")
+    #expect(try !env.store.entities.merge(fourth.id, into: third.id), "two different dates: neither is dropped")
+    #expect(try env.store.entities.entity(id: second.id)?.detailText == "flat and green")
+    #expect(try env.store.entities.merge(sixth.id, into: fifth.id), "one side has none: it takes the other's")
+    let andover = try #require(try env.store.entities.entity(id: fifth.id))
+    #expect(andover.detailText == "the old mill town" && andover.range == .stated(year: 2001) && andover.title == "Andover")
+
+    let report = try ArchiveRepair.run(env.store)
+    #expect(report.joinedEntities.isEmpty, "the repair leaves the pairs it cannot join without loss")
+    #expect(try env.store.entities.entities(type: .place).count == 3 && (try env.store.entities.entities(type: .thing)).count == 2)
+}
+
 @Test func mergeRefusesTheSameAMissingADifferentTypeAndPeople() throws {
     let env = try Env()
     let (ohio, copy) = try env.twins(.place, "Ohio", "Ohio.")

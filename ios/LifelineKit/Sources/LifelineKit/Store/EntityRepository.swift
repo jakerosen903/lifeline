@@ -66,8 +66,9 @@ public struct EntityRepository: Sendable {
     /// What moves: links to memories (a memory linked to both keeps one link of each relation),
     /// first tellings (after the target's own), tags, curiosity items and a session's subject.
     /// `target` keeps its title, its dates and its one-line detail, and takes `source`'s where it
-    /// has none. Hidden or excluded on either side stays hidden or excluded: a merge never
-    /// reveals what the person put away.
+    /// has none. When both have a detail line, or both have dates, and they differ, nothing is
+    /// joined: a merge never drops what the person said. Hidden or excluded on either side stays
+    /// hidden or excluded: a merge never reveals what the person put away.
     @discardableResult
     public func merge(_ source: EntityID, into target: EntityID) throws -> Bool {
         try db.writer.write { try Self.merge(source, into: target, in: $0) }
@@ -77,6 +78,10 @@ public struct EntityRepository: Sendable {
         guard source != target, let leaving = try Entity.fetchOne(db, key: source.rawValue),
               var staying = try Entity.fetchOne(db, key: target.rawValue),
               leaving.type == staying.type, leaving.type != .person else { return false }
+        // Each entity holds one detail line and one set of dates. When both sides have one and they
+        // differ, joining would drop the person's words or dates, so the pair is left as it is.
+        if let mine = staying.detailText, let theirs = leaving.detailText, mine != theirs { return false }
+        if staying.range.isPlaced, leaving.range.isPlaced, staying.range != leaving.range { return false }
         // Photos (S4) links a photo to an entity. Its rules for covers live with that table, so a
         // pair that has photos on the side that would go is left for that code to join.
         if try db.tableExists("photo_link"),

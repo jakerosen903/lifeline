@@ -17,6 +17,19 @@ One entry per decision. Newest first. Status is Decided, Open, or Superseded.
 
 **Consequences.** `chapter.range` holds stated years only. The chapters in the owner's archive show under "Not placed in time yet" until the owner says when. The chapter rules in the audit data fixes spec move to S6. S6 is specified ahead of the ship order and of the two-week watch.
 
+## 2026-11-17 · Extractor v7's rules in code: rulings made while building A2a
+
+**Status:** Decided by the builder, for the owner to overrule. Source: PR #25 and `docs/plans/2026-11-16-extractor-v7.md`, "Rulings made while building A2a".
+
+- **No stored match-key column and no migration.** Lookups read the rows of one type and compare keys in Swift. The tables are small.
+- **Places, things and collections with one match key are joined once at launch, without a question,** as stories are (owner's call 1 of 2026-11-16). People and ideas are never joined by name. A pair is left alone when joining would drop a detail line or dates that differ, or when the side that would go has photos.
+- **The owner's own name is never a person on the extraction path.** `findPerson` never returns the owner. A name the person typed or chose themselves still reaches the owner, so typing your own name never makes a second person.
+- **A bad `about_ref` is cleared, not retried.** A retry costs a model call for a field that can safely be empty.
+- **A place with no name leaves only the quote.** It is unnamed when it starts with "a", "an", "some" or "somewhere" and no later word is capitalised, so "A Coruña" is a name.
+- **A group phrase is recognised by its wording in A2a.** The `group` mention kind waits for the v7 prompt (A2b).
+
+**Open for the owner.** You draws the owner's life strip from moments linked to the owner as a person. New recordings no longer add that link. The strip should read every dated moment; that change is not made yet.
+
 ## 2026-11-16 · A feeling has no title, and "our parents" is not one person
 
 **Status:** Decided by the owner. Source: `docs/specs/2026-11-16-audit-data-fixes.md`, "A2: titles", "A2: groups of people" and "A2: the Change sheet for what is not a moment".
