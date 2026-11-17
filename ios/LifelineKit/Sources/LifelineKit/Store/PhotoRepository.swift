@@ -161,6 +161,15 @@ public struct PhotoRepository: Sendable {
         return row
     }
 
+    /// A memory kept from, or merged with a telling of, a photo's story holds that photo (spec: a story about a photo).
+    /// The segment's session names the photo; none named, nothing happens. Linking twice changes nothing.
+    static func linkSubjectPhoto(ofSegment segment: SegmentID, to memory: MemoryID, in db: Database) throws {
+        guard let photo = try String.fetchOne(db, sql: """
+            select session.subject_photo_id from segment join session on session.id = segment.session_id where segment.id = ?
+            """, arguments: [segment.rawValue]) else { return }
+        try link(PhotoID(rawValue: photo), to: .memory(memory), in: db)
+    }
+
     static func link(_ photo: PhotoID, to subject: PhotoSubject, in db: Database) throws {
         let (column, value) = subject.key
         let linked = try Int.fetchOne(db, sql: "select count(*) from photo_link where \(column) = ? and photo_id = ?",

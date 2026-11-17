@@ -32,6 +32,8 @@ public struct MemoryRepository: Sendable {
             for anchor in anchors { try anchor.insert(db) }
             if let candidate {
                 try db.execute(sql: "update candidate set status = ? where id = ?", arguments: [CandidateStatus.accepted.rawValue, candidate.rawValue])
+                // Kept from a card, so told: a floating memory (no card) is not.
+                try PhotoRepository.linkSubjectPhoto(ofSegment: spans[0].segmentID, to: memory.id, in: db)
             }
             try Self.accept(continuations, in: db)
             if let story {
@@ -319,6 +321,7 @@ public struct MemoryRepository: Sendable {
             for anchor in anchors { try anchor.insert(db) }
             try db.execute(sql: "update candidate set status = ? where id = ?", arguments: [CandidateStatus.accepted.rawValue, candidate.rawValue])
             try Self.accept(continuationCards, in: db)
+            try PhotoRepository.linkSubjectPhoto(ofSegment: span.segmentID, to: span.memoryID, in: db)
     }
 
     /// A group (M5): every source folds into the target, oldest first as given, then the card

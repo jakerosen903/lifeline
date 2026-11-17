@@ -295,3 +295,119 @@ extension Fixture {
     try f.photoSession(pointingAt: a)
     #expect(try f.photos.hasOtherHome(a.id, than: first) == true)
 }
+
+// MARK: - A kept memory gets the session's photo
+
+private extension Fixture {
+    /// Makes the fixture's own session a story about a new photo.
+    func makeSessionAPhotoSession(_ name: String = "story") throws -> Photo {
+        let subject = photo(name)
+        try photos.insert(subject)
+        var row = try #require(try store.sessions.fetch(sessionID))
+        row.subjectPhotoID = subject.id; row.startedFrom = .photo
+        try store.sessions.update(row)
+        return subject
+    }
+
+    /// A pending memory card over the first two words of segment `segment`.
+    func card(segment: Int = 0, ordinal: Int = 0, title: String = "The tree house") throws -> Candidate {
+        let out = MemoryOut(ref: "m1", title: title, quote: "the tree", segmentSpan: WordSpan(startWord: 0, endWord: 1),
+                            peopleRefs: [], placeText: nil, anchors: [], collectionHint: nil, chapterHint: nil, confidence: 0.9)
+        // Ordinal 7: the fixture's own memories hold ordinal 0 on their segments.
+        let card = StoreFixtures.candidate(segments[segment].id, ordinal: 7 + ordinal, payload: try CandidatePayload.encode(out))
+        try store.candidates.insert(card)
+        return card
+    }
+
+    var actions: CandidateActions { CandidateActions(store: store) }
+
+    func links(of memory: MemoryID) throws -> [String] {
+        try photos.photos(of: .memory(memory)).map { "\($0.id.rawValue) \($0.role.rawValue)" }
+    }
+}
+
+@Test func keepingAMemoryFromAPhotoSessionLinksThePhoto() throws {
+    let f = try Fixture(), subject = try f.makeSessionAPhotoSession()
+    let kept = try f.actions.acceptMemory(try f.card()).memory
+    #expect(try f.photos.photos(of: .memory(kept.id)).map(\.photo.id) == [subject.id])
+}
+
+@Test func theFirstPhotoOnAMemoryIsItsCover() throws {
+    let f = try Fixture(), subject = try f.makeSessionAPhotoSession()
+    let kept = try f.actions.acceptMemory(try f.card()).memory
+    #expect(try f.photos.photos(of: .memory(kept.id)).map(\.role) == [.cover])
+    #expect(try f.photos.photos(of: .memory(kept.id)).first?.photo.id == subject.id)
+}
+
+@Test func aMemoryThatHasACoverKeepsIt() throws {
+    let f = try Fixture(), subject = try f.makeSessionAPhotoSession()
+    let target = try f.memory("The old house", segment: 1), cover = photo("cover", at: 1)
+    try f.photos.insert(cover, linkingTo: .memory(target.id))
+    _ = try f.actions.mergeCandidate(try f.card(), into: target.id)
+    #expect(try f.links(of: target.id) == ["\(cover.id.rawValue) cover", "\(subject.id.rawValue) attached"])
+}
+
+@Test func mergingATellingFromAPhotoSessionLinksThePhotoToTheTarget() throws {
+    let f = try Fixture(), subject = try f.makeSessionAPhotoSession()
+    let target = try f.memory("The old house", segment: 1)
+    _ = try f.actions.mergeCandidate(try f.card(), into: target.id)
+    #expect(try f.links(of: target.id) == ["\(subject.id.rawValue) cover"])
+}
+
+@Test func aGroupMergeLinksThePhotoOnce() throws {
+    let f = try Fixture(), subject = try f.makeSessionAPhotoSession()
+    let first = try f.memory("The old house", segment: 1), second = try f.memory("The old house again", segment: 0)
+    let result = try f.actions.mergeGroup(try f.card(), into: [first.id, second.id])
+    #expect(try f.links(of: result.receipt.target) == ["\(subject.id.rawValue) cover"])
+    let count = try f.db.writer.read { try Int.fetchOne($0, sql: "select count(*) from photo_link where photo_id = ?", arguments: [subject.id.rawValue]) }
+    #expect(count == 1)
+}
+
+@Test func aSessionWithNoPhotoLinksNothing() throws {
+    let f = try Fixture()
+    let kept = try f.actions.acceptMemory(try f.card()).memory
+    #expect(try f.links(of: kept.id).isEmpty)
+    let target = try f.memory("The old house", segment: 1)
+    _ = try f.actions.mergeCandidate(try f.card(ordinal: 1), into: target.id)
+    #expect(try f.links(of: target.id).isEmpty)
+}
+
+@Test func aFloatingMemoryGetsNoPhoto() throws {
+    let f = try Fixture()
+    _ = try f.makeSessionAPhotoSession()
+    let span = try #require(try f.store.memories.spans(of: try f.memory("The old house", segment: 1).id).first)
+    let floating = try f.store.memories.insertFloating(title: "graduation", segment: span.segmentID, startMs: span.startMs, endMs: span.endMs)
+    #expect(try f.links(of: floating.id).isEmpty, "the person did not tell it")
+}
+
+@Test func aRemovedPhotoStaysRemovedOnALaterRead() throws {
+    let f = try Fixture(), subject = try f.makeSessionAPhotoSession()
+    let kept = try f.actions.acceptMemory(try f.card()).memory
+    _ = try f.photos.unlink(subject.id, from: .memory(kept.id))
+    #expect(try f.store.memories.memories(in: f.sessionID).map(\.id) == [kept.id])
+    #expect(try f.links(of: kept.id).isEmpty, "reading memories does not link the session's photo again")
+}
+
+@Test func aFailedKeepLinksNothing() throws {
+    let f = try Fixture()
+    _ = try f.makeSessionAPhotoSession()
+    let card = try f.card()
+    let memory = Memory(id: .init(), title: "The tree house", summaryQuote: "the tree", visibility: .timeline, chapterID: nil,
+                        createdFromCandidateID: card.id, createdAt: .now, hiddenFromTimeline: false, kind: .event)
+    let good = MemorySpan(memoryID: memory.id, segmentID: f.segments[0].id, startMs: 0, endMs: 100, order: 0)
+    let bad = MemorySpan(memoryID: memory.id, segmentID: SegmentID(rawValue: "missing"), startMs: 0, endMs: 1, order: 1, continuesOrder: 0)
+    #expect(throws: (any Error).self) {
+        try f.store.memories.insert(memory, spans: [good, bad], people: [], places: [], anchors: [], acceptingCandidate: card.id)
+    }
+    #expect(try f.store.memories.fetch(memory.id) == nil)
+    #expect(try f.db.writer.read { try Int.fetchOne($0, sql: "select count(*) from photo_link") } == 0)
+}
+
+@Test func separatingATellingLeavesThePhotoOnTheOriginal() throws {
+    let f = try Fixture(), subject = try f.makeSessionAPhotoSession()
+    let target = try f.memory("The old house", segment: 1)
+    _ = try f.actions.mergeCandidate(try f.card(), into: target.id)
+    let fresh = try f.actions.separateTelling(target.id, order: 1)
+    #expect(try f.links(of: fresh.id).isEmpty)
+    #expect(try f.links(of: target.id) == ["\(subject.id.rawValue) cover"])
+}
