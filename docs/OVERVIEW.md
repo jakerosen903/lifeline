@@ -302,9 +302,9 @@ A tap on a photo copies it with the rules of “Photos” and closes the sheet. 
 
 A photo has three homes: a page, a memory and a session. A photo that a session points at stays when its last page link goes. When nothing holds the photo, the row and the file go together.
 
-The photo links to a memory when the person keeps the memory, or when a telling of the session is merged into a memory. An undone merge takes back the link that the merge added. The landing and the session’s page show a photo card. The card lists the memories that hold the photo, each with “Remove”. It offers “Add to {title}’s page” for each person, place or thing the story named, and “Use this date” when the photo has a date that fits. Each offer is a tap, has no “No” button and stores nothing when ignored. “Use this date” changes the memory and its chapter in one write, then the resolver runs. A date from a photo is settled. The memory page marks it “from a photo”. Where the app sums dates up, such as the entity page span and the life strip, it reads as a guess.
+The photo links to a memory when the person keeps the memory, or when a telling of the session is merged into a memory. An undone merge takes back the link that the merge added, and only that link. The landing and the session’s page show a photo card. The card lists each memory with a telling in the session that holds the photo, also a memory first told in another session. Each has “Remove”. It offers “Add to {title}’s page” for each person, place or thing the story named, and “Use this date” when the photo has a date that fits. Each offer is a tap, has no “No” button and stores nothing when ignored. “Use this date” changes the memory and its chapter in one write, then the resolver runs. A date from a photo is settled. The memory page marks it “from a photo” and shows no “you said” line, because the person did not say it. Where the app sums dates up, such as the entity page span and the life strip, it reads as a guess.
 
-The landing’s delete dialog adds “Its photo goes too.” A delete of a session removes its photo at once when nothing else holds it.
+On the session’s page, “Remove the photo from this story” asks first. The viewer offers “Tell its story” only where a session can start, so not inside a landing’s review. The landing’s delete dialog adds “Its photo goes too.” A delete of a session removes its photo at once when nothing else holds it.
 
 ### 10. The spoken interviewer (M8, in review)
 
@@ -323,7 +323,7 @@ The voice is on-device (`AVSpeechSynthesizer`), through the same audio engine as
 - **Replay (M9).** “Listen at this level”: a playlist in the person’s voice for a story, a chapter or a life, with narration added only later and only as the person approves it.
 - **Navigation by level.** Life, chapter, story and moment as one zoomable view in the manner of Photos, with a year scrubber on the edge.
 - **Protect, when others use the app.** A privacy screen with Share and a Local-only session chosen before recording; span-level deletion that keeps playback offsets; re-running a new extractor version from inside the app.
-- **Phase 2: props.** Favorite photos as prompts and anchors (PhotoKit gives dates and places; people are tagged by hand; a face model only after an evaluation against those tags), then music from an era.
+- **Phase 2: props.** Phase 1.5 built one Favorite photo as a prompt (see “A photo starts a story”). Phase 2 adds photos as anchors: clusters of photos, the places PhotoKit gives, people tagged by hand, and a face model only after an evaluation against those tags. Then music from an era.
 - **Phase 3: family.** Per-memory sharing, several perspectives on one event, questions for each other, and a read-only web viewer.
 
 > **Next.**
