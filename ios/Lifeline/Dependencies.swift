@@ -48,6 +48,8 @@ struct Dependencies {
     let photoImages: PhotoImageCache
     /// Under `-uiTesting-pickPhoto <path>`: "Add a photo" adds this file without the picker (decision 22).
     var pickPhotoPath: String? = nil
+    /// The photo library for "Tell a story about a photo": PhotoKit in the app, generated photos under `-uiTesting`.
+    var photoPickSource: any PhotoPickSource = LibraryPhotoPickSource()
     /// Under `-uiTesting-restoreFrom <path>`: Restore stages this file without the picker.
     var restoreFromPath: String? = nil
     /// Under `-uiTesting`: Export keeps the file in Documents and shows no share sheet, which a UI test cannot drive.
@@ -271,6 +273,8 @@ struct Dependencies {
         if let i = args.firstIndex(of: "-uiTesting-restoreFrom"), i + 1 < args.count { deps.restoreFromPath = args[i + 1] }
         deps.exportWithoutShareSheet = true
         if let i = args.firstIndex(of: "-uiTesting-pickPhoto"), i + 1 < args.count { deps.pickPhotoPath = args[i + 1] }
+        let photoAccess = args.firstIndex(of: "-uiTesting-photoAccess").flatMap { $0 + 1 < args.count ? args[$0 + 1] : nil }
+        deps.photoPickSource = try ScriptedPhotoPickSource(mode: photoAccess, folder: root.appending(path: "scripted-photos"))
         if args.contains("-uiTesting-seed") { try UITestSeed.write(sessions: deps.sessions, store: store) }
         if args.contains("-uiTesting-seedPerson") { try UITestSeed.writePersonOnly(store: store) }
         if args.contains("-uiTesting-seedPeople") { try UITestSeed.writePeople(store: store, profile: deps.profile, sessions: deps.sessions) }

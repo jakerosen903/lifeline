@@ -59,8 +59,14 @@ final class HomeViewModel {
     /// The subject of the session that just ended, for "Tell another". Nil after a kill, where a resumed
     /// landing has no known subject.
     private var lastSubject: SessionSubject?
-    /// The session that just ended was about a photo. Task 5 reads it: "Tell another" then asks for a new photo.
+    /// The session that just ended was about a photo: "Tell another" then asks for a new photo (plan decision 11).
     private(set) var lastWasPhoto = false
+    /// "Tell a story about a photo" while its sheet is up.
+    var photoStart: PhotoStoryStartViewModel?
+    /// The photo the sheet stored; its session starts once the sheet has closed.
+    private var chosenPhoto: Photo?
+    /// "Tell another" after a photo session: the entry opens again once the landing's cover has closed.
+    private var opensPhotoStartWhenCoverCloses = false
     /// Called after a session ends, so the timeline can refresh.
     var onSessionEnded: (() -> Void)?
     var activeSession: SessionViewModel? {
@@ -123,6 +129,36 @@ final class HomeViewModel {
         await vm.start()
     }
 
+    /// "Tell a story about a photo": the sheet that explains, asks, and shows the grid or the picker. A tap while a
+    /// session is starting or recording does nothing, as for every start.
+    func tellAboutAPhoto() {
+        guard !isStarting, activeSession == nil, photoStart == nil else { return }
+        startError = nil
+        photoStart = PhotoStoryStartViewModel(source: deps.photoPickSource, library: deps.photos) { [weak self] start, photo in
+            // A photo that finishes storing after its sheet was cancelled starts nothing; the next sweep removes it.
+            guard let self, self.photoStart === start else { return }
+            self.chosenPhoto = photo
+            self.photoStart = nil
+        }
+    }
+
+    /// The sheet has gone: now the session can present its cover. The photo was stored with no link while the sheet
+    /// was up, and nothing can sweep it before the session row points at it: the sweep runs at launch and before a
+    /// copy in Settings, a sheet that cannot be open under this one, and from here to the row there is no tap but the
+    /// microphone prompt. If the microphone is refused, no row is made and the next sweep rightly removes the photo.
+    func photoStartClosed() {
+        guard let photo = chosenPhoto else { return }
+        chosenPhoto = nil
+        Task { await startPhotoSession(photo) }
+    }
+
+    /// The session or landing cover has gone. Swapping the session for its landing also passes here, with nothing pending.
+    func coverClosed() {
+        guard opensPhotoStartWhenCoverCloses else { return }
+        opensPhotoStartWhenCoverCloses = false
+        tellAboutAPhoto()
+    }
+
     /// A start from the bar: about the page on screen.
     func startSession(kind: SessionKind = .quick) async {
         await startSession(kind: kind, subject: context)
@@ -178,11 +214,13 @@ final class HomeViewModel {
 
     /// "Another" is about the same subject as the session that just ended, and starts from the same page
     /// (a tab-started session stays on the tab). The page under the cover may already have left, so the
-    /// subject comes from `lastSubject`, not `context`.
+    /// subject comes from `lastSubject`, not `context`. After a photo session it asks for a new photo, once the
+    /// cover has gone, so the sheet never presents over a leaving cover.
     func landingClosed(tellAnother: Bool) {
+        opensPhotoStartWhenCoverCloses = tellAnother && lastWasPhoto
         presented = nil
         refresh()
-        if tellAnother { Task { await startSession(kind: .quick, subject: lastSubject) } }
+        if tellAnother, !lastWasPhoto { Task { await startSession(kind: .quick, subject: lastSubject) } }
     }
 
     /// Duration from the last segment's end; falls back to the wall clock for a session with no segments.
