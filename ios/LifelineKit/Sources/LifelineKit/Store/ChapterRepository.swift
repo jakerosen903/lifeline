@@ -64,11 +64,12 @@ public struct ChapterRepository: Sendable {
         try db.writer.read { try Collection.order(Column("title").collating(.nocase)).fetchAll($0) }
     }
 
-    /// Reuses a collection with the same title, ignoring case and outer whitespace.
+    /// Reuses a collection whose title has the same match key ("Family trips." finds "Family trips").
     public func insertCollection(titled title: String) throws -> Collection {
         let clean = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        let key = MatchKey.of(clean)
         return try db.writer.write { db in
-            if let existing = try Collection.fetchOne(db, sql: "select * from collection where lower(trim(title)) = ?", arguments: [clean.lowercased()]) {
+            if !key.isEmpty, let existing = try Collection.fetchAll(db, sql: "select * from collection order by rowid").first(where: { MatchKey.of($0.title) == key }) {
                 return existing
             }
             let collection = Collection(id: .init(), title: clean)

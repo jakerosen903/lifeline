@@ -115,7 +115,10 @@ public struct CandidateActions: Sendable {
 
         // A session hidden from the timeline hides what is kept from it later, too.
         let hidden = try store.sessions.fetchSegment(candidate.segmentID).flatMap { try store.sessions.fetch($0.sessionID) }?.hiddenFromTimeline ?? false
-        let memory = Memory(id: .init(), title: out.title, summaryQuote: out.quote, visibility: .timeline, chapterID: nil,
+        // A fact, a feeling or a goal has no event to name: the start of its quote stands for it (v7).
+        let kind = out.kind ?? .event
+        let quoteTitle = kind.isMoment ? "" : MemoryLabel.storedTitle(quote: out.quote)
+        let memory = Memory(id: .init(), title: quoteTitle.isEmpty ? out.title : quoteTitle, summaryQuote: out.quote, visibility: .timeline, chapterID: nil,
                             createdFromCandidateID: candidate.id, createdAt: .now, hiddenFromTimeline: hidden,
                             kind: out.kind ?? .event)
         var spans = [MemorySpan(memoryID: memory.id, segmentID: candidate.segmentID,
@@ -200,7 +203,8 @@ public struct CandidateActions: Sendable {
             }
         }
         // Places, things and ideas the card names (its chips) link on Keep without a card of their own (M7).
-        for ref in out.allEntityRefs where ref.kind != .person {
+        // A place with no name ("a restaurant") stays in the quote and makes no place (audit F13).
+        for ref in out.allEntityRefs where ref.kind != .person && !(ref.kind == .place && GenericPhrase.isGeneric(ref.text)) {
             let entity = try entity(for: ref, plan: &e.entityWrite)
             if ref.kind == .place {
                 if !e.places.contains(where: { $0.placeID.rawValue == entity.id.rawValue }) {
@@ -249,7 +253,8 @@ public struct CandidateActions: Sendable {
         if let known = try store.entities.entity(id: EntityID(rawValue: ref)) { return known.id }
         guard let segment = currentSegment,
               let row = try store.candidates.candidates(for: segment).first(where: { ($0.kind == .entity || $0.kind == .place) && CandidatePayload.mention($0)?.ref == ref }),
-              let mention = CandidatePayload.mention(row), mention.kind != .person else { return nil }
+              let mention = CandidatePayload.mention(row), mention.kind != .person,
+              !(mention.kind == .place && GenericPhrase.isGeneric(mention.text)) else { return nil }
         return try proposeEntity(from: mention, candidate: row, plan: &plan).id
     }
 
@@ -425,7 +430,8 @@ public struct CandidateActions: Sendable {
         case .collection:
             result = .collection(try addToCollection(memory.id, titled: out.phrase))
         case .chapter:
-            if let existing = try store.chapters.chapters().first(where: { Self.same($0.title ?? "", out.phrase) }) {
+            let key = MatchKey.of(out.phrase)
+            if !key.isEmpty, let existing = try store.chapters.chapters().first(where: { MatchKey.of($0.title ?? "") == key }) {
                 try assign(memory: memory.id, toChapter: existing.id)
                 result = .chapter(try store.chapters.chapter(id: existing.id) ?? existing)
             } else {

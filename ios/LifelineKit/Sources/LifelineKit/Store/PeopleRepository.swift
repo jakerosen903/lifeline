@@ -43,6 +43,7 @@ public struct PeopleRepository: Sendable {
 
     /// The person whose display name or any alias equals `text`, ignoring case and outer
     /// whitespace. A phrase with a role and a name ("my mom, Marcel") matches on either part.
+    /// Never the owner: the owner is the speaker, not someone a story mentions (audit F10).
     public func findPerson(matching text: String) throws -> Person? {
         for part in Self.parts(of: text) {
             if let person = try findPerson(exactly: part) { return person }
@@ -56,7 +57,7 @@ public struct PeopleRepository: Sendable {
         return try db.writer.read { db in
             try Person.fetchOne(db, sql: Person.selectSQL + """
                 left join alias on alias.person_id = person.id
-                where lower(trim(entity.title)) = ? or lower(trim(alias.text)) = ?
+                where person.is_owner = 0 and (lower(trim(entity.title)) = ? or lower(trim(alias.text)) = ?)
                 limit 1
                 """, arguments: [needle, needle])
         }
@@ -101,6 +102,23 @@ public struct PeopleRepository: Sendable {
             try Self.insertAlias(person.displayName, person.id, db)
         }
         return person
+    }
+
+    /// The owner's typed name and every other name the app holds for them. Empty with no owner.
+    public func ownerNames() throws -> OwnerNames {
+        try db.writer.read { db in
+            guard let owner = try Person.fetchOne(db, sql: Person.selectSQL + "where person.is_owner = 1") else { return OwnerNames(names: []) }
+            let aliases = try String.fetchAll(db, sql: "select text from alias where person_id = ?", arguments: [owner.id.rawValue])
+            return OwnerNames(names: [owner.displayName] + aliases)
+        }
+    }
+
+    /// "That's me": the name is one of the owner's from now on. Does nothing with no owner.
+    public func addOwnerAlias(_ text: String) throws {
+        try db.writer.write { db in
+            guard let owner = try Person.fetchOne(db, sql: Person.selectSQL + "where person.is_owner = 1") else { return }
+            try Self.insertAlias(text, owner.id, db)
+        }
     }
 
     /// No-op when the person already has this alias (case-insensitive).

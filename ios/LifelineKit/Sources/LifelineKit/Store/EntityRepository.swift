@@ -2,7 +2,7 @@ import Foundation
 import GRDB
 
 /// People, places, things and ideas, and the one table that links them to memories (M7).
-/// Titles match ignoring case and outer whitespace, never spelling.
+/// Titles match by `MatchKey`: case, outer space and sentence punctuation at the ends are ignored, never spelling.
 public struct EntityRepository: Sendable {
     public enum Error: Swift.Error, Equatable {
         case emptyTitle
@@ -46,11 +46,14 @@ public struct EntityRepository: Sendable {
         try db.writer.read { try Self.find(type: type, title: title, in: $0) }
     }
 
+    /// The entity of this type that the title names: the one made first among those with the
+    /// same match key, so "Ohio." finds "Ohio". The rows of one type are read and compared here;
+    /// the table is small, and SQL cannot compute the key. An empty key finds nothing.
     static func find(type: EntityType, title: String, in db: Database) throws -> Entity? {
-        let needle = PeopleRepository.normalize(title)
-        guard !needle.isEmpty else { return nil }
-        return try Entity.fetchOne(db, sql: "select * from entity where type = ? and lower(trim(title)) = ? order by created_at limit 1",
-                                   arguments: [type.rawValue, needle])
+        let key = MatchKey.of(title)
+        guard !key.isEmpty else { return nil }
+        return try Entity.fetchAll(db, sql: "select * from entity where type = ? order by created_at, rowid", arguments: [type.rawValue])
+            .first { MatchKey.of($0.title) == key }
     }
 
     public func rename(_ id: EntityID, to title: String) throws {
@@ -95,7 +98,7 @@ public struct EntityRepository: Sendable {
         /// default title, which are two ideas.
         func planned(_ type: EntityType, _ title: String) -> Entity? {
             if type == .idea, IdeaTitle.isDefault(title) { return nil }
-            return entities.first { $0.type == type && PeopleRepository.normalize($0.title) == PeopleRepository.normalize(title) }
+            return entities.first { $0.type == type && MatchKey.of($0.title) == MatchKey.of(title) }
         }
 
         /// The union with another plan; an entity both planned keeps this plan's id.
