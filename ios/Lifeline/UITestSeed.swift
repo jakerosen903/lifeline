@@ -153,6 +153,22 @@ enum UITestSeed {
         return seed
     }
 
+    /// Under `-uiTesting-seedDuplicates`: what the launch repair is for. Three stories whose titles differ only
+    /// in case and a full stop, with one moment each, and one chapter with no title and no memory. It saves a
+    /// profile, so first open is done.
+    static func writeDuplicates(store: ExtractionStore, profile: ProfileRepository, sessions: SessionRepository) throws {
+        try profile.save(Profile(displayName: "Jordan", birthDate: nil, birthPlaceText: nil, freeText: nil, updatedAt: .now))
+        let session = Session(id: .init(), startedAt: .now, endedAt: .now, audioPath: "seed.m4a", stageLog: "[]", landingChoiceMade: true)
+        try sessions.insert(session)
+        var seed = SeedSession(session: session, store: store, sessions: sessions)
+        let copies = [("The road trip", "Leaving before dawn"), ("the road trip", "The flat tyre in Nebraska"), ("The road trip.", "The motel with the neon cactus")]
+        for (story, moment) in copies {
+            let memory = try seed.keep(moment, kind: .event, year: 2009, links: [])
+            try store.stories.add(memory: memory, to: try store.stories.insert(title: story, chapterID: nil).id)
+        }
+        _ = try store.chapters.insertChapter(title: nil)
+    }
+
     /// Under `-uiTesting-seedSpine`: Jordan, born 1990, with six dated moments on the Timeline's spine and one undated.
     /// Gaps between them are 1, 1, 2, 3 and 2 years, so exactly one gap names itself ("3 years"). "The tree house" is
     /// inferred (1999) and sits in the chapter "Maple Street"; "The science fair" sits in a chapter with no title.
