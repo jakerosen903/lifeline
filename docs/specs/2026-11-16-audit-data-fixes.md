@@ -105,7 +105,7 @@ A1 keeps one chapter rule, because it is a repair and needs no new screen:
 
 1. One pure function gives the match key of a name: lower case, edge spaces removed, sentence punctuation and quotation marks at the ends removed, inner runs of spaces made one space. A symbol at the end stays, because it can be part of a name: "C++" and "C#" are two names. It replaces `PeopleRepository.normalize` for entity titles, story titles, chapter titles and collection titles.
 2. Stored titles do not change. The person's spelling shows as they said it. Only the comparison changes.
-3. Lookups by title must compare match keys. The store keeps the key in a column so that SQL can compare it (a migration; see "Data").
+3. Lookups by title must compare match keys.
 4. Existing entities of the same type with the same match key must become one entity. See owner's call 1.
 
 Edge cases:
@@ -263,9 +263,9 @@ One pure function compares a kept memory with the v7 output for its segment.
 
 ## Data
 
-- A2 adds a match-key column to `entity`, `story`, `chapter` and `collection`, filled for existing rows in the same migration.
+- A2 adds no column and no migration. The tables are small, so a lookup compares match keys in Swift (`docs/plans/2026-11-16-extractor-v7.md`, decision 1). An earlier draft of this spec asked for a stored match-key column.
 - A3 adds the suggestion table and a marker for a segment whose diff is done.
-- S4 (Photos) plans migration v13. A2 takes the next free number after whatever is on `main` when it merges, and A3 the one after. The first PR to merge keeps its number (`docs/plans/2026-11-15-sections.md`, "Rules for the order").
+- S4 (Photos) plans migration v13. A3 takes the next free number after whatever is on `main` when it merges. The first PR to merge keeps its number (`docs/plans/2026-11-15-sections.md`, "Rules for the order").
 - `BackupManifest` does not change. A backup made after A3 carries open suggestions inside the database file.
 - The server stays absent. Nothing here stores user content outside the device.
 

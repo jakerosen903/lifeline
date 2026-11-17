@@ -43,6 +43,7 @@ public struct PeopleRepository: Sendable {
 
     /// The person whose display name or any alias equals `text`, ignoring case and outer
     /// whitespace. A phrase with a role and a name ("my mom, Marcel") matches on either part.
+    /// Never the owner: the owner is the speaker, not someone a story mentions (audit F10).
     public func findPerson(matching text: String) throws -> Person? {
         for part in Self.parts(of: text) {
             if let person = try findPerson(exactly: part) { return person }
@@ -56,7 +57,7 @@ public struct PeopleRepository: Sendable {
         return try db.writer.read { db in
             try Person.fetchOne(db, sql: Person.selectSQL + """
                 left join alias on alias.person_id = person.id
-                where lower(trim(entity.title)) = ? or lower(trim(alias.text)) = ?
+                where person.is_owner = 0 and (lower(trim(entity.title)) = ? or lower(trim(alias.text)) = ?)
                 limit 1
                 """, arguments: [needle, needle])
         }
@@ -103,6 +104,33 @@ public struct PeopleRepository: Sendable {
         return person
     }
 
+    /// For a name the person typed or chose themselves: the person it names, and the owner when
+    /// it is one of the owner's names. A name the extractor found goes through `findPerson`,
+    /// which never returns the owner. Without this, typing your own name would make a second
+    /// person with it.
+    public func findPersonOrOwner(matching text: String) throws -> Person? {
+        if let person = try findPerson(matching: text) { return person }
+        guard try ownerNames().isOwner(text) else { return nil }
+        return try db.writer.read { try Person.fetchOne($0, sql: Person.selectSQL + "where person.is_owner = 1") }
+    }
+
+    /// The owner's typed name and every other name the app holds for them. Empty with no owner.
+    public func ownerNames() throws -> OwnerNames {
+        try db.writer.read { db in
+            guard let owner = try Person.fetchOne(db, sql: Person.selectSQL + "where person.is_owner = 1") else { return OwnerNames(names: []) }
+            let aliases = try String.fetchAll(db, sql: "select text from alias where person_id = ?", arguments: [owner.id.rawValue])
+            return OwnerNames(names: [owner.displayName] + aliases)
+        }
+    }
+
+    /// "That's me": the name is one of the owner's from now on. Does nothing with no owner.
+    public func addOwnerAlias(_ text: String) throws {
+        try db.writer.write { db in
+            guard let owner = try Person.fetchOne(db, sql: Person.selectSQL + "where person.is_owner = 1") else { return }
+            try Self.insertAlias(text, owner.id, db)
+        }
+    }
+
     /// No-op when the person already has this alias (case-insensitive).
     public func addAlias(_ text: String, to person: PersonID) throws {
         try db.writer.write { db in try Self.insertAlias(text, person, db) }
@@ -134,14 +162,16 @@ public struct PeopleRepository: Sendable {
     }
 
     /// Marks the mention resolved to `person` and records its text, and its relation phrase, as aliases.
+    /// A group phrase is not recorded: who "our parents" means depends on the story.
     public func resolve(_ id: MentionID, to person: PersonID) throws {
         try db.writer.write { db in
             guard var mention = try Mention.fetchOne(db, key: id.rawValue) else { return }
             mention.status = .resolved
             mention.personID = person
             try mention.update(db)
-            try Self.insertAlias(mention.text, person, db)
-            if let relation = mention.relationText { try Self.insertAlias(relation, person, db) }
+            // A phrase for several people ("our parents") is never one person's name.
+            if !GroupPhrase.isGroup(mention.text) { try Self.insertAlias(mention.text, person, db) }
+            if let relation = mention.relationText, !GroupPhrase.isGroup(relation) { try Self.insertAlias(relation, person, db) }
         }
     }
 
@@ -150,6 +180,22 @@ public struct PeopleRepository: Sendable {
         try db.writer.write { db in
             try db.execute(sql: "update mention set status = ?, person_id = null where id = ?",
                            arguments: [MentionStatus.unresolved.rawValue, id.rawValue])
+        }
+    }
+
+    /// A group phrase answered: the mention is settled and names no one person.
+    public func markGroupAnswered(_ id: MentionID) throws {
+        try db.writer.write { db in
+            try db.execute(sql: "update mention set status = ?, person_id = null where id = ?",
+                           arguments: [MentionStatus.resolved.rawValue, id.rawValue])
+        }
+    }
+
+    /// Takes a name away from a person. No memory changes: the links stay. A later story that
+    /// says the name no longer links to this person by it.
+    public func removeAlias(_ text: String, from person: PersonID) throws {
+        try db.writer.write { db in
+            try db.execute(sql: "delete from alias where person_id = ? and lower(trim(text)) = ?", arguments: [person.rawValue, Self.normalize(text)])
         }
     }
 

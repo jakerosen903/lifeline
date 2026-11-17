@@ -69,7 +69,8 @@ public struct CandidateActions: Sendable {
     public func linkNewPerson(named name: String, to memory: MemoryID) throws -> Person {
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { throw Error.emptyTitle }
-        let person = try store.people.findPerson(matching: trimmed) ?? store.people.insertPerson(displayName: trimmed)
+        // Typing your own name means "I was there": it is the owner, never a second person with that name.
+        let person = try store.people.findPersonOrOwner(matching: trimmed) ?? store.people.insertPerson(displayName: trimmed)
         try store.memories.link(person.id, to: memory, roleText: nil)
         return person
     }
@@ -115,7 +116,10 @@ public struct CandidateActions: Sendable {
 
         // A session hidden from the timeline hides what is kept from it later, too.
         let hidden = try store.sessions.fetchSegment(candidate.segmentID).flatMap { try store.sessions.fetch($0.sessionID) }?.hiddenFromTimeline ?? false
-        let memory = Memory(id: .init(), title: out.title, summaryQuote: out.quote, visibility: .timeline, chapterID: nil,
+        // A fact, a feeling or a goal has no event to name: the start of its quote stands for it (v7).
+        let kind = out.kind ?? .event
+        let quoteTitle = kind.isMoment ? "" : MemoryLabel.storedTitle(quote: out.quote)
+        let memory = Memory(id: .init(), title: quoteTitle.isEmpty ? out.title : quoteTitle, summaryQuote: out.quote, visibility: .timeline, chapterID: nil,
                             createdFromCandidateID: candidate.id, createdAt: .now, hiddenFromTimeline: hidden,
                             kind: out.kind ?? .event)
         var spans = [MemorySpan(memoryID: memory.id, segmentID: candidate.segmentID,
@@ -187,7 +191,10 @@ public struct CandidateActions: Sendable {
     func edges(of out: MemoryOut, for memory: MemoryID, segment: SegmentID? = nil) throws -> Edges {
         let currentSegment = segment
         var e = Edges()
-        for ref in out.peopleRefs {
+        // A card stored before the owner filter can still name the owner. The speaker is not
+        // someone to ask about, so the name is left out here too (audit F10).
+        let owner = try store.people.ownerNames()
+        for ref in out.peopleRefs where !owner.isOwner(ref) {
             if let person = try store.people.findPerson(matching: ref) {
                 if !e.people.contains(where: { $0.personID == person.id }) {
                     e.people.append(MemoryPerson(memoryID: memory, personID: person.id, roleText: ref))
@@ -200,7 +207,8 @@ public struct CandidateActions: Sendable {
             }
         }
         // Places, things and ideas the card names (its chips) link on Keep without a card of their own (M7).
-        for ref in out.allEntityRefs where ref.kind != .person {
+        // A place with no name ("a restaurant") stays in the quote and makes no place (audit F13).
+        for ref in out.allEntityRefs where ref.kind != .person && !(ref.kind == .place && GenericPhrase.isGeneric(ref.text)) {
             let entity = try entity(for: ref, plan: &e.entityWrite)
             if ref.kind == .place {
                 if !e.places.contains(where: { $0.placeID.rawValue == entity.id.rawValue }) {
@@ -247,9 +255,17 @@ public struct CandidateActions: Sendable {
         guard let ref = ref?.trimmingCharacters(in: .whitespacesAndNewlines), !ref.isEmpty else { return nil }
         if ref == "self" { return try store.profile.owner()?.entityID }
         if let known = try store.entities.entity(id: EntityID(rawValue: ref)) { return known.id }
+        // About a person named in this segment: linked now when the app knows the name, and when
+        // the person answers "Who's this?" otherwise (`linkDetails`).
+        if let segment = currentSegment,
+           let named = try store.candidates.candidates(for: segment).first(where: { $0.kind == .person && CandidatePayload.mention($0)?.ref == ref }),
+           let mention = CandidatePayload.mention(named) {
+            return try store.people.findPerson(matching: mention.text)?.entityID
+        }
         guard let segment = currentSegment,
               let row = try store.candidates.candidates(for: segment).first(where: { ($0.kind == .entity || $0.kind == .place) && CandidatePayload.mention($0)?.ref == ref }),
-              let mention = CandidatePayload.mention(row), mention.kind != .person else { return nil }
+              let mention = CandidatePayload.mention(row), mention.kind != .person,
+              !(mention.kind == .place && GenericPhrase.isGeneric(mention.text)) else { return nil }
         return try proposeEntity(from: mention, candidate: row, plan: &plan).id
     }
 
@@ -271,7 +287,7 @@ public struct CandidateActions: Sendable {
 
     /// Aliases and the "Who's this?" mentions that follow the edges. Returns the new mentions.
     func finishEdges(_ edges: Edges, segment: SegmentID) throws -> [Mention] {
-        for (person, alias) in edges.roleAliases { try store.people.addAlias(alias, to: person) }
+        for (person, alias) in edges.roleAliases where !GroupPhrase.isGroup(alias) { try store.people.addAlias(alias, to: person) }
         return try edges.unknown.map { try mention(for: $0, in: segment) }
     }
 
@@ -343,8 +359,8 @@ public struct CandidateActions: Sendable {
         case .new(let displayName):
             let name = displayName.trimmingCharacters(in: .whitespacesAndNewlines)
             let wanted = name.isEmpty ? mention.text : name
-            // A typed name the app already knows is that person, not a second one.
-            let existing = try store.people.findPerson(matching: wanted)
+            // A typed name the app already knows is that person, not a second one. The owner's own name is the owner.
+            let existing = try store.people.findPersonOrOwner(matching: wanted)
             let target = try existing ?? store.people.insertPerson(displayName: wanted)
             try store.people.resolve(id, to: target.id)
             person = target
@@ -354,10 +370,14 @@ public struct CandidateActions: Sendable {
         }
         if let person {
             try linkMemories(naming: mention.text, in: mention.segmentID, to: person.id)
-            // The same name waiting in other segments is the same question; answer it once.
-            for other in try store.people.mentions(status: .unresolved) where other.id != id && Self.same(other.text, mention.text) {
+            try linkDetails(aboutMentionNamed: mention.text, in: mention.segmentID, to: person.id)
+            // The same name waiting in other segments is the same question; answer it once. A group
+            // phrase ("our parents") is a new question in every story, so it is not carried over.
+            for other in try store.people.mentions(status: .unresolved)
+                where other.id != id && Self.same(other.text, mention.text) && !GroupPhrase.isGroup(mention.text) {
                 try store.people.resolve(other.id, to: person.id)
                 try linkMemories(naming: other.text, in: other.segmentID, to: person.id)
+                try linkDetails(aboutMentionNamed: other.text, in: other.segmentID, to: person.id)
             }
         } else {
             for other in try store.people.mentions(status: .unresolved) where other.id != id && Self.same(other.text, mention.text) {
@@ -374,7 +394,39 @@ public struct CandidateActions: Sendable {
         guard mention.status == .unresolved, let person = try store.people.findPerson(matching: mention.text) else { return nil }
         try store.people.resolve(mention.id, to: person.id)
         try linkMemories(naming: mention.text, in: mention.segmentID, to: person.id)
+        try linkDetails(aboutMentionNamed: mention.text, in: mention.segmentID, to: person.id)
         return person
+    }
+
+    /// "Who are “our parents”?" answered: each chosen person is linked to the memories of that
+    /// segment that say the phrase. The phrase is never saved as a name for any of them, so the
+    /// next story that says it asks again. With nobody chosen it is "Leave it as said".
+    public func resolveGroup(_ id: MentionID, people: [PersonID]) throws {
+        guard let mention = try store.people.mention(id: id) else { return }
+        for person in people { try linkMemories(naming: mention.text, in: mention.segmentID, to: person) }
+        try store.people.markGroupAnswered(id)
+    }
+
+    /// "Leave it as said": nobody is linked, the phrase stays in the quote, and this mention is not asked about again.
+    public func leaveGroupAsSaid(_ id: MentionID) throws {
+        try resolveGroup(id, people: [])
+    }
+
+    /// A fact, feeling or goal kept before the app knew who it was about: once the name is a
+    /// person, the memory becomes a detail of that person. A memory that is already a detail of
+    /// something keeps the link the person gave it.
+    private func linkDetails(aboutMentionNamed text: String, in segment: SegmentID, to person: PersonID) throws {
+        let rows = try store.candidates.candidates(for: segment)
+        let refs = Set(rows.compactMap { row -> String? in
+            guard row.kind == .person, let mention = CandidatePayload.mention(row), Self.same(mention.text, text) else { return nil }
+            return mention.ref
+        })
+        guard !refs.isEmpty else { return }
+        for row in rows where row.kind == .memory {
+            guard let out = CandidatePayload.memory(row), let about = out.aboutRef, refs.contains(about), !(out.kind ?? .event).isMoment,
+                  let memory = try store.memories.memory(createdFrom: row.id), try !store.entities.hasDetail(memory.id) else { continue }
+            try store.entities.link(memory.id, EntityID(rawValue: person.rawValue), relation: .detail)
+        }
     }
 
     private func linkMemories(naming text: String, in segment: SegmentID, to person: PersonID) throws {
@@ -425,7 +477,8 @@ public struct CandidateActions: Sendable {
         case .collection:
             result = .collection(try addToCollection(memory.id, titled: out.phrase))
         case .chapter:
-            if let existing = try store.chapters.chapters().first(where: { Self.same($0.title ?? "", out.phrase) }) {
+            let key = MatchKey.of(out.phrase)
+            if !key.isEmpty, let existing = try store.chapters.chapters().first(where: { MatchKey.of($0.title ?? "") == key }) {
                 try assign(memory: memory.id, toChapter: existing.id)
                 result = .chapter(try store.chapters.chapter(id: existing.id) ?? existing)
             } else {
