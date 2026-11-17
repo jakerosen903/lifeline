@@ -74,6 +74,11 @@ private func fact(people: [String] = [], about: String? = nil) -> MemoryOut {
     for text in ["our house", "Alder Street", "the restaurant", "Andover", "my grandmother's kitchen", "", "   "] { #expect(!GenericPhrase.isGeneric(text), "\(text)") }
 }
 
+@Test func aNameThatStartsLikeAnArticleIsNotGeneric() {
+    for text in ["A Coruña", "An Loc", "a restaurant in Boston", "Some Like It Hot Diner"] { #expect(!GenericPhrase.isGeneric(text), "\(text)") }
+    #expect(GenericPhrase.isGeneric("A restaurant"), "a capital on the first word alone is the start of a sentence")
+}
+
 @Test func aKeptMemoryWithAGenericPlaceMakesNoPlace() throws {
     let env = try Env()
     let memory = try env.kept("we ate at a restaurant by the road", place: "a restaurant")
