@@ -84,3 +84,23 @@ private func d(_ s: String) -> CivilDate { CivilDate(iso: s)! }
     #expect(onlyEarliest.isPlaced && !onlyEarliest.isDated)
     #expect(onlyLatest.isPlaced && !onlyLatest.isDated)
 }
+
+// MARK: - A date from a photo (photo story)
+
+@Test func aPhotoDateIsSettledAndDoesNotReadAsSaid() {
+    let r = TimeRange.fromPhoto(d("2019-07-14"))
+    #expect(r.isSettled)
+    #expect(!r.readsAsSaid)
+    #expect(r.isFromPhoto)
+    #expect(r.earliest == r.latest && r.earliest == d("2019-07-14"))
+    #expect(r.granularity == .day)
+    #expect(r.evidenceText == "the photo's date, 14 July 2019")
+    #expect(r.displayText == "14 July 2019", "a day from a photo is shown as a fact, not a guess")
+}
+
+@Test func aStatedDateReplacesAPhotoDate() {
+    let photoDated = TimeRange.fromPhoto(d("2019-07-14"))
+    #expect(photoDated.origin == .photo)
+    let replaced = TimeRange.stated(year: 2018)
+    #expect(replaced.origin == .stated && !replaced.isFromPhoto)
+}

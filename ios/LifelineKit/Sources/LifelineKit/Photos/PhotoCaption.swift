@@ -4,7 +4,12 @@ import Foundation
 public enum PhotoCaption {
     /// "taken 14 June 2012": the camera's date only (decision 6). Nil when the file had none.
     public static func taken(_ takenAt: PhotoTakenAt?) -> String? {
-        guard let date = takenAt?.date else { return nil }
+        guard let date = takenAt?.date, let text = longDate(date) else { return nil }
+        return "taken \(text)"
+    }
+
+    /// "14 June 2012": Gregorian, `en_GB`. The one place a photo's date becomes words.
+    public static func longDate(_ date: CivilDate) -> String? {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = .gmt
         // A civil date has no time zone: build it at noon in UTC and format it in UTC, so no zone moves the day.
@@ -14,7 +19,7 @@ public enum PhotoCaption {
         formatter.timeZone = .gmt
         formatter.locale = Locale(identifier: "en_GB")
         formatter.dateFormat = "d MMMM yyyy"
-        return "taken \(formatter.string(from: noon))"
+        return formatter.string(from: noon)
     }
 
     /// The accessibility label: where the person put the photo.

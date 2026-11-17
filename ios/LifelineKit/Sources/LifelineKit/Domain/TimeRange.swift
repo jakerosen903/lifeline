@@ -6,6 +6,8 @@ public enum Granularity: String, Codable, Sendable, CaseIterable {
 
 public enum RangeOrigin: String, Codable, Sendable, CaseIterable {
     case stated, inferred, derived, confirmed
+    /// The day a photo was taken, used because the person tapped it (photo story). Settled, like a stated date.
+    case photo
 }
 
 /// When something happened, as honestly as the owner's words allow: a possible band
@@ -46,7 +48,7 @@ public struct TimeRange: Codable, Sendable, Equatable {
     /// ("before Graduation (2004)"), whose far edge is the builder's slack. `displayText` makes
     /// the same distinction.
     public var readsAsSaid: Bool {
-        guard isSettled else { return false }
+        guard isSettled, !isFromPhoto else { return false }
         guard let evidenceText else { return true }
         return !Self.isAsSaidEvidence(evidenceText) && !Self.isRelationEvidence(evidenceText)
     }
@@ -56,7 +58,15 @@ public struct TimeRange: Codable, Sendable, Equatable {
     public var isDated: Bool { earliest != nil && latest != nil }
     public var isConfirmed: Bool { origin == .confirmed }
     /// Stated by the person or confirmed by them: the resolver and the questions leave it alone.
-    public var isSettled: Bool { origin == .confirmed || origin == .stated }
+    public var isSettled: Bool { origin == .confirmed || origin == .stated || origin == .photo }
+    /// The date is the day of a photo the person chose to date the memory by.
+    public var isFromPhoto: Bool { origin == .photo }
+
+    /// That day, from a photo: "the photo's date, 14 July 2019". Only the date is used, never the time.
+    public static func fromPhoto(_ date: CivilDate) -> TimeRange {
+        let evidence = PhotoCaption.longDate(date).map { "the photo's date, \($0)" } ?? "the photo's date"
+        return TimeRange(earliest: date, latest: date, likelyStart: nil, likelyEnd: nil, granularity: .day, origin: .photo, evidenceText: evidence)
+    }
 
     // MARK: - Stated by the person (M4.1: "Tell me when")
 
