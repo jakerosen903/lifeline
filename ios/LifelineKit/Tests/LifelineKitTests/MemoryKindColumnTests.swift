@@ -67,6 +67,7 @@ private func year(_ y: Int) -> TimeRange {
 
 @Test func keepWritesTheCardsKind() throws {
     let env = try Env()
+    var about: [MemoryID] = []
     for (i, kind) in [MemoryKind.fact, .feeling, .goal, .event].enumerated() {
         let out = MemoryOut(ref: "m\(i)", kind: kind, title: "T\(i)", quote: "we lived", segmentSpan: WordSpan(startWord: 0, endWord: 2),
                             peopleRefs: [], placeText: nil, anchors: [], collectionHint: nil, chapterHint: nil, confidence: 0.9)
@@ -74,8 +75,11 @@ private func year(_ y: Int) -> TimeRange {
         try env.store.candidates.insert(card)
         let kept = try env.actions.acceptMemory(card)
         #expect(try env.store.memories.fetch(kept.memory.id)?.kind == kind)
+        if !kind.isMoment { about.append(kept.memory.id) }
     }
-    #expect(try env.store.memories.aboutMemories(includingHidden: false).map(\.title) == ["T0", "T1", "T2"])
+    // By id, not by title: a fact, feeling or goal is stored under the start of its quote (v7),
+    // and these three cards share one quote.
+    #expect(try env.store.memories.aboutMemories(includingHidden: false).map(\.id) == about)
 }
 
 @Test func factIsPlacedButAsksNothing() {
