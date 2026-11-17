@@ -110,6 +110,7 @@ A photo session is a quick session (`SessionKind.quick`). There is no photo form
   - The memory is unplaced.
   - The photo's date is outside the memory's `earliest`…`latest` band.
 - The app does not offer it when the photo's date is inside the band. The person's words win.
+- The app does not offer it when the memory's date has origin `stated` or `confirmed`, wherever the photo's date falls. A tap replaces the range and its evidence text, and there is no undo, so the person's words must not be at risk (review of PR #29). The person can still change that date with the existing "when" controls.
 - A tap sets the memory's range to that day, with day granularity, a new origin `photo`, and the evidence text "the photo's date, 14 July 2019". The display of that memory's date must show that it came from a photo, in the manner the app shows `inferred` today.
 - A date with origin `photo` is settled (`TimeRange.isSettled`), like `stated` and `confirmed`: the person tapped it. The resolver must not rewrite it, and an open "when" question must not target that memory. It does not read as said (`readsAsSaid`): the display says it came from a photo.
 - The person can change the date afterwards with the existing "when" controls. Their change replaces origin `photo`.

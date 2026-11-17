@@ -33,8 +33,10 @@ public struct PhotoStoryCard: Sendable, Equatable {
 public enum PhotoStory {
     /// True when the memory is unplaced, or `date` is before `earliest` or after `latest`. False with no date.
     /// A missing edge is unbounded, so a half-open range offers the date only when it falls on the wrong side of the edge it has.
+    /// False for a date the person said or confirmed: a tap replaces the range and its evidence text, and there is no undo.
     public static func offersDate(_ date: CivilDate?, for range: TimeRange) -> Bool {
         guard let date else { return false }
+        if range.origin == .stated || range.origin == .confirmed { return false }
         if range.earliest == nil && range.latest == nil { return true }
         if let earliest = range.earliest, date < earliest { return true }
         if let latest = range.latest, date > latest { return true }

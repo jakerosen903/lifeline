@@ -33,6 +33,28 @@ private func range(_ a: CivilDate?, _ b: CivilDate?) -> TimeRange {
     #expect(PhotoStory.offersDate(photoDay, for: range(nil, day(2018, 1, 1))))
 }
 
+/// A date the person said or confirmed is theirs. "Use this date" replaces the range and its evidence text with no undo,
+/// so the card must not offer it there, however far the photo's day is from the band.
+@Test func offersDateNeverReplacesADateThePersonSaid() {
+    let photoDay = day(2019, 7, 14)
+    for origin in [RangeOrigin.stated, .confirmed] {
+        let said = TimeRange(earliest: day(2012, 1, 1), latest: day(2012, 12, 31), likelyStart: nil, likelyEnd: nil,
+                             granularity: .year, origin: origin, evidenceText: "in 2012")
+        #expect(!PhotoStory.offersDate(photoDay, for: said), "\(origin)")
+        // Said words with no dates yet ("when I was little") are still the person's words.
+        var saidUnplaced = TimeRange.unplaced
+        saidUnplaced.origin = origin
+        saidUnplaced.evidenceText = "when I was little"
+        #expect(!PhotoStory.offersDate(photoDay, for: saidUnplaced), "\(origin), unplaced")
+    }
+    // A guess outside the band still gets the offer.
+    for origin in [RangeOrigin.inferred, .derived] {
+        let guess = TimeRange(earliest: day(2012, 1, 1), latest: day(2012, 12, 31), likelyStart: nil, likelyEnd: nil,
+                              granularity: .year, origin: origin, evidenceText: nil)
+        #expect(PhotoStory.offersDate(photoDay, for: guess), "\(origin)")
+    }
+}
+
 // MARK: - card
 
 private func photo(taken: CivilDate? = day(2019, 7, 14)) -> Photo {
