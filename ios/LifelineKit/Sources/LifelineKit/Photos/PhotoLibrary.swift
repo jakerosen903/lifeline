@@ -23,10 +23,28 @@ public actor PhotoLibrary {
     /// picking a photo again repairs one that does not show. Otherwise: writes `.<id>.partial`, renames it to
     /// `<id>.jpg`, then inserts the row and link. A kill after the rename leaves a file with no row; the sweep removes it.
     public func add(fileAt source: URL, assetLocalID: String?, to subject: PhotoSubject, now: Date = .now) throws -> Photo {
+        try importPhoto(fileAt: source, assetLocalID: assetLocalID, now: now, link: subject)
+    }
+
+    /// The import of `add` with no link: the photo waits for a home (a session row that points at it, or a later link).
+    /// Same photo already stored: returns it, writes a missing file again, adds no link. A photo that never gets a home
+    /// goes at the next sweep.
+    public func store(fileAt source: URL, assetLocalID: String?, now: Date = .now) throws -> Photo {
+        try importPhoto(fileAt: source, assetLocalID: assetLocalID, now: now, link: nil)
+    }
+
+    /// The session lets go of its photo; when nothing else holds the photo, its row and then its file go.
+    public func removeFromStory(_ session: SessionID) throws {
+        guard let gone = try photos.letGo(of: session) else { return }
+        // As in `remove`: a file that will not delete is a file with no row, and the next sweep takes it.
+        try? FileManager.default.removeItem(at: directory.appending(path: gone.fileName))
+    }
+
+    private func importPhoto(fileAt source: URL, assetLocalID: String?, now: Date, link subject: PhotoSubject?) throws -> Photo {
         let sha256 = try PhotoImport.sha256(of: source)
         if let stored = try photos.photo(sha256: sha256) {
             if !FileManager.default.fileExists(atPath: url(for: stored).path) { _ = try writeFile(from: source, named: stored.fileName) }
-            try photos.link(stored.id, to: subject)
+            if let subject { try photos.link(stored.id, to: subject) }
             return stored
         }
         let metadata = try PhotoImport.metadata(of: source)
@@ -37,7 +55,9 @@ public actor PhotoLibrary {
                           takenAt: metadata.takenAt, takenOrigin: metadata.takenAt == nil ? nil : .exif,
                           lat: metadata.lat, lon: metadata.lon, locationOrigin: metadata.lat == nil ? nil : .exif,
                           sha256: sha256, pixelWidth: size.width, pixelHeight: size.height, addedAt: now)
-        do { try photos.insert(photo, linkingTo: subject) } catch {
+        do {
+            if let subject { try photos.insert(photo, linkingTo: subject) } else { try photos.insert(photo) }
+        } catch {
             try? FileManager.default.removeItem(at: url(for: photo))
             throw error
         }

@@ -21,12 +21,13 @@ private struct Fixture {
     let db: AppDatabase
     let store: ExtractionStore
     let segments: [Segment]
+    let sessionID: SessionID
     var photos: PhotoRepository { store.photos }
 
     init() throws {
         db = try AppDatabase.inMemory()
         store = ExtractionStore(db)
-        (_, segments) = try StoreFixtures.session(in: store.sessions, segments: ["the tree house", "the old house"])
+        (sessionID, segments) = try StoreFixtures.session(in: store.sessions, segments: ["the tree house", "the old house"])
     }
 
     func person(_ name: String) throws -> Entity { try store.entities.insert(type: .person, title: name) }
@@ -198,4 +199,99 @@ private struct Fixture {
     try f.photos.insert(y, linkingTo: .memory(s.id)); try f.photos.insert(z, linkingTo: .memory(s.id))
     try f.store.memories.fold(s, into: t)
     #expect(try f.photos.photos(of: .memory(t.id)).map { "\($0.id.rawValue) \($0.role.rawValue)" } == ["\(y.id.rawValue) cover", "\(z.id.rawValue) attached"])
+}
+
+// MARK: - A session as a home (photo story)
+
+extension Fixture {
+    /// A session that points at `photo`.
+    @discardableResult
+    func photoSession(pointingAt photo: Photo) throws -> SessionID {
+        let session = Session(id: SessionID(), startedAt: at(5), endedAt: nil, audioPath: "photo.m4a", stageLog: "[]", landingChoiceMade: false,
+                              subjectPhotoID: photo.id, startedFrom: .photo)
+        try store.sessions.insert(session)
+        return session.id
+    }
+}
+
+@Test func aPhotoAStoryPointsAtSurvivesItsLastUnlink() throws {
+    let f = try Fixture(), maya = try f.person("Maya")
+    let a = photo("a")
+    try f.photos.insert(a, linkingTo: .entity(maya.id))
+    try f.photoSession(pointingAt: a)
+    #expect(try f.photos.unlink(a.id, from: .entity(maya.id)) == nil)
+    #expect(try f.photos.photo(id: a.id) != nil)
+}
+
+@Test func deleteUnlinkedKeepsAPhotoAStoryPointsAt() throws {
+    let f = try Fixture()
+    let a = photo("a")
+    try f.photos.insert(a)
+    try f.photoSession(pointingAt: a)
+    #expect(try f.photos.deleteUnlinked().isEmpty)
+    #expect(try f.photos.photo(id: a.id) != nil)
+}
+
+@Test func lettingGoKeepsAPhotoWithAPage() throws {
+    let f = try Fixture(), maya = try f.person("Maya")
+    let a = photo("a")
+    try f.photos.insert(a, linkingTo: .entity(maya.id))
+    let session = try f.photoSession(pointingAt: a)
+    #expect(try f.photos.letGo(of: session) == nil)
+    #expect(try f.photos.photo(id: a.id) != nil)
+    #expect(try f.photos.subjectPhoto(of: session) == nil)
+}
+
+@Test func lettingGoOfThePhotoWithNoOtherHomeReturnsItsRow() throws {
+    let f = try Fixture()
+    let a = photo("a")
+    try f.photos.insert(a)
+    let session = try f.photoSession(pointingAt: a)
+    #expect(try f.photos.subjectPhoto(of: session) == a)
+    #expect(try f.photos.letGo(of: session) == a)
+    #expect(try f.photos.photo(id: a.id) == nil)
+    #expect(try f.photos.letGo(of: session) == nil, "letting go twice changes nothing")
+}
+
+@Test func twoStoriesAboutOnePhotoEachHoldIt() throws {
+    let f = try Fixture()
+    let a = photo("a")
+    try f.photos.insert(a)
+    let first = try f.photoSession(pointingAt: a), second = try f.photoSession(pointingAt: a)
+    #expect(try f.photos.letGo(of: first) == nil)
+    #expect(try f.photos.subjectPhoto(of: second)?.id == a.id)
+    #expect(try f.photos.letGo(of: second) == a)
+}
+
+@Test func hasOtherHomeIgnoresMemoriesOnlyFromThisSession() throws {
+    let f = try Fixture(), dad = try f.person("Dad")
+    let a = photo("a")
+    try f.photos.insert(a)
+    // The fixture's own session tells memory A, and it is the one that points at the photo.
+    let session = f.sessionID
+    var row = try #require(try f.store.sessions.fetch(session))
+    row.subjectPhotoID = a.id; row.startedFrom = .photo
+    try f.store.sessions.update(row)
+    let memoryA = try f.memory("The tree house", segment: 0)
+    try f.photos.link(a.id, to: .memory(memoryA.id))
+    #expect(try f.photos.hasOtherHome(a.id, than: session) == false, "a memory told only in this session is this story's own")
+    try f.photos.link(a.id, to: .entity(dad.id))
+    #expect(try f.photos.hasOtherHome(a.id, than: session) == true)
+    _ = try f.photos.unlink(a.id, from: .entity(dad.id))
+    #expect(try f.photos.hasOtherHome(a.id, than: session) == false)
+    // Memory B has a span in another session.
+    let (_, other) = try StoreFixtures.session(in: f.store.sessions, segments: ["the old house"])
+    let memoryB = try StoreFixtures.memory(in: f.store.memories, candidates: f.store.candidates, segment: other[0].id, title: "The old house")
+    try f.photos.link(a.id, to: .memory(memoryB.id))
+    #expect(try f.photos.hasOtherHome(a.id, than: session) == true)
+}
+
+@Test func anotherSessionPointingAtThePhotoIsAnotherHome() throws {
+    let f = try Fixture()
+    let a = photo("a")
+    try f.photos.insert(a)
+    let first = try f.photoSession(pointingAt: a)
+    #expect(try f.photos.hasOtherHome(a.id, than: first) == false)
+    try f.photoSession(pointingAt: a)
+    #expect(try f.photos.hasOtherHome(a.id, than: first) == true)
 }
