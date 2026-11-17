@@ -39,6 +39,8 @@ One entry per decision. Newest first. Status is Decided, Open, or Superseded.
 
 - **The sweep also runs before every copy.** Settings runs the sweep before an export and before a restore is staged, through the photo library, so it cannot run between an add's file and its row. Why: a photo whose memory or session was deleted in this run keeps its row and file until the next launch, and a copy made before then would carry it. The copy is the one thing that leaves the phone. Cost: a short pause before each copy. A sweep that fails is logged and does not stop the copy.
 - **"Adding the photo…" starts when the picked item arrives.** It shows before the system hands the file over, which takes seconds for a photo in iCloud, and it clears on every exit. A count keeps it on while a second pick is still running. Cost: none known. Device check item 2 confirms it.
+- **A staged restore keeps its recordings and photos out of the cloud backup.** After the unzip, the app excludes the staged `audio/` and `photos/` folders. The app never flags the staging folder itself, because that folder becomes the archive folder at the swap. A flag on it could leave the database out of the cloud backup after a kill. Cost: the staged database can go into the cloud backup until the next launch, as it could before S4.
+- **The backup tests run one at a time.** They are in one serialized suite. They zip whole archives on the test thread, and in parallel they starved a timing test in the extraction queue (`drainGivesUpAtItsDeadline`). Cost: the backup tests take longer; no assertion changed.
 
 **The owner must see:**
 
