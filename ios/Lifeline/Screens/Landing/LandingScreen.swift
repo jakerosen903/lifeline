@@ -40,6 +40,7 @@ struct LandingScreen: View {
                             .font(.footnote).foregroundStyle(Theme.ochreText)
                             .accessibilityIdentifier("landing.stillSorting")
                     }
+                    PhotoCard(viewModel: viewModel.photoCard, cache: viewModel.deps.photoImages)
                     VStack(alignment: .leading, spacing: 6) {
                         Text("Before you go").font(.caption.weight(.semibold)).foregroundStyle(Theme.oliveText)
                         Text(viewModel.closingLine)
@@ -60,12 +61,15 @@ struct LandingScreen: View {
                 .padding(24)
             }
             .linenBackground()
+            .photoErrorSlot(viewModel.photoCard.error)
             .navigationBarTitleDisplayMode(.inline)
             .navigationDestination(isPresented: Binding(get: { reviewing }, set: { reviewing = $0 })) {
                 SessionDetailScreen(session: viewModel.session, deps: viewModel.deps)
             }
         }
         .interactiveDismissDisabled()
+        // Moments kept on the review page hold the photo now; the poll may have stopped, so read again.
+        .onChange(of: reviewing) { if !reviewing { viewModel.refresh() } }
         .onChange(of: viewModel.finished) { if let another = viewModel.finished { onClose(another) } }
         .onDisappear { viewModel.stop() }
         .confirmationDialog("Delete today's recording?", isPresented: Binding(get: { viewModel.confirmingDelete }, set: { viewModel.confirmingDelete = $0 }),
@@ -74,7 +78,7 @@ struct LandingScreen: View {
                 .accessibilityIdentifier("landing.confirmDelete")
             Button("Keep it", role: .cancel) {}
         } message: {
-            Text("The audio, the words and the \(viewModel.rows.count + viewModel.more) moments from today go. This cannot be undone.")
+            Text(viewModel.deleteMessage)
         }
     }
 

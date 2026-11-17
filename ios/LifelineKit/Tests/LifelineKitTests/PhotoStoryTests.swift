@@ -96,6 +96,25 @@ private func card(_ photo: Photo = photo(), memories: [Memory], holding: Set<Mem
     #expect(card(photo(taken: nil), memories: [m]).dateOffers.isEmpty)
 }
 
+@Test func theCardNamesTheOwnersPage() {
+    let m = memory("The tree house"), me = entity("Jo"), amy = entity("Amy")
+    #expect(card(memories: [m], linked: [m.id: [me, amy]], owner: me.id).ownerEntity == me.id)
+    #expect(card(memories: [m], linked: [m.id: [me, amy]]).ownerEntity == nil)
+}
+
+// MARK: - The delete dialog's sentence
+
+@Test func theDeleteSentence() {
+    let m = memory("The tree house")
+    func card(otherHome: Bool) -> PhotoStoryCard {
+        PhotoStory.card(photo: photo(), sessionMemories: [m], holding: [m.id], linked: [:], pagesWithPhoto: [], ownerEntity: nil,
+                        hasPendingMoments: false, hasOtherHome: otherHome)
+    }
+    #expect(PhotoStory.deleteSentence(card: nil) == nil, "an ordinary session says nothing")
+    #expect(PhotoStory.deleteSentence(card: card(otherHome: true)) == nil, "the photo stays: a page or another story holds it")
+    #expect(PhotoStory.deleteSentence(card: card(otherHome: false)) == "Its photo goes too.")
+}
+
 // MARK: - The reader
 
 private struct StoryFixture {

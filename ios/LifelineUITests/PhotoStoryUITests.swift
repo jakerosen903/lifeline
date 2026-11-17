@@ -6,16 +6,7 @@ import XCTest
 final class PhotoStoryUITests: XCTestCase {
     /// Maya's page, her cover in the viewer, then "Tell its story".
     @MainActor
-    private func tellMayasCoversStory(_ app: XCUIApplication) {
-        app.openEntityPage("Maya")
-        XCTAssertTrue(app.waitHittable(app.buttons["photo.header"], timeout: 10), "Maya's cover is on screen")
-        app.buttons["photo.header"].tap()
-        let tell = app.buttons["photo.tellStory"]
-        XCTAssertTrue(app.waitHittable(tell, timeout: 5), "the viewer offers Tell its story")
-        XCTAssertEqual(tell.label, "Tell its story")
-        tell.tap()
-        XCTAssertTrue(app.buttons["session.finish"].waitForExistence(timeout: 10), "the session starts")
-    }
+    private func tellMayasCoversStory(_ app: XCUIApplication) { app.tellMayasCoversStory() }
 
     @MainActor
     func testTellItsStoryStartsASessionWithThePhotoOnScreen() {

@@ -115,6 +115,51 @@ enum UITestSeed {
         }
     }
 
+    /// Under `-uiTesting-seedPhotoStory`: the family, then two landed photo sessions, each about a generated photo.
+    /// The first (two moments, told 2 hours ago) is about a dated photo (14 June 2012) and has two kept memories that both hold it:
+    /// "The beach" (unplaced; names Maya and Dad) and "The drive home" (stated 2012; names Dad). Maya's page holds the photo; Dad's
+    /// does not. The second (newer, one sorted moment) has no kept memory, and its photo has no other home.
+    /// `unlanded` leaves one of them with no landing choice made, so the app opens on its landing (`-uiTesting-photoStoryLanding`).
+    enum PhotoStoryLanding: String { case first, second }
+
+    static func writePhotoStory(store: ExtractionStore, profile: ProfileRepository, sessions: SessionRepository, library: PhotoLibrary,
+                                unlanded: PhotoStoryLanding?) throws {
+        guard try people(store: store, profile: profile, sessions: sessions) != nil,
+              let maya = try store.entities.entities(type: .person).first(where: { $0.title == person })?.id,
+              let dad = try store.entities.entities(type: .person).first(where: { $0.title == "Dad" })?.id else { return }
+        let folder = FileManager.default.temporaryDirectory.appending(path: "seed-photo-story-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder) }
+
+        // The first story. The photo is stored with no link, as a pick stores it; the session row then points at it.
+        let beachPhoto = try storePhoto(library, in: folder, named: "story-beach", rgb: 0xC8893F, takenAt: "2012:06:14 15:32:10")
+        let first = Session(id: .init(), startedAt: .now.addingTimeInterval(-7_200), endedAt: .now.addingTimeInterval(-7_100), audioPath: "seed-story-1.m4a",
+                            stageLog: "[]", landingChoiceMade: unlanded != .first, subjectPhotoID: beachPhoto.id, startedFrom: .photo)
+        try sessions.insert(first)
+        var seed = SeedSession(session: first, store: store, sessions: sessions)
+        let beach = try seed.keep("The beach", kind: .event, relation: .mention, links: [(maya, nil), (dad, "my dad")])
+        let drive = try seed.keep("The drive home", kind: .event, year: 2012, relation: .mention, links: [(dad, "my dad")])
+        try store.photos.link(beachPhoto.id, to: .memory(beach))
+        try store.photos.link(beachPhoto.id, to: .memory(drive))
+        try store.photos.link(beachPhoto.id, to: .entity(maya))
+
+        // The second story: one sorted moment, no memory kept, and a photo nothing else holds.
+        let lonePhoto = try storePhoto(library, in: folder, named: "story-lone", rgb: 0x5F7046, takenAt: nil)
+        let second = Session(id: .init(), startedAt: .now, endedAt: .now, audioPath: "seed-story-2.m4a", stageLog: "[]",
+                             landingChoiceMade: unlanded != .second, subjectPhotoID: lonePhoto.id, startedFrom: .photo)
+        try sessions.insert(second)
+        try sessions.insert(Segment(id: .init(), sessionID: second.id, index: 0, startMs: 0, endMs: 4_000, text: "the long way round, as told", status: .extracted), words: [])
+    }
+
+    private static func storePhoto(_ library: PhotoLibrary, in folder: URL, named name: String, rgb: Int, takenAt: String?) throws -> Photo {
+        let file = folder.appending(path: "\(name).jpg")
+        try GeneratedPhoto.write(to: file, width: 1600, height: 1200, rgb: rgb, takenAt: takenAt, gps: nil)
+        let box = PhotoBox()
+        try waitFor { box.set(try await library.store(fileAt: file, assetLocalID: nil)) }
+        guard let photo = box.get() else { throw CocoaError(.fileReadUnknown) }
+        return photo
+    }
+
     /// The seed runs before the first screen, from a synchronous launch. The library is an actor off the main
     /// thread, so blocking here cannot deadlock it. Under UI testing only.
     private static func waitFor(_ work: @escaping @Sendable () async throws -> Void) throws {
@@ -167,6 +212,14 @@ private final class FailureBox: @unchecked Sendable {
     private var error: (any Error)?
     func set(_ error: any Error) { lock.withLock { self.error = error } }
     func get() -> (any Error)? { lock.withLock { error } }
+}
+
+/// The photo a detached seed step stored, read back on the waiting thread.
+private final class PhotoBox: @unchecked Sendable {
+    private let lock = NSLock()
+    private var photo: Photo?
+    func set(_ photo: Photo) { lock.withLock { self.photo = photo } }
+    func get() -> Photo? { lock.withLock { photo } }
 }
 
 /// One seeded session (`seed.m4a`, never written): each `keep` adds a segment of 4 000 ms and keeps one memory on it.

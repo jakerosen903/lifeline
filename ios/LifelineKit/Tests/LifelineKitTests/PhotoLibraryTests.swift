@@ -417,3 +417,25 @@ private func photoSession(in f: Fixture, pointingAt photo: Photo) throws -> Sess
     #expect(f.photoFiles.isEmpty)
     #expect(try f.store.photos.fileNames().isEmpty)
 }
+
+/// The delete dialog says "Its photo goes too." and the app then runs the library's sweep: the file is gone at once.
+@Test func deletingAPhotoSessionAndSweepingRemovesItsPhotoRowAndFile() async throws {
+    let f = try Fixture()
+    let photo = try await f.library.store(fileAt: try f.source(), assetLocalID: nil)
+    let session = try photoSession(in: f, pointingAt: photo)
+    #expect(try await f.library.sweep() == .init(rows: 0, files: 0), "a session that points at it is a home")
+    try f.store.sessions.deleteSession(session)
+    #expect(try await f.library.sweep() == .init(rows: 1, files: 1))
+    #expect(f.photoFiles.isEmpty)
+    #expect(try f.store.photos.photo(id: photo.id) == nil)
+}
+
+@Test func deletingAPhotoSessionKeepsAPhotoAPageHolds() async throws {
+    let f = try Fixture()
+    let photo = try await f.library.store(fileAt: try f.source(), assetLocalID: nil)
+    try f.store.photos.link(photo.id, to: .entity(f.maya.id))
+    let session = try photoSession(in: f, pointingAt: photo)
+    try f.store.sessions.deleteSession(session)
+    #expect(try await f.library.sweep() == .init(rows: 0, files: 0))
+    #expect(f.photoFiles == ["\(photo.id.rawValue).jpg"])
+}

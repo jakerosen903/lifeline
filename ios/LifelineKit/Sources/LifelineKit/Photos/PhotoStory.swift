@@ -20,10 +20,13 @@ public struct PhotoStoryCard: Sendable, Equatable {
     public var pageOffers: [Entity]
     public var dateOffers: [DateOffer]
     public var hasOtherHome: Bool
+    /// The owner's page, so a view can word that offer "Add to your page". Nil when there is no owner.
+    public var ownerEntity: EntityID?
 
-    public init(photo: Photo, hasPendingMoments: Bool, memories: [Memory], pageOffers: [Entity], dateOffers: [DateOffer], hasOtherHome: Bool) {
+    public init(photo: Photo, hasPendingMoments: Bool, memories: [Memory], pageOffers: [Entity], dateOffers: [DateOffer], hasOtherHome: Bool,
+                ownerEntity: EntityID? = nil) {
         self.photo = photo; self.hasPendingMoments = hasPendingMoments; self.memories = memories
-        self.pageOffers = pageOffers; self.dateOffers = dateOffers; self.hasOtherHome = hasOtherHome
+        self.pageOffers = pageOffers; self.dateOffers = dateOffers; self.hasOtherHome = hasOtherHome; self.ownerEntity = ownerEntity
     }
 }
 
@@ -36,6 +39,13 @@ public enum PhotoStory {
         if let earliest = range.earliest, date < earliest { return true }
         if let latest = range.latest, date > latest { return true }
         return false
+    }
+
+    /// The sentence the session's delete dialog adds, or nil. The photo goes with the session only when the session was
+    /// its last home. A memory that came only from this session is deleted with it, so the card already ignores it.
+    public static func deleteSentence(card: PhotoStoryCard?) -> String? {
+        guard let card, !card.hasOtherHome else { return nil }
+        return "Its photo goes too."
     }
 
     /// - Parameters:
@@ -59,6 +69,6 @@ public enum PhotoStory {
             date.map { PhotoStoryCard.DateOffer(memory: memory, date: $0) }
         }
         return PhotoStoryCard(photo: photo, hasPendingMoments: hasPendingMoments, memories: memories, pageOffers: offers,
-                              dateOffers: dateOffers, hasOtherHome: hasOtherHome)
+                              dateOffers: dateOffers, hasOtherHome: hasOtherHome, ownerEntity: ownerEntity)
     }
 }
