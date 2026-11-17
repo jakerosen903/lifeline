@@ -135,6 +135,18 @@ public struct PhotoRepository: Sendable {
         try db.writer.read { try Self.subjectPhotoID(ofSegment: segment, in: $0) }
     }
 
+    /// Every memory and entity that holds the photo, in one read.
+    public func subjects(of photo: PhotoID) throws -> (memories: Set<MemoryID>, entities: Set<EntityID>) {
+        try db.writer.read { db in
+            var memories = Set<MemoryID>(), entities = Set<EntityID>()
+            for row in try Row.fetchAll(db, sql: "select memory_id, entity_id from photo_link where photo_id = ?", arguments: [photo.rawValue]) {
+                if let id = row["memory_id"] as String? { memories.insert(MemoryID(rawValue: id)) }
+                if let id = row["entity_id"] as String? { entities.insert(EntityID(rawValue: id)) }
+            }
+            return (memories, entities)
+        }
+    }
+
     public func isLinked(_ photo: PhotoID, to subject: PhotoSubject) throws -> Bool {
         try db.writer.read { db in
             let (column, value) = subject.key

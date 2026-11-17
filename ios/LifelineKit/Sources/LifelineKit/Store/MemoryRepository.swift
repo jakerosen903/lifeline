@@ -520,6 +520,16 @@ public struct MemoryRepository: Sendable {
         }
     }
 
+    /// The memory's range and the range of the chapter it sits in change in one write, so the chapter is never stale.
+    public func updateRange(_ id: MemoryID, _ range: TimeRange, refreshingChapter: Bool) throws {
+        try db.writer.write { db in
+            guard var memory = try Memory.fetchOne(db, key: id.rawValue) else { return }
+            memory.range = range
+            try memory.update(db)
+            if refreshingChapter { try Self.refreshChapterRange(ofMemory: id, in: db) }
+        }
+    }
+
     public func allMemories() throws -> [Memory] {
         try db.writer.read { try Memory.order(Column("created_at")).fetchAll($0) }
     }

@@ -471,3 +471,13 @@ private extension Fixture {
     #expect(try f.links(of: fresh.id).isEmpty)
     #expect(try f.links(of: target.id) == ["\(subject.id.rawValue) cover"])
 }
+
+@Test func subjectsOfAPhotoListEveryMemoryAndEntityThatHoldsIt() throws {
+    let f = try Fixture(), maya = try f.person("Maya"), m = try f.memory("The tree house", segment: 0)
+    let shared = photo("shared"), lone = photo("lone")
+    try f.photos.insert(shared, linkingTo: .entity(maya.id)); try f.photos.link(shared.id, to: .memory(m.id)); try f.photos.insert(lone)
+    let held = try f.photos.subjects(of: shared.id)
+    #expect(held.memories == [m.id] && held.entities == [maya.id])
+    let none = try f.photos.subjects(of: lone.id)
+    #expect(none.memories.isEmpty && none.entities.isEmpty)
+}

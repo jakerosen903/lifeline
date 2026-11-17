@@ -99,13 +99,15 @@ private func card(_ photo: Photo = photo(), memories: [Memory], holding: Set<Mem
 // MARK: - The reader
 
 private struct StoryFixture {
+    let db: AppDatabase
     let store: ExtractionStore
     let sessionID: SessionID
     let segments: [Segment]
     let subject: Photo
 
     init(photoSession: Bool = true) throws {
-        store = ExtractionStore(try AppDatabase.inMemory())
+        db = try AppDatabase.inMemory()
+        store = ExtractionStore(db)
         (sessionID, segments) = try StoreFixtures.session(in: store.sessions, segments: ["the tree house"])
         subject = Photo(fileName: "story.jpg", takenAt: PhotoTakenAt(stored: "2019-07-14T09:30:00"),
                         sha256: "hash-story", pixelWidth: 400, pixelHeight: 300, addedAt: .now)
@@ -119,8 +121,8 @@ private struct StoryFixture {
 
     var reader: PhotoStoryReader { PhotoStoryReader(store: store) }
 
-    func pendingCard() throws -> Candidate {
-        let out = MemoryOut(ref: "m1", title: "The tree house", quote: "the tree", segmentSpan: WordSpan(startWord: 0, endWord: 1),
+    func pendingCard(title: String = "The tree house") throws -> Candidate {
+        let out = MemoryOut(ref: "m1", title: title, quote: "the tree", segmentSpan: WordSpan(startWord: 0, endWord: 1),
                             peopleRefs: [], placeText: nil, anchors: [], collectionHint: nil, chapterHint: nil, confidence: 0.9)
         let card = StoreFixtures.candidate(segments[0].id, ordinal: 0, payload: try CandidatePayload.encode(out))
         try store.candidates.insert(card)
@@ -180,4 +182,40 @@ private struct StoryFixture {
     let chapter = try CandidateActions(store: f.store).createChapter(title: "Summers", containing: kept.id)
     try f.reader.useDate(PhotoStoryCard.DateOffer(memory: kept, date: day(2019, 7, 14)))
     #expect(try f.store.chapters.chapter(id: chapter.id)?.range.earliest == day(2019, 7, 14))
+}
+
+private final class WriteCounter: @unchecked Sendable {
+    private let lock = NSLock()
+    private var value = 0
+    func note(_ sql: String) { if sql.uppercased().hasPrefix("BEGIN IMMEDIATE") { lock.withLock { value += 1 } } }
+    var count: Int { lock.withLock { value } }
+}
+
+@Test func usingTheDateIsOneWrite() throws {
+    let f = try StoryFixture()
+    let kept = try CandidateActions(store: f.store).acceptMemory(try f.pendingCard()).memory
+    let chapter = try CandidateActions(store: f.store).createChapter(title: "Summers", containing: kept.id)
+    let counter = WriteCounter()
+    try f.db.writer.write { db in db.trace { counter.note($0.expandedDescription) } }
+    try f.store.memories.updateRange(kept.id, .fromPhoto(day(2019, 7, 14)), refreshingChapter: true)
+    #expect(counter.count == 1, "the memory and its chapter change in one transaction")
+    #expect(try f.store.chapters.chapter(id: chapter.id)?.range.earliest == day(2019, 7, 14))
+}
+
+@Test func usingTheDateRePlacesAMemoryThatPointsAtIt() throws {
+    let f = try StoryFixture()
+    let actions = CandidateActions(store: f.store)
+    let beach = try actions.acceptMemory(try f.pendingCard(title: "The beach")).memory
+    let out = MemoryOut(ref: "m2", kind: .event, title: "The picnic", quote: "the tree", segmentSpan: WordSpan(startWord: 0, endWord: 1), peopleRefs: [],
+                        placeText: nil, anchors: [AnchorOut(phrase: "after The beach", relation: .after, targetText: "The beach", value: nil)],
+                        collectionHint: nil, chapterHint: nil, confidence: 0.9)
+    let c = StoreFixtures.candidate(f.segments[0].id, ordinal: 1, payload: try CandidatePayload.encode(out))
+    try f.store.candidates.insert(c)
+    let picnic = try actions.acceptMemory(c).memory
+    try f.store.memories.updateRange(beach.id, .unplaced)
+    #expect(try f.store.memories.fetch(picnic.id)?.range.isPlaced == false)
+    try f.reader.useDate(PhotoStoryCard.DateOffer(memory: beach, date: day(2019, 7, 14)))
+    #expect(try f.store.memories.fetch(beach.id)?.range == .fromPhoto(day(2019, 7, 14)), "the photo-dated memory does not move")
+    let placed = try #require(try f.store.memories.fetch(picnic.id)?.range)
+    #expect(placed.isPlaced && placed.earliest.map { $0 >= day(2019, 7, 14) } == true, "the memory that points at it is placed after it")
 }
