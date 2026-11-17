@@ -111,7 +111,7 @@ import GRDB
 }
 
 @Test func schemaVersionsOrderByMigrationPosition() {
-    #expect(Migrations.currentSchemaVersion == "v12")
+    #expect(Migrations.currentSchemaVersion == "v13")
     #expect(Migrations.isNewer("v9", than: "v8") && !Migrations.isNewer("v8", than: "v9") && Migrations.isNewer("v10", than: "v9"))
     #expect(Migrations.isNewer("v8", than: "v7") && !Migrations.isNewer("v7", than: "v8") && !Migrations.isNewer("v8", than: "v8"))
     #expect(Migrations.isNewer("v99", than: "v8"), "an unknown version is from the future")
@@ -159,4 +159,50 @@ import GRDB
     let session = try #require(try queue.read { try Session.fetchOne($0, sql: "select * from session where id = 's1'") })
     #expect(session.subjectEntityID == nil)
     #expect(session.startedFrom == .tab)
+}
+
+@Test func v13OnAPopulatedV12Database() throws {
+    var config = Configuration()
+    config.foreignKeysEnabled = true
+    let queue = try DatabaseQueue(configuration: config)
+    try Migrations.migrator.migrate(queue, upTo: "v12")
+    try queue.write { db in
+        try db.execute(sql: """
+            insert into session (id, started_at, ended_at, audio_path, stage_log, landing_choice_made) values ('s1', '2026-10-01', '2026-10-01', 'a.m4a', '[]', 1);
+            insert into segment (id, session_id, "index", start_ms, end_ms, text, status) values ('g1', 's1', 0, 0, 1000, 'hi', 'extracted');
+            insert into entity (id, type, title, created_at) values ('e1', 'person', 'Maya', '2026-10-01');
+            insert into memory (id, title, summary_quote, visibility, created_at) values ('m1', 'A', 'a', 'timeline', '2026-10-01');
+            insert into moment_entity (memory_id, entity_id, relation) values ('m1', 'e1', 'mention');
+            """)
+    }
+    let tables = ["session", "segment", "entity", "memory", "moment_entity"]
+    func rows() throws -> [[Row]] {
+        try queue.read { db in try tables.map { try Row.fetchAll(db, sql: "select * from \($0) order by rowid") } }
+    }
+    let rowsBefore = try rows()
+    try Migrations.migrator.migrate(queue)
+    #expect(try rows() == rowsBefore, "no existing row or column changes")
+    #expect(Set(try queue.read { try $0.columns(in: "photo") }.map(\.name))
+            == ["id", "file_name", "asset_local_id", "taken_at", "taken_origin", "lat", "lon", "location_origin", "sha256", "pixel_width", "pixel_height", "added_at"])
+    func photo(_ id: String) -> String {
+        "insert into photo (id, file_name, sha256, pixel_width, pixel_height, added_at) values ('\(id)', '\(id).jpg', '\(id)-hash', 4, 3, '2026-10-01')"
+    }
+    try queue.write { db in
+        try db.execute(sql: photo("p1"))
+        try db.execute(sql: "insert into photo_link (photo_id, entity_id, role, sort_order) values ('p1', 'e1', 'cover', 0)")
+    }
+    // p2 has no link yet, so only the check can refuse these two.
+    try queue.write { try $0.execute(sql: photo("p2")) }
+    #expect(throws: DatabaseError.self, "a link names one subject") {
+        try queue.write { try $0.execute(sql: "insert into photo_link (photo_id, entity_id, memory_id, role, sort_order) values ('p2', 'e1', 'm1', 'attached', 1)") }
+    }
+    #expect(throws: DatabaseError.self, "a link names a subject") {
+        try queue.write { try $0.execute(sql: "insert into photo_link (photo_id, role, sort_order) values ('p2', 'attached', 1)") }
+    }
+    #expect(throws: DatabaseError.self, "one cover per subject") {
+        try queue.write { try $0.execute(sql: "insert into photo_link (photo_id, entity_id, role, sort_order) values ('p2', 'e1', 'cover', 1)") }
+    }
+    try queue.write { try $0.execute(sql: "delete from entity where id = 'e1'") }
+    #expect(try queue.read { try Int.fetchOne($0, sql: "select count(*) from photo_link") } == 0, "the link goes with its entity")
+    #expect(try queue.read { try Int.fetchOne($0, sql: "select count(*) from photo") } == 2, "the photo row waits for the sweep")
 }

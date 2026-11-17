@@ -1,7 +1,7 @@
 import LifelineKit
 import SwiftUI
 
-/// People, the root of its tab: a grid of monogram tiles, three to a row, two at the first
+/// People, the root of its tab: a grid of tiles (a cover photo, else a monogram), three to a row, two at the first
 /// accessibility sizes and a list from the third. A free-text tag narrows it; a menu sorts it.
 struct PeopleGridScreen: View {
     /// Created once per presentation: a parent re-render must not reset the filter.
@@ -50,7 +50,7 @@ struct PeopleGridScreen: View {
             VStack(alignment: .leading, spacing: 0) {
                 sortMenu.padding(.horizontal, 16)
                 LazyVGrid(columns: columns, alignment: .leading, spacing: 20) {
-                    ForEach(people) { PersonTile(summary: $0, deps: viewModel.deps) { viewModel.refresh() } }
+                    ForEach(people) { PersonTile(summary: $0, cover: viewModel.covers[$0.id], deps: viewModel.deps) { viewModel.refresh() } }
                 }
                 .padding(.horizontal, 16).padding(.vertical, 12)
                 .accessibilityIdentifier("people.grid")
@@ -62,7 +62,7 @@ struct PeopleGridScreen: View {
     private func list(_ people: [EntitySummary]) -> some View {
         List {
             sortMenu.listRowBackground(Color.clear)
-            ForEach(people) { PersonRow(summary: $0, deps: viewModel.deps) { viewModel.refresh() } }
+            ForEach(people) { PersonRow(summary: $0, cover: viewModel.covers[$0.id], deps: viewModel.deps) { viewModel.refresh() } }
             errorLine
         }
         .scrollContentBackground(.hidden)

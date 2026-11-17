@@ -28,6 +28,12 @@ final class MemoryViewModel {
     /// True once the memory was merged away or deleted; the screen closes itself.
     private(set) var isGone = false
     private(set) var birthDate: CivilDate?
+    /// Why the last photo action failed, for the pinned slot (decision 21). Cleared when the next one starts.
+    private(set) var photoError: String?
+    /// The memory's photos (S4): with one or more, a row under the title and Play. Lazy, because the shelf reports
+    /// to this page, which must exist first; it is made on the first `refresh()`, in `init`.
+    @ObservationIgnored private(set) lazy var shelf = PhotoShelf(subject: .memory(memory.id), deps: deps,
+                                                                  onError: { [weak self] in self?.photoError = $0 })
     let player = SegmentPlayer()
     let deps: Dependencies
 
@@ -41,6 +47,8 @@ final class MemoryViewModel {
     var isGuess: Bool { memory.range.origin == .inferred }
     var evidence: String? { memory.range.evidenceText }
     var isPlaying: Bool { player.isPlaying }
+    /// "Photo for The tree house" (decision 19).
+    var photoLabel: String { PhotoCaption.label(title: memory.title, isOwner: false, isMemory: true) }
 
     func refresh() {
         do {
@@ -71,6 +79,7 @@ final class MemoryViewModel {
         } catch {
             self.error = error.localizedDescription
         }
+        shelf.load()
     }
 
     private func firstQuestion() throws -> RelativeQuestion? {
@@ -146,6 +155,28 @@ final class MemoryViewModel {
         do { try deps.actions.setStatedRange(memory.id, range); error = nil; refresh() }
         catch { self.error = "Could not save that: \(error.localizedDescription)" }
     }
+
+    // MARK: - Photos
+
+    func addPhoto(fileAt file: URL, assetLocalID: String?) async {
+        photoError = nil
+        await shelf.add(fileAt: file, assetLocalID: assetLocalID)
+    }
+
+    func makeCover(_ photo: PhotoID) async {
+        photoError = nil
+        await shelf.makeCover(photo)
+    }
+
+    func removePhoto(_ photo: PhotoID) async {
+        photoError = nil
+        await shelf.remove(photo)
+    }
+
+    /// A picked photo that never reached the shelf (the picker could not hand it over).
+    func photoFailed(_ message: String) { photoError = message }
+
+    func clearPhotoError() { photoError = nil }
 
     func mention(for tag: CheckThis) -> Mention? {
         guard case .person(_, let id) = tag else { return nil }

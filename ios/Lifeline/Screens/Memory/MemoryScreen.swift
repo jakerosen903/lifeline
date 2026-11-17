@@ -12,6 +12,9 @@ struct MemoryScreen: View {
     @Environment(\.dismiss) private var dismiss
     @State private var changing = false
     @State private var whoIsThis: Mention?
+    @State private var addingPhoto = false
+    /// The photo open in the viewer.
+    @State private var viewing: PlacedPhoto?
 
     var body: some View {
         ScrollView {
@@ -100,6 +103,12 @@ struct MemoryScreen: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background(RoundedRectangle(cornerRadius: 18).fill(Theme.sand))
 
+                // Decision 13: a memory has no header, so one photo is already a row. No photo, no frame.
+                if viewModel.shelf.isAdding { PhotoAddingLine() }
+                if !viewModel.shelf.photos.isEmpty {
+                    PhotoRow(photos: viewModel.shelf.photos, label: viewModel.photoLabel, cache: deps.photoImages) { viewing = $0 }
+                }
+
                 if !viewModel.entities.isEmpty {
                     VStack(alignment: .leading, spacing: 8) {
                         Text(viewModel.memory.isMoment ? "In this memory" : "About").font(.caption.weight(.semibold)).foregroundStyle(Theme.oliveText)
@@ -135,7 +144,22 @@ struct MemoryScreen: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             Button("Change…") { changing = true }.accessibilityIdentifier("memory.change")
+            Menu {
+                Button("Add a photo", systemImage: "photo") { viewModel.clearPhotoError(); addingPhoto = true }
+                    .accessibilityIdentifier("memory.addPhoto")
+            } label: { Image(systemName: "ellipsis.circle") }
+                .accessibilityLabel("More")
+                .accessibilityIdentifier("memory.more")
         }
+        .addPhotoFlow(isPresented: $addingPhoto, deps: deps, shelf: viewModel.shelf,
+                      onFile: { file, assetID in await viewModel.addPhoto(fileAt: file, assetLocalID: assetID); onChange() },
+                      onError: { viewModel.photoFailed($0) })
+        .sheet(item: $viewing) { placed in
+            PhotoViewer(photo: placed, label: viewModel.photoLabel, canMakeCover: !placed.isCover, cache: deps.photoImages,
+                        onMakeCover: { await viewModel.makeCover(placed.id); onChange() },
+                        onRemove: { await viewModel.removePhoto(placed.id); onChange() })
+        }
+        .photoErrorSlot(viewModel.photoError)
         .sheet(isPresented: $changing, onDismiss: { viewModel.refresh(); onChange() }) {
             ChangeSheet(memory: viewModel.memory, deps: deps) {}
         }
@@ -161,6 +185,6 @@ struct MemoryScreen: View {
             TellMeWhenSheet(title: viewModel.memory.title, birthDate: viewModel.birthDate) { viewModel.setStated($0) }
         }
         .onChange(of: viewModel.isGone) { if viewModel.isGone { onChange(); dismiss() } }
-        .onDisappear { viewModel.stop() }
+        .onDisappear { viewModel.stop(); viewModel.clearPhotoError() }
     }
 }

@@ -20,7 +20,7 @@ Most journaling tools ask you to write. Most family-history tools ask you to fil
 4. **Kept.** Keep, change or dismiss a card whenever you like, or never. Nothing merges, groups or gets a title without your tap.
 5. **Placed.** Moments land on a timeline as honest ranges (“during the Boston years”), inside stories and chapters, or on the shelf until a date turns up. Things that are not moments (a first car, a grandmother, a belief) become details on pages for the people, places, things and ideas they are about.
 
-**The shape of the app.** The app opens on five tabs: Timeline, People, Places, Things and You. A record bar sits above the tab bar on every tab. Its label names the page: “Tell a story”, “Tell a story about Maya” or “Tell a story about yourself”. Tap the bar to start a quick story. Its menu holds “Settle in”. A session started from a page records that page as its subject and opens with a question about it. Sessions is a labeled button on Timeline. Settings is a labeled button on You, and You is a portrait of the person in their own words (see “You as a portrait”). “Names you mentioned” is in the overflow menu on People. People is a grid of letter tiles. Each tile shows the name and the person’s own words, such as “my sister”. A labeled row above the grid sorts it: “Most told”, “First in your story” or “By name”. The sort starts on “Most told” at each launch. The pages for people, places and things open from their tabs.
+**The shape of the app.** The app opens on five tabs: Timeline, People, Places, Things and You. A record bar sits above the tab bar on every tab. Its label names the page: “Tell a story”, “Tell a story about Maya” or “Tell a story about yourself”. Tap the bar to start a quick story. Its menu holds “Settle in”. A session started from a page records that page as its subject and opens with a question about it. Sessions is a labeled button on Timeline. Settings is a labeled button on You, and You is a portrait of the person in their own words (see “You as a portrait”). “Names you mentioned” is in the overflow menu on People. People is a grid of tiles. A tile shows the person’s cover photo, or a letter when there is no photo. Each tile shows the name and the person’s own words, such as “my sister”. A labeled row above the grid sorts it: “Most told”, “First in your story” or “By name”. The sort starts on “Most told” at each launch. The pages for people, places and things open from their tabs. A page, a memory and You can each hold photos (see “Photos”).
 
 The result is three things at once: a **journal** for revisiting fond memories, an **autobiography** you can replay in your own voice, and, later, a **family record** where several people’s versions of the same Christmas sit side by side.
 
@@ -244,6 +244,8 @@ The store is SQLite (GRDB). Audio files are next to it. All offsets are millisec
 
 *A session is when the person spoke; a segment is a unit of capture; a candidate is raw extractor output and is never edited. A memory is what the person kept, with a kind and one or more tellings, each an audio span in some session. A memory links to entities as a detail (“the house had a blue door”) or a mention. Stories, chapters and collections group moments.*
 
+A `photo` row holds one stored photo: its file name, its pixel size, when it was added, and what the file said about itself (a date taken, a place, and where each came from). A `photo_link` row puts a photo on one subject, which is an entity or a memory. Each link has a role (cover or attached) and a sort order. A link has exactly one of `entity_id` and `memory_id`. Deleting the photo, the entity or the memory deletes the link.
+
 ### 8. Session arc and safety
 
 The stages are open, wind-down and ended. A quick story shows no clock. It ends when the person taps “Let’s leave it there”.
@@ -264,7 +266,27 @@ If the app stops during a session, the next launch opens the landing for that se
 
 A restore first writes a safety copy of the data on the phone. Then it stages the copy and applies it at the next launch, before the database opens. A copy with a newer schema is refused. An older one migrates.
 
-The app excludes every `.lifeline` file and the audio folder from the phone’s cloud backup. A copy leaves the phone only when the person shares the file.
+The copy also holds the photo files, in `photos/`, stored without compression. The manifest counts them. A copy made before photos existed restores with no photos. A build from before photos refuses a copy made after, because the schema is newer.
+
+The app excludes every `.lifeline` file and the audio folder and the photos folder from the phone’s cloud backup. A copy leaves the phone only when the person shares the file.
+
+### Photos
+
+The person adds a photo one at a time with the system picker, from “Add a photo” in the “…” menu of a person, place or thing page, a memory page, or You. The app asks for no photo-library permission and makes no network call for a photo.
+
+The app keeps one copy of the photo, as a JPEG of quality 0.85 and at most 2048 pixels on the long edge, in `photos/` next to the audio. The copy has no metadata: no GPS, no EXIF and no orientation flag. The app reads two things from the picked file: the date taken (`DateTimeOriginal`) and the GPS position. It keeps both only in the database, with the origin `exif`. The app shows the date as “taken 14 June 2012”. It does nothing with the position. Neither value changes a memory, a range or a place.
+
+The app stores one copy per photo. The SHA-256 of the picked file identifies the photo. The same photo added to a second page links the one copy to both pages. The same photo added again to the same page changes nothing. If the stored file is missing, the second add writes the file again. That is how the person repairs a photo that does not show. Deleting the original in the Photos app changes nothing in Lifeline.
+
+The first photo on a page is its cover. The cover shows as the page header, as the face of the person’s tile on People, and on You. A page with two or more photos also shows a Photos row. A memory page has no header. Its Photos row sits after the “In your voice” card and before “In this memory”, and shows with one photo or more. A tap opens the viewer. The viewer offers “Make this the cover” (when the photo is not the cover), “Remove photo…” and “Done”. Removing a photo takes it off this page only. When a removed cover leaves other photos, the oldest-added photo becomes the cover. When the last photo goes, the tile shows its letter again and the page has no header. When the cover changes, the page scrolls to its top and shows the new cover. The owner must confirm this (see DECISIONS).
+
+A merge of two memories moves the source memory’s photos to the target. A source cover becomes an attached photo when the target has a cover. Undoing the merge does not move the photos back.
+
+Photos on the life strip of You wait for a later spec. That spec must say where a photo’s date may place it.
+
+A sweep removes what a delete, a failure or a kill leaves behind: a photo with no link, a file with no row, and a half-written `.partial` file. The sweep runs at launch. It also runs before a copy is made: before an export and before a restore is staged. So a photo whose page was deleted does not travel in a copy. The sweep never deletes a row because its file is missing.
+
+The photos folder is part of the `.lifeline` copy and is out of the phone’s cloud backup, as audio is. When a restore waits for the next launch, its recordings and photos are out of the cloud backup too. Its database is not, as before photos.
 
 ### 10. The spoken interviewer (M8, in review)
 
@@ -283,7 +305,7 @@ The voice is on-device (`AVSpeechSynthesizer`), through the same audio engine as
 - **Replay (M9).** “Listen at this level”: a playlist in the person’s voice for a story, a chapter or a life, with narration added only later and only as the person approves it.
 - **Navigation by level.** Life, chapter, story and moment as one zoomable view in the manner of Photos, with a year scrubber on the edge.
 - **Protect, when others use the app.** A privacy screen with Share and a Local-only session chosen before recording; span-level deletion that keeps playback offsets; re-running a new extractor version from inside the app.
-- **Phase 1.5: one photo, one story.** Pick a photo and tell its story. No clustering, no faces.
+- **Phase 1.5: one photo, one story.** Pick a photo and tell its story. No clustering, no faces. Photo storage is built (see “Photos”). The prompt that asks for the story is not.
 - **Phase 2: props.** Favorite photos as prompts and anchors (PhotoKit gives dates and places; people are tagged by hand; a face model only after an evaluation against those tags), then music from an era.
 - **Phase 3: family.** Per-memory sharing, several perspectives on one event, questions for each other, and a read-only web viewer.
 
