@@ -50,6 +50,41 @@ One entry per decision. Newest first. Status is Decided, Open, or Superseded.
 
 **Costs.** The app re-encodes every photo. Metadata does not feed any other feature yet. The schema is permanent once v13 ships. S4 builds storage and display, not the “one photo, one story” prompt.
 
+## 2026-11-16 · The Timeline is a spine; a chapter is a tag, a "During" line and a bar on the life map
+
+**Status:** Decided by the owner from mock-ups. Source: `docs/specs/2026-11-16-timeline.md`. Supersedes in part "The timeline groups moments into computed life periods" (2026-10-26) and "Archive structure: chapters → stories → moments" (2026-10-22).
+
+**Decision.** The Timeline is one spine of moments with gaps that follow the years between them. A pinned card shows the whole life as a strip, with a frame for the years on screen and a "During" line that names the chapters over those years. A moment shows one tag when the person put it in a chapter. One sheet, the life map, shows every chapter as a bar on a year axis and is where a chapter is renamed, dated or removed.
+
+- A chapter is not a container on the Timeline. "Outside any chapter" and the chapter sections go away.
+- A tag is what the person said about a moment. The "During" line and the life map go by stated years. A date overlap never makes a tag.
+- A chapter shows years only when the person stated them. The span of its members is never shown as its dates.
+- Periods are always computed from age. A chapter never replaces a period.
+
+**Why.** The owner found that most moments sat outside every chapter, that empty chapters could not be removed, and that the Timeline read as a list. Marks on every row (a band or several tags) break with many chapters, because chapters overlap. One line and one map hold any number.
+
+**Consequences.** `chapter.range` holds stated years only. The chapters in the owner's archive show under "Not placed in time yet" until the owner says when. The chapter rules in the audit data fixes spec move to S6. S6 is specified ahead of the ship order and of the two-week watch.
+
+## 2026-11-16 · A feeling has no title, and "our parents" is not one person
+
+**Status:** Decided by the owner. Source: `docs/specs/2026-11-16-audit-data-fixes.md`, "A2: titles", "A2: groups of people" and "A2: the Change sheet for what is not a moment".
+
+**Decision.** A fact, a feeling or a goal shows as the person's quote, with no composed title. A phrase that names more than one person is a group: its card takes several people or "Leave it as said", and the phrase is never saved as a name for one person. A person's page lists the other names the app holds, each with "Remove". The Change sheet asks about a scene only for a moment.
+
+**Why.** The owner said of a friend, "I think we had some of our most formative experiences together". The app showed it with the title "our most formative experiences together" and asked "Who was there". In the same story "our parents" raised "Who's this?", took one answer, and saved the phrase as a name for the owner's father.
+
+## 2026-11-16 · Owner's calls on the audit data fixes
+
+**Status:** Decided by the owner, except call 4. Source: `docs/specs/2026-11-16-audit-data-fixes.md`, "Owner's calls".
+
+- Exact duplicates (stories with one title, "Ohio." beside "Ohio") are merged once without a question, with one notice.
+- The owner's typed name goes to the model provider in the context packet.
+- The second read does not offer memories that v7 finds and v6 missed.
+- The second read's line shows on You only.
+- A chapter shows no years until the person states them.
+- Build order: A1 (stories), then A2 (extractor v7) after Photos merges, then A3 (the second read).
+- **Open:** whether the second read may change a memory's kind. The owner wants to see v7's output on the whole archive first.
+
 ## 2026-11-16 · You is a portrait, and About leaves the Timeline (S3)
 
 **Status:** Decided. Builds on the five-sections decision of 2026-11-15. Source: `docs/plans/2026-11-16-sections-you.md`, decisions 2, 4, 5, 8, 17 and 18, and the rulings made while building it.

@@ -452,6 +452,8 @@ public struct CandidateActions: Sendable {
         let previous = try store.memories.fetch(memory)?.chapterID
         try store.chapters.assign(memory: memory, toChapter: chapter)
         for id in [previous, chapter].compactMap({ $0 }) { try chapterRangeFromMembers(id) }
+        // The chapter the memory left may now be empty; one with no title either is removed.
+        try store.chapters.deleteEmptyUntitled()
     }
 
     /// "What is this?" on the Change sheet (M7): the only way a memory changes kind. A moment

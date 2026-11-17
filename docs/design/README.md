@@ -55,6 +55,9 @@ Sample content (names, places, dates) is invented.
 | TL_Spine.dc.html | True-time vertical spine with "quiet years" pills |
 | TL_Book.dc.html | Chapters-first contents page |
 | TL_Rings.dc.html | Decade rings overview (superseded: a ring holds marks, not memories) |
+| TL_SpineStrip.dc.html | The chosen Timeline (2026-11-16): spine with real gaps, marks for uncertain dates, one tag for a said chapter, and a pinned whole-life strip with the "During" line. Spec: `docs/specs/2026-11-16-timeline.md` |
+| TL_LifeMap.dc.html | The life map: every chapter as a bar on one year axis; chapters with no stated years under "Not placed in time yet" |
+| TL_ChapterSheet.dc.html | Rename, say when, or remove a chapter. An early list form; the life map replaces the list |
 | Z1_Life.dc.html · Z2_Chapter.dc.html · Z3_Memories.dc.html | The Photos model: one scroll, three altitudes, a year scrubber on the edge |
 
 ## Review revisions (2026-10-22) — preserve first, organize later
