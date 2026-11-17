@@ -191,7 +191,10 @@ public struct CandidateActions: Sendable {
     func edges(of out: MemoryOut, for memory: MemoryID, segment: SegmentID? = nil) throws -> Edges {
         let currentSegment = segment
         var e = Edges()
-        for ref in out.peopleRefs {
+        // A card stored before the owner filter can still name the owner. The speaker is not
+        // someone to ask about, so the name is left out here too (audit F10).
+        let owner = try store.people.ownerNames()
+        for ref in out.peopleRefs where !owner.isOwner(ref) {
             if let person = try store.people.findPerson(matching: ref) {
                 if !e.people.contains(where: { $0.personID == person.id }) {
                     e.people.append(MemoryPerson(memoryID: memory, personID: person.id, roleText: ref))

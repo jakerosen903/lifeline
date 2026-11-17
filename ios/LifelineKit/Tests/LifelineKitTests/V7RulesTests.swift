@@ -155,6 +155,21 @@ private func fact(people: [String] = [], about: String? = nil) -> MemoryOut {
     #expect(try env.store.people.findPersonOrOwner(matching: "maya")?.id == maya.id)
 }
 
+@Test func keepingAnOldCardThatNamesTheOwnerAsksNothingAndMakesNoPerson() throws {
+    let env = try Env()
+    try env.store.profile.save(Profile(displayName: "Jordan", birthDate: nil, birthPlaceText: nil, freeText: nil, updatedAt: .now))
+    let text = "Jordan and Maya built the tree house"
+    let (_, segs) = try StoreFixtures.session(in: env.store.sessions, segments: [text])
+    // As extractor v6 stored it, before the filter: the owner's name among the people.
+    let out = MemoryOut(ref: "m1", kind: .event, title: "The tree house", quote: text, segmentSpan: WordSpan(startWord: 0, endWord: 6),
+                        peopleRefs: ["Jordan", "Maya"], placeText: nil, anchors: [], collectionHint: nil, chapterHint: nil, confidence: 0.9)
+    let card = StoreFixtures.candidate(segs[0].id, payload: try CandidatePayload.encode(out))
+    try env.store.candidates.insert(card)
+    let kept = try env.actions.acceptMemory(card, joinStory: false)
+    #expect(kept.newMentions.map(\.text) == ["Maya"], "only the name the app does not know is asked about")
+    #expect(try env.store.people.people().count == 1, "no second person with the owner's name")
+}
+
 // MARK: - The stored title of a fact, feeling or goal
 
 @Test func theStoredTitleIsTheStartOfTheCleanedQuote() {
