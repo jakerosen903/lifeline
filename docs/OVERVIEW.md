@@ -20,7 +20,7 @@ Most journaling tools ask you to write. Most family-history tools ask you to fil
 4. **Kept.** Keep, change or dismiss a card whenever you like, or never. Nothing merges, groups or gets a title without your tap.
 5. **Placed.** Moments land on a timeline as honest ranges (“during the Boston years”), inside stories and chapters, or on the shelf until a date turns up. Things that are not moments (a first car, a grandmother, a belief) become details on pages for the people, places, things and ideas they are about.
 
-**The shape of the app.** The app opens on five tabs: Timeline, People, Places, Things and You. A record bar sits above the tab bar on every tab. Its label names the page: “Tell a story”, “Tell a story about Maya” or “Tell a story about yourself”. Tap the bar to start a quick story. Its menu holds “Settle in”. A session started from a page records that page as its subject and opens with a question about it. Sessions is a labeled button on Timeline. Settings is a labeled button on You, and You is a portrait of the person in their own words (see “You as a portrait”). “Names you mentioned” is in the overflow menu on People. People is a grid of tiles. A tile shows the person’s cover photo, or a letter when there is no photo. Each tile shows the name and the person’s own words, such as “my sister”. A labeled row above the grid sorts it: “Most told”, “First in your story” or “By name”. The sort starts on “Most told” at each launch. The pages for people, places and things open from their tabs. A page, a memory and You can each hold photos (see “Photos”).
+**The shape of the app.** The app opens on five tabs: Timeline, People, Places, Things and You. A record bar sits above the tab bar on every tab. Its label names the page: “Tell a story”, “Tell a story about Maya” or “Tell a story about yourself”. Tap the bar to start a quick story. Its menu holds “Settle in” and “Tell a story about a photo”. A session started from a page records that page as its subject and opens with a question about it. Sessions is a labeled button on Timeline. Settings is a labeled button on You, and You is a portrait of the person in their own words (see “You as a portrait”). “Names you mentioned” is in the overflow menu on People. People is a grid of tiles. A tile shows the person’s cover photo, or a letter when there is no photo. Each tile shows the name and the person’s own words, such as “my sister”. A labeled row above the grid sorts it: “Most told”, “First in your story” or “By name”. The sort starts on “Most told” at each launch. The pages for people, places and things open from their tabs. A page, a memory and You can each hold photos (see “Photos”). A photo can also start a story (see “A photo starts a story”).
 
 The result is three things at once: a **journal** for revisiting fond memories, an **autobiography** you can replay in your own voice, and, later, a **family record** where several people’s versions of the same Christmas sit side by side.
 
@@ -272,7 +272,7 @@ The app excludes every `.lifeline` file and the audio folder and the photos fold
 
 ### Photos
 
-The person adds a photo one at a time with the system picker, from “Add a photo” in the “…” menu of a person, place or thing page, a memory page, or You. The app asks for no photo-library permission and makes no network call for a photo.
+The person adds a photo one at a time with the system picker, from “Add a photo” in the “…” menu of a person, place or thing page, a memory page, or You. “Add a photo” asks for no photo-library permission and makes no network call for a photo. Only “Tell a story about a photo” asks for access (see “A photo starts a story”).
 
 The app keeps one copy of the photo, as a JPEG of quality 0.85 and at most 2048 pixels on the long edge, in `photos/` next to the audio. The copy has no metadata: no GPS, no EXIF and no orientation flag. The app reads two things from the picked file: the date taken (`DateTimeOriginal`) and the GPS position. It keeps both only in the database, with the origin `exif`. The app shows the date as “taken 14 June 2012”. It does nothing with the position. Neither value changes a memory, a range or a place.
 
@@ -287,6 +287,24 @@ Photos on the life strip of You wait for a later spec. That spec must say where 
 A sweep removes what a delete, a failure or a kill leaves behind: a photo with no link, a file with no row, and a half-written `.partial` file. The sweep runs at launch. It also runs before a copy is made: before an export and before a restore is staged. So a photo whose page was deleted does not travel in a copy. The sweep never deletes a row because its file is missing.
 
 The photos folder is part of the `.lifeline` copy and is out of the phone’s cloud backup, as audio is. When a restore waits for the next launch, its recordings and photos are out of the cloud backup too. Its database is not, as before photos.
+
+### A photo starts a story
+
+Phase 1.5 is built: one photo, one story. There is no clustering and there are no faces.
+
+The person starts from the record bar’s menu, “Tell a story about a photo”, or from “Tell its story” in the photo viewer. The viewer path asks for no access, because the photo is already in the app.
+
+The first tap of the menu entry shows an explanation: “Lifeline will ask to see your photos. They stay on this phone. Lifeline shows them only so you can pick one.” After “Continue”, the system asks for photo access. The app asks with the `.readWrite` level, because it is the only level that can read an album. The app never writes to the photo library. The app asks once and does not ask at launch. The explanation shows once.
+
+The app then shows a grid of the person’s Favorites, newest first. With limited access, the grid shows the photos the person allowed, under the heading “Photos you allowed”. The “All photos” button opens the system picker inside the same sheet. With no access, or with an empty Favorites album, the sheet opens the system picker at once. The app reads only the Favorites album or the allowed set, and the one photo picked. It does not scan the library. Nothing leaves the phone.
+
+A tap on a photo copies it with the rules of “Photos” and closes the sheet. A cancel while the copy runs stores nothing. Then a quick session starts about that photo. The session points at its photo (`session.subject_photo_id`). The running session reads “You chose a story about a photo”, shows the photo above the question, and speaks the opening “Tell me about this one.” After the opening, the app asks nothing. Sessions names it “A story about a photo”.
+
+A photo has three homes: a page, a memory and a session. A photo that a session points at stays when its last page link goes. When nothing holds the photo, the row and the file go together.
+
+The photo links to a memory when the person keeps the memory, or when a telling of the session is merged into a memory. An undone merge takes back the link that the merge added. The landing and the session’s page show a photo card. The card lists the memories that hold the photo, each with “Remove”. It offers “Add to {title}’s page” for each person, place or thing the story named, and “Use this date” when the photo has a date that fits. Each offer is a tap, has no “No” button and stores nothing when ignored. “Use this date” changes the memory and its chapter in one write, then the resolver runs. A date from a photo is settled. The memory page marks it “from a photo”. Where the app sums dates up, such as the entity page span and the life strip, it reads as a guess.
+
+The landing’s delete dialog adds “Its photo goes too.” A delete of a session removes its photo at once when nothing else holds it.
 
 ### 10. The spoken interviewer (M8, in review)
 
@@ -305,7 +323,6 @@ The voice is on-device (`AVSpeechSynthesizer`), through the same audio engine as
 - **Replay (M9).** “Listen at this level”: a playlist in the person’s voice for a story, a chapter or a life, with narration added only later and only as the person approves it.
 - **Navigation by level.** Life, chapter, story and moment as one zoomable view in the manner of Photos, with a year scrubber on the edge.
 - **Protect, when others use the app.** A privacy screen with Share and a Local-only session chosen before recording; span-level deletion that keeps playback offsets; re-running a new extractor version from inside the app.
-- **Phase 1.5: one photo, one story.** Pick a photo and tell its story. No clustering, no faces. Photo storage is built (see “Photos”). The prompt that asks for the story is not.
 - **Phase 2: props.** Favorite photos as prompts and anchors (PhotoKit gives dates and places; people are tagged by hand; a face model only after an evaluation against those tags), then music from an era.
 - **Phase 3: family.** Per-memory sharing, several perspectives on one event, questions for each other, and a read-only web viewer.
 
@@ -317,7 +334,7 @@ The voice is on-device (`AVSpeechSynthesizer`), through the same audio engine as
 > - Run the recording study now that V1 exists: 5 to 8 people, ten minutes each, scored with the app’s evaluation command.
 > - Settle the open product questions below, starting with what a second user needs.
 > - Engineering meanwhile tunes the starting numbers on real recordings.
-> - Then choose the next build: replay (M9) or the one-photo prompt.
+> - Then choose the next build: replay (M9).
 
 ### Open questions
 
