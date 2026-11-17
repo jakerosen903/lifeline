@@ -60,6 +60,28 @@ public struct ChapterRepository: Sendable {
 
     // MARK: - Collections
 
+    /// Collections that share a match key become one: the members of each later copy join the one
+    /// made first, and the copy is deleted. A memory in both stays once. One transaction.
+    @discardableResult
+    public func mergeDuplicateCollections() throws -> [StoryRepository.MergedTitle] {
+        try db.writer.write { db in
+            var first: [String: Collection] = [:]
+            var copies: [String: Int] = [:]
+            var found: [String] = []
+            for collection in try Collection.fetchAll(db, sql: "select * from collection order by rowid") {
+                let key = MatchKey.of(collection.title)
+                guard !key.isEmpty else { continue }
+                guard let kept = first[key] else { first[key] = collection; continue }
+                try db.execute(sql: "update or ignore collection_memory set collection_id = ? where collection_id = ?",
+                               arguments: [kept.id.rawValue, collection.id.rawValue])
+                _ = try Collection.deleteOne(db, key: collection.id.rawValue)
+                if copies[key] == nil { found.append(key) }
+                copies[key, default: 1] += 1
+            }
+            return found.map { StoryRepository.MergedTitle(title: first[$0]?.title ?? "", copies: copies[$0] ?? 0) }
+        }
+    }
+
     public func collections() throws -> [Collection] {
         try db.writer.read { try Collection.order(Column("title").collating(.nocase)).fetchAll($0) }
     }

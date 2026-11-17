@@ -56,6 +56,80 @@ public struct EntityRepository: Sendable {
             .first { MatchKey.of($0.title) == key }
     }
 
+    // MARK: - Two entities that are one
+
+    /// Everything `source` holds moves to `target`, and `source` is deleted. One transaction: a
+    /// kill part-way leaves both as they were. Returns false, and changes nothing, when the two
+    /// are the same, either is gone, their types differ, or they are people (two people can
+    /// share a name; only the person can say they are one).
+    ///
+    /// What moves: links to memories (a memory linked to both keeps one link of each relation),
+    /// first tellings (after the target's own), tags, curiosity items and a session's subject.
+    /// `target` keeps its title, its dates and its one-line detail, and takes `source`'s where it
+    /// has none. Hidden or excluded on either side stays hidden or excluded: a merge never
+    /// reveals what the person put away.
+    @discardableResult
+    public func merge(_ source: EntityID, into target: EntityID) throws -> Bool {
+        try db.writer.write { try Self.merge(source, into: target, in: $0) }
+    }
+
+    static func merge(_ source: EntityID, into target: EntityID, in db: Database) throws -> Bool {
+        guard source != target, let leaving = try Entity.fetchOne(db, key: source.rawValue),
+              var staying = try Entity.fetchOne(db, key: target.rawValue),
+              leaving.type == staying.type, leaving.type != .person else { return false }
+        // Photos (S4) links a photo to an entity. Its rules for covers live with that table, so a
+        // pair that has photos on the side that would go is left for that code to join.
+        if try db.tableExists("photo_link"),
+           try Int.fetchOne(db, sql: "select count(*) from photo_link where entity_id = ?", arguments: [source.rawValue]) ?? 0 > 0 { return false }
+
+        let s = source.rawValue, t = target.rawValue
+        try db.execute(sql: "update or ignore moment_entity set entity_id = ? where entity_id = ?", arguments: [t, s])
+        let last = try Int.fetchOne(db, sql: "select max(\"order\") from entity_span where entity_id = ?", arguments: [t]) ?? -1
+        let orders = try Int.fetchAll(db, sql: "select \"order\" from entity_span where entity_id = ? order by \"order\"", arguments: [s])
+        for (offset, order) in orders.enumerated() {
+            try db.execute(sql: "update entity_span set entity_id = ?, \"order\" = ? where entity_id = ? and \"order\" = ?",
+                           arguments: [t, last + 1 + offset, s, order])
+        }
+        try db.execute(sql: "update or ignore domain_tag set element_id = ? where element_kind = ? and element_id = ?",
+                       arguments: [t, ElementKind.entity.rawValue, s])
+        try db.execute(sql: "delete from domain_tag where element_kind = ? and element_id = ?", arguments: [ElementKind.entity.rawValue, s])
+        try db.execute(sql: "update curiosity_item set entity_id = ? where entity_id = ?", arguments: [t, s])
+        try db.execute(sql: "update session set subject_entity_id = ? where subject_entity_id = ?", arguments: [t, s])
+
+        if staying.detailText == nil { staying.detailText = leaving.detailText }
+        if !staying.range.isPlaced { staying.range = leaving.range }
+        staying.hiddenFromTimeline = staying.hiddenFromTimeline || leaving.hiddenFromTimeline
+        staying.excludedFromAI = staying.excludedFromAI || leaving.excludedFromAI
+        try staying.update(db)
+        // Links the target already had stayed behind on the source; the delete takes them with it.
+        _ = try Entity.deleteOne(db, key: s)
+        return true
+    }
+
+    /// Places and things that share a type and a match key become one: each later copy joins the
+    /// one made first ("Ohio." joins "Ohio"). People and ideas are never joined by name. One
+    /// transaction. Returns what was joined, for the notice.
+    @discardableResult
+    public func mergeDuplicateTitles() throws -> [StoryRepository.MergedTitle] {
+        try db.writer.write { db in
+            var first: [String: Entity] = [:]
+            var copies: [String: Int] = [:]
+            var found: [String] = []
+            let rows = try Entity.fetchAll(db, sql: "select * from entity where type in (?, ?) order by created_at, rowid",
+                                           arguments: [EntityType.place.rawValue, EntityType.thing.rawValue])
+            for entity in rows {
+                let name = MatchKey.of(entity.title)
+                guard !name.isEmpty else { continue }
+                let key = entity.type.rawValue + "\u{1F}" + name
+                guard let kept = first[key] else { first[key] = entity; continue }
+                guard try Self.merge(entity.id, into: kept.id, in: db) else { continue }
+                if copies[key] == nil { found.append(key) }
+                copies[key, default: 1] += 1
+            }
+            return found.map { StoryRepository.MergedTitle(title: first[$0]?.title ?? "", copies: copies[$0] ?? 0) }
+        }
+    }
+
     public func rename(_ id: EntityID, to title: String) throws {
         let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { throw Error.emptyTitle }
