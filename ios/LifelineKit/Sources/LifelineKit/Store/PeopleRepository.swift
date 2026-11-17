@@ -162,14 +162,16 @@ public struct PeopleRepository: Sendable {
     }
 
     /// Marks the mention resolved to `person` and records its text, and its relation phrase, as aliases.
+    /// A group phrase is not recorded: who "our parents" means depends on the story.
     public func resolve(_ id: MentionID, to person: PersonID) throws {
         try db.writer.write { db in
             guard var mention = try Mention.fetchOne(db, key: id.rawValue) else { return }
             mention.status = .resolved
             mention.personID = person
             try mention.update(db)
-            try Self.insertAlias(mention.text, person, db)
-            if let relation = mention.relationText { try Self.insertAlias(relation, person, db) }
+            // A phrase for several people ("our parents") is never one person's name.
+            if !GroupPhrase.isGroup(mention.text) { try Self.insertAlias(mention.text, person, db) }
+            if let relation = mention.relationText, !GroupPhrase.isGroup(relation) { try Self.insertAlias(relation, person, db) }
         }
     }
 
@@ -178,6 +180,22 @@ public struct PeopleRepository: Sendable {
         try db.writer.write { db in
             try db.execute(sql: "update mention set status = ?, person_id = null where id = ?",
                            arguments: [MentionStatus.unresolved.rawValue, id.rawValue])
+        }
+    }
+
+    /// A group phrase answered: the mention is settled and names no one person.
+    public func markGroupAnswered(_ id: MentionID) throws {
+        try db.writer.write { db in
+            try db.execute(sql: "update mention set status = ?, person_id = null where id = ?",
+                           arguments: [MentionStatus.resolved.rawValue, id.rawValue])
+        }
+    }
+
+    /// Takes a name away from a person. No memory changes: the links stay. A later story that
+    /// says the name no longer links to this person by it.
+    public func removeAlias(_ text: String, from person: PersonID) throws {
+        try db.writer.write { db in
+            try db.execute(sql: "delete from alias where person_id = ? and lower(trim(text)) = ?", arguments: [person.rawValue, Self.normalize(text)])
         }
     }
 

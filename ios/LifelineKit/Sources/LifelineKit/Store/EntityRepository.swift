@@ -237,6 +237,13 @@ public struct EntityRepository: Sendable {
         }
     }
 
+    /// True when the memory is already a detail of something.
+    public func hasDetail(_ memory: MemoryID) throws -> Bool {
+        try db.writer.read { db in
+            try Int.fetchOne(db, sql: "select count(*) from moment_entity where memory_id = ? and relation = 'detail'", arguments: [memory.rawValue]) ?? 0 > 0
+        }
+    }
+
     public func unlink(_ memory: MemoryID, _ entity: EntityID, relation: EntityRelation) throws {
         try db.writer.write { db in
             try db.execute(sql: "delete from moment_entity where memory_id = ? and entity_id = ? and relation = ?",

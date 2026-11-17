@@ -26,6 +26,14 @@ The spec leaves these open. Each one is decided here so the owner can overrule i
 6. **"That's me" needs an owner.** With no owner row, the button does not show.
 7. **A2c is three small PRs if the session prefers:** cards, the person's page, the Change sheet. They touch different files.
 
+### Rulings made while building A2a (PR #25)
+
+- **Task 5: a bad `about_ref` is cleared in a step of its own** (`AboutRefCheck`), after validation, not inside `OutputValidator`. The validator's signature and its tests do not change.
+- **Task 6: the `group` mention kind waits for A2b.** A2a keeps `MentionKind` as it is and works on the phrase: `GroupPhrase.isGroup` decides. A group phrase is never saved as a name, `resolveGroup` links several people, and `removeAlias` takes a name away. The enum value and the schema belong with the prompt that asks for them.
+- **A place with no name leaves nothing on the memory but the quote.** `MemoryPlace` holds an entity id, not text, so there is no place text to keep apart from the quote.
+- **Typed names still reach the owner.** `findPerson` never returns the owner; `findPersonOrOwner` does, for a name the person typed or chose. The review on #25 found the four callers.
+- **The entity merge leaves a pair alone when the side that would go has photos** (`photo_link`, S4). Photos owns the rules for covers.
+
 ### Limits found while planning
 
 - **No score exists for prompt quality.** The only measure is the comparison in A2b, read by the owner. It needs an Anthropic key and runs on the Mac, not in CI.

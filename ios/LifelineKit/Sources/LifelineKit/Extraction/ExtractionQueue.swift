@@ -131,6 +131,8 @@ public actor ExtractionQueue {
             var validated = OutputValidator.validate(response.output, segmentText: segment.text, words: words)
             // The speaker is the owner: their own name is never a person to ask about (audit F10).
             validated = try store.people.ownerNames().removingOwner(from: validated)
+            // An about_ref that names nothing the model was given is cleared; the memory is kept.
+            validated = AboutRefCheck.cleared(validated, knownIDs: Set(request.packet.people.map(\.id) + request.packet.entities.map(\.id)))
             try mintStoryRefs(&validated)
             let shown = try storeCandidates(validated, segment: segmentID, version: response.version)
             lastFailure[segmentID] = nil

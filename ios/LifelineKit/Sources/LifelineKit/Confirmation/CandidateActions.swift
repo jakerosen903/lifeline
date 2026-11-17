@@ -255,6 +255,13 @@ public struct CandidateActions: Sendable {
         guard let ref = ref?.trimmingCharacters(in: .whitespacesAndNewlines), !ref.isEmpty else { return nil }
         if ref == "self" { return try store.profile.owner()?.entityID }
         if let known = try store.entities.entity(id: EntityID(rawValue: ref)) { return known.id }
+        // About a person named in this segment: linked now when the app knows the name, and when
+        // the person answers "Who's this?" otherwise (`linkDetails`).
+        if let segment = currentSegment,
+           let named = try store.candidates.candidates(for: segment).first(where: { $0.kind == .person && CandidatePayload.mention($0)?.ref == ref }),
+           let mention = CandidatePayload.mention(named) {
+            return try store.people.findPerson(matching: mention.text)?.entityID
+        }
         guard let segment = currentSegment,
               let row = try store.candidates.candidates(for: segment).first(where: { ($0.kind == .entity || $0.kind == .place) && CandidatePayload.mention($0)?.ref == ref }),
               let mention = CandidatePayload.mention(row), mention.kind != .person,
@@ -280,7 +287,7 @@ public struct CandidateActions: Sendable {
 
     /// Aliases and the "Who's this?" mentions that follow the edges. Returns the new mentions.
     func finishEdges(_ edges: Edges, segment: SegmentID) throws -> [Mention] {
-        for (person, alias) in edges.roleAliases { try store.people.addAlias(alias, to: person) }
+        for (person, alias) in edges.roleAliases where !GroupPhrase.isGroup(alias) { try store.people.addAlias(alias, to: person) }
         return try edges.unknown.map { try mention(for: $0, in: segment) }
     }
 
@@ -363,10 +370,14 @@ public struct CandidateActions: Sendable {
         }
         if let person {
             try linkMemories(naming: mention.text, in: mention.segmentID, to: person.id)
-            // The same name waiting in other segments is the same question; answer it once.
-            for other in try store.people.mentions(status: .unresolved) where other.id != id && Self.same(other.text, mention.text) {
+            try linkDetails(aboutMentionNamed: mention.text, in: mention.segmentID, to: person.id)
+            // The same name waiting in other segments is the same question; answer it once. A group
+            // phrase ("our parents") is a new question in every story, so it is not carried over.
+            for other in try store.people.mentions(status: .unresolved)
+                where other.id != id && Self.same(other.text, mention.text) && !GroupPhrase.isGroup(mention.text) {
                 try store.people.resolve(other.id, to: person.id)
                 try linkMemories(naming: other.text, in: other.segmentID, to: person.id)
+                try linkDetails(aboutMentionNamed: other.text, in: other.segmentID, to: person.id)
             }
         } else {
             for other in try store.people.mentions(status: .unresolved) where other.id != id && Self.same(other.text, mention.text) {
@@ -383,7 +394,39 @@ public struct CandidateActions: Sendable {
         guard mention.status == .unresolved, let person = try store.people.findPerson(matching: mention.text) else { return nil }
         try store.people.resolve(mention.id, to: person.id)
         try linkMemories(naming: mention.text, in: mention.segmentID, to: person.id)
+        try linkDetails(aboutMentionNamed: mention.text, in: mention.segmentID, to: person.id)
         return person
+    }
+
+    /// "Who are “our parents”?" answered: each chosen person is linked to the memories of that
+    /// segment that say the phrase. The phrase is never saved as a name for any of them, so the
+    /// next story that says it asks again. With nobody chosen it is "Leave it as said".
+    public func resolveGroup(_ id: MentionID, people: [PersonID]) throws {
+        guard let mention = try store.people.mention(id: id) else { return }
+        for person in people { try linkMemories(naming: mention.text, in: mention.segmentID, to: person) }
+        try store.people.markGroupAnswered(id)
+    }
+
+    /// "Leave it as said": nobody is linked, the phrase stays in the quote, and this mention is not asked about again.
+    public func leaveGroupAsSaid(_ id: MentionID) throws {
+        try resolveGroup(id, people: [])
+    }
+
+    /// A fact, feeling or goal kept before the app knew who it was about: once the name is a
+    /// person, the memory becomes a detail of that person. A memory that is already a detail of
+    /// something keeps the link the person gave it.
+    private func linkDetails(aboutMentionNamed text: String, in segment: SegmentID, to person: PersonID) throws {
+        let rows = try store.candidates.candidates(for: segment)
+        let refs = Set(rows.compactMap { row -> String? in
+            guard row.kind == .person, let mention = CandidatePayload.mention(row), Self.same(mention.text, text) else { return nil }
+            return mention.ref
+        })
+        guard !refs.isEmpty else { return }
+        for row in rows where row.kind == .memory {
+            guard let out = CandidatePayload.memory(row), let about = out.aboutRef, refs.contains(about), !(out.kind ?? .event).isMoment,
+                  let memory = try store.memories.memory(createdFrom: row.id), try !store.entities.hasDetail(memory.id) else { continue }
+            try store.entities.link(memory.id, EntityID(rawValue: person.rawValue), relation: .detail)
+        }
     }
 
     private func linkMemories(naming text: String, in segment: SegmentID, to person: PersonID) throws {
