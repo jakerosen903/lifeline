@@ -27,6 +27,23 @@ public struct ChapterRepository: Sendable {
         }
     }
 
+    /// Deletes every chapter that has no title, no memory in it and no story filed in it, and
+    /// returns how many. Such a chapter shows as "Untitled chapter" with nothing under it, and no
+    /// action could remove it. A chapter with a title is kept even when it is empty: the person
+    /// named it. A chapter that a story points at is kept too: deleting it would clear the
+    /// story's chapter without a word.
+    @discardableResult
+    public func deleteEmptyUntitled() throws -> Int {
+        try db.writer.write { db in
+            try db.execute(sql: """
+                delete from chapter where (title is null or trim(title) = '')
+                and id not in (select chapter_id from memory where chapter_id is not null)
+                and id not in (select chapter_id from story where chapter_id is not null)
+                """)
+            return db.changesCount
+        }
+    }
+
     public func setRange(_ id: ChapterID, _ range: TimeRange) throws {
         try db.writer.write { db in
             guard var chapter = try Chapter.fetchOne(db, key: id.rawValue) else { return }
@@ -43,15 +60,38 @@ public struct ChapterRepository: Sendable {
 
     // MARK: - Collections
 
+    /// Collections that share a match key become one: the members of each later copy join the one
+    /// made first, and the copy is deleted. A memory in both stays once. One transaction.
+    @discardableResult
+    public func mergeDuplicateCollections() throws -> [StoryRepository.MergedTitle] {
+        try db.writer.write { db in
+            var first: [String: Collection] = [:]
+            var copies: [String: Int] = [:]
+            var found: [String] = []
+            for collection in try Collection.fetchAll(db, sql: "select * from collection order by rowid") {
+                let key = MatchKey.of(collection.title)
+                guard !key.isEmpty else { continue }
+                guard let kept = first[key] else { first[key] = collection; continue }
+                try db.execute(sql: "update or ignore collection_memory set collection_id = ? where collection_id = ?",
+                               arguments: [kept.id.rawValue, collection.id.rawValue])
+                _ = try Collection.deleteOne(db, key: collection.id.rawValue)
+                if copies[key] == nil { found.append(key) }
+                copies[key, default: 1] += 1
+            }
+            return found.map { StoryRepository.MergedTitle(title: first[$0]?.title ?? "", copies: copies[$0] ?? 0) }
+        }
+    }
+
     public func collections() throws -> [Collection] {
         try db.writer.read { try Collection.order(Column("title").collating(.nocase)).fetchAll($0) }
     }
 
-    /// Reuses a collection with the same title, ignoring case and outer whitespace.
+    /// Reuses a collection whose title has the same match key ("Family trips." finds "Family trips").
     public func insertCollection(titled title: String) throws -> Collection {
         let clean = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        let key = MatchKey.of(clean)
         return try db.writer.write { db in
-            if let existing = try Collection.fetchOne(db, sql: "select * from collection where lower(trim(title)) = ?", arguments: [clean.lowercased()]) {
+            if !key.isEmpty, let existing = try Collection.fetchAll(db, sql: "select * from collection order by rowid").first(where: { MatchKey.of($0.title) == key }) {
                 return existing
             }
             let collection = Collection(id: .init(), title: clean)

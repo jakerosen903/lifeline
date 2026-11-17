@@ -45,11 +45,12 @@ final class BackupViewModel {
         guard !isSessionLive() else { error = Self.liveSessionText; return }
         error = nil
         progressText = "Copying your memories…"
-        let root = deps.audioRoot, database = deps.database
+        let root = deps.audioRoot, database = deps.database, photos = deps.photos
         let folder = deps.exportWithoutShareSheet ? ((try? Backup.safetyCopyDirectory()) ?? FileManager.default.temporaryDirectory) : FileManager.default.temporaryDirectory
         let destination = folder.appending(path: Backup.defaultFileName())
         let share = !deps.exportWithoutShareSheet
         Task.detached(priority: .userInitiated) { [weak self] in
+            await Self.sweepPhotos(photos)
             do {
                 let manifest = try Backup.export(root: root, appVersion: Dependencies.appVersion, to: destination, database: database) { line in
                     Task { @MainActor in self?.progressText = line }
@@ -109,9 +110,11 @@ final class BackupViewModel {
         guard let confirming else { return }
         self.confirming = nil
         progressText = "Saving a copy of what is on the phone…"
-        let root = deps.audioRoot, database = deps.database
+        let root = deps.audioRoot, database = deps.database, photos = deps.photos
         Task.detached(priority: .userInitiated) { [weak self] in
             defer { try? FileManager.default.removeItem(at: confirming.url) }
+            // The safety copy is a copy too.
+            await Self.sweepPhotos(photos)
             do {
                 _ = try Backup.stage(confirming.url, root: root, appVersion: Dependencies.appVersion, database: database,
                                      safetyCopyDirectory: try Backup.safetyCopyDirectory())
@@ -125,6 +128,18 @@ final class BackupViewModel {
             } catch {
                 await MainActor.run { self?.progressText = nil; self?.error = "Could not restore: \(error.localizedDescription)" }
             }
+        }
+    }
+
+    /// A photo whose page was deleted in this run waits for the launch sweep; a copy made before then must not carry it.
+    /// The library's sweep is serialised with its adds. A failure is logged and does not stop the copy: the launch sweep
+    /// still runs.
+    private nonisolated static func sweepPhotos(_ photos: PhotoLibrary) async {
+        do {
+            let swept = try await photos.sweep()
+            if swept.rows + swept.files > 0 { print("[photos] sweep before a copy removed \(swept.rows) rows and \(swept.files) files") }
+        } catch {
+            print("[photos] sweep before a copy failed: \(error)")
         }
     }
 

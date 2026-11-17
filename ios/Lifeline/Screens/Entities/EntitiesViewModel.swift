@@ -9,6 +9,8 @@ final class EntitiesViewModel {
     let type: EntityType
     var tagFilter: String? { didSet { refresh() } }
     private(set) var rows: [EntitySummary] = []
+    /// Each entity's cover photo, for People only: its tiles show them. Places and Things read none.
+    private(set) var covers: [EntityID: Photo] = [:]
     private(set) var allTags: [String] = []
     /// The owner's own page: "About you" (M7), on the You tab.
     private(set) var aboutYou: Entity?
@@ -32,6 +34,8 @@ final class EntitiesViewModel {
             aboutYou = try owner.flatMap { try store.entities.entity(id: $0) }
             rows = try store.entities.summaries(type: type)
                 .filter { $0.id != owner && (tagged?.contains($0.id.rawValue) ?? true) }
+            // One statement, whatever the number of people.
+            covers = type == .person ? try store.photos.covers(type: .person) : [:]
             error = nil
         } catch {
             self.error = error.localizedDescription

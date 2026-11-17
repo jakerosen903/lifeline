@@ -29,13 +29,24 @@ final class EntityViewModel {
     /// The owner's own page ("About you"): a session from here is about "yourself".
     private(set) var isOwner = false
     private(set) var error: String?
+    /// Why the last photo action failed, for the pinned slot (decision 21). Cleared when the next one starts.
+    private(set) var photoError: String?
+    /// The page's photos (S4): the cover heads the page, two or more sit in a row.
+    let shelf: PhotoShelf
     let player = SegmentPlayer()
     let deps: Dependencies
 
     init(entity: Entity, deps: Dependencies) {
         self.entity = entity
         self.deps = deps
+        // The shelf reports to this page, which exists only once the shelf is stored: the closure is bound after.
+        var report: (String) -> Void = { _ in }
+        self.shelf = PhotoShelf(subject: .entity(entity.id), deps: deps, onError: { report($0) })
+        report = { [weak self] in self?.photoError = $0 }
     }
+
+    /// "Photo of Maya", or "Photo of you" on the owner's page (decision 19).
+    var photoLabel: String { PhotoCaption.label(title: entity.title, isOwner: isOwner, isMemory: false) }
 
     /// "Add dates" is offered only on a place or a thing, and only as the person's own action.
     var canAddDates: Bool { entity.type == .place || entity.type == .thing }
@@ -85,7 +96,30 @@ final class EntityViewModel {
         } catch {
             self.error = error.localizedDescription
         }
+        shelf.load()
     }
+
+    // MARK: - Photos
+
+    func addPhoto(fileAt file: URL, assetLocalID: String?) async {
+        photoError = nil
+        await shelf.add(fileAt: file, assetLocalID: assetLocalID)
+    }
+
+    func makeCover(_ photo: PhotoID) async {
+        photoError = nil
+        await shelf.makeCover(photo)
+    }
+
+    func removePhoto(_ photo: PhotoID) async {
+        photoError = nil
+        await shelf.remove(photo)
+    }
+
+    /// A picked photo that never reached the shelf (the picker could not hand it over).
+    func photoFailed(_ message: String) { photoError = message }
+
+    func clearPhotoError() { photoError = nil }
 
     func togglePlayback() {
         if player.isPlaying { player.stop(); return }

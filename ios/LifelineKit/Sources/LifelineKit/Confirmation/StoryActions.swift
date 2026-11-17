@@ -86,11 +86,20 @@ extension CandidateActions {
     /// raw ref), so the memory joins the story when its row exists and makes the row otherwise.
     /// A story title hint, accepted: the member's story takes the title, or a story is made
     /// around the member. Titles are the person's words, at most 8 of them.
+    ///
+    /// A title names one story. When another story already has this title (by match key), this
+    /// memory joins that story. Without this, three memories with the same hint became three
+    /// stories with one title (audit F14). Only the hinted memory moves: a story it was in keeps
+    /// its other members, its title and its chapter, because the hint was about one memory.
     func acceptStoryHint(_ phrase: String, for memory: MemoryID) throws -> Story {
         let title = Self.storyTitle(from: phrase)
-        if let story = try store.stories.story(of: memory) {
-            try store.stories.rename(story.id, title: title)
-            return try store.stories.story(id: story.id) ?? story
+        let current = try store.stories.story(of: memory)
+        if let named = try store.stories.story(matching: title), named.id != current?.id {
+            return try store.stories.join([memory], story: named.id, title: nil, chapterID: nil)
+        }
+        if let current {
+            try store.stories.rename(current.id, title: title)
+            return try store.stories.story(id: current.id) ?? current
         }
         return try createStory(title: title, containing: [memory])
     }

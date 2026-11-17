@@ -42,6 +42,8 @@ final class YouViewModel {
     private(set) var playingLineID: PortraitLine.ID?
     /// The chosen chip; nil is "All". Not remembered across launches. A chip that filters out the playing line stops it.
     var tag: String? { didSet { stopIfPlayingLineIsGone() } }
+    /// The owner's photos (S4, decision 15), the same shelf as the owner's own page. Nil until the owner is known.
+    private(set) var shelf: PhotoShelf?
 
     /// Reads nothing: the page reads when it appears.
     init(deps: Dependencies) {
@@ -62,9 +64,47 @@ final class YouViewModel {
             if newLead, case .error = notice { notice = nil }
             stopIfPlayingLineIsGone()
             error = nil
+            placeShelf(owner: made.owner)
         } catch {
             self.error = "Could not read your page: \(error.localizedDescription)"
         }
+        shelf?.load()
+    }
+
+    /// One shelf per owner. Made once the owner is known; a failure says why in the slot at the foot of the page.
+    private func placeShelf(owner: Entity?) {
+        guard let owner else { shelf = nil; return }
+        guard shelf?.subject != .entity(owner.id) else { return }
+        shelf = PhotoShelf(subject: .entity(owner.id), deps: deps, onError: { [weak self] in self?.show(.error($0)) })
+    }
+
+    // MARK: - Photos
+
+    /// "Photo of you" (decision 19), as on the owner's own page.
+    var photoLabel: String { PhotoCaption.label(title: "", isOwner: true, isMemory: false) }
+
+    /// A photo action clears an old error only. "Hidden." and its Undo stay, so an action never takes the way back.
+    func addPhoto(fileAt file: URL, assetLocalID: String?) async {
+        clearError()
+        await shelf?.add(fileAt: file, assetLocalID: assetLocalID)
+    }
+
+    func makeCover(_ photo: PhotoID) async {
+        clearError()
+        await shelf?.makeCover(photo)
+    }
+
+    func removePhoto(_ photo: PhotoID) async {
+        clearError()
+        await shelf?.remove(photo)
+    }
+
+    /// A picked photo that never reached the shelf (the picker could not hand it over).
+    func photoFailed(_ message: String) { show(.error(message)) }
+
+    /// Empties the slot of an error, and only of an error.
+    func clearError() {
+        if case .error = notice { notice = nil }
     }
 
     /// The part's lines without the lead; "Who you are" only with the chosen tag.
@@ -174,7 +214,7 @@ final class YouViewModel {
     /// and changes nothing else. A telling is not checked to be non-empty when it is read, so an empty span reaches here.
     func togglePlayback(_ line: PortraitLine) {
         // A play tap clears an old error only. "Hidden." and its Undo stay, so a tap never takes the way back.
-        if case .error = notice { notice = nil }
+        clearError()
         if isPlaying(line) { stop(); return }
         guard let telling = line.telling else { return }
         do {

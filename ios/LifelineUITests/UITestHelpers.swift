@@ -1,4 +1,8 @@
+import UIKit
 import XCTest
+
+/// A class in the UI test bundle, so `Bundle(for:)` finds the bundled fixtures.
+private final class FixtureBundle {}
 
 extension XCUIApplication {
     /// First open: "Add a little context" then Skip, which saves an empty profile and leads home.
@@ -110,6 +114,17 @@ extension XCUIApplication {
         return app
     }
 
+    /// Launches with `-uiTesting-seedPhotos`: the invented family, then generated photos. Maya has two (a dated
+    /// landscape cover, then an undated portrait), "The tree house" one, Jordan one; Dad, Sam and Lena none.
+    /// First open is done; do not call `skipFirstOpen()`.
+    static func launchWithPhotos(_ extra: [String] = []) -> XCUIApplication {
+        let app = XCUIApplication()
+        app.launchArguments += ["-uiTesting", "-uiTesting-seedPhotos"] + extra
+        app.launch()
+        XCTAssertTrue(app.waitHittable(app.buttons["home.start"], timeout: 15), "the seeded app lands on the timeline")
+        return app
+    }
+
     /// Launches with `-uiTesting-seedSpine`: Jordan (born 1990) with six placed moments, a gap of three years, one named
     /// chapter, one chapter without a title and one undated moment. First open is done; do not call `skipFirstOpen()`.
     static func launchWithSpine(_ extra: [String] = []) -> XCUIApplication {
@@ -118,6 +133,52 @@ extension XCUIApplication {
         app.launch()
         XCTAssertTrue(app.waitHittable(app.buttons["home.start"], timeout: 15), "the seeded app lands on the timeline")
         return app
+    }
+
+    /// A copy of a bundled fixture in the temporary folder, for a launch argument such as `-uiTesting-pickPhoto`.
+    static func fixturePath(_ name: String, ext: String) throws -> String {
+        let url = try XCTUnwrap(Bundle(for: FixtureBundle.self).url(forResource: name, withExtension: ext), "fixture \(name).\(ext) in the UI test bundle")
+        let dest = FileManager.default.temporaryDirectory.appending(path: "\(name)-\(UUID().uuidString).\(ext)")
+        try FileManager.default.copyItem(at: url, to: dest)
+        return dest.path
+    }
+
+    /// Opens a page's "…" menu, then taps "Add a photo" in it.
+    func addPhotoFromMenu(_ menu: String, _ item: String) {
+        let more = buttons[menu]
+        XCTAssertTrue(waitHittable(more, timeout: 10), "the page's menu is on screen")
+        more.tap()
+        let add = buttons[item]
+        XCTAssertTrue(waitHittable(add, timeout: 5), "Add a photo is in the menu")
+        add.tap()
+    }
+
+    /// The 0xRRGGBB of the pixel at a unit point (0...1 each way) of the element's screenshot.
+    func colour(of element: XCUIElement, at unit: CGPoint) -> Int {
+        guard let image = element.screenshot().image.cgImage,
+              let pixel = Self.pixel(of: image, x: Int(unit.x * CGFloat(image.width - 1)), y: Int(unit.y * CGFloat(image.height - 1)))
+        else { XCTFail("the element has a screenshot to sample"); return -1 }
+        return pixel
+    }
+
+    /// Whether two 0xRRGGBB values are within 24 per channel (the copy is JPEG in Display P3).
+    func isNear(_ a: Int, _ b: Int) -> Bool {
+        guard a >= 0, b >= 0 else { return false }
+        return [16, 8, 0].allSatisfy { abs(((a >> $0) & 0xFF) - ((b >> $0) & 0xFF)) <= 24 }
+    }
+
+    /// Redraws one pixel into sRGB, so the comparison does not depend on the screenshot's colour space.
+    private static func pixel(of image: CGImage, x: Int, y: Int) -> Int? {
+        guard let one = image.cropping(to: CGRect(x: x, y: y, width: 1, height: 1)),
+              let space = CGColorSpace(name: CGColorSpace.sRGB) else { return nil }
+        var rgba = [UInt8](repeating: 0, count: 4)
+        let drew = rgba.withUnsafeMutableBytes { buffer -> Bool in
+            guard let context = CGContext(data: buffer.baseAddress, width: 1, height: 1, bitsPerComponent: 8, bytesPerRow: 4, space: space,
+                                          bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return false }
+            context.draw(one, in: CGRect(x: 0, y: 0, width: 1, height: 1))
+            return true
+        }
+        return drew ? Int(rgba[0]) << 16 | Int(rgba[1]) << 8 | Int(rgba[2]) : nil
     }
 
     /// The You tab, once its header is up.

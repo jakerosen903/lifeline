@@ -24,6 +24,70 @@ public struct StoryRepository: Sendable {
         try db.writer.read { try Story.order(Column("created_at")).fetchAll($0) }
     }
 
+    /// The story a title names: the one made first among the stories whose title has the same
+    /// match key. A title with an empty key names no story. Untitled stories never match.
+    public func story(matching title: String) throws -> Story? {
+        let key = MatchKey.of(title)
+        guard !key.isEmpty else { return nil }
+        return try db.writer.read { db in try Self.inCreationOrder(db).first { $0.title.map(MatchKey.of) == key } }
+    }
+
+    /// Oldest first. `created_at` keeps milliseconds, so two stories made together tie; the row order breaks the tie.
+    static func inCreationOrder(_ db: Database) throws -> [Story] {
+        try Story.fetchAll(db, sql: "select * from story order by created_at, rowid")
+    }
+
+    /// Moves every member of `source` to the end of `target`, in their order, and deletes
+    /// `source`. `target` keeps its title. It keeps its chapter too; when it has none it takes
+    /// `source`'s, so no chapter placement is lost. One transaction: a kill part-way leaves both
+    /// stories as they were. Does nothing when either story is gone or they are the same.
+    public func merge(_ source: StoryID, into target: StoryID) throws {
+        try db.writer.write { try Self.merge(source, into: target, in: $0) }
+    }
+
+    static func merge(_ source: StoryID, into target: StoryID, in db: Database) throws {
+        guard source != target, let leaving = try Story.fetchOne(db, key: source.rawValue),
+              let staying = try Story.fetchOne(db, key: target.rawValue) else { return }
+        if staying.chapterID == nil, let chapter = leaving.chapterID {
+            try db.execute(sql: "update story set chapter_id = ? where id = ?", arguments: [chapter.rawValue, target.rawValue])
+        }
+        let last = try Int.fetchOne(db, sql: "select max(\"order\") from story_moment where story_id = ?", arguments: [target.rawValue]) ?? -1
+        let moving = try String.fetchAll(db, sql: "select memory_id from story_moment where story_id = ? order by \"order\", rowid", arguments: [source.rawValue])
+        for (offset, memory) in moving.enumerated() {
+            try db.execute(sql: "update story_moment set story_id = ?, \"order\" = ? where memory_id = ?",
+                           arguments: [target.rawValue, last + 1 + offset, memory])
+        }
+        _ = try Story.deleteOne(db, key: source.rawValue)
+    }
+
+    /// One title that several stories had, and how many stories that was.
+    public struct MergedTitle: Sendable, Equatable {
+        public var title: String
+        public var copies: Int
+    }
+
+    /// Stories that share a title become one: each later copy joins the one made first (audit
+    /// F14: accepting a story hint used to make a new story every time). Untitled stories are
+    /// left alone. One transaction. Returns what was joined, in the order found, for the notice.
+    @discardableResult
+    public func mergeDuplicateTitles() throws -> [MergedTitle] {
+        try db.writer.write { db in
+            var first: [String: Story] = [:]
+            var copies: [String: Int] = [:]
+            var found: [String] = []
+            for story in try Self.inCreationOrder(db) {
+                guard let title = story.title else { continue }
+                let key = MatchKey.of(title)
+                guard !key.isEmpty else { continue }
+                guard let kept = first[key] else { first[key] = story; continue }
+                try Self.merge(story.id, into: kept.id, in: db)
+                if copies[key] == nil { found.append(key) }
+                copies[key, default: 1] += 1
+            }
+            return found.map { MergedTitle(title: first[$0]?.title ?? "", copies: copies[$0] ?? 0) }
+        }
+    }
+
     /// A memory's place in its story, with enough of the story to put it back if the story goes.
     public struct Membership: Sendable, Equatable {
         public var moment: StoryMoment

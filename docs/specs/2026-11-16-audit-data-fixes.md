@@ -81,7 +81,7 @@ The work is three PRs. Each one is useful alone.
 
 1. Accepting a story hint must reuse a story with the same match key (see A2, "Names") before it creates one. The memory joins that story.
 2. When two or more stories share a match key, the newest telling joins the story that was created first.
-3. `StoryRepository` must offer one function that merges story B into story A: it moves B's members to the end of A in their order, keeps A's title and chapter, and deletes B. It must be one transaction.
+3. `StoryRepository` must offer one function that merges story B into story A: it moves B's members to the end of A in their order, keeps A's title, keeps A's chapter (or takes B's when A has none), and deletes B. It must be one transaction.
 4. Existing duplicates must be repaired. See owner's call 1.
 5. A story with one member stays allowed in storage. The Timeline already hides it. Rule 1 lets a second memory join it later.
 6. The minted `story_ref` ids stay per session. Rule 1 makes the title the link across sessions, so no stored id map is needed.
@@ -99,13 +99,13 @@ The chapter rules moved to the Timeline spec (`docs/specs/2026-11-16-timeline.md
 
 A1 keeps one chapter rule, because it is a repair and needs no new screen:
 
-1. A chapter with no title and no members must be deleted. This runs once at launch for existing data and after every action that removes a member.
+1. A chapter with no title, no member and no story filed in it must be deleted. This runs once at launch for existing data and after a memory changes chapter.
 
 ### A2: names
 
-1. One pure function gives the match key of a name: lower case, edge spaces removed, edge punctuation removed, inner runs of spaces made one space. It replaces `PeopleRepository.normalize` for entity titles, story titles, chapter titles and collection titles.
+1. One pure function gives the match key of a name: lower case, edge spaces removed, sentence punctuation and quotation marks at the ends removed, inner runs of spaces made one space. A symbol at the end stays, because it can be part of a name: "C++" and "C#" are two names. It replaces `PeopleRepository.normalize` for entity titles, story titles, chapter titles and collection titles.
 2. Stored titles do not change. The person's spelling shows as they said it. Only the comparison changes.
-3. Lookups by title must compare match keys. The store keeps the key in a column so that SQL can compare it (a migration; see "Data").
+3. Lookups by title must compare match keys.
 4. Existing entities of the same type with the same match key must become one entity. See owner's call 1.
 
 Edge cases:
@@ -137,9 +137,49 @@ Edge cases:
 
 ### A2: titles
 
-1. Prompt v7 must ask for a title that names the moment, in sentence case, 3 to 8 words, in the person's words where it can.
-2. The validator keeps the 8-word limit. It adds no lower limit: a short telling can have a short title.
-3. The app must not change a title's case in code. The title is the model's one composed field, and the person can rename it.
+1. A title names an event. Only a moment has one that the person sees.
+2. For a moment, prompt v7 must ask for a title that names the moment, in sentence case, 3 to 8 words, in the person's words where it can.
+3. For a fact, a feeling or a goal, prompt v7 must return an empty title. The app must not show a composed title for these kinds. The quote is the thing. This is the rule ideas already have (v6, rule 7).
+4. `memory.title` cannot be empty in the store. For a fact, a feeling or a goal the code stores the start of the cleaned quote as the title: at most 8 words, cut at a word. One pure function gives it, from `ReadableQuote`. Lists that need one line for the memory (a picker, the context packet) read it.
+5. Where a screen shows a fact, a feeling or a goal with a heading (its card, its own page), the heading is the cleaned quote in quotation marks, not a title.
+6. The validator keeps the 8-word limit. It adds no lower limit. It accepts an empty title only for a fact, a feeling or a goal.
+7. The app must not change a title's case in code. The person can rename a moment.
+
+Example. The person says "I think we had some of our most formative experiences together" about a friend. v6 made a feeling with the title "our most formative experiences together". v7 makes a feeling about that friend with no title; the friend's page shows the sentence.
+
+Edge cases:
+
+- A memory that the person changes from a feeling to a moment keeps its stored title and can be renamed.
+- A memory that the person changes from a moment to a feeling keeps its stored title in the store. The screens stop showing it.
+- A quote of one or two words is its own title.
+
+### A2: groups of people
+
+A phrase can name more than one person: "our parents", "my grandparents", "the kids". Today it raises "Who's this?", which takes one answer. The answer is then saved as another name for that one person, so the next "our parents" links to that person with no question.
+
+1. The extractor output gains one mention kind, `group`. Prompt v7 must say: a phrase that names more than one person is a `group` mention, never a `person` mention. Two names said together ("Mom and Dad") are two `person` mentions.
+2. The code must not trust the prompt for this. One pure function says whether a phrase is a group: a plural kin or company word ("parents", "grandparents", "folks", "kids", "children", "siblings", "brothers", "sisters", "cousins", "aunts", "uncles", "friends"), with or without a possessive before it. A `person` mention that matches is treated as a `group`.
+3. A group mention shows on the kept card as one chip: "Who are “our parents”?". It opens a list where the person can tick several people, add someone new, or choose "Leave it as said".
+4. Each ticked person is linked to the memory, as a person mention is today.
+5. A group phrase is never saved as a name for a person. The same phrase asks again in a later story, because who "our" means depends on the story.
+6. "Leave it as said" links nobody. The phrase stays in the quote. The app does not ask about this memory again.
+7. A person's page must list the other names the app has for them, each with "Remove". Removing a name changes no memory. It stops later stories from linking by that name.
+
+Edge cases:
+
+- A group phrase that the store already holds as a name for one person (from before this change) still resolves to that person until the name is removed. Rule 7 is the way out. A3 offers the removal (see "How a change is found").
+- A group of one ("my parents" from a person who has one parent in the store): the list still shows; one tick is a valid answer.
+- A group mention with no memory that carries it shows nowhere, as a person mention with no memory does today.
+
+### A2: the Change sheet for what is not a moment
+
+The Change sheet asks "The title", "Who was there" and "Same story" for every kind. Those questions describe a scene.
+
+1. For a fact, a feeling or a goal the sheet shows, in this order: the quote; "About whom or what?"; "What kind"; "Who it mentions"; "Said before"; the recording rows.
+2. It does not show "The title".
+3. "Who it mentions" is the list that "Who was there" is for a moment. Only the heading changes.
+4. "Said before" is the row that "Same story" is for a moment, with the same action. Its note reads: "This becomes a later telling of the one you pick. Its words and audio stay."
+5. For a moment the sheet does not change.
 
 ### A2: generic places and casual ideas
 
@@ -151,11 +191,11 @@ Edge cases:
 
 1. `extractor.v7.md` is a new file. v1 to v6 stay.
 2. v7 must keep rules 1 to 4 of v6 word for word (extract only what is said, summaries, confidence, disclosure). A test must compare them.
-3. The schema changes in one way only: none. The new packet field needs no schema change. If a redline adds a field, the decoder must stay tolerant of v6 payloads, as it is for v1 to v5.
+3. The schema changes in one way only: a mention's `kind` gains the value `group`. The new packet field needs no schema change. The decoder must stay tolerant of v6 payloads, as it is for v1 to v5.
 4. `ExtractorConfig.version` becomes "v7".
-5. The kit gains checks that need no network: the owner rule (A2 "the owner", rule 3), the `about_ref` rule, the match key and the generic-place function. Each is a pure function with tests.
-6. The repository gains invented transcripts that hold each audit case: the owner says their own name; a fact names a new person; a place is said twice with different punctuation; a generic place; a retold story across two sessions.
-7. `ExtractorIntegrationTests` (it runs only with a key, on the owner's Mac) must run v6 and v7 over those transcripts and print, per version: person mentions that are the owner, facts with and without `about_ref`, titles not in sentence case, generic places. The owner reads the two columns before v7 becomes the default. This is the only measure of prompt quality; it is not a CI check.
+5. The kit gains checks that need no network: the owner rule (A2 "the owner", rule 3), the `about_ref` rule, the match key, the generic-place function, the group-phrase function and the stored title of a fact, feeling or goal. Each is a pure function with tests.
+6. The repository gains invented transcripts that hold each audit case: the owner says their own name; a fact names a new person; a place is said twice with different punctuation; a generic place; a retold story across two sessions; a feeling about a named person; a group phrase ("our parents") beside a named person.
+7. `ExtractorIntegrationTests` (it runs only with a key, on the owner's Mac) must run v6 and v7 over those transcripts and print, per version: person mentions that are the owner, facts with and without `about_ref`, titles not in sentence case, facts, feelings and goals that carry a title, group phrases returned as one person, generic places. The owner reads the two columns before v7 becomes the default. This is the only measure of prompt quality; it is not a CI check.
 
 ### A3: the second read
 
@@ -190,6 +230,7 @@ One pure function compares a kept memory with the v7 output for its segment.
 | About a person, place or thing | The memory is a fact, feeling or goal with no detail link, and v7 gives an `about_ref` that resolves to a stored entity. | The memory has a detail link. The entity is hidden. |
 | About you | The memory's detail link, or its person mention, points at a person whose name is the owner's. | — |
 | This person is you | A stored person's match key equals the owner's name or alias. One suggestion per person, not per memory. | The person has a relation ("my cousin"). |
+| This name is a group | A stored person has another name that the group-phrase function calls a group ("our parents"). Accepting removes the name. It changes no memory. | — |
 
 5. It never offers: a new memory, a deletion, a change of kind, a date, a change to the quote, a story or chapter change. Dates stay with the resolver and the person (`docs/DECISIONS.md`, 2026-10-23).
 6. It never offers a change to a memory the person dismissed or hid.
@@ -222,9 +263,9 @@ One pure function compares a kept memory with the v7 output for its segment.
 
 ## Data
 
-- A2 adds a match-key column to `entity`, `story`, `chapter` and `collection`, filled for existing rows in the same migration.
+- A2 adds no column and no migration. The tables are small, so a lookup compares match keys in Swift (`docs/plans/2026-11-16-extractor-v7.md`, decision 1). An earlier draft of this spec asked for a stored match-key column.
 - A3 adds the suggestion table and a marker for a segment whose diff is done.
-- S4 (Photos) plans migration v13. A2 takes the next free number after whatever is on `main` when it merges, and A3 the one after. The first PR to merge keeps its number (`docs/plans/2026-11-15-sections.md`, "Rules for the order").
+- S4 (Photos) plans migration v13. A3 takes the next free number after whatever is on `main` when it merges. The first PR to merge keeps its number (`docs/plans/2026-11-15-sections.md`, "Rules for the order").
 - `BackupManifest` does not change. A backup made after A3 carries open suggestions inside the database file.
 - The server stays absent. Nothing here stores user content outside the device.
 

@@ -58,4 +58,65 @@ final class PeopleUITests: XCTestCase {
         XCTAssertFalse(app.any("people.grid").exists)
         XCTAssertEqual(Set(app.entityRowLabels()), ["Maya", "Dad", "Sam", "Lena"])
     }
+
+    // MARK: - Covers
+
+    /// A tile or row of this person, by its label.
+    private func personRow(_ app: XCUIApplication, _ name: String) -> XCUIElement {
+        app.buttons.matching(identifier: "entities.row").matching(NSPredicate(format: "label == %@", name)).firstMatch
+    }
+
+    @MainActor
+    func testATileShowsItsCover() {
+        let app = XCUIApplication.launchWithPhotos(); app.openTab("People")
+        let maya = personRow(app, "Maya")
+        let dad = personRow(app, "Dad")
+        XCTAssertTrue(maya.waitForExistence(timeout: 5))
+        let face = CGPoint(x: 0.25, y: 0.2)   // inside the face's upper left quarter, clear of the circle
+        // The cover decodes off the main thread: wait for it to draw.
+        waitForColour(app, maya, at: face, near: 0xC8893F)
+        XCTAssertTrue(app.isNear(app.colour(of: maya, at: face), 0xC8893F), "Maya's cover fills her face")
+        XCTAssertTrue([0xE3DCC6, 0xDDE2D3, 0xEADBCB].contains { app.isNear(app.colour(of: dad, at: face), $0) }, "Dad keeps his letter tile")
+        XCTAssertEqual(maya.value as? String, "my sister", "the tile reads as before")
+    }
+
+    @MainActor
+    func testAPhotoAddedOnThePageShowsOnTheTile() throws {
+        let app = XCUIApplication.launchWithPeople(["-uiTesting-pickPhoto", try XCUIApplication.fixturePath("photo-orange", ext: "jpg")])
+        app.openEntityPage("Lena"); app.addPhotoFromMenu("entity.more", "entity.addPhoto")
+        XCTAssertTrue(app.buttons["photo.header"].waitForExistence(timeout: 10))
+        app.navigationBars.buttons.firstMatch.tap()
+        let lena = personRow(app, "Lena")
+        XCTAssertTrue(lena.waitForExistence(timeout: 5))
+        waitForColour(app, lena, at: CGPoint(x: 0.25, y: 0.2), near: 0xE07A2E)
+        XCTAssertTrue(app.isNear(app.colour(of: lena, at: CGPoint(x: 0.25, y: 0.2)), 0xE07A2E))
+    }
+
+    @MainActor
+    func testNoTileOffersAPhotoWhenSomeHaveOne() {
+        let app = XCUIApplication.launchWithPhotos(); app.openTab("People")
+        XCTAssertTrue(app.any("people.grid").waitForExistence(timeout: 5))
+        XCTAssertEqual(app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS[c] %@", "photo")).count, 0)
+    }
+
+    @MainActor
+    func testTheListKeepsTheCoverAtTheLargestTextSize() {
+        let app = XCUIApplication.launchWithPhotos(["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"]); app.openTab("People")
+        XCTAssertTrue(app.any("people.list").waitForExistence(timeout: 5))
+        let maya = personRow(app, "Maya")
+        XCTAssertTrue(maya.waitForExistence(timeout: 5))
+        // The row spans the screen; its face is the 52-point square at the leading edge, after the list's inset,
+        // so the sample sits at the face's middle (at 0.04 it lands in the inset, on the screen's white).
+        let face = CGPoint(x: 0.1, y: 0.5)
+        waitForColour(app, maya, at: face, near: 0xC8893F)
+        XCTAssertTrue(app.isNear(app.colour(of: maya, at: face), 0xC8893F))
+    }
+
+    /// Polls up to 10 seconds for the pixel to turn this colour; the assertion that follows still checks it.
+    private func waitForColour(_ app: XCUIApplication, _ element: XCUIElement, at point: CGPoint, near colour: Int) {
+        let deadline = Date().addingTimeInterval(10)
+        while !app.isNear(app.colour(of: element, at: point), colour), Date() < deadline {
+            RunLoop.current.run(until: Date().addingTimeInterval(0.3))
+        }
+    }
 }
