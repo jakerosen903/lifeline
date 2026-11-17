@@ -65,6 +65,8 @@ final class HomeViewModel {
     var photoStart: PhotoStoryStartViewModel?
     /// The photo the sheet stored; its session starts once the sheet has closed.
     private var chosenPhoto: Photo?
+    /// The sheet last shown, kept past its dismissal so a close with no photo can cancel a copy still on its way.
+    private var shownPhotoStart: PhotoStoryStartViewModel?
     /// "Tell another" after a photo session: the entry opens again once the landing's cover has closed.
     private var opensPhotoStartWhenCoverCloses = false
     /// Called after a session ends, so the timeline can refresh.
@@ -134,12 +136,14 @@ final class HomeViewModel {
     func tellAboutAPhoto() {
         guard !isStarting, activeSession == nil, photoStart == nil else { return }
         startError = nil
-        photoStart = PhotoStoryStartViewModel(source: deps.photoPickSource, library: deps.photos) { [weak self] start, photo in
-            // A photo that finishes storing after its sheet was cancelled starts nothing; the next sweep removes it.
+        let start = PhotoStoryStartViewModel(source: deps.photoPickSource, library: deps.photos) { [weak self] start, photo in
+            // A cancelled sheet stores nothing (`cancel()`); this guard is the backstop for a store already under way.
             guard let self, self.photoStart === start else { return }
             self.chosenPhoto = photo
             self.photoStart = nil
         }
+        shownPhotoStart = start
+        photoStart = start
     }
 
     /// The sheet has gone: now the session can present its cover. The photo was stored with no link while the sheet
@@ -147,7 +151,11 @@ final class HomeViewModel {
     /// copy in Settings, a sheet that cannot be open under this one, and from here to the row there is no tap but the
     /// microphone prompt. If the microphone is refused, no row is made and the next sweep rightly removes the photo.
     func photoStartClosed() {
-        guard let photo = chosenPhoto else { return }
+        defer { shownPhotoStart = nil }
+        guard let photo = chosenPhoto else {
+            shownPhotoStart?.cancel()
+            return
+        }
         chosenPhoto = nil
         Task { await startPhotoSession(photo) }
     }

@@ -274,7 +274,8 @@ struct Dependencies {
         deps.exportWithoutShareSheet = true
         if let i = args.firstIndex(of: "-uiTesting-pickPhoto"), i + 1 < args.count { deps.pickPhotoPath = args[i + 1] }
         let photoAccess = args.firstIndex(of: "-uiTesting-photoAccess").flatMap { $0 + 1 < args.count ? args[$0 + 1] : nil }
-        deps.photoPickSource = try ScriptedPhotoPickSource(mode: photoAccess, folder: root.appending(path: "scripted-photos"))
+        deps.photoPickSource = try ScriptedPhotoPickSource(mode: photoAccess, slowFile: args.contains("-uiTesting-slowPhotoFile"),
+                                                           folder: root.appending(path: "scripted-photos"))
         if args.contains("-uiTesting-seed") { try UITestSeed.write(sessions: deps.sessions, store: store) }
         if args.contains("-uiTesting-seedPerson") { try UITestSeed.writePersonOnly(store: store) }
         if args.contains("-uiTesting-seedPeople") { try UITestSeed.writePeople(store: store, profile: deps.profile, sessions: deps.sessions) }

@@ -179,6 +179,28 @@ final class PhotoStoryStartUITests: XCTestCase {
         XCTAssertFalse(app.any("home.sessionRow").waitForExistence(timeout: 3), "Sessions has no new row")
     }
 
+    /// The copy takes three seconds (`-uiTesting-slowPhotoFile`). Whether a photo row was stored cannot be seen from the
+    /// UI; the kit's `CancellablePhotoStoreTests` prove that a cancelled copy stores nothing.
+    @MainActor
+    func testCancellingWhileThePhotoIsAddedStoresNothing() {
+        let app = launch(["-uiTesting-slowPhotoFile"])
+        tapTheEntry(app)
+        waitForGrid(app)
+        app.buttons.matching(identifier: "favorites.photo").firstMatch.tap()
+        XCTAssertTrue(app.any("photo.adding").waitForExistence(timeout: 2), "Adding the photo… shows while the copy is written")
+        app.buttons["Cancel"].tap()
+        XCTAssertTrue(app.waitHittable(app.buttons["home.start"], timeout: 10), "the sheet closed")
+        RunLoop.current.run(until: Date().addingTimeInterval(5))
+        XCTAssertFalse(app.buttons["session.finish"].exists, "no session screen after the copy finished")
+        app.openSessions()
+        XCTAssertFalse(app.any("home.sessionRow").waitForExistence(timeout: 3), "Sessions has no new row")
+
+        tapTheEntry(app)
+        waitForGrid(app)
+        app.buttons.matching(identifier: "favorites.photo").firstMatch.tap()
+        assertSessionAbout(app, caption: Self.newestCaption)
+    }
+
     @MainActor
     func testTwoStoriesFromTheSameFavorite() {
         let app = launch()

@@ -17,7 +17,7 @@ final class PhotoStoryStartViewModel: Identifiable {
     var isLoaded: Bool { start != nil }
     /// The grid's photos, newest first.
     private(set) var photos: [LibraryPhoto] = []
-    /// Each thumbnail is read and decoded once, then kept while the grid is up.
+    /// Each thumbnail is read and decoded once, then kept while the grid is up. One that could not be read is asked again.
     private(set) var thumbnails: [String: UIImage] = [:]
     /// "Adding the photo…" shows while this is true.
     private(set) var isAdding = false
@@ -28,6 +28,8 @@ final class PhotoStoryStartViewModel: Identifiable {
     @ObservationIgnored private let library: PhotoLibrary
     @ObservationIgnored private let onChosen: (PhotoStoryStartViewModel, Photo) -> Void
     @ObservationIgnored private var thumbnailsAsked: Set<String> = []
+    /// The sheet closed with no photo chosen: a copy still on its way is not stored.
+    @ObservationIgnored private(set) var isCancelled = false
 
     /// Reads nothing: the sheet calls `load()` when it is on screen.
     init(source: any PhotoPickSource, library: PhotoLibrary, onChosen: @escaping (_ from: PhotoStoryStartViewModel, _ photo: Photo) -> Void) {
@@ -56,15 +58,19 @@ final class PhotoStoryStartViewModel: Identifiable {
 
     func thumbnail(for photo: LibraryPhoto, side: CGFloat) async {
         guard thumbnailsAsked.insert(photo.id).inserted else { return }
-        if let image = await source.thumbnail(for: photo, side: side) { thumbnails[photo.id] = image }
+        // Nil is forgotten, so the tile asks again the next time it appears.
+        if let image = await source.thumbnail(for: photo, side: side) { thumbnails[photo.id] = image } else { thumbnailsAsked.remove(photo.id) }
     }
 
-    /// A tap in the grid: copies the original, stores it, removes the copy. A second tap while one adds does nothing.
+    /// The sheet closed before a photo was chosen ("Cancel" or a swipe), perhaps while one is being copied.
+    func cancel() { isCancelled = true }
+
+    /// A tap in the grid: copies the original, stores it unless the sheet closed meanwhile, removes the copy.
+    /// A second tap while one adds does nothing.
     func pick(_ photo: LibraryPhoto) async {
         await adding {
-            let file = try await source.file(for: photo)
-            defer { try? FileManager.default.removeItem(at: file) }
-            return try await library.store(fileAt: file, assetLocalID: photo.id)
+            try await CancellablePhotoStore.fetchAndStore(fetch: { try await source.file(for: photo) }, assetLocalID: photo.id,
+                                                          into: library, isCancelled: { isCancelled })
         }
     }
 
@@ -72,9 +78,9 @@ final class PhotoStoryStartViewModel: Identifiable {
     /// shows from now: the hand-over can take seconds for a photo in iCloud.
     func picked(_ item: PhotosPickerItem) async {
         await adding {
-            var stored: Result<Photo, any Error> = .failure(PhotoImport.Error.unreadable)
+            var stored: Result<Photo?, any Error> = .failure(PhotoImport.Error.unreadable)
             try await PickedPhotoFile.receive(item) { file, assetLocalID in
-                do { stored = .success(try await self.library.store(fileAt: file, assetLocalID: assetLocalID)) } catch { stored = .failure(error) }
+                do { stored = .success(try await self.store(file, assetLocalID: assetLocalID)) } catch { stored = .failure(error) }
             }
             return try stored.get()
         }
@@ -82,14 +88,23 @@ final class PhotoStoryStartViewModel: Identifiable {
 
     /// Under `-uiTesting-pickPhoto`: the test's file, which the test owns and which stays.
     func picked(fileAt file: URL) async {
-        await adding { try await library.store(fileAt: file, assetLocalID: nil) }
+        await adding { try await store(file, assetLocalID: nil) }
     }
 
-    private func adding(_ store: () async throws -> Photo) async {
+    private func store(_ file: URL, assetLocalID: String?) async throws -> Photo? {
+        try await CancellablePhotoStore.store(fileAt: file, assetLocalID: assetLocalID, into: library, isCancelled: { isCancelled })
+    }
+
+    /// Nil from `store`: the sheet was cancelled, so nothing was stored and nothing starts.
+    private func adding(_ store: () async throws -> Photo?) async {
         guard !isAdding else { return }
         isAdding = true
         error = nil
         defer { isAdding = false }
-        do { onChosen(self, try await store()) } catch { self.error = "Could not add this photo: \(error.localizedDescription)" }
+        do {
+            if let photo = try await store() { onChosen(self, photo) }
+        } catch {
+            self.error = "Could not add this photo: \(error.localizedDescription)"
+        }
     }
 }

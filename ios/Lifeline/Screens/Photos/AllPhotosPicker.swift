@@ -18,8 +18,9 @@ struct AllPhotosPicker: View {
                 Text("All photos")
             }
             .photosPickerStyle(.inline)
-            // The sheet has its own Cancel; one photo at a time needs no Add button.
-            .photosPickerAccessoryVisibility(.hidden, edges: .all)
+            // Only the bottom bar (Cancel and Add) goes: the sheet has its own Cancel, and one photo at a time needs no Add.
+            // The top keeps Photos and Collections and search, the person's only way to albums here without access.
+            .photosPickerAccessoryVisibility(.hidden, edges: .bottom)
             .disabled(viewModel.isAdding)
             .onChange(of: selection) { _, item in
                 guard let item else { return }

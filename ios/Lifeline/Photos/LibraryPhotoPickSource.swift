@@ -1,4 +1,5 @@
 import LifelineKit
+import os
 import Photos
 import UIKit
 
@@ -36,20 +37,26 @@ struct LibraryPhotoPickSource: PhotoPickSource {
         return (0..<assets.count).map { LibraryPhoto(id: assets.object(at: $0).localIdentifier) }
     }
 
-    /// One result per request (`highQualityFormat`), from what is on the phone: a thumbnail never downloads.
+    /// Opportunistic delivery, from what is on the phone: a thumbnail never downloads. For a photo kept only in iCloud
+    /// ("Optimize iPhone Storage") the full image is not on the phone, but a lower-quality one usually is; this mode
+    /// delivers that first (degraded), then a final call with the full image or nil. The final call resumes, with the
+    /// degraded image when the full one did not come, so the tile shows something and the continuation resumes once.
     /// The image is decoded here, so the grid draws it without decoding on the main thread.
     @concurrent func thumbnail(for photo: LibraryPhoto, side: CGFloat) async -> UIImage? {
         guard let asset = Self.asset(photo) else { return nil }
         let options = PHImageRequestOptions()
-        options.deliveryMode = .highQualityFormat
+        options.deliveryMode = .opportunistic
         options.resizeMode = .fast
         options.isNetworkAccessAllowed = false
+        let degraded = OSAllocatedUnfairLock<UIImage?>(initialState: nil)
         let image: UIImage? = await withCheckedContinuation { continuation in
             PHImageManager.default().requestImage(for: asset, targetSize: CGSize(width: side, height: side), contentMode: .aspectFill,
                                                   options: options) { image, info in
-                // A degraded image comes only in opportunistic mode; skipping one keeps this to a single resume anyway.
-                if (info?[PHImageResultIsDegradedKey] as? Bool) == true { return }
-                continuation.resume(returning: image)
+                if (info?[PHImageResultIsDegradedKey] as? Bool) == true {
+                    degraded.withLock { $0 = image }
+                    return
+                }
+                continuation.resume(returning: image ?? degraded.withLock { $0 })
             }
         }
         return image?.preparingForDisplay() ?? image
