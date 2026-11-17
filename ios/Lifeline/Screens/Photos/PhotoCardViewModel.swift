@@ -14,8 +14,13 @@ final class PhotoCardViewModel {
     private(set) var card: PhotoStoryCard?
     /// True after the first read. Reads nothing in `init`: the screen calls `refresh()` when it is on screen.
     private(set) var isLoaded = false
-    /// Why the last action failed, for `photoErrorSlot`. The next action clears it.
-    private(set) var error: String?
+    /// Why the card cannot show, or why the last action failed, for `photoErrorSlot`. The action's message wins:
+    /// a read right after a failed action must not hide why the action failed.
+    var error: String? { actionError ?? readError }
+    /// The last read failed. The next good read clears it (the landing reads every second).
+    private var readError: String?
+    /// The last action failed. The next action clears it.
+    private var actionError: String?
 
     init(session: SessionID, deps: Dependencies, showsRemoveFromStory: Bool) {
         self.session = session
@@ -30,8 +35,9 @@ final class PhotoCardViewModel {
             let fresh = try PhotoStoryReader(store: deps.extractionStore).card(for: session)
             if fresh != card { card = fresh }
             isLoaded = true
+            readError = nil
         } catch {
-            self.error = "Could not show the photo: \(error.localizedDescription)"
+            readError = "Could not show the photo: \(error.localizedDescription)"
         }
     }
 
@@ -61,14 +67,14 @@ final class PhotoCardViewModel {
     }
 
     private func run(_ failure: String, _ work: () throws -> Void) {
-        error = nil
-        do { try work() } catch { self.error = "\(failure): \(error.localizedDescription)" }
+        actionError = nil
+        do { try work() } catch { actionError = "\(failure): \(error.localizedDescription)" }
         refresh()
     }
 
     private func perform(_ failure: String, _ work: () async throws -> Void) async {
-        error = nil
-        do { try await work() } catch { self.error = "\(failure): \(error.localizedDescription)" }
+        actionError = nil
+        do { try await work() } catch { actionError = "\(failure): \(error.localizedDescription)" }
         refresh()
     }
 }

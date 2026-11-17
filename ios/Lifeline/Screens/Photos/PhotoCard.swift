@@ -8,6 +8,8 @@ import SwiftUI
 struct PhotoCard: View {
     let viewModel: PhotoCardViewModel
     let cache: PhotoImageCache
+    /// "Remove the photo from this story" asks first, as "Remove photo…" in the viewer does (S4): the photo can leave Lifeline.
+    @State private var confirmingRemoveFromStory = false
 
     var body: some View {
         if let card = viewModel.card {
@@ -30,9 +32,16 @@ struct PhotoCard: View {
                 }
                 ForEach(card.dateOffers) { offer in dateOffer(offer) }
                 if viewModel.showsRemoveFromStory {
-                    Button(role: .destructive) { Task { await viewModel.removeFromStory() } } label: { control("Remove the photo from this story") }
+                    Button(role: .destructive) { confirmingRemoveFromStory = true } label: { control("Remove the photo from this story") }
                         .buttonStyle(.borderless)
                         .accessibilityIdentifier("photoCard.removeFromStory")
+                        .confirmationDialog("Remove this photo?", isPresented: $confirmingRemoveFromStory, titleVisibility: .visible) {
+                            Button("Remove photo", role: .destructive) { Task { await viewModel.removeFromStory() } }
+                                .accessibilityIdentifier("photoCard.confirmRemoveFromStory")
+                            Button("Keep it", role: .cancel) {}
+                        } message: {
+                            Text("It leaves this story. The original stays in your photo library.")
+                        }
                 }
             }
             .padding(14)
@@ -66,6 +75,8 @@ struct PhotoCard: View {
                 .font(.subheadline).foregroundStyle(Theme.ink).fixedSize(horizontal: false, vertical: true)
             Button { viewModel.useDate(offer) } label: { control("Use this date") }
                 .buttonStyle(.bordered).tint(Theme.oliveOnFill)
+                // Two offers must not sound the same to VoiceOver and Voice Control; the label starts with the visible text.
+                .accessibilityLabel("Use this date for \(offer.memory.title)")
         }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("photoCard.useDate")

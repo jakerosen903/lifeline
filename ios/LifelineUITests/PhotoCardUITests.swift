@@ -86,6 +86,22 @@ final class PhotoCardUITests: XCTestCase {
         XCTAssertEqual(listed.label, kept)
     }
 
+    /// Inside a landing's review no session can start, so the viewer there does not offer "Tell its story".
+    @MainActor
+    func testTellItsStoryIsNotOfferedInsideALandingsReview() {
+        let app = XCUIApplication.launchWithPhotoStory(opening: "first")
+        let review = app.buttons["landing.review"]
+        XCTAssertTrue(app.scrollIntoView(review), "Review these moments is on the landing")
+        review.tap()
+        openMemory("The beach", in: app)
+        let thumb = app.buttons["photo.thumb"]
+        XCTAssertTrue(app.waitHittable(thumb, timeout: 5), "the memory's page shows the photo")
+        thumb.tap()
+        XCTAssertTrue(app.any("photo.viewer").waitForExistence(timeout: 5), "the viewer is up")
+        XCTAssertTrue(app.buttons["photo.remove"].exists, "the viewer's other controls are there")
+        XCTAssertFalse(app.buttons["photo.tellStory"].exists, "no session can start under a landing")
+    }
+
     // MARK: - The session's page
 
     @MainActor
@@ -119,14 +135,15 @@ final class PhotoCardUITests: XCTestCase {
         let block = blocks.first
         XCTAssertTrue(block?.staticTexts["The beach"].exists == true, "the offer names the memory")
         XCTAssertTrue(block?.staticTexts["The photo is dated 14 June 2012. Use that for when this happened?"].exists == true)
-        XCTAssertTrue(block?.buttons["Use this date"].exists == true)
+        let use = block?.buttons["Use this date for The beach"]
+        XCTAssertTrue(use?.exists == true, "the button's spoken name starts with its text and names the memory")
     }
 
     @MainActor
     func testUseThisDateDatesTheMemory() {
         let app = XCUIApplication.launchWithPhotoStory()
         openFirstStory(app)
-        let use = app.buttons["Use this date"]
+        let use = app.buttons["Use this date for The beach"]
         XCTAssertTrue(app.waitHittable(use, timeout: 5))
         use.tap()
         XCTAssertTrue(use.waitForNonExistence(timeout: 5), "the offer goes")
@@ -135,6 +152,7 @@ final class PhotoCardUITests: XCTestCase {
         let range = app.buttons["memory.range"]
         XCTAssertTrue(range.label.contains("14 June 2012"), "the day is shown: \(range.label)")
         XCTAssertTrue(range.label.contains("from a photo"), "and its source: \(range.label)")
+        XCTAssertFalse(app.staticTexts["memory.evidence"].exists, "the person did not say the date: no \"you said\" line")
     }
 
     @MainActor
@@ -164,9 +182,34 @@ final class PhotoCardUITests: XCTestCase {
         XCTAssertTrue(app.reveal(remove), "the session's page can let the story go of its photo")
         XCTAssertEqual(remove.label, "Remove the photo from this story")
         remove.tap()
+        // The iOS 26 dialog can list its button twice in the tree (as `row.confirmDelete` in YouUITests): take the first.
+        let confirm = app.buttons["photoCard.confirmRemoveFromStory"].firstMatch
+        XCTAssertTrue(confirm.waitForExistence(timeout: 5), "it asks first")
+        XCTAssertTrue(app.staticTexts["Remove this photo?"].exists)
+        XCTAssertTrue(app.staticTexts["It leaves this story. The original stays in your photo library."].exists)
+        XCTAssertEqual(confirm.label, "Remove photo")
+        confirm.tap()
         XCTAssertTrue(app.any("photoCard").waitForNonExistence(timeout: 5), "the card is gone")
         openMemory("The beach", in: app)
         XCTAssertTrue(app.buttons["photo.thumb"].waitForExistence(timeout: 5), "The beach still shows the photo")
+    }
+
+    @MainActor
+    func testKeepItLeavesThePhotoOnTheStory() {
+        let app = XCUIApplication.launchWithPhotoStory()
+        openFirstStory(app)
+        let remove = app.buttons["photoCard.removeFromStory"]
+        XCTAssertTrue(app.reveal(remove))
+        remove.tap()
+        XCTAssertTrue(app.buttons["photoCard.confirmRemoveFromStory"].firstMatch.waitForExistence(timeout: 5), "it asks first")
+        // The iOS 26 dialog can be a popover: its "Keep it" is then a tap outside it (the dismiss region); a sheet has the button.
+        let keep = app.buttons["Keep it"].firstMatch, outside = app.otherElements["PopoverDismissRegion"].firstMatch
+        if keep.exists { keep.tap() } else { outside.tap() }
+        XCTAssertTrue(app.buttons["photoCard.confirmRemoveFromStory"].firstMatch.waitForNonExistence(timeout: 5), "the question is gone")
+        XCTAssertTrue(app.any("photoCard").exists, "the card stays")
+        XCTAssertTrue(remove.exists, "and so does its remove control")
+        for _ in 0..<4 { app.swipeDown() }
+        XCTAssertEqual(cardMemoryTitles(app), ["The beach", "The drive home"], "nothing changed")
     }
 
     // MARK: - The delete dialog
@@ -226,13 +269,18 @@ final class PhotoCardUITests: XCTestCase {
     func testTheCardHoldsAtTheLargestText() {
         let landing = XCUIApplication.launchWithPhotoStory(opening: "first", Self.largestText)
         XCTAssertTrue(landing.any("photoCard").waitForExistence(timeout: 10))
-        assertControlsReachable(landing, ids: ["photoCard.removeFromMemory", "photoCard.addToPage"], buttonTitles: ["Use this date"])
+        assertControlsReachable(landing, ids: ["photoCard.removeFromMemory", "photoCard.addToPage"], buttonTitles: ["Use this date for The beach"])
         landing.terminate()
 
         let page = XCUIApplication.launchWithPhotoStory(Self.largestText)
         openFirstStory(page)
-        XCTAssertTrue(page.reveal(page.buttons["photoCard.removeFromStory"]), "the card's last control is in the list")
-        assertControlsReachable(page, ids: ["photoCard.removeFromMemory", "photoCard.addToPage", "photoCard.removeFromStory"], buttonTitles: ["Use this date"])
+        let last = page.buttons["photoCard.removeFromStory"]
+        XCTAssertTrue(page.reveal(last), "the card's last control is in the list")
+        // Revealed, it can sit clear of the record bar: the page scrolls it above the bar, not under it.
+        for _ in 0..<4 where !(last.frame.maxY <= page.buttons["home.start"].frame.minY) { page.swipeUp() }
+        XCTAssertTrue(last.isHittable, "the last control is not under the bar")
+        XCTAssertLessThanOrEqual(last.frame.maxY, page.buttons["home.start"].frame.minY, "the last control ends above the record bar")
+        assertControlsReachable(page, ids: ["photoCard.removeFromMemory", "photoCard.addToPage", "photoCard.removeFromStory"], buttonTitles: ["Use this date for The beach"])
     }
 
     /// Every button with these identifiers and titles is reachable and at least 44 points high.

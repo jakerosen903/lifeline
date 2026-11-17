@@ -94,5 +94,6 @@ final class PhotoStoryUITests: XCTestCase {
         XCTAssertTrue(range.waitForExistence(timeout: 5))
         XCTAssertTrue(range.label.contains("14 June 2012"), "the day is shown: \(range.label)")
         XCTAssertTrue(range.label.contains("from a photo"), "and its source: \(range.label)")
+        XCTAssertFalse(app.staticTexts["memory.evidence"].exists, "the person did not say the date: no \"you said\" line")
     }
 }

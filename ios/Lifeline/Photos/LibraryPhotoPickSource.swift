@@ -37,29 +37,46 @@ struct LibraryPhotoPickSource: PhotoPickSource {
         return (0..<assets.count).map { LibraryPhoto(id: assets.object(at: $0).localIdentifier) }
     }
 
-    /// Opportunistic delivery, from what is on the phone: a thumbnail never downloads. For a photo kept only in iCloud
-    /// ("Optimize iPhone Storage") the full image is not on the phone, but a lower-quality one usually is; this mode
-    /// delivers that first (degraded), then a final call with the full image or nil. The final call resumes, with the
-    /// degraded image when the full one did not come, so the tile shows something and the continuation resumes once.
+    /// From what is on the phone: a thumbnail never downloads. First the image at full quality; for a photo kept only in
+    /// iCloud ("Optimize iPhone Storage") that is nil, and the phone's lower-quality copy is asked for next. Each request
+    /// calls back exactly once, so the tile never waits on a second delivery that does not come. A cancelled task (the
+    /// tile left the screen, the sheet closed) cancels its request and gets nil; the grid asks again when it needs to.
     /// The image is decoded here, so the grid draws it without decoding on the main thread.
     @concurrent func thumbnail(for photo: LibraryPhoto, side: CGFloat) async -> UIImage? {
         guard let asset = Self.asset(photo) else { return nil }
+        let size = CGSize(width: side, height: side)
+        var image = await Self.localImage(of: asset, size: size, delivery: .highQualityFormat)
+        if image == nil, !Task.isCancelled { image = await Self.localImage(of: asset, size: size, delivery: .fastFormat) }
+        return image?.preparingForDisplay() ?? image
+    }
+
+    /// One image request with the network off. In `.highQualityFormat` and `.fastFormat` PhotoKit calls back once, and
+    /// that call is the answer whatever `PHImageResultIsDegradedKey` says. `ResumeOnce` still guards the continuation,
+    /// because a cancel can race the callback.
+    private static func localImage(of asset: PHAsset, size: CGSize, delivery: PHImageRequestOptionsDeliveryMode) async -> UIImage? {
         let options = PHImageRequestOptions()
-        options.deliveryMode = .opportunistic
+        options.deliveryMode = delivery
         options.resizeMode = .fast
         options.isNetworkAccessAllowed = false
-        let degraded = OSAllocatedUnfairLock<UIImage?>(initialState: nil)
-        let image: UIImage? = await withCheckedContinuation { continuation in
-            PHImageManager.default().requestImage(for: asset, targetSize: CGSize(width: side, height: side), contentMode: .aspectFill,
-                                                  options: options) { image, info in
-                if (info?[PHImageResultIsDegradedKey] as? Bool) == true {
-                    degraded.withLock { $0 = image }
-                    return
+        let request = OSAllocatedUnfairLock<(id: PHImageRequestID?, once: ResumeOnce<UIImage?>?)>(initialState: (nil, nil))
+        return await withTaskCancellationHandler {
+            await withCheckedContinuation { continuation in
+                let once = ResumeOnce<UIImage?>(continuation)
+                let id = PHImageManager.default().requestImage(for: asset, targetSize: size, contentMode: .aspectFill, options: options) { image, _ in
+                    once.resume(image)
                 }
-                continuation.resume(returning: image ?? degraded.withLock { $0 })
+                request.withLock { $0 = (id, once) }
+                // Cancelled before `onCancel` could see the request: cancel it here.
+                if Task.isCancelled {
+                    PHImageManager.default().cancelImageRequest(id)
+                    once.resume(nil)
+                }
             }
+        } onCancel: {
+            let (id, once) = request.withLock { $0 }
+            if let id { PHImageManager.default().cancelImageRequest(id) }
+            once?.resume(nil)
         }
-        return image?.preparingForDisplay() ?? image
     }
 
     /// The edited version when the photo has one, as the grid shows it and as the system picker hands it over
