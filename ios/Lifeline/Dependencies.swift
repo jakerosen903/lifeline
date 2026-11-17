@@ -52,6 +52,8 @@ struct Dependencies {
     var restoreFromPath: String? = nil
     /// Under `-uiTesting`: Export keeps the file in Documents and shows no share sheet, which a UI test cannot drive.
     var exportWithoutShareSheet = false
+    /// What the launch repair joined, in one sentence for the person, or nil when it joined nothing. The shell shows it once.
+    var launchNotice: String? = nil
 
     /// "1.0 (12)": the marketing version and the build, for the backup manifest.
     static var appVersion: String {
@@ -138,6 +140,7 @@ struct Dependencies {
         let pauseLog = PauseLog(url: root.appending(path: "Lifeline/pauses.log"))
         let secrets = KeychainSecretStore()
         let store = ExtractionStore(db)
+        let launchNotice = repairArchive(store)
         let extraction = AnthropicExtractionService(apiKey: { try? secrets.read(.anthropicAPIKey) })
         let matcher = MemoryMatcher(store: store, embedder: NLSentenceEmbedder())
         let actions = CandidateActions(store: store, matcher: matcher)
@@ -187,7 +190,23 @@ struct Dependencies {
             duplicates: DuplicatePass(store: store, matcher: matcher, reconcile: reconcile, actions: actions, reporter: reporter, log: { print($0) }),
             reporter: reporter,
             photos: library,
-            photoImages: PhotoImageCache(library: library))
+            photoImages: PhotoImageCache(library: library),
+            launchNotice: launchNotice)
+    }
+
+    /// Repairs what earlier versions left in the archive (audit A1 and A2), before any screen reads it. A second run
+    /// finds nothing, so every launch can call it. A failure must not keep the person out of their archive: the
+    /// step that failed is logged and changes nothing, and the next launch tries it again. The notice still says
+    /// what the other steps joined, so a change to the person's stories is never silent.
+    private static func repairArchive(_ store: ExtractionStore) -> String? {
+        let report = ArchiveRepair.run(store)
+        // Counts only: a title or a name never goes to the log.
+        if report.notice != nil || report.removedChapters > 0 {
+            print("[repair] joined \(report.joinedStories.count) story titles, \(report.joinedEntities.count) names and "
+                  + "\(report.joinedCollections.count) collection titles; removed \(report.removedChapters) empty chapters")
+        }
+        for failure in report.failures { print("[repair] \(failure.step.rawValue) failed: \(failure.message)") }
+        return report.notice
     }
 
     /// Fresh temp database, scripted voice and extraction, in-memory secrets with a fake key.
@@ -280,6 +299,9 @@ struct Dependencies {
         if args.contains("-uiTesting-seedPortrait") { try UITestSeed.writePortrait(store: store, profile: deps.profile, sessions: deps.sessions) }
         if args.contains("-uiTesting-seedTaggedMoment") { try UITestSeed.tagOneMoment(store: store) }
         if args.contains("-uiTesting-noOwner") { try UITestSeed.writeProfileWithoutOwner(profile: deps.profile, store: store) }
+        if args.contains("-uiTesting-seedDuplicates") { try UITestSeed.writeDuplicates(store: store, profile: deps.profile, sessions: deps.sessions) }
+        // After the seeds: a seed stands for what an earlier version left behind.
+        deps.launchNotice = repairArchive(store)
         return deps
     }
 
