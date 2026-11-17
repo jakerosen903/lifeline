@@ -96,7 +96,7 @@ private struct Env {
     let andover = try #require(try env.store.entities.entity(id: fifth.id))
     #expect(andover.detailText == "the old mill town" && andover.range == .stated(year: 2001) && andover.title == "Andover")
 
-    let report = try ArchiveRepair.run(env.store)
+    let report = ArchiveRepair.run(env.store)
     #expect(report.joinedEntities.isEmpty, "the repair leaves the pairs it cannot join without loss")
     #expect(try env.store.entities.entities(type: .place).count == 3 && (try env.store.entities.entities(type: .thing)).count == 2)
 }
@@ -123,7 +123,7 @@ private struct Env {
     _ = try env.store.people.insertPerson(displayName: "Sam")
     let (belief, _) = try env.twins(.idea, "Say yes", "say yes")
 
-    let report = try ArchiveRepair.run(env.store)
+    let report = ArchiveRepair.run(env.store)
     #expect(report.joinedEntities == [StoryRepository.MergedTitle(title: "Ohio", copies: 2)])
     #expect(report.notice == "Joined 2 copies of “Ohio”.")
     #expect(try env.store.entities.entities(type: .place).map(\.id).contains(ohio.id))
@@ -132,7 +132,7 @@ private struct Env {
     #expect(try env.store.people.people().count == 2, "people are never joined by name")
     #expect(try env.store.entities.entities(type: .idea).count == 2 && (try env.store.entities.entity(id: belief.id)) != nil, "ideas are never joined by name")
 
-    let again = try ArchiveRepair.run(env.store)
+    let again = ArchiveRepair.run(env.store)
     #expect(again.joinedEntities.isEmpty && again.notice == nil, "a second run finds nothing to do")
 }
 
@@ -147,7 +147,7 @@ private struct Env {
             try db.execute(sql: "insert into collection_memory (collection_id, memory_id) values (?, ?)", arguments: [collection.rawValue, memory.rawValue])
         }
     }
-    let report = try ArchiveRepair.run(env.store)
+    let report = ArchiveRepair.run(env.store)
     #expect(report.joinedCollections == [StoryRepository.MergedTitle(title: "Family trips", copies: 2)])
     #expect(try env.store.chapters.collections().map(\.id) == [trips.id])
     #expect(Set(try env.store.chapters.members(of: trips.id).map(\.id)) == Set([a.id, b.id, c.id]), "a memory in both stays once")
@@ -159,7 +159,7 @@ private struct Env {
     let a = try env.kept("we packed the car"), b = try env.kept("the tire went flat")
     _ = try env.actions.createStory(title: "The road trip", containing: [a.id])
     _ = try env.actions.createStory(title: "The road trip", containing: [b.id])
-    let report = try ArchiveRepair.run(env.store)
+    let report = ArchiveRepair.run(env.store)
     #expect(report.joinedStories.count == 1 && report.joinedEntities.count == 1)
     #expect(report.notice == "Joined copies of 2 things that had the same name.")
 }

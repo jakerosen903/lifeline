@@ -149,13 +149,13 @@ private struct Env {
     let play = try env.actions.createStory(title: "The school play", containing: [d.id])
     let untitled = try env.actions.createStory(title: nil, containing: [e.id])
 
-    let report = try ArchiveRepair.run(env.store)
+    let report = ArchiveRepair.run(env.store)
     #expect(report.joinedStories == [StoryRepository.MergedTitle(title: "The road trip", copies: 3)])
     #expect(report.notice == "Joined 3 copies of “The road trip”.")
     #expect(try env.members(first.id) == [a.id, b.id, c.id])
     #expect(Set(try env.store.stories.stories().map(\.id)) == Set([first.id, play.id, untitled.id]), "other stories are left alone")
 
-    let again = try ArchiveRepair.run(env.store)
+    let again = ArchiveRepair.run(env.store)
     #expect(again.joinedStories.isEmpty && again.notice == nil, "a second run finds nothing to do")
 }
 
@@ -167,7 +167,7 @@ private struct Env {
     _ = try env.actions.createStory(title: "The road trip", containing: [b.id])
     _ = try env.actions.createStory(title: "The play", containing: [c.id])
     _ = try env.actions.createStory(title: "The play", containing: [d.id])
-    let report = try ArchiveRepair.run(env.store)
+    let report = ArchiveRepair.run(env.store)
     #expect(report.joinedStories.map(\.copies) == [2, 2])
     #expect(report.notice == "Joined copies of 2 stories that had the same title.")
     #expect(try env.store.stories.stories().count == 2)
@@ -175,7 +175,7 @@ private struct Env {
 
 @Test func anEmptyArchiveNeedsNoRepair() throws {
     let env = try Env()
-    let report = try ArchiveRepair.run(env.store)
+    let report = ArchiveRepair.run(env.store)
     #expect(report == ArchiveRepair.Report() && report.notice == nil)
 }
 
@@ -190,7 +190,7 @@ private struct Env {
     let untitledWithAMemory = try env.store.chapters.insertChapter(title: nil)
     try env.store.chapters.assign(memory: a.id, toChapter: untitledWithAMemory.id)
 
-    let report = try ArchiveRepair.run(env.store)
+    let report = ArchiveRepair.run(env.store)
     #expect(report.removedChapters == 2)
     let left = Set(try env.store.chapters.chapters().map(\.id))
     #expect(left == Set([namedEmpty.id, untitledWithAMemory.id]), "a named chapter stays; so does one that holds a memory")

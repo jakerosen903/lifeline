@@ -14,6 +14,8 @@ struct SectionsScreen: View {
                 ForEach(AppTab.allCases, id: \.self) { tab in
                     Tab(tab.title, systemImage: tab.systemImage, value: tab) {
                         NavigationStack { root(of: tab, deps: deps, timeline: timeline, home: home) }
+                            // The shell's notice, above the record bar on every tab. A page's own slot (You) stacks above it.
+                            .safeAreaInset(edge: .bottom, spacing: 0) { ShellNoticeBar(notice: model.notice) }
                     }
                     .accessibilityIdentifier(tab.accessibilityIdentifier)
                 }
@@ -23,6 +25,9 @@ struct SectionsScreen: View {
             .tint(Theme.oliveText)
             .tabBarMinimizeBehavior(.never)
             .onChange(of: tab) { home.tabChanged() }
+            .animation(.default, value: model.notice.text)
+            // A landing resumed at launch covers the shell: the notice waits until the person can see it.
+            .onChange(of: home.presented == nil, initial: true) { _, uncovered in if uncovered { model.notice.present() } }
             // Pages name the bar's subject as they appear and clear it as they leave (see `sessionContext`).
             .environment(home)
             .sheet(item: Binding(get: { home.photoStart }, set: { home.photoStart = $0 }), onDismiss: home.photoStartClosed) { start in
