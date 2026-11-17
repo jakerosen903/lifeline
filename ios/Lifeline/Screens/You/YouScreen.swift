@@ -12,8 +12,6 @@ struct YouScreen: View {
     @State private var addingPhoto = false
     /// The photo open in the viewer.
     @State private var viewing: PlacedPhoto?
-    /// "Tell its story" was tapped: the session starts when the viewer has closed.
-    @State private var tellingStoryOf: Photo?
     /// Absent outside the shell (a preview): then nothing watches the session cover.
     @Environment(HomeViewModel.self) private var home: HomeViewModel?
     /// The root of its stack, on screen. The session cover sends no onDisappear, so the root stays visible under it.
@@ -90,11 +88,11 @@ struct YouScreen: View {
         .addPhotoFlow(isPresented: $addingPhoto, deps: viewModel.deps, shelf: viewModel.shelf,
                       onFile: { file, assetID in await viewModel.addPhoto(fileAt: file, assetLocalID: assetID) },
                       onError: { viewModel.photoFailed($0) })
-        .sheet(item: $viewing, onDismiss: startPendingPhotoStory) { placed in
+        .photoViewerSheet(item: $viewing, home: home) { placed, tellStory in
             PhotoViewer(photo: placed, label: viewModel.photoLabel, canMakeCover: !placed.isCover, cache: viewModel.deps.photoImages,
                         onMakeCover: { await viewModel.makeCover(placed.id) },
                         onRemove: { await viewModel.removePhoto(placed.id) },
-                        onTellStory: { tellingStoryOf = placed.photo })
+                        onTellStory: tellStory)
         }
         .sheet(isPresented: $showSettings, onDismiss: changed) {
             SettingsScreen(deps: viewModel.deps, isSessionLive: isSessionLive)
@@ -122,13 +120,6 @@ struct YouScreen: View {
     private static let top = "you.top"
 
     /// Something changed elsewhere (Settings, a pushed page): read again, keeping the lead.
-    /// The viewer has closed: a "Tell its story" tap starts the session now, not while the sheet is leaving.
-    private func startPendingPhotoStory() {
-        guard let photo = tellingStoryOf else { return }
-        tellingStoryOf = nil
-        Task { await home?.startPhotoSession(photo) }
-    }
-
     private func changed() { viewModel.refresh(newLead: false) }
 
     @ViewBuilder private var parts: some View {

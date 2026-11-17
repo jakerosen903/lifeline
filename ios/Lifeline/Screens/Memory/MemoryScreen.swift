@@ -16,15 +16,6 @@ struct MemoryScreen: View {
     @State private var addingPhoto = false
     /// The photo open in the viewer.
     @State private var viewing: PlacedPhoto?
-    /// "Tell its story" was tapped: the session starts when the viewer has closed.
-    @State private var tellingStoryOf: Photo?
-
-    /// The viewer has closed: a "Tell its story" tap starts the session now, not while the sheet is leaving.
-    private func startPendingPhotoStory() {
-        guard let photo = tellingStoryOf else { return }
-        tellingStoryOf = nil
-        Task { await home?.startPhotoSession(photo) }
-    }
 
     var body: some View {
         ScrollView {
@@ -167,11 +158,11 @@ struct MemoryScreen: View {
         .addPhotoFlow(isPresented: $addingPhoto, deps: deps, shelf: viewModel.shelf,
                       onFile: { file, assetID in await viewModel.addPhoto(fileAt: file, assetLocalID: assetID); onChange() },
                       onError: { viewModel.photoFailed($0) })
-        .sheet(item: $viewing, onDismiss: startPendingPhotoStory) { placed in
+        .photoViewerSheet(item: $viewing, home: home) { placed, tellStory in
             PhotoViewer(photo: placed, label: viewModel.photoLabel, canMakeCover: !placed.isCover, cache: deps.photoImages,
                         onMakeCover: { await viewModel.makeCover(placed.id); onChange() },
                         onRemove: { await viewModel.removePhoto(placed.id); onChange() },
-                        onTellStory: { tellingStoryOf = placed.photo })
+                        onTellStory: tellStory)
         }
         .photoErrorSlot(viewModel.photoError)
         .sheet(isPresented: $changing, onDismiss: { viewModel.refresh(); onChange() }) {

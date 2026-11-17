@@ -22,6 +22,7 @@ final class PhotoStoryUITests: XCTestCase {
         let app = XCUIApplication.launchWithPhotos()
         tellMayasCoversStory(app)
         XCTAssertFalse(app.any("photo.viewer").exists, "the viewer closed first")
+        XCTAssertEqual(app.staticTexts["session.kind"].label, "You chose a story about a photo", "the header names the session")
         let photo = app.any("session.photo")
         XCTAssertTrue(photo.waitForExistence(timeout: 5))
         XCTAssertEqual(photo.label, "Photo for this story")
