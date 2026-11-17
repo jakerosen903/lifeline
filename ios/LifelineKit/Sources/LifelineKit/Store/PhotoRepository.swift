@@ -130,11 +130,6 @@ public struct PhotoRepository: Sendable {
         return true
     }
 
-    /// The photo the segment's session is about, if any.
-    public func subjectPhotoID(ofSegment segment: SegmentID) throws -> PhotoID? {
-        try db.writer.read { try Self.subjectPhotoID(ofSegment: segment, in: $0) }
-    }
-
     /// Every memory and entity that holds the photo, in one read.
     public func subjects(of photo: PhotoID) throws -> (memories: Set<MemoryID>, entities: Set<EntityID>) {
         try db.writer.read { db in
@@ -193,9 +188,12 @@ public struct PhotoRepository: Sendable {
 
     /// A memory kept from, or merged with a telling of, a photo's story holds that photo (spec: a story about a photo).
     /// The segment's session names the photo; none named, nothing happens. Linking twice changes nothing.
-    static func linkSubjectPhoto(ofSegment segment: SegmentID, to memory: MemoryID, in db: Database) throws {
-        guard let photo = try subjectPhotoID(ofSegment: segment, in: db) else { return }
-        try link(photo, to: .memory(memory), in: db)
+    /// Returns the photo when this call wrote the link, nil when the memory already held it or there is no photo,
+    /// so an undo takes back only what this write added.
+    @discardableResult
+    static func linkSubjectPhoto(ofSegment segment: SegmentID, to memory: MemoryID, in db: Database) throws -> PhotoID? {
+        guard let photo = try subjectPhotoID(ofSegment: segment, in: db) else { return nil }
+        return try link(photo, to: .memory(memory), in: db) ? photo : nil
     }
 
     private static func subjectPhotoID(ofSegment segment: SegmentID, in db: Database) throws -> PhotoID? {
@@ -204,11 +202,13 @@ public struct PhotoRepository: Sendable {
             """, arguments: [segment.rawValue]).map(PhotoID.init(rawValue:))
     }
 
-    static func link(_ photo: PhotoID, to subject: PhotoSubject, in db: Database) throws {
+    /// True when this call wrote the link; false when the subject already held the photo.
+    @discardableResult
+    static func link(_ photo: PhotoID, to subject: PhotoSubject, in db: Database) throws -> Bool {
         let (column, value) = subject.key
         let linked = try Int.fetchOne(db, sql: "select count(*) from photo_link where \(column) = ? and photo_id = ?",
                                       arguments: [value, photo.rawValue]) ?? 0
-        guard linked == 0 else { return }
+        guard linked == 0 else { return false }
         let held = try Row.fetchOne(db, sql: """
             select max(sort_order) as top, max(role = 'cover') as has_cover from photo_link where \(column) = ?
             """, arguments: [value])
@@ -216,6 +216,7 @@ public struct PhotoRepository: Sendable {
         let next = ((held?["top"] as Int?) ?? -1) + 1
         try db.execute(sql: "insert into photo_link (photo_id, \(column), role, sort_order) values (?, ?, ?, ?)",
                        arguments: [photo.rawValue, value, (hasCover ? PhotoRole.attached : .cover).rawValue, next])
+        return true
     }
 }
 

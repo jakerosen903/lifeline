@@ -98,9 +98,8 @@ private func d(_ s: String) -> CivilDate { CivilDate(iso: s)! }
     #expect(r.displayText == "14 July 2019", "a day from a photo is shown as a fact, not a guess")
 }
 
-@Test func aStatedDateReplacesAPhotoDate() {
-    let photoDated = TimeRange.fromPhoto(d("2019-07-14"))
-    #expect(photoDated.origin == .photo)
-    let replaced = TimeRange.stated(year: 2018)
-    #expect(replaced.origin == .stated && !replaced.isFromPhoto)
+@Test func aPhotoDateHasNoSaidEvidence() {
+    #expect(TimeRange.fromPhoto(d("2019-07-14")).saidEvidence == nil, "the person tapped an offer; they did not say the date")
+    #expect(TimeRange.stated(around: 1998).saidEvidence == "around 1998", "words behind a date are still shown")
+    #expect(TimeRange.unplaced.saidEvidence == nil)
 }

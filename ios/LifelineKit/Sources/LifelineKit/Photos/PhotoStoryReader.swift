@@ -9,7 +9,8 @@ public struct PhotoStoryReader: Sendable {
     /// Nil when the session has no subject photo.
     public func card(for session: SessionID) throws -> PhotoStoryCard? {
         guard let photo = try store.photos.subjectPhoto(of: session) else { return nil }
-        let memories = try store.memories.memories(in: session)
+        // Any telling counts: a telling merged into an older memory put the photo there too.
+        let memories = try store.memories.memories(toldIn: session)
         let held = try store.photos.subjects(of: photo.id)
         let holding = Set(memories.map(\.id)).intersection(held.memories)
         var linked: [MemoryID: [Entity]] = [:]

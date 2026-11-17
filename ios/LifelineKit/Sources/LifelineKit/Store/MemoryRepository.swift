@@ -79,6 +79,25 @@ public struct MemoryRepository: Sendable {
         }
     }
 
+    /// Every told memory with a span in this session, once each, by its first span here (segment, then start).
+    /// Unlike `memories(in:)`, a memory first told in an earlier session counts when a telling of this session
+    /// was merged into it. Stand-ins are left out.
+    public func memories(toldIn session: SessionID) throws -> [Memory] {
+        try db.writer.read { db in
+            try Memory.fetchAll(db, sql: """
+                select memory.* from memory
+                join (
+                    select memory_span.memory_id, segment."index" as segment_index, memory_span.start_ms,
+                           row_number() over (partition by memory_span.memory_id order by segment."index", memory_span.start_ms) as nth
+                    from memory_span join segment on segment.id = memory_span.segment_id
+                    where segment.session_id = ?
+                ) here on here.memory_id = memory.id and here.nth = 1
+                where memory.created_from_candidate_id is not null
+                order by here.segment_index, here.start_ms, memory.created_at
+                """, arguments: [session.rawValue])
+        }
+    }
+
     /// Memories created from candidates of this segment.
     public func memories(fromSegment segment: SegmentID) throws -> [Memory] {
         try db.writer.read { db in
@@ -288,9 +307,11 @@ public struct MemoryRepository: Sendable {
     /// `promotingStandIn` carries the card's title, quote and candidate when the target is a
     /// resolver stand-in: its borrowed span goes, this telling becomes order 0 and the memory
     /// becomes real. A failure anywhere leaves the card pending and the target untouched.
+    /// Returns the session's photo when this write linked it to the target (see `PhotoRepository.linkSubjectPhoto`).
+    @discardableResult
     public func mergeSpan(_ span: MemorySpan, continuations: [MemorySpan] = [], people: [MemoryPerson], places: [MemoryPlace], links: [MomentEntity] = [], entities: EntityRepository.Write = .init(), anchors: [Anchor],
                           promotingStandIn: (title: String, summaryQuote: String)?, acceptingCandidate candidate: CandidateID,
-                          acceptingContinuations continuationCards: [CandidateID] = []) throws {
+                          acceptingContinuations continuationCards: [CandidateID] = []) throws -> PhotoID? {
         try db.writer.write { db in
             try Self.mergeSpan(span, continuations: continuations, people: people, places: places, links: links, entities: entities, anchors: anchors,
                                promotingStandIn: promotingStandIn, acceptingCandidate: candidate, acceptingContinuations: continuationCards, in: db)
@@ -299,7 +320,7 @@ public struct MemoryRepository: Sendable {
 
     static func mergeSpan(_ span: MemorySpan, continuations: [MemorySpan], people: [MemoryPerson], places: [MemoryPlace], links: [MomentEntity] = [], entities: EntityRepository.Write = .init(), anchors: [Anchor],
                           promotingStandIn: (title: String, summaryQuote: String)?, acceptingCandidate candidate: CandidateID,
-                          acceptingContinuations continuationCards: [CandidateID] = [], in db: Database) throws {
+                          acceptingContinuations continuationCards: [CandidateID] = [], in db: Database) throws -> PhotoID? {
             var span = span
             if let promoted = promotingStandIn {
                 try db.execute(sql: "delete from memory_span where memory_id = ?", arguments: [span.memoryID.rawValue])
@@ -323,14 +344,17 @@ public struct MemoryRepository: Sendable {
             for anchor in anchors { try anchor.insert(db) }
             try db.execute(sql: "update candidate set status = ? where id = ?", arguments: [CandidateStatus.accepted.rawValue, candidate.rawValue])
             try Self.accept(continuationCards, in: db)
-            try PhotoRepository.linkSubjectPhoto(ofSegment: span.segmentID, to: span.memoryID, in: db)
+            return try PhotoRepository.linkSubjectPhoto(ofSegment: span.segmentID, to: span.memoryID, in: db)
     }
 
     /// A group (M5): every source folds into the target, oldest first as given, then the card
     /// joins as the last telling. One transaction: a failure anywhere leaves every memory as it was.
+    /// Returns the session's photo when this write linked it to the target. The check runs after the folds, so a
+    /// photo a folded memory carried to the target is not counted as added.
+    @discardableResult
     public func mergeGroup(sources: [Memory], into target: Memory, span: MemorySpan, continuations: [MemorySpan], people: [MemoryPerson],
                            places: [MemoryPlace], links: [MomentEntity] = [], entities: EntityRepository.Write = .init(), anchors: [Anchor], promotingStandIn: (title: String, summaryQuote: String)?,
-                           acceptingCandidate candidate: CandidateID, acceptingContinuations continuationCards: [CandidateID] = []) throws {
+                           acceptingCandidate candidate: CandidateID, acceptingContinuations continuationCards: [CandidateID] = []) throws -> PhotoID? {
         try db.writer.write { db in
             for source in sources {
                 guard let current = try Memory.fetchOne(db, key: target.id.rawValue) else { throw Error.noSpan }
@@ -338,7 +362,7 @@ public struct MemoryRepository: Sendable {
             }
             var last = span
             last.order = (try Int.fetchOne(db, sql: "select max(\"order\") from memory_span where memory_id = ?", arguments: [target.id.rawValue]) ?? -1) + 1
-            try Self.mergeSpan(last, continuations: continuations, people: people, places: places, links: links, entities: entities, anchors: anchors,
+            return try Self.mergeSpan(last, continuations: continuations, people: people, places: places, links: links, entities: entities, anchors: anchors,
                                promotingStandIn: promotingStandIn, acceptingCandidate: candidate, acceptingContinuations: continuationCards, in: db)
         }
     }

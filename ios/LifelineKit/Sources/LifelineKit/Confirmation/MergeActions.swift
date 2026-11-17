@@ -44,8 +44,7 @@ extension CandidateActions {
         for row in continuations { if let o = CandidatePayload.memory(row) { edges.merge(try self.edges(of: o, for: target, segment: row.segmentID)) } }
         // The owner named this moment before telling it; now they have told it.
         let promotion = targetMemory.isFloating ? (title: out.title, summaryQuote: out.quote) : nil
-        let photoToAdd = try photoAMergeWouldAdd(segment: candidate.segmentID, target: target)
-        try store.memories.mergeSpan(span, continuations: try continuationSpans(of: out, for: target), people: edges.people, places: edges.places, links: edges.links, entities: edges.entityWrite,
+        let addedPhoto = try store.memories.mergeSpan(span, continuations: try continuationSpans(of: out, for: target), people: edges.people, places: edges.places, links: edges.links, entities: edges.entityWrite,
                                      anchors: edges.anchors, promotingStandIn: promotion, acceptingCandidate: candidate.id,
                                      acceptingContinuations: continuations.map(\.id))
         let newMentions = try finishEdges(edges, segment: candidate.segmentID)
@@ -53,7 +52,7 @@ extension CandidateActions {
         _ = try ResolverRunner(store: store).run()
         guard let after = try store.memories.snapshot(of: target) else { throw Error.targetMissing }
         return MergedCandidate(receipt: MergeReceipt(target: target, targetTitle: targetMemory.title, before: [before], after: after,
-                                                     candidateID: candidate.id, mergedAt: .now, addedPhoto: photoToAdd),
+                                                     candidateID: candidate.id, mergedAt: .now, addedPhoto: addedPhoto),
                                newMentions: newMentions)
     }
 
@@ -96,8 +95,8 @@ extension CandidateActions {
         var edges = try edges(of: out, for: oldest.id, segment: candidate.segmentID)
         for row in continuations { if let o = CandidatePayload.memory(row) { edges.merge(try self.edges(of: o, for: oldest.id, segment: row.segmentID)) } }
         let promotion = oldest.isFloating && later.isEmpty ? (title: out.title, summaryQuote: out.quote) : nil
-        let photoToAdd = try photoAMergeWouldAdd(segment: candidate.segmentID, target: oldest.id)
-        try store.memories.mergeGroup(sources: later, into: oldest, span: span, continuations: try continuationSpans(of: out, for: oldest.id),
+        // The write says what it linked, after the folds: a photo a folded memory held is moved, not added.
+        let addedPhoto = try store.memories.mergeGroup(sources: later, into: oldest, span: span, continuations: try continuationSpans(of: out, for: oldest.id),
                                       people: edges.people, places: edges.places, links: edges.links, entities: edges.entityWrite, anchors: edges.anchors,
                                       promotingStandIn: promotion, acceptingCandidate: candidate.id, acceptingContinuations: continuations.map(\.id))
         let newMentions = try finishEdges(edges, segment: candidate.segmentID)
@@ -106,15 +105,8 @@ extension CandidateActions {
         _ = try ResolverRunner(store: store).run()
         guard let after = try store.memories.snapshot(of: oldest.id) else { throw Error.targetMissing }
         return MergedCandidate(receipt: MergeReceipt(target: oldest.id, targetTitle: oldest.title, before: before, after: after,
-                                                     candidateID: candidate.id, mergedAt: .now, addedPhoto: photoToAdd),
+                                                     candidateID: candidate.id, mergedAt: .now, addedPhoto: addedPhoto),
                                newMentions: newMentions)
-    }
-
-    /// The session's photo when the target does not hold it yet: the link the merge is about to add.
-    private func photoAMergeWouldAdd(segment: SegmentID, target: MemoryID) throws -> PhotoID? {
-        guard let photo = try store.photos.subjectPhotoID(ofSegment: segment),
-              try !store.photos.isLinked(photo, to: .memory(target)) else { return nil }
-        return photo
     }
 
     /// When a memory was first told: the session start of its order-0 span.

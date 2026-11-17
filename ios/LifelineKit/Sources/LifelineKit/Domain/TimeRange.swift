@@ -61,6 +61,8 @@ public struct TimeRange: Codable, Sendable, Equatable {
     public var isSettled: Bool { origin == .confirmed || origin == .stated || origin == .photo }
     /// The date is the day of a photo the person chose to date the memory by.
     public var isFromPhoto: Bool { origin == .photo }
+    /// The words behind the date, when the date came from words. A date from a photo has none: the person tapped an offer.
+    public var saidEvidence: String? { isFromPhoto ? nil : evidenceText }
 
     /// That day, from a photo: "the photo's date, 14 July 2019". Only the date is used, never the time.
     public static func fromPhoto(_ date: CivilDate) -> TimeRange {

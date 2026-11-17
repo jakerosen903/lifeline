@@ -384,8 +384,10 @@ private extension Fixture {
     let f = try Fixture(), subject = try f.makeSessionAPhotoSession()
     let kept = try f.actions.acceptMemory(try f.card()).memory
     _ = try f.photos.unlink(subject.id, from: .memory(kept.id))
-    #expect(try f.store.memories.memories(in: f.sessionID).map(\.id) == [kept.id])
-    #expect(try f.links(of: kept.id).isEmpty, "reading memories does not link the session's photo again")
+    // The read the app repeats while the card is on screen.
+    let card = try #require(try PhotoStoryReader(store: f.store).card(for: f.sessionID))
+    #expect(card.memories.isEmpty, "the card no longer lists the memory")
+    #expect(try f.links(of: kept.id).isEmpty, "reading the card does not link the session's photo again")
 }
 
 @Test func aFailedKeepLinksNothing() throws {
@@ -453,6 +455,20 @@ private extension Fixture {
     #expect(again.receipt.addedPhoto == nil)
     try g.actions.unmerge(again.receipt)
     #expect(try g.links(of: again.receipt.target) == ["\(held.id.rawValue) cover"])
+}
+
+@Test(arguments: [true, false]) func undoingAGroupMergeKeepsAPhotoAFoldedMemoryHeld(heldByTheFoldedOne: Bool) throws {
+    let f = try Fixture(), subject = try f.makeSessionAPhotoSession()
+    let memories = [try f.memory("The old house", segment: 1), try f.memory("The old house again", segment: 0)]
+    // Both were first told in this session, so the tie goes to the smaller id: that one is the target, the other folds in.
+    let target = memories.min { $0.id.rawValue < $1.id.rawValue }!, folded = memories.max { $0.id.rawValue < $1.id.rawValue }!
+    try f.photos.link(subject.id, to: .memory(heldByTheFoldedOne ? folded.id : target.id))
+    let merged = try f.actions.mergeGroup(try f.card(ordinal: 1), into: memories.map(\.id))
+    #expect(merged.receipt.target == target.id)
+    #expect(merged.receipt.addedPhoto == nil, "one of the memories held the photo before the merge")
+    try f.actions.unmerge(merged.receipt)
+    // S4 decision 11: an undone fold leaves a moved photo on the target. A link the target held stays.
+    #expect(try f.photos.isLinked(subject.id, to: .memory(target.id)), "an undo never takes off a link the merge did not write")
 }
 
 @Test func undoingAKeepLeavesNoLinkAndKeepsThePhoto() throws {

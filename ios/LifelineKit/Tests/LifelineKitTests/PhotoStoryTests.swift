@@ -140,12 +140,19 @@ private struct StoryFixture {
 
     var reader: PhotoStoryReader { PhotoStoryReader(store: store) }
 
-    func pendingCard(title: String = "The tree house") throws -> Candidate {
-        let out = MemoryOut(ref: "m1", title: title, quote: "the tree", segmentSpan: WordSpan(startWord: 0, endWord: 1),
+    func pendingCard(title: String = "The tree house", ordinal: Int = 0, words: (Int, Int) = (0, 1)) throws -> Candidate {
+        let out = MemoryOut(ref: "m1", title: title, quote: "the tree", segmentSpan: WordSpan(startWord: words.0, endWord: words.1),
                             peopleRefs: [], placeText: nil, anchors: [], collectionHint: nil, chapterHint: nil, confidence: 0.9)
-        let card = StoreFixtures.candidate(segments[0].id, ordinal: 0, payload: try CandidatePayload.encode(out))
+        let card = StoreFixtures.candidate(segments[0].id, ordinal: ordinal, payload: try CandidatePayload.encode(out))
         try store.candidates.insert(card)
         return card
+    }
+
+    /// A kept memory first told in another, earlier session.
+    func olderMemory(_ title: String) throws -> Memory {
+        let (_, older) = try StoreFixtures.session(in: store.sessions, segments: ["the old house"])
+        return try StoreFixtures.memory(in: store.memories, candidates: store.candidates, segment: older[0].id, title: title,
+                                        createdAt: .now.addingTimeInterval(-3600))
     }
 }
 
@@ -167,6 +174,32 @@ private struct StoryFixture {
     #expect(!after.hasPendingMoments)
     #expect(after.dateOffers.map(\.id) == [kept.id], "the kept memory is unplaced, so the photo's date is offered")
     #expect(!after.hasOtherHome)
+}
+
+@Test func theCardListsAMemoryATellingWasMergedInto() throws {
+    let f = try StoryFixture()
+    // An older memory, first told in another session: its order-0 span is not in the photo session.
+    let target = try f.olderMemory("The old house")
+    let dad = try f.store.entities.insert(type: .person, title: "Dad")
+    try f.store.entities.link(target.id, dad.id, relation: .mention)
+    _ = try CandidateActions(store: f.store).mergeCandidate(try f.pendingCard(), into: target.id)
+    let card = try #require(try f.reader.card(for: f.sessionID))
+    #expect(card.memories.map(\.id) == [target.id], "the memory the telling went into holds the photo, so the card lists it")
+    #expect(card.memories.map(\.title) == ["The old house"])
+    #expect(card.pageOffers.map(\.id) == [dad.id], "the merged-into memory's pages are offered")
+    #expect(card.dateOffers.map(\.id) == [target.id], "the merged-into memory is unplaced, so its date is offered")
+}
+
+@Test func theCardListsEachMemoryOnceInTheOrderThisSessionToldIt() throws {
+    let f = try StoryFixture()
+    let target = try f.olderMemory("The old house")
+    let actions = CandidateActions(store: f.store)
+    let kept = try actions.acceptMemory(try f.pendingCard()).memory
+    // Two later tellings of the older memory, both after the kept one in this session.
+    _ = try actions.mergeCandidate(try f.pendingCard(title: "The old house", ordinal: 1, words: (1, 1)), into: target.id)
+    _ = try actions.mergeCandidate(try f.pendingCard(title: "The old house", ordinal: 2, words: (2, 2)), into: target.id)
+    let card = try #require(try f.reader.card(for: f.sessionID))
+    #expect(card.memories.map(\.id) == [kept.id, target.id], "each memory once, by its first telling in this session")
 }
 
 @Test func theReaderOffersTheNamedPagesAndTheDateAndAppliesTaps() throws {
@@ -237,4 +270,17 @@ private final class WriteCounter: @unchecked Sendable {
     #expect(try f.store.memories.fetch(beach.id)?.range == .fromPhoto(day(2019, 7, 14)), "the photo-dated memory does not move")
     let placed = try #require(try f.store.memories.fetch(picnic.id)?.range)
     #expect(placed.isPlaced && placed.earliest.map { $0 >= day(2019, 7, 14) } == true, "the memory that points at it is placed after it")
+}
+
+/// "The `photo` origin through a date change" (spec, Tests): the person's own date replaces the photo's in the store.
+@Test func aStatedDateReplacesAPhotoDate() throws {
+    let f = try StoryFixture()
+    let actions = CandidateActions(store: f.store)
+    let kept = try actions.acceptMemory(try f.pendingCard()).memory
+    try f.reader.useDate(PhotoStoryCard.DateOffer(memory: kept, date: day(2019, 7, 14)))
+    #expect(try f.store.memories.fetch(kept.id)?.range.origin == .photo)
+    try actions.setStatedRange(kept.id, .stated(year: 2018))
+    let after = try #require(try f.store.memories.fetch(kept.id)?.range)
+    #expect(after.origin == .stated && !after.isFromPhoto)
+    #expect(after == .stated(year: 2018))
 }
