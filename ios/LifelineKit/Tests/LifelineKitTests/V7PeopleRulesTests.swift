@@ -72,7 +72,8 @@ private func fact(about: String?) -> MemoryOut {
     let env = try Env()
     let moment = try env.card("Devon and I drove to the coast", kind: .event, people: ["Devon"], about: "p1", mentions: [("Devon", "p1")])
     let keptMoment = try env.actions.acceptMemory(moment, joinStory: false)
-    let devon = try #require(try env.actions.resolveMention(try #require(keptMoment.newMentions.first).id, to: .new(displayName: "Devon")))
+    let momentMention = try #require(keptMoment.newMentions.first)
+    let devon = try #require(try env.actions.resolveMention(momentMention.id, to: .new(displayName: "Devon")))
     #expect(try env.store.entities.details(of: devon.entityID).isEmpty, "a moment mentions a person; it is not a detail of them")
 
     let feeling = try env.card("Rover was the best of us", kind: .feeling, people: ["Rover"], about: "p1", mentions: [("Rover", "p1")])
@@ -87,7 +88,8 @@ private func fact(about: String?) -> MemoryOut {
     let card = try env.card("Devon and I had our most formative years together", kind: .feeling, people: ["Devon"], about: "p1", mentions: [("Devon", "p1")])
     let kept = try env.actions.acceptMemory(card, joinStory: false)
     try env.store.entities.moveDetail(kept.memory.id, to: maya.entityID)
-    let devon = try #require(try env.actions.resolveMention(try #require(kept.newMentions.first).id, to: .new(displayName: "Devon")))
+    let mention = try #require(kept.newMentions.first)
+    let devon = try #require(try env.actions.resolveMention(mention.id, to: .new(displayName: "Devon")))
     #expect(try env.store.entities.details(of: maya.entityID).map(\.id) == [kept.memory.id], "the link the person chose stays")
     #expect(try env.store.entities.details(of: devon.entityID).isEmpty)
 }
