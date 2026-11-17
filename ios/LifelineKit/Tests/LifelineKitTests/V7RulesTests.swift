@@ -142,6 +142,19 @@ private func fact(people: [String] = [], about: String? = nil) -> MemoryOut {
     #expect(try env.store.people.findPerson(matching: "Jordy") == nil, "and it never names another person")
 }
 
+@Test func typingYourOwnNameLinksYouAndMakesNoSecondPerson() throws {
+    let env = try Env()
+    try env.store.profile.save(Profile(displayName: "Jordan", birthDate: nil, birthPlaceText: nil, freeText: nil, updatedAt: .now))
+    let owner = try #require(try env.store.profile.owner())
+    let memory = try env.kept("we built the tree house that summer")
+    let linked = try env.actions.linkNewPerson(named: " jordan ", to: memory.id)
+    #expect(linked.id == owner.id, "the owner, not a new person with the owner's name")
+    #expect(try env.store.people.people().count == 1)
+    #expect(try env.store.people.findPersonOrOwner(matching: "Maya") == nil, "an unknown name is still nobody")
+    let maya = try env.actions.linkNewPerson(named: "Maya", to: memory.id)
+    #expect(try env.store.people.findPersonOrOwner(matching: "maya")?.id == maya.id)
+}
+
 // MARK: - The stored title of a fact, feeling or goal
 
 @Test func theStoredTitleIsTheStartOfTheCleanedQuote() {

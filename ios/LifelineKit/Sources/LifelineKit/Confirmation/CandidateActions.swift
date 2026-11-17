@@ -69,7 +69,8 @@ public struct CandidateActions: Sendable {
     public func linkNewPerson(named name: String, to memory: MemoryID) throws -> Person {
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { throw Error.emptyTitle }
-        let person = try store.people.findPerson(matching: trimmed) ?? store.people.insertPerson(displayName: trimmed)
+        // Typing your own name means "I was there": it is the owner, never a second person with that name.
+        let person = try store.people.findPersonOrOwner(matching: trimmed) ?? store.people.insertPerson(displayName: trimmed)
         try store.memories.link(person.id, to: memory, roleText: nil)
         return person
     }
@@ -348,8 +349,8 @@ public struct CandidateActions: Sendable {
         case .new(let displayName):
             let name = displayName.trimmingCharacters(in: .whitespacesAndNewlines)
             let wanted = name.isEmpty ? mention.text : name
-            // A typed name the app already knows is that person, not a second one.
-            let existing = try store.people.findPerson(matching: wanted)
+            // A typed name the app already knows is that person, not a second one. The owner's own name is the owner.
+            let existing = try store.people.findPersonOrOwner(matching: wanted)
             let target = try existing ?? store.people.insertPerson(displayName: wanted)
             try store.people.resolve(id, to: target.id)
             person = target

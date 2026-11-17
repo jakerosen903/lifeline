@@ -104,6 +104,16 @@ public struct PeopleRepository: Sendable {
         return person
     }
 
+    /// For a name the person typed or chose themselves: the person it names, and the owner when
+    /// it is one of the owner's names. A name the extractor found goes through `findPerson`,
+    /// which never returns the owner. Without this, typing your own name would make a second
+    /// person with it.
+    public func findPersonOrOwner(matching text: String) throws -> Person? {
+        if let person = try findPerson(matching: text) { return person }
+        guard try ownerNames().isOwner(text) else { return nil }
+        return try db.writer.read { try Person.fetchOne($0, sql: Person.selectSQL + "where person.is_owner = 1") }
+    }
+
     /// The owner's typed name and every other name the app holds for them. Empty with no owner.
     public func ownerNames() throws -> OwnerNames {
         try db.writer.read { db in
