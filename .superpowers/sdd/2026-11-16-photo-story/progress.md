@@ -26,3 +26,6 @@ Owner approved the v14 schema and "build it" on 2026-11-16. v14 unused on origin
 | 7 self | docs only | agrees |
 
 ## Tasks
+- Task 1: complete (commits 6e138c6..5b56644, review clean). Implementer a7b779d41dcdfa90d. Minor, parked for later tasks: (a) v14 data test compares counts, not row contents; (b) a Settings sweep between `store` and the session insert could remove the new photo — Task 5 note; (c) deleting a photo session leaves its homeless photo until the next sweep — Task 6 note.
+- Hygiene commit 78ad9da: two nested `#require` calls in V7PeopleRulesTests un-nested so the kit tests compile on Swift 6.4.2 (same assertions).
+- Known red on origin/main, not ours: `keepWritesTheCardsKind` (MemoryKindColumnTests.swift:78) fails at a1638c3; PRs #25 and an earlier one disagree once merged. Left alone; owner to be told. Kit baseline is therefore "1 known failure".
