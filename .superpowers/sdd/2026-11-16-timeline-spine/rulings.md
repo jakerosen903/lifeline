@@ -45,3 +45,5 @@ R17 (final review, Important 1). The qualifier "around" is also set for a capsul
 R18 (final review, Important 2). A gap that is measured from or to the band of a confirmed relation has no label and is not dashed; its length is kept. Why: the edge of that band is the builder's slack (R4), so "9 years" would state a number the person never gave. The waypoint above a relation still comes from the start of its band; that cost is recorded in "After S6a". Cost if wrong: one condition and two tests.
 
 R19 (final review). The first full UI run was stopped when the final review asked for kit and view fixes. The one full UI run is made after the fix wave, on the final code.
+
+Owner, 2026-11-16, on R13: "Keep it". The scroll on story open stays.

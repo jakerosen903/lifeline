@@ -15,7 +15,7 @@ One entry per decision. Newest first. Status is Decided, Open, or Superseded.
 - An open story that is the last stop keeps the spine beside its members, and the spine ends at the last member (R7).
 - A spine row keeps the age ("age ~7") on its date line, so the person sees why a guess sits where it does (R8).
 - The "in your voice" length sits on its own line on a spine row, so the title has the full width (R9).
-- Opening a story scrolls it to the top of the list. Opened members landed under the record bar. The owner can overrule this (R13).
+- Opening a story scrolls it to the top of the list. Opened members landed under the record bar. The owner confirmed this on 2026-11-16 (R13).
 - The Check-this tag wraps. A long tag pushed the "..." menu off the row (R14).
 - A tap on a tag does nothing until S6c makes the tag a button (R15).
 - A story's members are list rows of their own, so each long-press menu belongs to one member (R16).
