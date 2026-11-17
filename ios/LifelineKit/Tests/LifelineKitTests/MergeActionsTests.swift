@@ -473,3 +473,22 @@ private func twoSegmentCard(_ env: Env, first: String, second: String, title: St
     #expect(try env.store.memories.spans(of: a.id).count == 2 && (try env.store.memories.fetch(fresh.id)) == nil)
     #expect(try env.store.memories.fetch(a.id)?.range.isPlaced == true, "the range was not cleared either")
 }
+
+@Test func undoingAMergeLeavesThePhotosOnTheTarget() throws {
+    let env = try Env()
+    let (_, target) = try env.kept("we lived in an orange house", title: "Orange house")
+    let (_, source) = try env.kept("we drove to disney with Maya", title: "The drive", people: ["Maya"])
+    let own = Photo(fileName: "own.jpg", sha256: "hash-own", pixelWidth: 400, pixelHeight: 300, addedAt: Date(timeIntervalSince1970: 1))
+    let moved = Photo(fileName: "moved.jpg", sha256: "hash-moved", pixelWidth: 400, pixelHeight: 300, addedAt: Date(timeIntervalSince1970: 2))
+    try env.store.photos.insert(own, linkingTo: .memory(target.id))
+    try env.store.photos.insert(moved, linkingTo: .memory(source.id))
+    let receipt = try env.actions.merge(source.id, into: target.id)
+    try env.actions.unmerge(receipt)
+    // Decision 11: the undo does not move photos back. The source's cover arrived as an attached photo and stays one.
+    let onTarget = try env.store.photos.photos(of: .memory(target.id))
+    #expect(onTarget.map(\.id) == [own.id, moved.id])
+    #expect(onTarget.filter(\.isCover).map(\.id) == [own.id], "exactly one cover on the target")
+    #expect(try env.store.memories.fetch(source.id) != nil)
+    #expect(try env.store.photos.photos(of: .memory(source.id)).isEmpty)
+    #expect(try env.store.photos.deleteUnlinked().isEmpty, "nothing is orphaned by the undo")
+}

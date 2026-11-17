@@ -9,6 +9,9 @@ struct YouScreen: View {
     /// Created once per presentation: a parent re-render must not reload it.
     @State private var viewModel: YouViewModel
     @State private var showSettings = false
+    @State private var addingPhoto = false
+    /// The photo open in the viewer.
+    @State private var viewing: PlacedPhoto?
     /// Absent outside the shell (a preview): then nothing watches the session cover.
     @Environment(HomeViewModel.self) private var home: HomeViewModel?
     /// The root of its stack, on screen. The session cover sends no onDisappear, so the root stays visible under it.
@@ -22,33 +25,40 @@ struct YouScreen: View {
 
     var body: some View {
         // A plain stack, not a List or a lazy stack: tens of lines, each there for VoiceOver without scrolling (decision 19).
-        ScrollView {
-            VStack(alignment: .leading, spacing: 28) {
-                if let portrait = viewModel.portrait {
-                    PortraitHeader(portrait: portrait, deps: viewModel.deps, onChange: changed)
-                    if let lead = viewModel.lead {
-                        VStack(alignment: .leading, spacing: 12) {
-                            Text(lead.drawnText).font(.system(.title, design: .serif)).foregroundStyle(Theme.ink)
+        ScrollViewReader { proxy in
+            ScrollView {
+                VStack(alignment: .leading, spacing: 28) {
+                    if let portrait = viewModel.portrait {
+                        PortraitHeader(portrait: portrait, cover: viewModel.shelf?.cover, photos: viewModel.shelf?.photos ?? [],
+                                       isAdding: viewModel.shelf?.isAdding ?? false, label: viewModel.photoLabel,
+                                       cache: viewModel.deps.photoImages, deps: viewModel.deps, onOpen: { viewing = $0 }, onChange: changed)
+                            .id(Self.top)
+                        if let lead = viewModel.lead {
+                            VStack(alignment: .leading, spacing: 12) {
+                                Text(lead.drawnText).font(.system(.title, design: .serif)).foregroundStyle(Theme.ink)
+                                    .fixedSize(horizontal: false, vertical: true)
+                                    .accessibilityLabel(lead.text)
+                                    .lineMenu(lead, viewModel)
+                                    .accessibilityIdentifier("you.lead")
+                                PortraitLeadPlayButton(line: lead, viewModel: viewModel)
+                            }
+                        }
+                        parts
+                        if viewModel.isLoaded, portrait.isEmpty {
+                            Text(EntityPage.invitation(title: "", isOwner: true))
+                                .font(.body).foregroundStyle(Theme.secondaryText)
                                 .fixedSize(horizontal: false, vertical: true)
-                                .accessibilityLabel(lead.text)
-                                .lineMenu(lead, viewModel)
-                                .accessibilityIdentifier("you.lead")
-                            PortraitLeadPlayButton(line: lead, viewModel: viewModel)
+                                .accessibilityIdentifier("you.invite")
                         }
                     }
-                    parts
-                    if viewModel.isLoaded, portrait.isEmpty {
-                        Text(EntityPage.invitation(title: "", isOwner: true))
-                            .font(.body).foregroundStyle(Theme.secondaryText)
-                            .fixedSize(horizontal: false, vertical: true)
-                            .accessibilityIdentifier("you.invite")
-                    }
+                    if let error = viewModel.error { ErrorLine(text: error).accessibilityIdentifier("you.error") }
                 }
-                if let error = viewModel.error { ErrorLine(text: error).accessibilityIdentifier("you.error") }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, 16)
-            .padding(.vertical, 12)
+            // A new cover is the page's news: the page goes back to the top, where the cover is.
+            .onChange(of: viewModel.shelf?.cover?.id) { withAnimation { proxy.scrollTo(Self.top, anchor: .top) } }
         }
         // One slot, pinned above the record bar: "Hidden." with Undo, or why something failed. Wherever the line
         // was on the page, its message is on screen, and the page does not jump.
@@ -75,6 +85,23 @@ struct YouScreen: View {
         .toolbar {
             Button("Settings") { showSettings = true }
                 .accessibilityIdentifier("home.settings")
+            // Photos hang on the owner's entity: with no owner yet there is nowhere to add one.
+            if viewModel.shelf != nil {
+                Menu {
+                    Button("Add a photo", systemImage: "photo") { viewModel.clearError(); addingPhoto = true }
+                        .accessibilityIdentifier("you.addPhoto")
+                } label: { Image(systemName: "ellipsis.circle") }
+                    .accessibilityLabel("More")
+                    .accessibilityIdentifier("you.more")
+            }
+        }
+        .addPhotoFlow(isPresented: $addingPhoto, deps: viewModel.deps, shelf: viewModel.shelf,
+                      onFile: { file, assetID in await viewModel.addPhoto(fileAt: file, assetLocalID: assetID) },
+                      onError: { viewModel.photoFailed($0) })
+        .sheet(item: $viewing) { placed in
+            PhotoViewer(photo: placed, label: viewModel.photoLabel, canMakeCover: !placed.isCover, cache: viewModel.deps.photoImages,
+                        onMakeCover: { await viewModel.makeCover(placed.id) },
+                        onRemove: { await viewModel.removePhoto(placed.id) })
         }
         .sheet(isPresented: $showSettings, onDismiss: changed) {
             SettingsScreen(deps: viewModel.deps, isSessionLive: isSessionLive)
@@ -97,6 +124,9 @@ struct YouScreen: View {
         .onChange(of: home?.coverClosings) { if isVisible { viewModel.refresh(newLead: false) } }
         .sessionContext(viewModel.ownerSubject)
     }
+
+    /// The header's id, for the scroll back to the cover.
+    private static let top = "you.top"
 
     /// Something changed elsewhere (Settings, a pushed page): read again, keeping the lead.
     private func changed() { viewModel.refresh(newLead: false) }

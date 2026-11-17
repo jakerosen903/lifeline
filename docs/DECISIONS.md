@@ -2,6 +2,56 @@
 
 One entry per decision. Newest first. Status is Decided, Open, or Superseded.
 
+## 2026-11-16 · Photos on pages, kept on the phone (S4)
+
+**Status:** Decided. Builds on the five-sections decision of 2026-11-15.
+
+**Source:** `docs/plans/2026-11-16-sections-photos.md`, decisions 2, 3, 4, 6, 7, 8, 10, 11, 15 and 20. The rulings made while building it are below. The owner approved the v13 schema on 2026-11-16. The schema is `photo_link` with `entity_id` and `memory_id`.
+
+**Decision.** A person, place or thing page, a memory page and You can hold photos. The first photo is the cover. A cover shows as the page header and as the face of the People tile.
+
+- **Links per subject kind (decision 2).** `photo_link` has `entity_id` and `memory_id`, exactly one set, each with `on delete cascade`. The spec had one polymorphic key. A cascade removes the link on every delete path with no code at each call site, and it needs no trigger, which the destructive-migration guard would flag. Cost: a third kind of subject, a chapter for example, needs a new column.
+- **Metadata stripped from the file (decisions 3 and 4).** The stored copy is a JPEG of at most 2048 pixels with no EXIF, GPS or orientation flag. The date taken and the position live only in the database row, with their origin. Cost: the app re-encodes the photo, so the person’s original bytes are not kept. The original stays in the Photos app.
+- **Metadata is a caption only (decision 6).** The app shows “taken {date}” and does nothing with the position. Cost: a photo’s date does not place it on the life strip, and its position does not suggest a place. A later spec must say where metadata may be offered.
+- **Cover rules (decision 8).** When the cover is removed, the oldest-added photo becomes the cover. With no photo left, the tile shows its letter and the page has no header.
+- **No orphans (decision 10).** A cascade removes links in the delete’s own transaction. A launch sweep removes unlinked photos, files with no row and `.partial` files. The sweep never deletes a row for a missing file.
+- **You (decision 15).** You shows the owner’s cover and a “…” menu with “Add a photo”. Photos on the strip wait.
+- **Backup (decision 20).** The copy holds `photos/*.jpg`, stored without compression. The manifest gets optional `photoFiles` and `photoBytes`.
+- **A pre-S4 build refuses a post-S4 copy.** The copy has schema v13. A build from before S4 shows “This copy was made by a newer version of Lifeline.” A copy from before S4 restores and has no photos.
+- **One copy per photo (decision 7).** The SHA-256 of the picked file identifies a photo. The same photo added to a second page links the one copy to both pages. The same photo added again to the same page changes nothing. Cost: two pages share one file, so removing the photo from one page must keep the file for the other.
+- **A merge moves photos (decision 11).** A merge of two memories moves the source memory’s photos to the target. A source cover becomes an attached photo when the target has a cover. Undoing the merge does not move the photos back. Cost: an undone merge leaves the photos on the target.
+- **Photos stay on their pages for now.** No Timeline row, Things tile, search result or map uses a photo yet (S5 to S8).
+
+**Rulings made while building (2026-11-16).** Each ruling has its cost.
+
+- **A repeat add repairs a missing file.** When the person adds a photo whose row exists and whose stored file is missing, the app writes the file again, with the same id and name, then links it. Why: picking the photo again is the only way to repair a photo that does not show. Cost: one extra file write on a rare path.
+- **The page scrolls to its top when the cover changes.** This holds for the entity page and You. Why: “Make this the cover” is tapped lower on the page, and the person must see the result. Cost: a scroll jump the owner may not want. The owner must confirm.
+- **The viewer’s “Done” has no glass background.** It is a plain toolbar button. With the glass background it measured 36 points at the largest text, under the 44-point minimum. Cost: this sheet’s toolbar looks unlike other sheets. The owner must confirm on the device.
+- **Four plan tests differ from the plan’s text, with assertions of equal strength.** The owner must see them.
+  - `photo.confirmRemove` is found with `.firstMatch`, because iOS 26 lists a confirmation-dialog button twice.
+  - The viewer caption query is scoped to `photo.viewer`, because the page’s caption under the sheet has the same identifier.
+  - The list cover sample is at x=0.1, not 0.04. At 0.04 the point lands on the row’s inset, before the face.
+  - `testAMemoryShowsItsPhotos` reveals its row and waits for `memory.range`. The row is off screen in a lazy list, and “The tree house” is an event, so its page shows the range and no kind.
+- **The pixel-colour tests poll for up to 10 seconds.** They poll before the unchanged colour assertion. Why: the image decodes off the main thread, so an immediate screenshot is a race. Cost: none. A wrong colour still fails.
+- **Two extra failure tests.** A foreign-key failure at the row insert and a failure at the file write prove that a failed add stores nothing. Cost: two more tests.
+
+**Rulings from the final review (2026-11-16).** Each ruling has its cost.
+
+- **The sweep also runs before every copy.** Settings runs the sweep before an export and before a restore is staged, through the photo library, so it cannot run between an add's file and its row. Why: a photo whose memory or session was deleted in this run keeps its row and file until the next launch, and a copy made before then would carry it. The copy is the one thing that leaves the phone. Cost: a short pause before each copy. A sweep that fails is logged and does not stop the copy.
+- **"Adding the photo…" starts when the picked item arrives.** It shows before the system hands the file over, which takes seconds for a photo in iCloud, and it clears on every exit. A count keeps it on while a second pick is still running. Cost: none known. Device check item 2 confirms it.
+- **A staged restore keeps its recordings and photos out of the cloud backup.** After the unzip, the app excludes the staged `audio/` and `photos/` folders. The app never flags the staging folder itself, because that folder becomes the archive folder at the swap. A flag on it could leave the database out of the cloud backup after a kill. Cost: the staged database can go into the cloud backup until the next launch, as it could before S4.
+- **The backup tests run one at a time.** They are in one serialized suite. They zip whole archives on the test thread, and in parallel they starved a timing test in the extraction queue (`drainGivesUpAtItsDeadline`). Cost: the backup tests take longer; no assertion changed.
+
+**The owner must see:**
+
+- The delete dialogs for a memory or a session do not say that its photos go too.
+- A photo whose stored file is missing shows an empty frame as a page header. A tile shows its letter.
+- `PhotoShelf.load` has one failure string outside the plan's copy list: "Could not show the photos: {reason}".
+
+**Why.** A life has faces and places. The person recognizes them by sight (P1). The person keeps the photos and decides which one leads (P2). The app shows only what the file says. The app never describes a photo and never guesses from it (P5). Photos stay on the phone, as audio does (data posture).
+
+**Costs.** The app re-encodes every photo. Metadata does not feed any other feature yet. The schema is permanent once v13 ships. S4 builds storage and display, not the “one photo, one story” prompt.
+
 ## 2026-11-16 · The Timeline is a spine; a chapter is a tag, a "During" line and a bar on the life map
 
 **Status:** Decided by the owner from mock-ups. Source: `docs/specs/2026-11-16-timeline.md`. Supersedes in part "The timeline groups moments into computed life periods" (2026-10-26) and "Archive structure: chapters → stories → moments" (2026-10-22).
@@ -16,6 +66,19 @@ One entry per decision. Newest first. Status is Decided, Open, or Superseded.
 **Why.** The owner found that most moments sat outside every chapter, that empty chapters could not be removed, and that the Timeline read as a list. Marks on every row (a band or several tags) break with many chapters, because chapters overlap. One line and one map hold any number.
 
 **Consequences.** `chapter.range` holds stated years only. The chapters in the owner's archive show under "Not placed in time yet" until the owner says when. The chapter rules in the audit data fixes spec move to S6. S6 is specified ahead of the ship order and of the two-week watch.
+
+## 2026-11-17 · Extractor v7's rules in code: rulings made while building A2a
+
+**Status:** Decided by the builder, for the owner to overrule. Source: PR #25 and `docs/plans/2026-11-16-extractor-v7.md`, "Rulings made while building A2a".
+
+- **No stored match-key column and no migration.** Lookups read the rows of one type and compare keys in Swift. The tables are small.
+- **Places, things and collections with one match key are joined once at launch, without a question,** as stories are (owner's call 1 of 2026-11-16). People and ideas are never joined by name. A pair is left alone when joining would drop a detail line or dates that differ, or when the side that would go has photos.
+- **The owner's own name is never a person on the extraction path.** `findPerson` never returns the owner. A name the person typed or chose themselves still reaches the owner, so typing your own name never makes a second person.
+- **A bad `about_ref` is cleared, not retried.** A retry costs a model call for a field that can safely be empty.
+- **A place with no name leaves only the quote.** It is unnamed when it starts with "a", "an", "some" or "somewhere" and no later word is capitalised, so "A Coruña" is a name.
+- **A group phrase is recognised by its wording in A2a.** The `group` mention kind waits for the v7 prompt (A2b).
+
+**Open for the owner.** You draws the owner's life strip from moments linked to the owner as a person. New recordings no longer add that link. The strip should read every dated moment; that change is not made yet.
 
 ## 2026-11-16 · A feeling has no title, and "our parents" is not one person
 

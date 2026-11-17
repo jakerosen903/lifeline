@@ -454,8 +454,28 @@ public struct MemoryRepository: Sendable {
             if target.chapterID == nil {
                 try db.execute(sql: "update memory set chapter_id = (select chapter_id from memory where id = ?) where id = ?", arguments: [source.id.rawValue, target.id.rawValue])
             }
+            try Self.movePhotoLinks(from: source.id, to: target.id, in: db)
             _ = try Memory.deleteOne(db, key: source.id.rawValue)
             try db.execute(sql: Self.deleteEmptyStoriesSQL)
+    }
+
+    /// The source's photos the target does not hold move to the target, after its own. The target keeps
+    /// its cover, so a source cover arrives as an attached photo; with no cover on the target it stays one.
+    private static func movePhotoLinks(from source: MemoryID, to target: MemoryID, in db: Database) throws {
+        var hasCover = try Int.fetchOne(db, sql: "select count(*) from photo_link where memory_id = ? and role = 'cover'", arguments: [target.rawValue]) == 1
+        var next = (try Int.fetchOne(db, sql: "select max(sort_order) from photo_link where memory_id = ?", arguments: [target.rawValue]) ?? -1) + 1
+        let moving = try Row.fetchAll(db, sql: """
+            select photo_id, role from photo_link where memory_id = ?
+              and photo_id not in (select photo_id from photo_link where memory_id = ?)
+            order by role = 'cover' desc, sort_order, rowid
+            """, arguments: [source.rawValue, target.rawValue])
+        for row in moving {
+            let role: PhotoRole = hasCover ? .attached : .cover
+            try db.execute(sql: "insert into photo_link (photo_id, memory_id, role, sort_order) values (?, ?, ?, ?)",
+                           arguments: [row["photo_id"] as String, target.rawValue, role.rawValue, next])
+            hasCover = true
+            next += 1
+        }
     }
 
     public func anchors(of memory: MemoryID) throws -> [Anchor] {

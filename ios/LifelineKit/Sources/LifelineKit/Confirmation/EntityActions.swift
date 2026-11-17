@@ -17,7 +17,8 @@ extension CandidateActions {
         var plan = EntityRepository.Write()
         let entity: Entity
         if chosen == .person {
-            if let person = try store.people.findPerson(matching: mention.text) {
+            // The person chose "a person" for this name themselves: their own name is the owner, never a second person.
+            if let person = try store.people.findPersonOrOwner(matching: mention.text) {
                 entity = Entity(id: person.entityID, type: .person, title: person.displayName)
             } else {
                 let person = Person(id: .init(), displayName: mention.text.trimmingCharacters(in: .whitespacesAndNewlines), notes: nil,

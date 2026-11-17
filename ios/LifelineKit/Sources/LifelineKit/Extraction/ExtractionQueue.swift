@@ -129,6 +129,10 @@ public actor ExtractionQueue {
                 if Self.isBlank(response.output) { throw ExtractionError.badOutput("blank answer") }
             }
             var validated = OutputValidator.validate(response.output, segmentText: segment.text, words: words)
+            // The speaker is the owner: their own name is never a person to ask about (audit F10).
+            validated = try store.people.ownerNames().removingOwner(from: validated)
+            // An about_ref that names nothing the model was given is cleared; the memory is kept.
+            validated = AboutRefCheck.cleared(validated, knownIDs: Set(request.packet.people.map(\.id) + request.packet.entities.map(\.id)))
             try mintStoryRefs(&validated)
             let shown = try storeCandidates(validated, segment: segmentID, version: response.version)
             lastFailure[segmentID] = nil
@@ -152,6 +156,8 @@ public actor ExtractionQueue {
     }
 
     /// A memory with no words at all, and nothing else in the reply.
+    static let genericPlaceReason = "a place with no name"
+
     static func isBlank(_ output: ExtractorOutput) -> Bool {
         !output.memories.isEmpty && output.mentions.isEmpty && !output.flags.isAnySet
             && output.memories.allSatisfy { $0.quote.trimmingCharacters(in: .whitespaces).isEmpty && $0.title.trimmingCharacters(in: .whitespaces).isEmpty }
@@ -214,6 +220,11 @@ public actor ExtractionQueue {
             let r = try Self.describe(candidate)
             if case .memory = candidate, validated.flags.seriousDisclosure {
                 rows.append(row(r.kind, r.payload, r.confidence, Self.withheldReason))
+                continue
+            }
+            // A place with no name is not a place of its own: a record, never a card or an entity (audit F13).
+            if case .mention(let mention) = candidate, mention.kind == .place, GenericPhrase.isGeneric(mention.text) {
+                rows.append(row(r.kind, r.payload, r.confidence, Self.genericPlaceReason))
                 continue
             }
             // A telling carried on after a pause: the earlier card grows a span and shows again;
@@ -330,7 +341,7 @@ public actor ExtractionQueue {
         accepted.contains { candidate in
             guard case .memory(let memory) = candidate else { return false }
             if let ref = mention.ref, memory.aboutRef == ref { return true }
-            return memory.allEntityRefs.contains { $0.kind == mention.kind && PeopleRepository.normalize($0.text) == PeopleRepository.normalize(mention.text) }
+            return memory.allEntityRefs.contains { $0.kind == mention.kind && MatchKey.of($0.text) == MatchKey.of(mention.text) }
         }
     }
 

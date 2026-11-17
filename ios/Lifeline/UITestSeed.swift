@@ -83,6 +83,44 @@ enum UITestSeed {
         try store.tags.tag(.memory, moment.id.rawValue, "Graduations")
     }
 
+    /// Under `-uiTesting-seedPhotos`: the family, then generated photos added through the library as a pick would add them.
+    /// Maya has two (a dated landscape cover, then an undated portrait), "The tree house" one, Jordan one.
+    /// Dad, Sam and Lena have none. Solid colours with a circle; never a real photo.
+    static func writePhotos(store: ExtractionStore, profile: ProfileRepository, sessions: SessionRepository, library: PhotoLibrary) throws {
+        try writePeople(store: store, profile: profile, sessions: sessions)
+        guard let jordan = try profile.owner()?.entityID,
+              let maya = try store.entities.entities(type: .person).first(where: { $0.title == person })?.id,
+              let treeHouse = try store.memories.allMemories().first(where: { $0.title == "The tree house" })?.id else { return }
+        let folder = FileManager.default.temporaryDirectory.appending(path: "seed-photos-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let photos: [(subject: PhotoSubject, width: Int, height: Int, rgb: Int, takenAt: String?, gps: (lat: Double, lon: Double)?)] = [
+            (.entity(maya), 1600, 1200, 0xC8893F, "2012:06:14 15:32:10", (0.5, -30.0)),
+            (.entity(maya), 1200, 1600, 0x5F7046, nil, nil),
+            (.memory(treeHouse), 1600, 1200, 0xECE3D2, "1999:07:04 10:00:00", nil),
+            (.entity(jordan), 1600, 1200, 0x8F5A1C, nil, nil),
+        ]
+        for (index, photo) in photos.enumerated() {
+            let file = folder.appending(path: "seed-\(index).jpg")
+            try GeneratedPhoto.write(to: file, width: photo.width, height: photo.height, rgb: photo.rgb, takenAt: photo.takenAt, gps: photo.gps)
+            let subject = photo.subject
+            try waitFor { _ = try await library.add(fileAt: file, assetLocalID: nil, to: subject) }
+        }
+    }
+
+    /// The seed runs before the first screen, from a synchronous launch. The library is an actor off the main
+    /// thread, so blocking here cannot deadlock it. Under UI testing only.
+    private static func waitFor(_ work: @escaping @Sendable () async throws -> Void) throws {
+        let done = DispatchSemaphore(value: 0)
+        let failure = FailureBox()
+        Task.detached {
+            do { try await work() } catch { failure.set(error) }
+            done.signal()
+        }
+        done.wait()
+        if let error = failure.get() { throw error }
+    }
+
     /// The family behind `writePeople`, and the session it was told in, for a seed that tells more after it.
     private static func people(store: ExtractionStore, profile: ProfileRepository, sessions: SessionRepository) throws -> SeedSession? {
         let birth = Calendar.current.date(from: DateComponents(year: 1990, month: 6, day: 1))
@@ -130,6 +168,14 @@ enum UITestSeed {
         }
         _ = try store.chapters.insertChapter(title: nil)
     }
+}
+
+/// The error a detached seed step threw, read back on the waiting thread.
+private final class FailureBox: @unchecked Sendable {
+    private let lock = NSLock()
+    private var error: (any Error)?
+    func set(_ error: any Error) { lock.withLock { self.error = error } }
+    func get() -> (any Error)? { lock.withLock { error } }
 }
 
 /// One seeded session (`seed.m4a`, never written): each `keep` adds a segment of 4 000 ms and keeps one memory on it.

@@ -1,10 +1,12 @@
 import LifelineKit
 import SwiftUI
 
-/// The square at the top of a tile. The monogram sits here today; S4 puts the person's photo in
-/// this same frame, so a photo changes nothing about the layout.
+/// The square at the top of a tile. A cover fills it, clipped to the same frame; the monogram is what shows
+/// without one, and under a cover that is still loading or cannot load. A photo changes nothing about the layout.
 struct TileFace: View {
     let summary: EntitySummary
+    let cover: Photo?
+    let cache: PhotoImageCache
     var letterFont: Font = .system(.largeTitle, design: .serif)
 
     var body: some View {
@@ -12,11 +14,20 @@ struct TileFace: View {
             .fill(Theme.monogramTints[Monogram.tintIndex(for: summary.id)])
             .aspectRatio(1, contentMode: .fit)
             .overlay {
-                Text(Monogram.letter(for: summary.entity.title))
-                    .font(letterFont)
-                    .foregroundStyle(Theme.ink)
+                if let cover {
+                    PhotoImageView(photo: cover, size: .small, cache: cache) { monogram }
+                } else {
+                    monogram
+                }
             }
+            .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
             .accessibilityHidden(true)
+    }
+
+    private var monogram: some View {
+        Text(Monogram.letter(for: summary.entity.title))
+            .font(letterFont)
+            .foregroundStyle(Theme.ink)
     }
 }
 
@@ -25,13 +36,14 @@ struct TileFace: View {
 /// and no date, and never asks for a photo.
 struct PersonTile: View {
     let summary: EntitySummary
+    let cover: Photo?
     let deps: Dependencies
     let onChange: () -> Void
 
     var body: some View {
         PersonLink(summary: summary, deps: deps, onChange: onChange) {
             VStack(alignment: .leading, spacing: 6) {
-                TileFace(summary: summary)
+                TileFace(summary: summary, cover: cover, cache: deps.photoImages)
                 Text(summary.entity.title)
                     .font(.system(.headline, design: .serif)).foregroundStyle(Theme.ink)
                     .lineLimit(2).multilineTextAlignment(.leading)
@@ -48,6 +60,7 @@ struct PersonTile: View {
 /// The same person as a list row, for accessibility text sizes: a small face, then the words.
 struct PersonRow: View {
     let summary: EntitySummary
+    let cover: Photo?
     let deps: Dependencies
     let onChange: () -> Void
     /// Fixed: at accessibility sizes the text needs the width, and the face only has to stay a face.
@@ -56,7 +69,7 @@ struct PersonRow: View {
     var body: some View {
         PersonLink(summary: summary, deps: deps, onChange: onChange) {
             HStack(spacing: 14) {
-                TileFace(summary: summary, letterFont: .system(size: 24, design: .serif)).frame(width: faceSize)
+                TileFace(summary: summary, cover: cover, cache: deps.photoImages, letterFont: .system(size: 24, design: .serif)).frame(width: faceSize)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(summary.entity.title)
                         .font(.system(.headline, design: .serif)).foregroundStyle(Theme.ink)
