@@ -94,6 +94,13 @@ enum UITestSeed {
         let folder = FileManager.default.temporaryDirectory.appending(path: "seed-photos-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: folder) }
+        // A memory dated by a photo, for the page that says so. No links: it sits on the timeline only.
+        var beach = SeedSession(session: Session(id: .init(), startedAt: .now, endedAt: .now, audioPath: "seed-beach.m4a", stageLog: "[]", landingChoiceMade: true),
+                                store: store, sessions: sessions)
+        try sessions.insert(beach.session)
+        if let day = CivilDate(year: 2012, month: 6, day: 14) {
+            try beach.keep("The beach", kind: .event, range: .fromPhoto(day), links: [])
+        }
         let photos: [(subject: PhotoSubject, width: Int, height: Int, rgb: Int, takenAt: String?, gps: (lat: Double, lon: Double)?)] = [
             (.entity(maya), 1600, 1200, 0xC8893F, "2012:06:14 15:32:10", (0.5, -30.0)),
             (.entity(maya), 1200, 1600, 0x5F7046, nil, nil),
@@ -171,7 +178,7 @@ private struct SeedSession {
     var index = 0
 
     @discardableResult
-    mutating func keep(_ title: String, kind: MemoryKind, year: Int? = nil, relation: EntityRelation = .detail, quote: String? = nil,
+    mutating func keep(_ title: String, kind: MemoryKind, year: Int? = nil, range dated: TimeRange? = nil, relation: EntityRelation = .detail, quote: String? = nil,
                        links: [(EntityID, String?)]) throws -> MemoryID {
         let text = quote ?? "\(title), as told"
         let segment = Segment(id: .init(), sessionID: session.id, index: index, startMs: index * 5_000, endMs: index * 5_000 + 4_000,
@@ -183,7 +190,7 @@ private struct SeedSession {
         let candidate = Candidate(id: .init(), segmentID: segment.id, extractorVersion: "seed", ordinal: 0, kind: .memory, payload: "{}",
                                   confidence: 1, status: .pending, rejection: nil, createdAt: .now)
         try store.candidates.insert(candidate)
-        let range = year.map { TimeRange.year($0, origin: .stated, evidence: "in \($0)") } ?? .unplaced
+        let range = dated ?? year.map { TimeRange.year($0, origin: .stated, evidence: "in \($0)") } ?? .unplaced
         let memory = Memory(id: .init(), title: title, summaryQuote: text, visibility: .timeline, chapterID: nil,
                             createdFromCandidateID: candidate.id, createdAt: told, range: range, kind: kind)
         try store.memories.insert(memory, spans: [MemorySpan(memoryID: memory.id, segmentID: segment.id, startMs: segment.startMs, endMs: segment.endMs, order: 0)],

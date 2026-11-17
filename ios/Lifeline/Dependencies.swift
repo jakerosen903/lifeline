@@ -72,11 +72,11 @@ struct Dependencies {
     }
 
     /// A fresh question for the next session: an open thread first, then the bank without repeats.
-    func opening(subject: SessionSubject? = nil) -> Opening {
+    func opening(photo: PhotoID? = nil, subject: SessionSubject? = nil) -> Opening {
         let bank = (try? PromptBank.load()) ?? []
         let curiosity = (try? extractionStore.curiosity.open()) ?? []
         let used = (try? promptLog.lastUsed()) ?? [:]
-        return OpeningChooser.choose(subject: subject, curiosity: curiosity, bank: bank, lastUsed: used, now: .now)
+        return OpeningChooser.choose(photo: photo, subject: subject, curiosity: curiosity, bank: bank, lastUsed: used, now: .now)
     }
 
     func audioURL(for id: SessionID) throws -> URL {

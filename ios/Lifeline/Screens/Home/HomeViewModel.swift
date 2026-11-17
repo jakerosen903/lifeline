@@ -10,6 +10,8 @@ final class HomeViewModel {
         let durationText: String
         /// Segments of this recording still to be sorted (M6).
         var pendingCount = 0
+        /// The session was about a photo; its list name says so.
+        var isPhotoStory: Bool { session.startedFrom == .photo }
         var id: SessionID { session.id }
     }
 
@@ -57,6 +59,8 @@ final class HomeViewModel {
     /// The subject of the session that just ended, for "Tell another". Nil after a kill, where a resumed
     /// landing has no known subject.
     private var lastSubject: SessionSubject?
+    /// The session that just ended was about a photo. Task 5 reads it: "Tell another" then asks for a new photo.
+    private(set) var lastWasPhoto = false
     /// Called after a session ends, so the timeline can refresh.
     var onSessionEnded: (() -> Void)?
     var activeSession: SessionViewModel? {
@@ -90,6 +94,16 @@ final class HomeViewModel {
     /// A second tap while starting or recording does nothing. The subject is fixed by the caller: a page
     /// change while the microphone prompt is up does not change this session.
     func startSession(kind: SessionKind = .quick, subject: SessionSubject?) async {
+        await begin(kind: kind, subject: subject, photo: nil)
+    }
+
+    /// A session about one photo, from the viewer once it has closed. It shares the guards and the
+    /// microphone path of `startSession`; it is a quick story with no subject page.
+    func startPhotoSession(_ photo: Photo) async {
+        await begin(kind: .quick, subject: nil, photo: photo)
+    }
+
+    private func begin(kind: SessionKind, subject: SessionSubject?, photo: Photo?) async {
         guard !isStarting, activeSession == nil else { return }
         isStarting = true
         defer { isStarting = false }
@@ -104,7 +118,7 @@ final class HomeViewModel {
             startError = .audio(error.localizedDescription)
             return
         }
-        let vm = SessionViewModel(deps: deps, kind: kind, subject: subject)
+        let vm = SessionViewModel(deps: deps, kind: kind, subject: subject, photo: photo)
         presented = .session(vm)
         await vm.start()
     }
@@ -134,6 +148,7 @@ final class HomeViewModel {
     func sessionEnded() {
         let ended = activeSession
         lastSubject = ended?.subject
+        lastWasPhoto = ended?.photo != nil
         deps.deactivateAudio()
         if let ended, let id = ended.state.sessionID, let session = try? deps.sessions.fetch(id),
            !((try? deps.sessions.segments(in: id)) ?? []).isEmpty {
@@ -149,6 +164,7 @@ final class HomeViewModel {
     /// A resumed landing (after a kill) has no known subject, so its "Tell another" starts on the tab.
     func present(landing: LandingViewModel) {
         lastSubject = nil
+        lastWasPhoto = false
         presented = .landing(landing)
     }
 

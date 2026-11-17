@@ -44,6 +44,8 @@ final class SessionViewModel: Identifiable {
     let deps: Dependencies
     /// The page this session is about, if it started from one.
     let subject: SessionSubject?
+    /// The photo this session is about, if it started from one. It stays on the session screen.
+    let photo: Photo?
     private var recorder: SessionRecorder?
     private var queue: ExtractionQueue?
     /// Everything the interviewer loop hears, in order. Finished when the session ends.
@@ -56,12 +58,13 @@ final class SessionViewModel: Identifiable {
     private var segmentsSeen = 0
     private var declinedOffers = 0
 
-    init(deps: Dependencies, kind: SessionKind = .quick, subject: SessionSubject? = nil) {
+    init(deps: Dependencies, kind: SessionKind = .quick, subject: SessionSubject? = nil, photo: Photo? = nil) {
         self.deps = deps
         self.subject = subject
+        self.photo = photo
         self.kind = kind
         flow = CardFlow(deps: deps)
-        let opening = deps.opening(subject: subject)
+        let opening = deps.opening(photo: photo?.id, subject: subject)
         let arc = SessionArc(kind: kind, config: deps.arcConfig, startedAt: .now)
         self.opening = opening
         self.arc = arc
@@ -70,7 +73,10 @@ final class SessionViewModel: Identifiable {
 
     var prompt: String { opening.main.text }
     var alternates: [String] { opening.alternates.map(\.text) }
-    var kindText: String { kind == .quick ? "a quick story" : "settling in" }
+    var kindText: String {
+        if photo != nil { return "a story about a photo" }
+        return kind == .quick ? "a quick story" : "settling in"
+    }
     var possibleMemoryCount: Int { cardQueue.possibleMemoryCount }
     var countText: String {
         let n = possibleMemoryCount
@@ -138,7 +144,9 @@ final class SessionViewModel: Identifiable {
         }
         do {
             let captureStart = ContinuousClock.now
-            try await recorder.start(id: sessionID, kind: kind, subject: subject?.entityID, startedFrom: subject == nil ? .tab : .page)  // Rule: a session with a subject started on a page; none, on a tab.
+            // Rule: a session with a photo started from it; one with a subject, on a page; none, on a tab.
+            try await recorder.start(id: sessionID, kind: kind, subject: subject?.entityID, subjectPhoto: photo?.id,
+                                     startedFrom: photo != nil ? .photo : (subject == nil ? .tab : .page))
             if speaks { startInterviewer(inputs: inputs, recorder: recorder, session: sessionID, captureStart: captureStart) }
             arc = SessionArc(kind: kind, config: deps.arcConfig, startedAt: startedAt)
             persistLog()

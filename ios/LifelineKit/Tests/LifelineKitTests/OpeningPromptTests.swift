@@ -138,3 +138,24 @@ private func entityItem(_ text: String, entity: EntityID?, payoff: Int = 1, stat
     #expect(!opening.main.text.contains("Maya"))
     #expect(opening.main == OpeningChooser.choose(curiosity: [], bank: bank, lastUsed: [:], now: now).main, "the plain tab opening")
 }
+
+// MARK: - A session about a photo
+
+@Test func aPhotoOpensWithTellMeAboutThisOne() throws {
+    let bank = try PromptBank.load()
+    let id = PhotoID()
+    let openItem = item("graduation", payoff: 2)
+    let opening = OpeningChooser.choose(photo: id, curiosity: [openItem], bank: bank, lastUsed: [:], now: now)
+    #expect(opening.main == .photo(id, text: "Tell me about this one."))
+    #expect(opening.main.logID == "photo")
+    #expect(opening.alternates.count == 3)
+    #expect(opening.alternates.allSatisfy { if case .scene = $0 { true } else { false } }, "no alternate is a curiosity item")
+    #expect(opening.alternates.map(\.logID) == bank.prefix(3).map(\.id), "the first three scenes")
+}
+
+@Test func aPhotoWinsOverASubject() throws {
+    let bank = try PromptBank.load()
+    let maya = SessionSubject(entityID: EntityID(), title: "Maya", isOwner: false)
+    let opening = OpeningChooser.choose(photo: PhotoID(), subject: maya, curiosity: [], bank: bank, lastUsed: [:], now: now)
+    #expect(opening.main.logID == "photo")
+}

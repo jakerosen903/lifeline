@@ -66,6 +66,7 @@ struct SessionScreen: View {
     private var listenView: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
+                sessionPhoto
                 promptCard(compact: false, chips: hasText)
                 if let turn = viewModel.latestTurn {
                     // A cut turn is marked in the transcripts; here it would change while the person speaks.
@@ -100,6 +101,11 @@ struct SessionScreen: View {
         }
     }
 
+    /// A photo session keeps its photo above the question, in both views.
+    @ViewBuilder private var sessionPhoto: some View {
+        if let photo = viewModel.photo { SessionPhoto(photo: photo, cache: viewModel.deps.photoImages) }
+    }
+
     /// One tap makes the interviewer quiet for the session; one tap asks it back (spec M8, "Quiet, by tap").
     private var quietControl: some View {
         Button { viewModel.toggleQuiet() } label: {
@@ -121,6 +127,7 @@ struct SessionScreen: View {
         ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 16) {
+                    sessionPhoto
                     promptCard(compact: hasText)
                     ForEach(viewModel.transcript) { item in
                         switch item {

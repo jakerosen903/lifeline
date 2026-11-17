@@ -24,6 +24,8 @@ struct EntityScreen: View {
     @State private var addingPhoto = false
     /// The photo open in the viewer.
     @State private var viewing: PlacedPhoto?
+    /// "Tell its story" was tapped: the session starts when the viewer has closed.
+    @State private var tellingStoryOf: Photo?
     @Environment(\.dismiss) private var dismiss
     /// Absent outside the shell (a preview): then nothing watches the session cover.
     @Environment(HomeViewModel.self) private var home: HomeViewModel?
@@ -169,10 +171,11 @@ struct EntityScreen: View {
         .addPhotoFlow(isPresented: $addingPhoto, deps: viewModel.deps, shelf: viewModel.shelf,
                       onFile: { file, assetID in await viewModel.addPhoto(fileAt: file, assetLocalID: assetID); onChange() },
                       onError: { viewModel.photoFailed($0) })
-        .sheet(item: $viewing) { placed in
+        .sheet(item: $viewing, onDismiss: startPendingPhotoStory) { placed in
             PhotoViewer(photo: placed, label: viewModel.photoLabel, canMakeCover: !placed.isCover, cache: viewModel.deps.photoImages,
                         onMakeCover: { await viewModel.makeCover(placed.id); onChange() },
-                        onRemove: { await viewModel.removePhoto(placed.id); onChange() })
+                        onRemove: { await viewModel.removePhoto(placed.id); onChange() },
+                        onTellStory: { tellingStoryOf = placed.photo })
         }
         .photoErrorSlot(viewModel.photoError)
         .onAppear { isVisible = true; viewModel.refresh() }
@@ -181,6 +184,13 @@ struct EntityScreen: View {
         .onChange(of: home?.coverClosings) { if isVisible { viewModel.refresh() } }
         .sessionContext(viewModel.subject)
         .onChange(of: viewModel.isGone) { if viewModel.isGone { onChange(); dismiss() } }
+    }
+
+    /// The viewer has closed: a "Tell its story" tap starts the session now, not while the sheet is leaving.
+    private func startPendingPhotoStory() {
+        guard let photo = tellingStoryOf else { return }
+        tellingStoryOf = nil
+        Task { await home?.startPhotoSession(photo) }
     }
 
     /// The header row's id, for the scroll back to the cover.
