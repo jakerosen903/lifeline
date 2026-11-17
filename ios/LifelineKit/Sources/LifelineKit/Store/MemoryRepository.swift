@@ -232,11 +232,13 @@ public struct MemoryRepository: Sendable {
         try restore([snapshot], settingCandidate: nil)
     }
 
-    /// Several memories back at once, a card's status with them, and a pair row reopened, in
+    /// Several memories back at once, a card's status with them, a pair row reopened and a photo link a merge added removed, in
     /// one transaction: an undo that is cut short leaves nothing half done.
     public func restore(_ snapshots: [Snapshot], settingCandidate candidate: (id: CandidateID, status: CandidateStatus)?,
-                        reopeningPair pair: DuplicatePair? = nil) throws {
+                        reopeningPair pair: DuplicatePair? = nil, removingPhoto photo: (id: PhotoID, from: MemoryID)? = nil) throws {
         try db.writer.write { db in
+            // The link a merge added goes in the same write; the photo row stays (its session still points at it).
+            if let photo { _ = try PhotoRepository.removeLink(photo.id, from: .memory(photo.from), in: db) }
             // Every memory row first, so a pair between two restored memories finds both.
             for snapshot in snapshots { try snapshot.memory.save(db) }
             for snapshot in snapshots { try Self.restore(snapshot, in: db) }

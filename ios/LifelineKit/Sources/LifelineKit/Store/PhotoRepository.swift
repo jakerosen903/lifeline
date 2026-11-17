@@ -110,18 +110,36 @@ public struct PhotoRepository: Sendable {
     /// the photo when no link is left and its row was deleted, so the caller deletes the file.
     public func unlink(_ photo: PhotoID, from subject: PhotoSubject) throws -> Photo? {
         try db.writer.write { db in
-            let (column, value) = subject.key
-            guard let role = try String.fetchOne(db, sql: "select role from photo_link where \(column) = ? and photo_id = ?",
-                                                 arguments: [value, photo.rawValue]) else { return nil }
-            let wasCover = role == PhotoRole.cover.rawValue
-            try db.execute(sql: "delete from photo_link where \(column) = ? and photo_id = ?", arguments: [value, photo.rawValue])
-            if wasCover {
-                try db.execute(sql: """
-                    update photo_link set role = 'cover' where rowid = (
-                        select rowid from photo_link where \(column) = ? order by sort_order, rowid limit 1)
-                    """, arguments: [value])
-            }
+            guard try Self.removeLink(photo, from: subject, in: db) else { return nil }
             return try Self.deleteIfHomeless(photo, in: db)
+        }
+    }
+
+    /// Removes one link and passes a removed cover to the oldest-added photo left. False when there was no link.
+    static func removeLink(_ photo: PhotoID, from subject: PhotoSubject, in db: Database) throws -> Bool {
+        let (column, value) = subject.key
+        guard let role = try String.fetchOne(db, sql: "select role from photo_link where \(column) = ? and photo_id = ?",
+                                             arguments: [value, photo.rawValue]) else { return false }
+        try db.execute(sql: "delete from photo_link where \(column) = ? and photo_id = ?", arguments: [value, photo.rawValue])
+        if role == PhotoRole.cover.rawValue {
+            try db.execute(sql: """
+                update photo_link set role = 'cover' where rowid = (
+                    select rowid from photo_link where \(column) = ? order by sort_order, rowid limit 1)
+                """, arguments: [value])
+        }
+        return true
+    }
+
+    /// The photo the segment's session is about, if any.
+    public func subjectPhotoID(ofSegment segment: SegmentID) throws -> PhotoID? {
+        try db.writer.read { try Self.subjectPhotoID(ofSegment: segment, in: $0) }
+    }
+
+    public func isLinked(_ photo: PhotoID, to subject: PhotoSubject) throws -> Bool {
+        try db.writer.read { db in
+            let (column, value) = subject.key
+            return try Bool.fetchOne(db, sql: "select exists (select 1 from photo_link where \(column) = ? and photo_id = ?)",
+                                     arguments: [value, photo.rawValue]) ?? false
         }
     }
 
@@ -164,10 +182,14 @@ public struct PhotoRepository: Sendable {
     /// A memory kept from, or merged with a telling of, a photo's story holds that photo (spec: a story about a photo).
     /// The segment's session names the photo; none named, nothing happens. Linking twice changes nothing.
     static func linkSubjectPhoto(ofSegment segment: SegmentID, to memory: MemoryID, in db: Database) throws {
-        guard let photo = try String.fetchOne(db, sql: """
+        guard let photo = try subjectPhotoID(ofSegment: segment, in: db) else { return }
+        try link(photo, to: .memory(memory), in: db)
+    }
+
+    private static func subjectPhotoID(ofSegment segment: SegmentID, in db: Database) throws -> PhotoID? {
+        try String.fetchOne(db, sql: """
             select session.subject_photo_id from segment join session on session.id = segment.session_id where segment.id = ?
-            """, arguments: [segment.rawValue]) else { return }
-        try link(PhotoID(rawValue: photo), to: .memory(memory), in: db)
+            """, arguments: [segment.rawValue]).map(PhotoID.init(rawValue:))
     }
 
     static func link(_ photo: PhotoID, to subject: PhotoSubject, in db: Database) throws {

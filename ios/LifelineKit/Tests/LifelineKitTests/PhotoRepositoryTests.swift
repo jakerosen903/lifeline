@@ -394,13 +394,73 @@ private extension Fixture {
     let card = try f.card()
     let memory = Memory(id: .init(), title: "The tree house", summaryQuote: "the tree", visibility: .timeline, chapterID: nil,
                         createdFromCandidateID: card.id, createdAt: .now, hiddenFromTimeline: false, kind: .event)
-    let good = MemorySpan(memoryID: memory.id, segmentID: f.segments[0].id, startMs: 0, endMs: 100, order: 0)
-    let bad = MemorySpan(memoryID: memory.id, segmentID: SegmentID(rawValue: "missing"), startMs: 0, endMs: 1, order: 1, continuesOrder: 0)
+    let span = MemorySpan(memoryID: memory.id, segmentID: f.segments[0].id, startMs: 0, endMs: 100, order: 0)
+    // Joining a chapter that does not exist fails after the link is written: the link must roll back with the memory.
     #expect(throws: (any Error).self) {
-        try f.store.memories.insert(memory, spans: [good, bad], people: [], places: [], anchors: [], acceptingCandidate: card.id)
+        try f.store.memories.insert(memory, spans: [span], people: [], places: [], anchors: [], acceptingCandidate: card.id,
+                                    joiningStory: (id: StoryID(), chapterID: ChapterID(rawValue: "missing")))
     }
     #expect(try f.store.memories.fetch(memory.id) == nil)
     #expect(try f.db.writer.read { try Int.fetchOne($0, sql: "select count(*) from photo_link") } == 0)
+}
+
+@Test func undoingAMergeTakesBackThePhotoItAdded() throws {
+    let f = try Fixture(), subject = try f.makeSessionAPhotoSession()
+    let target = try f.memory("The old house", segment: 1)
+    let merged = try f.actions.mergeCandidate(try f.card(), into: target.id)
+    #expect(try f.links(of: target.id) == ["\(subject.id.rawValue) cover"])
+    try f.actions.unmerge(merged.receipt)
+    #expect(try f.links(of: target.id).isEmpty)
+    #expect(try f.photos.photo(id: subject.id) != nil, "the session still points at it")
+    #expect(try f.photos.subjectPhoto(of: f.sessionID)?.id == subject.id)
+}
+
+@Test func undoingAMergeKeepsAPhotoTheTargetAlreadyHeld() throws {
+    let f = try Fixture(), subject = try f.makeSessionAPhotoSession()
+    let target = try f.memory("The old house", segment: 1), other = photo("other", at: 1)
+    try f.photos.insert(other, linkingTo: .memory(target.id))
+    try f.photos.link(subject.id, to: .memory(target.id))
+    let before = try f.links(of: target.id)
+    let merged = try f.actions.mergeCandidate(try f.card(), into: target.id)
+    try f.actions.unmerge(merged.receipt)
+    #expect(try f.links(of: target.id) == before && before == ["\(other.id.rawValue) cover", "\(subject.id.rawValue) attached"])
+}
+
+@Test func undoingAMergeThatTookTheCoverPassesTheCoverOn() throws {
+    let f = try Fixture(), subject = try f.makeSessionAPhotoSession()
+    let target = try f.memory("The old house", segment: 1)
+    let merged = try f.actions.mergeCandidate(try f.card(), into: target.id)
+    let later = photo("later", at: 2)
+    try f.photos.insert(later, linkingTo: .memory(target.id))
+    #expect(try f.links(of: target.id) == ["\(subject.id.rawValue) cover", "\(later.id.rawValue) attached"])
+    try f.actions.unmerge(merged.receipt)
+    #expect(try f.links(of: target.id) == ["\(later.id.rawValue) cover"])
+}
+
+@Test func undoingAGroupMergeTakesBackThePhotoItAddedAndKeepsAHeldOne() throws {
+    let f = try Fixture(), subject = try f.makeSessionAPhotoSession()
+    let first = try f.memory("The old house", segment: 1), second = try f.memory("The old house again", segment: 0)
+    let merged = try f.actions.mergeGroup(try f.card(ordinal: 1), into: [first.id, second.id])
+    #expect(merged.receipt.addedPhoto == subject.id)
+    try f.actions.unmerge(merged.receipt)
+    #expect(try f.links(of: merged.receipt.target).isEmpty && (try f.photos.photo(id: subject.id)) != nil)
+
+    let g = try Fixture(), held = try g.makeSessionAPhotoSession()
+    let a = try g.memory("The old house", segment: 1), b = try g.memory("The old house again", segment: 0)
+    // Either may be the oldest, so both hold it.
+    try g.photos.link(held.id, to: .memory(a.id)); try g.photos.link(held.id, to: .memory(b.id))
+    let again = try g.actions.mergeGroup(try g.card(ordinal: 1), into: [a.id, b.id])
+    #expect(again.receipt.addedPhoto == nil)
+    try g.actions.unmerge(again.receipt)
+    #expect(try g.links(of: again.receipt.target) == ["\(held.id.rawValue) cover"])
+}
+
+@Test func undoingAKeepLeavesNoLinkAndKeepsThePhoto() throws {
+    let f = try Fixture(), subject = try f.makeSessionAPhotoSession()
+    let kept = try f.actions.acceptMemory(try f.card()).memory
+    try f.store.memories.delete(kept.id)
+    #expect(try f.db.writer.read { try Int.fetchOne($0, sql: "select count(*) from photo_link") } == 0)
+    #expect(try f.photos.photo(id: subject.id) != nil)
 }
 
 @Test func separatingATellingLeavesThePhotoOnTheOriginal() throws {
