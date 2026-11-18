@@ -294,7 +294,7 @@ Step 2 changes no screen. It gets its own plan after step 1 ships.
 
 ## Data model
 
-Migration v14 is additive. The phone's database is the only copy, so the migration drops nothing and rewrites no row.
+Migration v15 is additive. The phone's database is the only copy, so the migration drops nothing and rewrites no row. The migration is named `v15`, not `v14`: the unmerged photo branches register their own `v14`, and GRDB records a migration by name (R36).
 
 `person`, new columns, all nullable:
 
@@ -304,7 +304,7 @@ Migration v14 is additive. The phone's database is the only copy, so the migrati
 | `contact_name` | The contact's full name at the last check. |
 | `contact_state` | `linked` or `missing`. Null with no contact. |
 | `contact_photo_id` | The photo the app copied from the contact, when one exists. References `photo`, set null on delete. |
-| `name_origin` | `said`, `typed` or `contact`. Null for a person older than v14. |
+| `name_origin` | `said`, `typed` or `contact`. Null for a person older than v15. |
 | `created_by_guess` | True when the app created the person on Keep and the owner has not acted on them. |
 
 `moment_entity`, new columns, nullable:
@@ -312,7 +312,7 @@ Migration v14 is additive. The phone's database is the only copy, so the migrati
 | Column | Holds |
 | --- | --- |
 | `origin` | `assumed`, `said` or `confirmed`. Null for an older link and for a link to a place, thing or idea. |
-| `person_handle` | The extractor's handle. Added in v14 and written from step 2. |
+| `person_handle` | The extractor's handle. Added in v15 and written from step 2. |
 
 New table `contact_declined` (`person_id`, `contact_identifier`, primary key on both, cascade on the person).
 
@@ -362,7 +362,7 @@ Unit tests in LifelineKit (`swift test`):
 - Merge: links, aliases, the photo order and the key photo; two different contacts refuse; Undo.
 - Contacts with a scripted directory: link, unlink, the unique contact, rename, new picture when the key photo is the contact's copy and when it is the owner's choice, missing, re-link by name with one match and with two, a declined suggestion that does not return.
 - Each status: full, limited, not asked, denied.
-- Migration v14 on a copy of a v13 database: every row is kept, old links have no origin, the backup round-trips.
+- Migration v15 on a copy of a v13 database: every row is kept, old links have no origin, the backup round-trips.
 - The context packet holds no name with origin `contact`.
 
 UI tests with a scripted directory: the marked chip on the landing; the sheet changes a person and Undo restores it; "Yes, this Robyn" clears a mark; the linked row; the suggestion card; the no-access card; merge by the button.
@@ -387,7 +387,7 @@ Device checks, in a checklist beside the plan:
 
 | PR | What | Needs |
 | --- | --- | --- |
-| PC-a | Migration v14, origin, `PersonGuess` against people on file, the marks, the sheet with no contact rows, move with Undo. This alone fixes the reported bug. | — |
+| PC-a | Migration v15, origin, `PersonGuess` against people on file, the marks, the sheet with no contact rows, move with Undo. This alone fixes the reported bug. | — |
 | PC-b | `ContactsDirectory`, access, link and unlink, the picture, the linked row, the check at launch, suggestions, the contact rows and search in the sheet. | PC-a |
 | PC-c | Merge: the button, the confirm, Undo, then the drag. | PC-a |
 | PC-d | Step 2: extractor handles. Its own plan. | PC-a |

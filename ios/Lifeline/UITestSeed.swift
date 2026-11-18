@@ -258,7 +258,7 @@ private struct SeedSession {
     var start = Date.now
     var index = 0
 
-    /// `origins` gives a link its origin (none: a link older than v14). `plan` writes the people a link needs first.
+    /// `origins` gives a link its origin (none: a link older than v15). `plan` writes the people a link needs first.
     @discardableResult
     mutating func keep(_ title: String, kind: MemoryKind, year: Int? = nil, relation: EntityRelation = .detail, quote: String? = nil,
                        links: [(EntityID, String?)], origins: [EntityID: LinkOrigin] = [:], plan: EntityRepository.Write = .init()) throws -> MemoryID {

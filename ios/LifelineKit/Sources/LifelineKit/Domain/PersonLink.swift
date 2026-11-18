@@ -1,7 +1,7 @@
 import Foundation
 
 /// One link between a memory and a person, as the views read it: the person, the name the owner
-/// said for this memory, and how the link was made. `origin` is nil for a link older than v14.
+/// said for this memory, and how the link was made. `origin` is nil for a link older than v15.
 public struct PersonLink: Sendable, Equatable, Identifiable {
     public var memoryID: MemoryID
     public var person: Person

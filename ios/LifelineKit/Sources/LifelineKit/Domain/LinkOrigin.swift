@@ -1,6 +1,6 @@
 import Foundation
 
-/// How a memory came to be linked to a person. A link made before v14 has no origin (nil).
+/// How a memory came to be linked to a person. A link made before v15 has no origin (nil).
 /// `assumed` is a guess the app made and the owner has not seen; `said` is the owner's own
 /// words matched to a person; `confirmed` is the owner's action; `new` is a person the
 /// app created for a name nobody matched.

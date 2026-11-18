@@ -4,9 +4,13 @@ One entry per decision. Newest first. Status is Decided, Open, or Superseded.
 
 ## 2026-11-18 · PC-a: rulings made while building people and contacts
 
-**Status:** Decided by the builder, except R13, which the controller made and the owner must confirm. The owner can overrule each one. Source: `docs/plans/2026-11-18-people-contacts.md`, ledger `.superpowers/sdd/2026-11-18-people-contacts/rulings.md` (R1 to R35). Narrows two statements of the entry below and of the spec.
+**Status:** Decided by the builder, except R13, which the controller made and the owner must confirm. The owner can overrule each one. Source: `docs/plans/2026-11-18-people-contacts.md`, ledger `.superpowers/sdd/2026-11-18-people-contacts/rulings.md` (R1 to R39). Narrows two statements of the entry below and of the spec.
 
 **Decision.**
+
+Schema:
+
+- R36: the migration is named `v15`. This branch registers no `v14`. Why: the unmerged photo branches register their own `v14`, and GRDB records a migration by name, so a device that ran one `v14` would skip the other. GRDB runs each unapplied id in registration order, so the gap is harmless.
 
 Matching and origins:
 

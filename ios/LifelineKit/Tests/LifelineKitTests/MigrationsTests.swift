@@ -111,10 +111,17 @@ import GRDB
 }
 
 @Test func schemaVersionsOrderByMigrationPosition() {
-    #expect(Migrations.currentSchemaVersion == "v14")
+    #expect(Migrations.currentSchemaVersion == "v15")
     #expect(Migrations.isNewer("v9", than: "v8") && !Migrations.isNewer("v8", than: "v9") && Migrations.isNewer("v10", than: "v9"))
     #expect(Migrations.isNewer("v8", than: "v7") && !Migrations.isNewer("v7", than: "v8") && !Migrations.isNewer("v8", than: "v8"))
     #expect(Migrations.isNewer("v99", than: "v8"), "an unknown version is from the future")
+}
+
+/// The unmerged photo branches own `v14` (`session.subject_photo_id`). GRDB records a migration by name,
+/// so this branch must not register it; a photo build's `v14` backup reads here as from the future.
+@Test func v14IsLeftToThePhotoBranches() {
+    #expect(!Migrations.versions.contains("v14"))
+    #expect(Migrations.isNewer("v14", than: Migrations.currentSchemaVersion), "a backup that says v14 is refused, not half-read")
 }
 
 @Test func v11OnAPopulatedV10Database() throws {
@@ -180,7 +187,7 @@ import GRDB
         try queue.read { db in try tables.map { try Row.fetchAll(db, sql: "select * from \($0) order by rowid") } }
     }
     let rowsBefore = try rows()
-    try Migrations.migrator.migrate(queue, upTo: "v13")  // v14 adds columns to two of these tables; it has its own test.
+    try Migrations.migrator.migrate(queue, upTo: "v13")  // v15 adds columns to two of these tables; it has its own test.
     #expect(try rows() == rowsBefore, "no existing row or column changes")
     #expect(Set(try queue.read { try $0.columns(in: "photo") }.map(\.name))
             == ["id", "file_name", "asset_local_id", "taken_at", "taken_origin", "lat", "lon", "location_origin", "sha256", "pixel_width", "pixel_height", "added_at"])
@@ -207,7 +214,7 @@ import GRDB
     #expect(try queue.read { try Int.fetchOne($0, sql: "select count(*) from photo") } == 2, "the photo row waits for the sweep")
 }
 
-@Test func v14KeepsEveryRowAndAddsNothingToOldLinks() throws {
+@Test func v15KeepsEveryRowAndAddsNothingToOldLinks() throws {
     var config = Configuration()
     config.foreignKeysEnabled = true
     let queue = try DatabaseQueue(configuration: config)

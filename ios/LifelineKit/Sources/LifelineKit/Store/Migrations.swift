@@ -386,9 +386,11 @@ enum Migrations {
             try db.execute(sql: "create unique index photo_link_entity_cover on photo_link (entity_id) where role = 'cover' and entity_id is not null")
             try db.execute(sql: "create unique index photo_link_memory_cover on photo_link (memory_id) where role = 'cover' and memory_id is not null")
         }
-        // v14 (people and contacts): a link records how it was made; a person can be backed by a contact.
+        // v15 (people and contacts): a link records how it was made; a person can be backed by a contact.
         // Additive: no existing row or column changes. An old link has a nil origin.
-        m.registerMigration("v14") { db in
+        // There is no v14 on this branch: the unmerged photo branches register their own v14, and GRDB
+        // records a migration by name. GRDB runs each unapplied id in registration order, so the gap is harmless.
+        m.registerMigration("v15") { db in
             try db.alter(table: "person") { t in
                 t.add(column: "contact_identifier", .text)
                 t.add(column: "contact_name", .text)

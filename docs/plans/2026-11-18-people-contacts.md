@@ -4,9 +4,9 @@
 
 **Goal:** A link between a memory and a person records how it was made. A link the app chose from a name alone shows the "Assumed" mark. One sheet changes who a name means, with Undo. A guess teaches the app no name. This PR alone fixes the reported bug (a story filed under the wrong person with no sign and no repair).
 
-**Architecture:** Tasks 1 to 5 are kit code. Migration v14 adds the columns. `PersonGuess` is a pure function with the seven matching rules. Keep calls it in place of `findPerson`. `PersonLinkActions` settles and moves links with a receipt. Tasks 6 to 8 are the views: one chip, one sheet, and their places on the cards, the landing, the memory page and the person's page. Task 9 is UI tests. Task 10 is docs.
+**Architecture:** Tasks 1 to 5 are kit code. Migration v15 adds the columns. `PersonGuess` is a pure function with the seven matching rules. Keep calls it in place of `findPerson`. `PersonLinkActions` settles and moves links with a receipt. Tasks 6 to 8 are the views: one chip, one sheet, and their places on the cards, the landing, the memory page and the person's page. Task 9 is UI tests. Task 10 is docs.
 
-**Tech Stack:** Swift 6, SwiftUI on iOS 26, GRDB, Swift Testing, XCUITest. One migration (v14). No new dependency. No Contacts framework in this PR. No network call. No prompt change.
+**Tech Stack:** Swift 6, SwiftUI on iOS 26, GRDB, Swift Testing, XCUITest. One migration (v15). No new dependency. No Contacts framework in this PR. No network call. No prompt change.
 
 **Spec:** `docs/specs/2026-11-18-people-contacts.md`. This plan builds "Origin of a link", "Matching a said name", "Where the mark shows", "Settling a guess", "Moving a name to another person" and the whole of "Data model". `docs/DECISIONS.md`, entry of 2026-11-18. Mock-ups: `docs/design/PC1_Assumed.dc.html`, `PC2_WhoIsThis.dc.html`, `PC3_PersonLinked.dc.html`.
 
@@ -20,7 +20,7 @@
 
 The spec leaves these open. The owner can overrule each one before work starts.
 
-1. **v14 adds every column of the spec's data model now.** PC-b then needs no migration. The contact columns stay null in this PR.
+1. **v15 adds every column of the spec's data model now.** PC-b then needs no migration. The contact columns stay null in this PR. The migration was first built as `v14` and renamed to `v15` after the final review (R36): the unmerged photo branches register their own `v14`.
 2. **`PersonGuess` has all seven rules now, with tests.** The app passes an empty contact list until PC-b, so rules 5 and 6 cannot fire on the phone yet.
 3. **The line for a new person is "New" in this PR.** "New · not in your contacts" would be a claim the app has not checked. PC-b adds the second half.
 4. **The relation phrase for a said name** comes from two places: the comma form of the ref ("my mom, Marcel"), and the `relation_text` of a person mention in the same segment with the same text.
@@ -42,7 +42,7 @@ The spec leaves these open. The owner can overrule each one before work starts.
 
 ## Global Constraints
 
-- Migration v14 is additive. It must not drop a column, delete a row or rewrite an existing row.
+- Migration v15 is additive. It must not drop a column, delete a row or rewrite an existing row.
 - The key of `moment_entity` stays (`memory_id`, `entity_id`, `relation`). A memory has at most one link to a person.
 - Keep must not change an origin. Only an owner's action writes `confirmed`.
 - An alias is saved only from a link with origin `said` or `confirmed`.
@@ -81,7 +81,7 @@ Paths are under `ios/`. Kit paths are under `LifelineKit/Sources/LifelineKit/`.
 
 | File | Responsibility |
 | --- | --- |
-| `Store/Migrations.swift` (modify) | v14 |
+| `Store/Migrations.swift` (modify) | v15 |
 | `Domain/LinkOrigin.swift` (create) | `LinkOrigin` and its order of strength |
 | `Domain/Entity.swift`, `Domain/Memory.swift`, `Domain/Profile.swift`, `Store/AppDatabase.swift`, `Store/EntityRepository.swift` (modify) | The new fields on `MomentEntity`, `MemoryPerson`, `Person` and their row mapping |
 | `Confirmation/PersonGuess.swift` (create) | The seven rules. Pure |
@@ -98,7 +98,7 @@ Paths are under `ios/`. Kit paths are under `LifelineKit/Sources/LifelineKit/`.
 
 ---
 
-### Task 1: Migration v14 and the origin of a link
+### Task 1: Migration v15 and the origin of a link
 
 **Files:**
 - Modify: `Store/Migrations.swift`, `Domain/Entity.swift`, `Domain/Memory.swift`, `Domain/Profile.swift`, `Store/AppDatabase.swift` (`Person.selectSQL` and the `Person` row mapping), `Store/EntityRepository.swift` (`MomentEntity` mapping and `insertIgnoringDuplicate`)
@@ -112,7 +112,7 @@ Paths are under `ios/`. Kit paths are under `LifelineKit/Sources/LifelineKit/`.
   - `MomentEntity.origin: LinkOrigin?` and `MomentEntity.personHandle: String?`, both defaulting to nil in `init`.
   - `MemoryPerson.origin: LinkOrigin?`, default nil; `MemoryPerson.link` carries it.
   - `Person.nameOrigin: NameOrigin?`, `Person.createdByGuess: Bool` (default false), `Person.contactIdentifier: String?`, `Person.contactName: String?`, `Person.contactState: String?`, `Person.contactPhotoID: PhotoID?`, all with defaults in `init` so no call site changes.
-- v14, exact:
+- v15, exact:
   - `person`: add `contact_identifier` text, `contact_name` text, `contact_state` text, `contact_photo_id` text references `photo` on delete set null, `name_origin` text, `created_by_guess` boolean not null default false. Unique index `person_contact_identifier` on `contact_identifier` where it is not null.
   - `moment_entity`: add `origin` text, `person_handle` text.
   - Table `contact_declined` (`person_id` text not null references `person` on delete cascade, `contact_identifier` text not null, primary key on both).
@@ -121,7 +121,7 @@ Paths are under `ios/`. Kit paths are under `LifelineKit/Sources/LifelineKit/`.
 - [ ] **Step 1: Write the failing tests**
 
 ```swift
-@Test func v14KeepsEveryRowAndAddsNothingToOldLinks() throws {
+@Test func v15KeepsEveryRowAndAddsNothingToOldLinks() throws {
     // Build a database at v13 with the test file's existing helper, with one person, one memory and one link.
     // Migrate to the latest.
     #expect(try count("person") == 1); #expect(try count("moment_entity") == 1)
@@ -149,9 +149,9 @@ Paths are under `ios/`. Kit paths are under `LifelineKit/Sources/LifelineKit/`.
 ```
 
 - [ ] **Step 2: Run `swift test --filter "Migrations|LinkOrigin"`.** Expected: FAIL, the types and columns do not exist.
-- [ ] **Step 3: Write v14, `LinkOrigin.swift`, and the new fields with their row mapping.** `Person.selectSQL` must select the six new columns. The backup round-trip test in `BackupTests` must still pass with no change to it.
+- [ ] **Step 3: Write v15, `LinkOrigin.swift`, and the new fields with their row mapping.** `Person.selectSQL` must select the six new columns. The backup round-trip test in `BackupTests` must still pass with no change to it.
 - [ ] **Step 4: Run `swift test`.** Expected: PASS, the whole suite.
-- [ ] **Step 5: Commit.** `git commit -m "Migration v14: a link records how it was made"`
+- [ ] **Step 5: Commit.** `git commit -m "Migration v15: a link records how it was made"`
 
 ---
 

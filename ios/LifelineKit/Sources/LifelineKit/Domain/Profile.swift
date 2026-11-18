@@ -30,7 +30,7 @@ public struct Person: Codable, Sendable, Equatable, Identifiable {
     public var isOwner: Bool
     public var birthDate: Date?
     public var birthDateOrigin: BirthDateOrigin?
-    /// Where the name came from; nil for a person made before v14.
+    /// Where the name came from; nil for a person made before v15.
     public var nameOrigin: NameOrigin? = nil
     /// True when the app made this person from a guess, not from the owner's action.
     public var createdByGuess: Bool = false

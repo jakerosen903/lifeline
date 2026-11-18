@@ -229,7 +229,7 @@ extension PersonLinkRepository {
 
     /// Deletes a person the guess made that nothing holds any more: no link, photo, contact, name the
     /// owner gave, mention, choice, tag, curiosity or session subject. Returns what Undo needs.
-    /// The pre-v10 link table is not checked: only v14 Keep makes a guessed person, and it never writes there.
+    /// The pre-v10 link table is not checked: only v15 Keep makes a guessed person, and it never writes there.
     private static func removeIfEmptyGuess(_ id: PersonID, in db: Database) throws -> (person: Person, entity: Entity, aliases: [Alias])? {
         guard let person = try Person.fetchOne(db, sql: Person.selectSQL + "where person.id = ?", arguments: [id.rawValue]),
               person.createdByGuess, !person.isOwner, person.contactIdentifier == nil, person.contactPhotoID == nil,
