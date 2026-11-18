@@ -17,6 +17,8 @@ struct MemoryRow: Identifiable, Equatable, Hashable {
     var storyID: StoryID? = nil
     /// The title of the memory's chapter, trimmed; nil when it has no chapter or the chapter has no title (S6a).
     var chapterTitle: String? = nil
+    /// The memory's chapter, named or not; the "Add to a chapter" sheet checks it.
+    var chapterID: ChapterID? = nil
     var id: MemoryID { memory.id }
 
     func hash(into hasher: inout Hasher) { hasher.combine(memory.id) }
@@ -82,6 +84,8 @@ final class TimelineViewModel {
     /// Stories with no year to lay out: no member is dated (M5, S6a).
     private(set) var shelfStories: [StoryRow] = []
     private(set) var allStories: [Story] = []
+    /// Chapters with a name, for "Add to a chapter…". An unnamed chapter is not offered: the person has no word for it.
+    private(set) var namedChapters: [Chapter] = []
     /// Story rows the person opened.
     var expandedStories: Set<StoryID> = []
     private(set) var floatingCount = 0
@@ -173,7 +177,9 @@ final class TimelineViewModel {
             aboutCount = TimelineSummary.thingsAboutYourLife(listed)
             let all = listed.filter { $0.isMoment && (tagged?.contains($0.id.rawValue) ?? true) }
             let birth = try store.profile.ownerBirthDate()
-            let chapterTitles = try Self.chapterTitles(store.chapters.chapters())
+            let allChapters = try store.chapters.chapters()
+            namedChapters = allChapters.filter { $0.name != nil }
+            let chapterTitles = Self.chapterTitles(allChapters)
             let rows = Dictionary(uniqueKeysWithValues: try all.map { ($0.id, try row(for: $0, birth: birth, chapterTitles: chapterTitles)) })
             let allCollections = try store.chapters.collections()
             var inCollection = Set<MemoryID>()
@@ -244,7 +250,8 @@ final class TimelineViewModel {
                          durationText: span.map { Format.duration(ms: $0.endMs - $0.startMs) } ?? "",
                          checkThis: CheckThisTags.tags(range: memory.isMoment ? memory.range : .unplaced, mentions: try span.map { try store.people.mentions(in: $0.segmentID) } ?? []),
                          storyID: try store.stories.story(of: memory.id)?.id,
-                         chapterTitle: memory.chapterID.flatMap { chapterTitles[$0] })
+                         chapterTitle: memory.chapterID.flatMap { chapterTitles[$0] },
+                         chapterID: memory.chapterID)
     }
 
     // MARK: - The spine
@@ -427,6 +434,21 @@ final class TimelineViewModel {
 
     func takeOutOfStory(_ memory: MemoryID) {
         attempt("Could not take that out") { try deps.actions.takeOutOfStory(memory) }
+    }
+
+    // MARK: - Chapters
+
+    func addToChapter(_ memory: MemoryID, chapter: ChapterID) {
+        attempt("Could not add that to a chapter") { _ = try ChapterActions(store: deps.extractionStore).add(memory, to: chapter) }
+    }
+
+    /// An empty or spaces-only name writes nothing; a name that matches a chapter in other capitals reuses it (kit).
+    func addToChapter(_ memory: MemoryID, named name: String) {
+        attempt("Could not add that to a chapter") { _ = try ChapterActions(store: deps.extractionStore).add(memory, toChapterNamed: name) }
+    }
+
+    func takeOutOfChapter(_ memory: MemoryID) {
+        attempt("Could not take that out of its chapter") { try ChapterActions(store: deps.extractionStore).takeOut(memory) }
     }
 
     /// Stories a memory could move to: every other one.

@@ -12,6 +12,9 @@ struct MemoryRowActions {
     /// Stories (M5): offered on every row; "Take out" only when the row is in one.
     var moveToStory: (MemoryRow) -> Void = { _ in }
     var takeOutOfStory: (MemoryRow) -> Void = { _ in }
+    /// Chapters: offered on every row; "Take out" only when the row's chapter has a name.
+    var addToChapter: (MemoryRow) -> Void = { _ in }
+    var takeOutOfChapter: (MemoryRow) -> Void = { _ in }
 }
 
 /// A memory row: its text (tap opens it), its chapter tag, its Check-this tags, and the visible
@@ -76,6 +79,13 @@ struct MemoryRowView: View {
     @ViewBuilder
     private var menuItems: some View {
         Button("Add to a collection…", systemImage: "square.stack") { actions.addToCollection(row) }
+        Button("Add to a chapter…", systemImage: "bookmark") { actions.addToChapter(row) }
+            .accessibilityIdentifier("row.addChapter")
+        // chapterTitle is nil for a chapter with no name, so no "Take out" for it.
+        if let chapterTitle = row.chapterTitle {
+            Button("Take out of “\(chapterTitle)”", systemImage: "bookmark.slash") { actions.takeOutOfChapter(row) }
+                .accessibilityIdentifier("row.takeOutOfChapter")
+        }
         Button("Move to another story…", systemImage: "text.book.closed") { actions.moveToStory(row) }
             .accessibilityIdentifier("row.moveToStory")
         if row.storyID != nil {

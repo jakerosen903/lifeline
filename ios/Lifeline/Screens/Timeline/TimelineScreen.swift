@@ -14,6 +14,7 @@ struct TimelineScreen: View {
     @State private var storyTitle = ""
     @State private var splitTarget: StoryRow?
     @State private var moveTarget: MemoryRow?
+    @State private var chapterTarget: MemoryRow?
     /// The list row to scroll to the top: a story just opened, so its members show above the record bar.
     @State private var scrollTarget: StoryScrollTarget?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -32,7 +33,9 @@ struct TimelineScreen: View {
                          setExcluded: { viewModel.setExcluded($0.id, $1) },
                          delete: { viewModel.deleteTarget = $0 },
                          moveToStory: { moveTarget = $0 },
-                         takeOutOfStory: { viewModel.takeOutOfStory($0.id) })
+                         takeOutOfStory: { viewModel.takeOutOfStory($0.id) },
+                         addToChapter: { chapterTarget = $0 },
+                         takeOutOfChapter: { viewModel.takeOutOfChapter($0.id) })
     }
 
     private var storyActions: StoryRowActions {
@@ -80,6 +83,11 @@ struct TimelineScreen: View {
             }
             .sheet(item: $dateTarget, onDismiss: { viewModel.refresh() }) { row in
                 TellMeWhenSheet(title: row.memory.title, birthDate: try? viewModel.deps.extractionStore.profile.ownerBirthDate()) { viewModel.setStated(row.id, $0) }
+            }
+            .sheet(item: $chapterTarget, onDismiss: { viewModel.refresh() }) { row in
+                AddToChapterSheet(chapters: viewModel.namedChapters, currentChapter: row.chapterID,
+                                  onPick: { viewModel.addToChapter(row.id, chapter: $0) },
+                                  onAddNamed: { viewModel.addToChapter(row.id, named: $0) })
             }
             .confirmationDialog("Delete this memory?", isPresented: Binding(get: { viewModel.deleteTarget != nil }, set: { if !$0 { viewModel.deleteTarget = nil } }),
                                 titleVisibility: .visible, presenting: viewModel.deleteTarget) { row in
