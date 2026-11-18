@@ -29,7 +29,7 @@ struct SessionScreen: View {
         .linenBackground()
         .interactiveDismissDisabled()
         .onChange(of: viewModel.landed) { if viewModel.landed { onEnded() } }
-        .sheet(item: $viewModel.changing) { memory in
+        .sheet(item: $viewModel.changing, onDismiss: { viewModel.cards.peopleChanged() }) { memory in
             ChangeSheet(memory: memory, deps: viewModel.deps) {}
         }
     }

@@ -38,6 +38,9 @@ public enum PersonChipLine {
     /// The notice when Undo is refused because a row the move left changed since.
     public static let staleUndo = "That changed since. Open the name to change it again."
 
+    /// The notice when Undo failed for any other reason. The error's own text never reaches the person.
+    public static let failedUndo = "Could not undo that."
+
     private static func clean(_ said: String?) -> String? {
         let trimmed = said?.trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmed?.isEmpty == false ? trimmed : nil

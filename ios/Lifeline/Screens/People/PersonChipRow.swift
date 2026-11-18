@@ -34,7 +34,14 @@ struct PersonChipRow: View {
     let deps: Dependencies
     let onDone: (WhoIsThisViewModel.Outcome) -> Void
 
-    @State private var asking: Item?
+    /// The open sheet's model, made once at the tap: the row's body re-runs (the landing polls each second)
+    /// and must not read the people again each time.
+    @State private var asking: Asking?
+
+    private struct Asking: Identifiable {
+        let id: String
+        let model: WhoIsThisViewModel
+    }
     @State private var covers: [EntityID: Photo] = [:]
 
     var body: some View {
@@ -47,13 +54,15 @@ struct PersonChipRow: View {
                                isAssumed: item.origin == .assumed,
                                accessibilityLabel: PersonChipLine.accessibilityLabel(name: item.name, origin: item.origin, saidName: item.saidName),
                                personID: item.person, cover: item.person.flatMap { covers[EntityID(rawValue: $0.rawValue)] },
-                               cache: deps.photoImages) { asking = item }
+                               cache: deps.photoImages) {
+                        asking = Asking(id: item.id, model: WhoIsThisViewModel(source: item.source, deps: deps))
+                    }
                 }
             }
             .task { covers = (try? deps.extractionStore.photos.covers(type: .person)) ?? [:] }
-            .sheet(item: $asking) { item in
-                WhoIsThisSheet(viewModel: WhoIsThisViewModel(source: item.source, deps: deps)) { outcome in
-                    asking = nil
+            .sheet(item: $asking) { asking in
+                WhoIsThisSheet(viewModel: asking.model) { outcome in
+                    self.asking = nil
                     onDone(outcome)
                 }
             }

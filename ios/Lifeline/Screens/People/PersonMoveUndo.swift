@@ -36,7 +36,7 @@ final class PersonMoveUndo {
         } catch is PersonLinkActions.Error {
             show(PersonChipLine.staleUndo)
         } catch {
-            show("Could not undo that: \(error.localizedDescription)")
+            show(PersonChipLine.failedUndo)
         }
         return false
     }

@@ -32,4 +32,5 @@ import Testing
     #expect(PersonChipLine.movedNotice(newName: "") == "Not a person.")      // the receipt of "Not a person" has no name
     #expect(PersonChipLine.movedNotice(newName: "  ") == "Not a person.")
     #expect(PersonChipLine.staleUndo == "That changed since. Open the name to change it again.")
+    #expect(PersonChipLine.failedUndo == "Could not undo that.")
 }

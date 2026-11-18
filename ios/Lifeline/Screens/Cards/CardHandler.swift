@@ -37,7 +37,8 @@ final class CardHandler {
     /// Read while a card renders, so they must not be observed. `peopleVersion` is, and a change to who is
     /// linked bumps it, so the chips are read again.
     @ObservationIgnored private var previews: [String: [PreviewChip]] = [:]
-    @ObservationIgnored private var keptLinks: [String: [PersonLink]] = [:]
+    /// The memory each kept card stands for. Its links are read on every render (one query).
+    @ObservationIgnored private var keptMemories: [String: MemoryID] = [:]
     private var peopleVersion = 0
     let deps: Dependencies
 
@@ -368,13 +369,18 @@ final class CardHandler {
     /// The people of the memory a kept card stands for: the one Keep made, or the one "Same story" joined.
     func personLinks(for kept: KeptCard) -> [PersonLink] {
         _ = peopleVersion
-        if let cached = keptLinks[kept.memoryCandidateID] { return cached }
-        let candidate = CandidateID(rawValue: kept.memoryCandidateID)
-        let memories = deps.extractionStore.memories
-        let memory = (try? memories.memory(createdFrom: candidate)) ?? (try? memories.memory(withSpanFrom: candidate))
-        let links = memory.map { personLinks(for: $0.id) } ?? []
-        keptLinks[kept.memoryCandidateID] = links
-        return links
+        let memory: MemoryID
+        if let known = keptMemories[kept.memoryCandidateID] {
+            memory = known
+        } else {
+            let candidate = CandidateID(rawValue: kept.memoryCandidateID)
+            let memories = deps.extractionStore.memories
+            guard let found = (try? memories.memory(createdFrom: candidate)) ?? (try? memories.memory(withSpanFrom: candidate)) else { return [] }
+            memory = found.id
+            keptMemories[kept.memoryCandidateID] = memory
+        }
+        // Read on every render, not cached: Change… edits a kept memory's people outside this handler.
+        return personLinks(for: memory)
     }
 
     /// What "Done" in the sheet did: anything but `.unchanged` may change who a card shows.
@@ -391,10 +397,11 @@ final class CardHandler {
         return done
     }
 
-    /// Who is linked may have changed: every chip is read again on the next render.
-    private func peopleChanged() {
+    /// Who is linked may have changed: every chip is read again on the next render. Called here after each
+    /// write, and by a host when Change… closes, because that sheet edits a memory's people on its own.
+    func peopleChanged() {
         previews.removeAll()
-        keptLinks.removeAll()
+        keptMemories.removeAll()
         peopleVersion += 1
     }
 
