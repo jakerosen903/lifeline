@@ -48,11 +48,13 @@ public struct MemoryRepository: Sendable {
     }
 
     /// Removes a memory and, by cascade, its spans, people, places and anchors.
-    /// The memory and everything hanging off it (cascade). A story left with no member goes too.
+    /// The memory and everything hanging off it (cascade). A story left with no member goes too,
+    /// and so does an untitled chapter left with nothing in it.
     public func delete(_ id: MemoryID) throws {
         try db.writer.write { db in
             _ = try Memory.deleteOne(db, key: id.rawValue)
             try db.execute(sql: Self.deleteEmptyStoriesSQL)
+            try db.execute(sql: ChapterRepository.deleteEmptyUntitledSQL)
         }
     }
 
