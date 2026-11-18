@@ -41,3 +41,7 @@ Spec: docs/specs/2026-11-18-people-contacts.md. Branch claude/people-contacts-16
 - Task 3: minor (deferred): `aCarriedPersonNameShowsNoCard` stops at the queue and does not keep the card.
 - Task 3: fix round 1/5 (1 addressed, 0 open — pending person cards closed in the Keep transaction; commits ed405db..59f377d)
 - Task 3: complete (commits 236bb08..59f377d, review clean)
+- Task 4: complete (commits b639794..ae9df62, review clean). ⚠️ item (which memories the link reads include) ruled as R18.
+- Task 4: minor (deferred): no test that a detail link is left out of a mention's group (R16).
+- Task 4: minor (deferred): `group(of:)` uses two separate reads; one read would be tidier.
+- Task 4: minor (deferred): the owner-order test compares with localizedCaseInsensitiveCompare while SQL uses collate nocase.
