@@ -10,6 +10,8 @@ struct PersonChip: View {
     let line: String?
     let isAssumed: Bool
     let accessibilityLabel: String
+    /// nil: `person.chip.assumed` for a guess, else `person.chip`.
+    var identifier: String? = nil
     var personID: PersonID? = nil
     var cover: Photo? = nil
     var cache: PhotoImageCache? = nil
@@ -47,6 +49,6 @@ struct PersonChip: View {
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(accessibilityLabel)
         .accessibilityAddTraits(.isButton)
-        .accessibilityIdentifier(isAssumed ? "person.chip.assumed" : "person.chip")
+        .accessibilityIdentifier(identifier ?? (isAssumed ? "person.chip.assumed" : "person.chip"))
     }
 }

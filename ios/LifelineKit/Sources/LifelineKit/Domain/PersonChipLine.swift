@@ -20,6 +20,11 @@ public enum PersonChipLine {
         return "\(name), assumed, you said \(said). Change who this is."
     }
 
+    /// A waiting card's quiet chip for a name the owner marked "Not a person" (R37).
+    public static func notAPersonLabel(saidName: String) -> String {
+        "\(clean(saidName) ?? saidName), not a person. Change who this is."
+    }
+
     /// The button on a guessed moment of a person's page: "Yes, this Robyn". The first word of the name;
     /// a one-word name is used whole, and an empty one reads "Yes, this person".
     public static func confirmLabel(name: String) -> String {

@@ -34,13 +34,22 @@ public struct PersonMoveReceipt: Sendable, Equatable {
     }
 }
 
-/// One said name of a waiting card, as Keep would link it.
+/// One said name of a waiting card, as Keep would link it, or as the owner marked it "Not a person".
 public struct PreviewChip: Sendable, Equatable, Identifiable {
     public var saidName: String; public var name: String; public var origin: LinkOrigin; public var person: PersonID?
+    /// The owner marked this name "Not a person": Keep links nothing, and the quiet chip reopens the sheet (R37).
+    public var isNotAPerson: Bool
     public var id: String { SaidName.key(saidName) }
 
     public init(saidName: String, name: String, origin: LinkOrigin, person: PersonID?) {
-        self.saidName = saidName; self.name = name; self.origin = origin; self.person = person
+        self.saidName = saidName; self.name = name; self.origin = origin; self.person = person; self.isNotAPerson = false
+    }
+
+    /// The chip shows the said name with no line and no mark: the owner's own answer (`confirmed`).
+    public static func notAPerson(saidName: String) -> PreviewChip {
+        var chip = PreviewChip(saidName: saidName, name: saidName.trimmingCharacters(in: .whitespacesAndNewlines), origin: .confirmed, person: nil)
+        chip.isNotAPerson = true
+        return chip
     }
 }
 
@@ -88,7 +97,7 @@ public struct PersonLinkActions: Sendable {
             if let o = CandidatePayload.memory(row) { edges.merge(try keep.edges(of: o, for: unwritten, segment: row.segmentID, card: candidate.id)) }
         }
         let planned = Dictionary(edges.entityWrite.persons.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
-        return try edges.people.compactMap { link in
+        let linked: [PreviewChip] = try edges.people.compactMap { link in
             // Keep's guess gives every person link its said name and an origin.
             guard let origin = link.origin else { return nil }
             let said = link.roleText ?? ""
@@ -96,5 +105,25 @@ public struct PersonLinkActions: Sendable {
             guard let person = try store.people.person(id: link.personID) else { return nil }
             return PreviewChip(saidName: said, name: person.displayName, origin: origin, person: person.id)
         }
+        let refs = out.peopleRefs + (try store.candidates.continuations(of: candidate.id).compactMap(CandidatePayload.memory).flatMap(\.peopleRefs))
+        return Self.withNotAPerson(linked, refs: refs, choices: try store.personLinks.choices(for: candidate.id))
+    }
+
+    /// Keep's chips, with a quiet chip for each said name the owner marked "Not a person", in the order
+    /// the names were said. A sheet opens only from a chip, so a stored "Not a person" always had one.
+    static func withNotAPerson(_ linked: [PreviewChip], refs: [String], choices: [PersonChoice]) -> [PreviewChip] {
+        let marked = Set(choices.filter(\.notAPerson).map(\.saidKey))
+        guard !marked.isEmpty else { return linked }
+        var out: [PreviewChip] = [], seen = Set<String>(), rest = linked
+        for ref in refs {
+            let key = SaidName.key(ref)
+            guard !key.isEmpty, seen.insert(key).inserted else { continue }
+            if let index = rest.firstIndex(where: { $0.id == key }) {
+                out.append(rest.remove(at: index))
+            } else if marked.contains(key) {
+                out.append(.notAPerson(saidName: ref))
+            }
+        }
+        return out + rest   // a chip whose said name is not among the refs keeps Keep's order at the end
     }
 }

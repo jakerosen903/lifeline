@@ -60,7 +60,11 @@ final class WhoIsThisViewModel {
         }
         options = WhoIsThisOptions.build(saidName: saidName, quote: quote, current: current, currentIsGuess: isGuess,
                                          candidates: candidates, people: people, otherMoments: others)
-        selected = current.map { .person($0) } ?? .someoneNew
+        if case .waiting(_, let chip) = source, chip.isNotAPerson {
+            selected = .notAPerson   // the way back (R37): the sheet opens on the answer the owner gave
+        } else {
+            selected = current.map { .person($0) } ?? .someoneNew
+        }
     }
 
     func cover(of person: PersonID) -> Photo? { covers[EntityID(rawValue: person.rawValue)] }

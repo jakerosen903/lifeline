@@ -42,3 +42,9 @@ import Testing
     #expect(PersonChipLine.confirmLabel(name: "") == "Yes, this person")
     #expect(PersonChipLine.confirmLabel(name: "   ") == "Yes, this person")
 }
+
+// M1 / R37: a name marked "Not a person" on a waiting card keeps a quiet chip, so the sheet opens again.
+@Test func aNotAPersonChipReadsTheSaidName() {
+    #expect(PersonChipLine.notAPersonLabel(saidName: "Tomas") == "Tomas, not a person. Change who this is.")
+    #expect(PersonChipLine.notAPersonLabel(saidName: "  the fence  ") == "the fence, not a person. Change who this is.")
+}

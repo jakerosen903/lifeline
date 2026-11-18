@@ -445,7 +445,14 @@ private struct Env {
 
     try env.actions.choose(.notAPerson, for: "Tomas", on: card.id)
     #expect(try env.count("candidate_person_choice") == 2, "choosing again replaces the row")
-    #expect(try env.actions.preview(card).map(\.saidName) == ["my roommate, Robin"])
+    let quiet = try env.actions.preview(card)
+    #expect(quiet.map(\.saidName) == ["my roommate, Robin", "Tomas"], "a stored \u{201C}Not a person\u{201D} keeps a chip in its place (R37)")
+    #expect(quiet.map(\.isNotAPerson) == [false, true])
+    #expect(quiet.last == .notAPerson(saidName: "Tomas"))
+    #expect(quiet.last?.name == "Tomas" && quiet.last?.person == nil)
+    try env.actions.choose(.someoneNew, for: "Tomas", on: card.id)
+    #expect(try env.actions.preview(card).map(\.isNotAPerson) == [false, false], "the way back: the name is a person again")
+    try env.actions.choose(.notAPerson, for: "Tomas", on: card.id)
 
     let memory = try env.keep.acceptMemory(card, joinStory: false).memory
     #expect(try env.personRows(memory).map(\.entityID) == [robyn.entityID], "Keep applies what the sheet stored")

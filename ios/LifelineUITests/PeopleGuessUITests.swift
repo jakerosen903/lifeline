@@ -309,6 +309,37 @@ final class PeopleGuessUITests: XCTestCase {
         XCTAssertEqual(kept.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'person.chip'")).count, 1)
     }
 
+    /// R37: "Not a person" on a waiting card leaves a quiet chip with the said name. A tap opens the sheet on that
+    /// answer, and "Someone new" there makes the name a person again.
+    @MainActor
+    func testNotAPersonOnAWaitingCardHasAWayBack() {
+        let app = XCUIApplication.launchWithPeople(["-uiTesting-followUps"])
+        app.startSession()
+        let card = app.any("card.memory")
+        XCTAssertTrue(card.waitForExistence(timeout: 20), "the memory card arrives")
+        let dara = chip(app, plain("Dara"), in: card)
+        XCTAssertTrue(dara.waitForExistence(timeout: 5))
+        openSheet(app, from: dara)
+        let notAPerson = app.buttons["who.notAPerson"]
+        XCTAssertTrue(revealInSheet(app, notAPerson))
+        notAPerson.tap()
+        tapDone(app)
+
+        let quiet = card.buttons["person.chip.notPerson"]
+        XCTAssertTrue(quiet.waitForExistence(timeout: 5), "the name keeps a quiet chip")
+        XCTAssertEqual(quiet.label, "Dara, not a person. Change who this is.")
+        XCTAssertFalse(chip(app, plain("Dara"), in: card).exists)
+        openSheet(app, from: quiet)
+        XCTAssertTrue(revealInSheet(app, notAPerson))
+        XCTAssertTrue(notAPerson.isSelected, "the sheet opens on the answer the owner gave")
+        let someoneNew = app.buttons["who.new"]
+        XCTAssertTrue(revealInSheet(app, someoneNew))
+        someoneNew.tap()
+        tapDone(app)
+        XCTAssertTrue(chip(app, plain("Dara"), in: card).waitForExistence(timeout: 5), "Dara is a person again")
+        XCTAssertFalse(card.buttons["person.chip.notPerson"].exists)
+    }
+
     /// Regression (task 7): "Change…" keeps the memory and edits its people in its own sheet; the kept card it
     /// leaves must show those people, not the ones read before the sheet opened.
     @MainActor

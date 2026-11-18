@@ -13,6 +13,18 @@ struct PersonChipRow: View {
         let origin: LinkOrigin?
         let saidName: String?
         let source: WhoIsThisViewModel.Source
+        /// A waiting card's name the owner marked "Not a person": a quiet chip with the said name (R37).
+        var isNotAPerson = false
+
+        var line: String? { isNotAPerson ? nil : PersonChipLine.text(origin: origin, saidName: saidName) }
+        var accessibilityLabel: String {
+            isNotAPerson ? PersonChipLine.notAPersonLabel(saidName: saidName ?? name)
+                         : PersonChipLine.accessibilityLabel(name: name, origin: origin, saidName: saidName)
+        }
+        var identifier: String {
+            if isNotAPerson { return "person.chip.notPerson" }
+            return origin == .assumed ? "person.chip.assumed" : "person.chip"
+        }
 
         /// A kept memory's link. The owner's link has no mark and still opens the sheet.
         init(link: PersonLink) {
@@ -27,6 +39,7 @@ struct PersonChipRow: View {
             name = chip.name; person = chip.person
             origin = chip.origin; saidName = chip.saidName
             source = .waiting(candidate: candidate, chip: chip)
+            isNotAPerson = chip.isNotAPerson
         }
     }
 
@@ -50,9 +63,8 @@ struct PersonChipRow: View {
                 Text("With").font(.caption.weight(.semibold)).foregroundStyle(Theme.oliveText)
                     .accessibilityAddTraits(.isHeader)
                 ForEach(items) { item in
-                    PersonChip(name: item.name, line: PersonChipLine.text(origin: item.origin, saidName: item.saidName),
-                               isAssumed: item.origin == .assumed,
-                               accessibilityLabel: PersonChipLine.accessibilityLabel(name: item.name, origin: item.origin, saidName: item.saidName),
+                    PersonChip(name: item.name, line: item.line, isAssumed: item.origin == .assumed && !item.isNotAPerson,
+                               accessibilityLabel: item.accessibilityLabel, identifier: item.identifier,
                                personID: item.person, cover: item.person.flatMap { covers[EntityID(rawValue: $0.rawValue)] },
                                cache: deps.photoImages) {
                         asking = Asking(id: item.id, model: WhoIsThisViewModel(source: item.source, deps: deps))
