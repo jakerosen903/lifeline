@@ -104,23 +104,23 @@ private func year(_ y: Int) -> TimeRange {
     #expect(out.placements[event.id]?.isPlaced == true, "a moment anchored on a fact still places")
 }
 
-@Test func kindChangeRecomputesChapterRange() throws {
+@Test func kindChangeLeavesTheChapterRangeAlone() throws {
     let env = try Env()
     let chapter = try env.store.chapters.insertChapter(title: "Lisbon")
+    try env.store.chapters.setRange(chapter.id, .stated(between: 1994, and: 2002))
+    let stated = try env.store.chapters.chapter(id: chapter.id)?.range
     _ = try env.memory("Early", range: year(1995), chapter: chapter.id)
     let late = try env.memory("Late", range: year(2001), chapter: chapter.id)
-    try env.actions.chapterRangeFromMembers(chapter.id)
-    #expect(try env.store.chapters.chapter(id: chapter.id)?.range.latest?.year == 2001)
 
     try env.actions.setKind(late.id, .fact)
-    #expect(try env.store.chapters.chapter(id: chapter.id)?.range.latest?.year == 1995, "a fact leaves the chapter's range")
+    #expect(try env.store.chapters.chapter(id: chapter.id)?.range == stated, "a fact does not change the chapter's stated years")
     #expect(try env.store.memories.fetch(late.id)?.chapterID == chapter.id, "it keeps its chapter_id")
     #expect(try env.store.memories.fetch(late.id)?.range.latest?.year == 2001, "its own range is still stored")
     #expect(try env.store.memories.aboutMemories(includingHidden: false).map(\.id) == [late.id])
     #expect(try env.store.memories.moments(inChapter: chapter.id).map(\.title) == ["Early"])
 
     try env.actions.setKind(late.id, .event)
-    #expect(try env.store.chapters.chapter(id: chapter.id)?.range.latest?.year == 2001, "a moment again, it counts again")
+    #expect(try env.store.chapters.chapter(id: chapter.id)?.range == stated, "a moment again, the stated years are still the same")
     #expect(try env.store.memories.aboutMemories(includingHidden: false).isEmpty)
 }
 
@@ -138,18 +138,16 @@ private func year(_ y: Int) -> TimeRange {
     #expect(try env.store.curiosity.open().contains { $0.sourceMemoryID == m.id }, "the question comes back with the moment")
 }
 
-@Test func setKindAndTheChapterRangeChangeInOneWrite() throws {
+@Test func setKindLeavesTheChapterRangeAlone() throws {
     let env = try Env()
     let chapter = try env.store.chapters.insertChapter(title: "Elm Street")
+    try env.store.chapters.setRange(chapter.id, .stated(year: 1996))
     let m = try env.memory("Painting the fence", range: year(1996), chapter: chapter.id)
-    try env.actions.chapterRangeFromMembers(chapter.id)
-    #expect(try env.store.chapters.chapter(id: chapter.id)?.range.earliest?.year == 1996)
-    // The repository alone keeps the chapter honest: no second call needed.
     try env.store.memories.setKind(m.id, .fact)
     #expect(try env.store.memories.fetch(m.id)?.kind == .fact)
-    #expect(try env.store.chapters.chapter(id: chapter.id)?.range.isPlaced == false, "a fact leaves the chapter's derived range in the same write")
+    #expect(try env.store.chapters.chapter(id: chapter.id)?.range == .stated(year: 1996), "a fact leaves the stated years as they were")
     try env.store.memories.setKind(m.id, .event)
-    #expect(try env.store.chapters.chapter(id: chapter.id)?.range.earliest?.year == 1996, "and comes back with it")
+    #expect(try env.store.chapters.chapter(id: chapter.id)?.range == .stated(year: 1996), "and so does a moment again")
 }
 
 @Test func collectionAndStorySpansSkipAFactsHiddenRange() throws {

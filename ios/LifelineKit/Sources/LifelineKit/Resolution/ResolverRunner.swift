@@ -86,13 +86,6 @@ public struct ResolverRunner: Sendable {
         try store.curiosity.replaceOpenEntityItems(EntityCuriosity.drafts(entities: try store.entities.allEntities(), links: try store.entities.allLinks(),
                                                                           memories: byID, owner: try store.profile.owner()?.entityID))
 
-        // Chapters follow their members wherever the members just moved.
-        if !changes.isEmpty {
-            for chapter in chapters {
-                try store.chapters.setRange(chapter.id, ChapterRepository.span(over: try store.memories.moments(inChapter: chapter.id).map(\.range)))
-            }
-        }
-
         changes.sort { $0.title < $1.title }
         return RunReport(placed: changes.count, floatingCreated: floatingCreated, curiosityOpen: try store.curiosity.open().count, changes: changes)
     }

@@ -52,7 +52,7 @@ private func person(_ name: String, owner: Bool = false, aliases: [String] = [])
 }
 
 @Test func packetCarriesChaptersAndOpenQuestions() {
-    let chapter = Chapter(id: .init(), title: "The Boston years", range: .year(2011, origin: .derived, evidence: nil), order: 0)
+    let chapter = Chapter(id: .init(), title: "The Boston years", range: .stated(year: 2011), order: 0)
     let untitled = Chapter(id: .init(), title: nil, range: .unplaced, order: 1)
     let questions = (0..<12).map { CuriosityItem(id: .init(), kind: .unresolvedAnchor, text: "q\($0)", payoffCount: 12 - $0, status: .open, sourceMemoryID: nil, targetMemoryID: nil) }
     let packet = ContextPacketBuilder.build(segment: seg(0, "x"), previous: [], people: [], memories: [], profileFreeText: nil, stage: "open",

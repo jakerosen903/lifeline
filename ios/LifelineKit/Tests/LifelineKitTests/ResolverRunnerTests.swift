@@ -114,14 +114,15 @@ private struct Env {
     #expect(try env.store.curiosity.open().isEmpty, "no question about a story already told")
 }
 
-@Test func chapterRangesFollowPlacedMembers() throws {
+@Test func aChapterRangeDoesNotFollowItsMembers() throws {
     let env = try Env()
     let memory = try env.accept("The blue door", anchors: [AnchorOut(phrase: "I was six", relation: .age, targetText: nil, value: nil)], ordinal: 0)
     let chapter = try env.actions.createChapter(title: "Childhood", containing: memory.id)
     #expect(try env.store.chapters.chapter(id: chapter.id)?.range == .unplaced)
     try env.birthday("1986-05-10")
     _ = try env.runner.run()
-    #expect(try env.store.chapters.chapter(id: chapter.id)?.range.earliest?.iso == "1992-05-10", "the chapter follows its member")
+    #expect(try env.store.memories.fetch(memory.id)?.range.earliest?.iso == "1992-05-10", "the member is placed")
+    #expect(try env.store.chapters.chapter(id: chapter.id)?.range == .unplaced, "the chapter does not follow its member: its range holds stated years only")
 }
 
 @Test func floatingTargetIsReplacedWhenTheRealMemoryArrives() throws {

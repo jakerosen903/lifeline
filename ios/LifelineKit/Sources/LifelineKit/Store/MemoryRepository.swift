@@ -565,8 +565,8 @@ public struct MemoryRepository: Sendable {
         try (includingHidden ? allMemories() : visibleMemories()).filter { !$0.isMoment && !$0.isFloating }
     }
 
-    /// The kind, and the chapter's derived range with it, in one write: a fact leaves the range,
-    /// a moment joins it, and a kill between the two can never leave the chapter stale (M7).
+    /// The kind, the detail links and the story place in one write, so a kill between them
+    /// leaves nothing half changed (M7). A chapter's range holds stated years only and does not move.
     /// The receipt holds what the change took away (a story place, detail links) for `undoKind`.
     @discardableResult
     public func setKind(_ id: MemoryID, _ kind: MemoryKind) throws -> KindReceipt {
@@ -574,7 +574,6 @@ public struct MemoryRepository: Sendable {
             let from = try MemoryKind(rawValue: String.fetchOne(db, sql: "select kind from memory where id = ?", arguments: [id.rawValue]) ?? "") ?? .event
             var receipt = KindReceipt(memory: id, from: from, to: kind, story: nil, details: [])
             try db.execute(sql: "update memory set kind = ? where id = ?", arguments: [kind.rawValue, id.rawValue])
-            try Self.refreshChapterRange(ofMemory: id, in: db)
             if kind.isMoment {
                 // A moment names what it was about; it is no longer a standing statement (M7).
                 let rows = try MomentEntity.filter(Column("memory_id") == id.rawValue).fetchAll(db)
@@ -598,7 +597,7 @@ public struct MemoryRepository: Sendable {
         }
     }
 
-    /// Puts a kind change back, in one write: the kind, the chapter range, the detail links a
+    /// Puts a kind change back, in one write: the kind, the detail links a
     /// moment turned into mentions, and the story place a fact, feeling or goal gave up (with
     /// the story itself when it was deleted for being empty). Stale once the kind moved again.
     public func undoKind(_ receipt: KindReceipt) throws {
@@ -607,7 +606,6 @@ public struct MemoryRepository: Sendable {
                 throw CandidateActions.Error.stale
             }
             try db.execute(sql: "update memory set kind = ? where id = ?", arguments: [receipt.from.rawValue, receipt.memory.rawValue])
-            try Self.refreshChapterRange(ofMemory: receipt.memory, in: db)
             for entity in receipt.details {
                 if receipt.alsoMentioned.contains(entity) {
                     try db.execute(sql: """
@@ -627,15 +625,6 @@ public struct MemoryRepository: Sendable {
                 try membership.moment.insert(db)
             }
         }
-    }
-
-    /// Recomputes the range of the chapter a memory sits in from its placed moments.
-    static func refreshChapterRange(ofMemory id: MemoryID, in db: Database) throws {
-        guard let chapterID = try String.fetchOne(db, sql: "select chapter_id from memory where id = ?", arguments: [id.rawValue]),
-              var chapter = try Chapter.fetchOne(db, key: chapterID) else { return }
-        let members = try Memory.filter(Column("chapter_id") == chapterID).fetchAll(db).filter(\.isMoment)
-        chapter.range = ChapterRepository.span(over: members.map(\.range))
-        try chapter.update(db)
     }
 
     /// Memories with no range at all.

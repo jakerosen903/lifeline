@@ -31,7 +31,7 @@ public struct ChapterRepository: Sendable {
     /// returns how many. Such a chapter shows as "Untitled chapter" with nothing under it, and no
     /// action could remove it. A chapter with a title is kept even when it is empty: the person
     /// named it. A chapter that a story points at is kept too: deleting it would clear the
-    /// story's chapter without a word.
+    /// story's chapter without a word. So is one with stated years: the person said them.
     @discardableResult
     public func deleteEmptyUntitled() throws -> Int {
         try db.writer.write { db in
@@ -39,6 +39,8 @@ public struct ChapterRepository: Sendable {
                 delete from chapter where (title is null or trim(title) = '')
                 and id not in (select chapter_id from memory where chapter_id is not null)
                 and id not in (select chapter_id from story where chapter_id is not null)
+                and not (coalesce(origin, '') in ('stated', 'confirmed')
+                         and (earliest is not null or latest is not null or likely_start is not null or likely_end is not null))
                 """)
             return db.changesCount
         }

@@ -500,11 +500,9 @@ public struct CandidateActions: Sendable {
         return try store.chapters.chapter(id: chapter.id) ?? chapter
     }
 
-    /// Moves a memory between chapters and refreshes both chapters' member-derived ranges.
+    /// Moves a memory between chapters. A chapter's range holds stated years only, so it does not change.
     public func assign(memory: MemoryID, toChapter chapter: ChapterID?) throws {
-        let previous = try store.memories.fetch(memory)?.chapterID
         try store.chapters.assign(memory: memory, toChapter: chapter)
-        for id in [previous, chapter].compactMap({ $0 }) { try chapterRangeFromMembers(id) }
         // The chapter the memory left may now be empty; one with no title either is removed.
         try store.chapters.deleteEmptyUntitled()
     }
@@ -536,11 +534,6 @@ public struct CandidateActions: Sendable {
 
     public func removeFromCollection(_ memory: MemoryID, from collection: CollectionID) throws {
         try store.chapters.remove(memory: memory, from: collection)
-    }
-
-    /// A chapter's range is the span of its placed members, origin `derived`; unplaced when none are placed.
-    public func chapterRangeFromMembers(_ chapter: ChapterID) throws {
-        try store.chapters.setRange(chapter, ChapterRepository.span(over: try store.memories.moments(inChapter: chapter).map(\.range)))
     }
 
     // MARK: - Helpers
