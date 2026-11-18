@@ -89,6 +89,8 @@ final class TimelineViewModel {
     private(set) var namedChapters: [Chapter] = []
     /// The chapter just removed, while its Undo lasts (`ShellNotice.duration`); nil after.
     private(set) var removedChapter: ChapterReceipt?
+    /// Undo of that removal failed; the notice shows this in its place until its time runs out.
+    private(set) var undoChapterFailure: String?
     @ObservationIgnored private var removalTimer: Task<Void, Never>?
     /// Says the removal notice to VoiceOver when it shows.
     @ObservationIgnored var announce: (String) -> Void = { AccessibilityNotification.Announcement($0).post() }
@@ -472,27 +474,48 @@ final class TimelineViewModel {
     /// "Removed “{name}”." for `ShellNotice.duration`. A second removal replaces the first, whose time
     /// stops: only the newest removal can be undone.
     func chapterRemoved(_ receipt: ChapterReceipt) {
-        removalTimer?.cancel()
         removedChapter = receipt
+        undoChapterFailure = nil
         refresh()
         if let removedChapterNotice { announce(removedChapterNotice) }
+        startRemovalTimer()
+    }
+
+    /// Puts the chapter back with its tags; true when it is back. After the time ran out there is no
+    /// receipt, and nothing happens. When the write fails the receipt stays, so Undo can be tried
+    /// again: the notice shows the failure and its time starts again.
+    @discardableResult
+    func undoRemoveChapter() -> Bool {
+        guard let receipt = removedChapter else { return false }
+        removalTimer?.cancel()
+        do {
+            try chapterActions.undoRemove(receipt)
+            removedChapter = nil
+            undoChapterFailure = nil
+            refresh()
+            return true
+        } catch {
+            undoChapterFailure = "Could not put that chapter back: \(error.localizedDescription)"
+            if let undoChapterFailure { announce(undoChapterFailure) }
+            startRemovalTimer()
+            return false
+        }
+    }
+
+    /// The notice, with its Undo, goes after `ShellNotice.duration`; a new start stops the old time.
+    private func startRemovalTimer() {
+        removalTimer?.cancel()
         removalTimer = Task { [weak self] in
             try? await Task.sleep(for: ShellNotice.duration)
             guard !Task.isCancelled else { return }
             self?.removedChapter = nil
+            self?.undoChapterFailure = nil
         }
     }
 
-    /// Puts the chapter back with its tags. After the time ran out there is no receipt, and nothing happens.
-    func undoRemoveChapter() {
-        guard let receipt = removedChapter else { return }
-        removalTimer?.cancel()
-        removedChapter = nil
-        attempt("Could not put that chapter back") { try chapterActions.undoRemove(receipt) }
-    }
-
+    /// "Removed “{name}”.", or "Removed a chapter with no name." It quotes no name the person never gave (ruling R7).
     var removedChapterNotice: String? {
-        removedChapter.map { "Removed “\($0.chapter.name ?? ChapterSheetViewModel.untitledInNotice)”." }
+        removedChapter.map { receipt in receipt.chapter.name.map { "Removed “\($0)”." } ?? "Removed a chapter with no name." }
     }
 
     /// Stories a memory could move to: every other one.

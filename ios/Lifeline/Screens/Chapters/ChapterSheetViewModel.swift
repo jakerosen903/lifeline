@@ -15,8 +15,8 @@ final class ChapterSheetViewModel: Identifiable {
 
     /// The sheet's title for a chapter with no name; the same words the life map uses.
     static let untitled = LifeMap.untitled
-    /// What the removal notice and the remove question call a chapter with no name.
-    static let untitledInNotice = "Untitled chapter"
+    /// The remove question for a chapter with no name. It quotes no name the person never gave (ruling R7).
+    static let removeQuestionWithNoName = "Remove this chapter?"
 
     let id: ChapterID
     private(set) var name: String?
@@ -34,7 +34,8 @@ final class ChapterSheetViewModel: Identifiable {
     private var actions: ChapterActions { ChapterActions(store: store) }
 
     var title: String { name ?? Self.untitled }
-    var nameInNotice: String { name ?? Self.untitledInNotice }
+    /// "Remove “{name}”?", or "Remove this chapter?" for a chapter with no name.
+    var removeQuestion: String { name.map { "Remove “\($0)”?" } ?? Self.removeQuestionWithNoName }
 
     init(chapter: ChapterID, store: ExtractionStore, onRemoved: @escaping (ChapterReceipt) -> Void) {
         id = chapter

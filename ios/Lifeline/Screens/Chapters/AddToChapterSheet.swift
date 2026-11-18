@@ -11,7 +11,8 @@ struct AddToChapterSheet: View {
     @State private var newName = ""
     @Environment(\.dismiss) private var dismiss
 
-    private var canAdd: Bool { !newName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+    /// A name of space or punctuation only is no name, so Add stays disabled for it.
+    private var canAdd: Bool { ChapterActions.isUsableName(newName) }
 
     var body: some View {
         NavigationStack {

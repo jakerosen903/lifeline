@@ -94,6 +94,8 @@ struct LifeMapSheet: View {
                             .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
+                    // The name alone would not say why it is here; VoiceOver reads that it has no dates.
+                    .accessibilityLabel("\(chapter.title), no dates yet")
                     Button("Say when") { sayWhenTarget = chapter }
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(Theme.oliveText)

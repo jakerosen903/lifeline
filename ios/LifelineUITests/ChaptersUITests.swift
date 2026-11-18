@@ -155,7 +155,7 @@ final class ChaptersUITests: XCTestCase {
         openLifeMap(app)
         let unplaced = app.any("lifemap.unplaced")
         XCTAssertTrue(unplaced.waitForExistence(timeout: 5), "chapters with no years wait in their own section")
-        XCTAssertTrue(unplaced.buttons["Maple Street"].exists, "Maple Street is not placed yet")
+        XCTAssertTrue(unplaced.buttons["Maple Street, no dates yet"].exists, "Maple Street is not placed yet")
         XCTAssertEqual(app.buttons.matching(identifier: "lifemap.row").count, 0, "no chapter is on the map yet")
         closeSheet(app, done: "lifemap.done")
 
@@ -172,7 +172,7 @@ final class ChaptersUITests: XCTestCase {
         let rows = app.buttons.matching(identifier: "lifemap.row")
         XCTAssertEqual(rows.count, 1, "one chapter is on the map")
         XCTAssertTrue(rows.firstMatch.label.hasPrefix("Maple Street, 1998"), rows.firstMatch.label)
-        XCTAssertFalse(app.any("lifemap.unplaced").buttons["Maple Street"].exists, "Maple Street left the unplaced section")
+        XCTAssertFalse(app.any("lifemap.unplaced").buttons["Maple Street, no dates yet"].exists, "Maple Street left the unplaced section")
     }
 
     // Review Focus 4: a date inside the stated years is no claim about a moment.
@@ -298,7 +298,7 @@ final class ChaptersUITests: XCTestCase {
         XCTAssertEqual(tagsOnTheWholeTimeline(app), ["The tree house": "Maple Street"], "only the named chapter shows as a tag")
 
         openLifeMap(app)
-        let unnamed = app.any("lifemap.unplaced").buttons["No name yet"]
+        let unnamed = app.any("lifemap.unplaced").buttons["No name yet, no dates yet"]
         XCTAssertTrue(app.waitHittable(unnamed, timeout: 5), "the chapter with no name is under Not placed in time yet")
         unnamed.tap()
         XCTAssertTrue(app.staticTexts["chapter.name"].waitForExistence(timeout: 5))

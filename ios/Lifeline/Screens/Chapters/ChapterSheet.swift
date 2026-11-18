@@ -7,13 +7,15 @@ import SwiftUI
 struct ChapterSheet: View {
     let viewModel: ChapterSheetViewModel
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.dynamicTypeSize) private var typeSize
     @State private var renaming = false
     /// Kept after a refused rename, so the alert opens again with what the person typed.
     @State private var renameText = ""
     @State private var sayingWhen = false
     @State private var confirmingRemove = false
 
-    private var canSave: Bool { !renameText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+    /// A name of space or punctuation only is no name, so Save stays disabled for it.
+    private var canSave: Bool { ChapterActions.isUsableName(renameText) }
 
     var body: some View {
         NavigationStack {
@@ -47,7 +49,7 @@ struct ChapterSheet: View {
         } message: {
             Text(viewModel.renameTaken ? Self.takenText : "In your own words.")
         }
-        .confirmationDialog("Remove “\(viewModel.nameInNotice)”?", isPresented: $confirmingRemove, titleVisibility: .visible) {
+        .confirmationDialog(viewModel.removeQuestion, isPresented: $confirmingRemove, titleVisibility: .visible) {
             Button("Remove chapter", role: .destructive) { viewModel.remove() }
                 .accessibilityIdentifier("chapter.confirmRemove")
             Button("Cancel", role: .cancel) {}
@@ -65,10 +67,11 @@ struct ChapterSheet: View {
     private var header: some View {
         Section {
             VStack(alignment: .leading, spacing: 4) {
-                // One line: a long name truncates rather than pushing the years and buttons down.
+                // One line, so a long name does not push the years and buttons down. At accessibility
+                // sizes one line holds a few letters only, so the name gets up to three.
                 Text(viewModel.title)
                     .font(.system(.title2, design: .serif).weight(.semibold)).foregroundStyle(Theme.ink)
-                    .lineLimit(1).truncationMode(.tail)
+                    .lineLimit(typeSize.isAccessibilitySize ? 3 : 1).truncationMode(.tail)
                     .accessibilityAddTraits(.isHeader)
                     .accessibilityIdentifier("chapter.name")
                 Text(viewModel.yearsText)
