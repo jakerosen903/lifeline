@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Drag a photo to the front to make it the key photo</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#5F7046}a:hover{color:#45533A}
+</style>
+</helmet>
+<div style="width: 390px; height: 844px; box-sizing: border-box; background: #F6F0E4; color: #332A23; font-family: Inter, system-ui, sans-serif; display: flex; flex-direction: column; overflow: hidden">
+
+  <div style="padding: 64px 24px 0 24px; display: flex; align-items: center; justify-content: space-between">
+    <a href="#" aria-label="Back to People" style="width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; border-radius: 22px; background: #ECE3D2; text-decoration: none">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#332A23" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>
+    </a>
+    <div style="font-size: 12px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: #6B6053">People</div>
+    <div style="width: 44px"></div>
+  </div>
+
+  <div style="padding: 18px 24px 0 24px; display: flex; flex-direction: column; align-items: center; gap: 12px">
+    <div role="img" aria-label="Maya's key photo" style="width: 132px; height: 132px; border-radius: 66px; background: #C8A56B; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600; color: #4A3413">key photo</div>
+    <h1 style="margin: 0; font-family: Fraunces, Georgia, serif; font-weight: 500; font-size: 30px; line-height: 1.15; letter-spacing: -0.01em">Maya</h1>
+  </div>
+
+  <div style="flex: 1; padding: 30px 24px 0 24px; display: flex; flex-direction: column; gap: 14px; overflow: hidden">
+    <div style="display: flex; flex-direction: column; gap: 4px">
+      <div style="font-size: 12px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: #6B6053">Photos</div>
+      <div style="font-size: 14px; line-height: 1.45; color: #4A4037">The first photo is the key photo. Hold a photo and drag it to the front to change it.</div>
+    </div>
+
+    <div style="position: relative; display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px">
+
+      <div aria-hidden="true" style="aspect-ratio: 1; box-sizing: border-box; border-radius: 14px; border: 2px dashed #5F7046; background: #E6EBDB; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600; color: #3F4C2E; text-align: center; line-height: 1.3">drop here<br>to make it<br>the key photo</div>
+
+      <button type="button" aria-label="Photo 1, taken 14 June 2012, the key photo now. Hold and drag to reorder." style="all: unset; cursor: grab; position: relative; aspect-ratio: 1; border-radius: 14px; background: #C8A56B; display: flex; align-items: flex-start">
+        <span style="margin: 6px; padding: 3px 8px; border-radius: 10px; background: #F6F0E4; color: #332A23; font-size: 11px; font-weight: 600">Key photo</span>
+      </button>
+
+      <button type="button" aria-label="Photo 2, from your contacts. Hold and drag to reorder." style="all: unset; cursor: grab; position: relative; aspect-ratio: 1; border-radius: 14px; background: #C9D2B8; display: flex; align-items: flex-end">
+        <span style="margin: 6px; padding: 3px 8px; border-radius: 10px; background: #F6F0E4; color: #332A23; font-size: 11px; font-weight: 600">From contacts</span>
+      </button>
+
+      <div aria-hidden="true" style="aspect-ratio: 1; box-sizing: border-box; border-radius: 14px; border: 1.5px dashed #C9BDA7"></div>
+
+      <button type="button" aria-label="Photo 4, no date. Hold and drag to reorder." style="all: unset; cursor: grab; aspect-ratio: 1; border-radius: 14px; background: #D9B8A4"></button>
+
+      <button type="button" style="all: unset; cursor: pointer; aspect-ratio: 1; box-sizing: border-box; border-radius: 14px; border: 1.5px dashed #A99C86; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; font-size: 13px; font-weight: 500; color: #4A4037">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#5F7046" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+        Add a photo
+      </button>
+
+      <div role="img" aria-label="Photo 3, taken 2019, being dragged toward the front" style="position: absolute; left: 34px; top: 46px; width: 106px; height: 106px; border-radius: 16px; background: #9FB0A8; transform: rotate(-5deg); box-shadow: 0 18px 36px rgba(51,42,35,0.32); border: 3px solid #F6F0E4; box-sizing: border-box; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 600; color: #26332E">dragging</div>
+    </div>
+
+    <div style="display: flex; align-items: flex-start; gap: 10px; padding: 14px 16px; border-radius: 16px; background: #ECE3D2">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#4A4037" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16.500v.500"/></svg>
+      <div style="font-size: 13px; line-height: 1.45; color: #332A23">Without dragging: open a photo and choose “Make this the key photo”. VoiceOver offers “Move to front” on each photo.</div>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>

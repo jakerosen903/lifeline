@@ -81,3 +81,13 @@ These supersede the matching Phase 1 screens. See `docs/DECISIONS.md`, entries d
 | File | Screen |
 | --- | --- |
 | Sections.html | Timeline, People, Places, Things, an entity page with and without a photo, and You as a portrait. Plain HTML, not a canvas export. Spec: `docs/specs/2026-11-15-five-sections.md` |
+
+## Photo card and key photo (2026-11-18)
+
+| File | Screen | What it shows |
+| --- | --- | --- |
+| PH1_PhotoCard.dc.html | Photo card | The moments in one line; pages grouped as People, Places and Things, as chips; one date offer for the story |
+| PH2_PhotoCardAfter.dc.html | Photo card after the taps | The same screen with the choices filled in: filled chips, "Used for those 3" and Undo |
+| KP1_KeyPhoto.dc.html | Key photo | The first photo is the key photo; drag a photo to the front to change it |
+
+Spec: `docs/specs/2026-11-18-photo-card-key-photo.md`.
