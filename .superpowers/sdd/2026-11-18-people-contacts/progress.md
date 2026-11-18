@@ -76,3 +76,6 @@ Spec: docs/specs/2026-11-18-people-contacts.md. Branch claude/people-contacts-16
 - Task 8: complete (commits 9811364..053d7ff, review clean). Kit clean run 1150/1150; build ok; EntityPageUITests 8/8.
 - Task 8: minor (deferred): if the refresh after a successful Undo throws, the held page closes.
 - Task 8: to cover in Task 9: UI tests for the held page and Undo restoring it.
+- Task 9: complete (commits 6082da4..99d2b11, review clean). PeopleGuessUITests 13/13; UI suite 155 pass (140 in one run, cut off by another session's pkill; YouUITests rerun alone 22/22); kit 1150/1150. ⚠️ items checked by the controller: the new seed sits in the `-uiTesting` launch block with the other seeds; the split UI run is accepted, Task 10 runs the whole suite once more. Two product fixes: `entity.moment.assumed` container keeps its children's identifiers; `who.else` names the toggle label. Ruling R35.
+- Task 9: minor (deferred): `testTheLandingStatesTheGuesses` reads the label with no wait; fixed 8 s and 12 s waits in the held-page tests; the refused-Undo branch of R34 has no UI test; the chip's visible text is not asserted (VoiceOver label only); class and per-test `@MainActor` both present.
+- Note: a third timing flake seen under load, `SegmentPlayerTests.playStartsAtRangeStartAndStopsAtRangeEnd`; passed idle; not touched by this plan.
