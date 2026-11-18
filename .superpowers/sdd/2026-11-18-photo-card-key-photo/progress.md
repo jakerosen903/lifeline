@@ -49,3 +49,9 @@ Spec addition after the plan was drafted: Undo cannot bring back a guess with no
 - Task 5: minor (deferred): the slot math in `PhotoRowDrag.swift` has no unit test (app target).
 - Task 5: minor (deferred): a drag on You scrolls the page to the top (existing `onChange` of the cover); confirm on device.
 - Flaky under load, not ours: `testAPlayErrorLeavesAnOpenUndoInPlace`, `testHidingALineFarDownShowsUndoWithoutScrolling` (YouUITests), `drainGivesUpAtItsDeadline` (kit). Watch in the whole-suite run.
+- Task 5: Ruling: the tap guard becomes a one-shot flag whether or not the two new tests fail on the old code — a guard that drops a real tap for half a second and rests on an undocumented event order is the wrong shape — cost if wrong: one view file. The two new tests passed on the old code too, so they do not tell the guards apart; device check carries it.
+- Task 5: fix round 1/5 (1 addressed, 0 open — time-based tap guard; commits a2705d4..6e5f307)
+- Task 5: minor (deferred): the flag's clear depends on `onChange(of: isHolding)`; a release at exactly the 0.35 s recognition could leave it set and swallow one tap.
+- Task 5: minor (deferred): no direct test for a tap right after a drop.
+- Task 5: complete (commits 541c356..6e5f307, review clean after one fix round; minors deferred above)
+- Task 6: dispatched from 6e5f307 (docs only), in parallel with the Task 5 re-review.
