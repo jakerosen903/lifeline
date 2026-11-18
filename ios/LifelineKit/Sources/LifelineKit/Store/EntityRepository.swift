@@ -88,6 +88,10 @@ public struct EntityRepository: Sendable {
            try Int.fetchOne(db, sql: "select count(*) from photo_link where entity_id = ?", arguments: [source.rawValue]) ?? 0 > 0 { return false }
 
         let s = source.rawValue, t = target.rawValue
+        // A memory linked to both keeps the target's row; that row takes the stronger origin first (R6).
+        for link in try MomentEntity.filter(Column("entity_id") == s).fetchAll(db) {
+            try MomentEntity.raiseOrigin(link.memoryID, target, link.relation, to: link.origin, in: db)
+        }
         try db.execute(sql: "update or ignore moment_entity set entity_id = ? where entity_id = ?", arguments: [t, s])
         let last = try Int.fetchOne(db, sql: "select max(\"order\") from entity_span where entity_id = ?", arguments: [t]) ?? -1
         let orders = try Int.fetchAll(db, sql: "select \"order\" from entity_span where entity_id = ? order by \"order\"", arguments: [s])
@@ -186,7 +190,8 @@ public struct EntityRepository: Sendable {
             for entity in other.entities {
                 if let mine = planned(entity.type, entity.title) { remap[entity.id] = mine.id } else { entities.append(entity) }
             }
-            persons += other.persons.filter { p in !persons.contains { $0.id == p.id } }
+            // A person both plans made for one name is this plan's person; the other's row would have no entity.
+            persons += other.persons.filter { p in !persons.contains { $0.id == p.id } && remap[p.entityID] == nil }
             links += other.links.map { var l = $0; l.entityID = remap[l.entityID] ?? l.entityID; return l }
             spans += other.spans.map { var s = $0; s.entityID = remap[s.entityID] ?? s.entityID; return s }
             tags += other.tags.map { EntityTag(entityID: remap[$0.entityID] ?? $0.entityID, text: $0.text) }
@@ -210,7 +215,7 @@ public struct EntityRepository: Sendable {
             try person.insert(db)
             try PeopleRepository.insertAlias(person.displayName, person.id, db)
         }
-        for link in write.links { try link.insertIgnoringDuplicate(db) }
+        for link in write.links { try link.insertKeepingStrongerOrigin(db) }
         for span in write.spans { try span.insertIgnoringDuplicate(db) }
         for tag in write.tags { try DomainTagRepository.tag(.entity, tag.entityID.rawValue, tag.text, in: db) }
         if let candidate = write.acceptingCandidate {
@@ -229,9 +234,9 @@ public struct EntityRepository: Sendable {
 
     // MARK: - Links
 
-    /// One link per memory, entity and relation; a second is a no-op that keeps the first role text.
-    public func link(_ memory: MemoryID, _ entity: EntityID, relation: EntityRelation, roleText: String? = nil) throws {
-        try db.writer.write { try MomentEntity(memoryID: memory, entityID: entity, relation: relation, roleText: roleText).insertIgnoringDuplicate($0) }
+    /// One link per memory, entity and relation; a second keeps the first role text and the stronger origin.
+    public func link(_ memory: MemoryID, _ entity: EntityID, relation: EntityRelation, roleText: String? = nil, origin: LinkOrigin? = nil) throws {
+        try db.writer.write { try MomentEntity(memoryID: memory, entityID: entity, relation: relation, roleText: roleText, origin: origin).insertKeepingStrongerOrigin($0) }
     }
 
     /// A detail leaves every entity it was on and lands on `entity` (nil: none), in one write.
@@ -564,6 +569,25 @@ extension MomentEntity: FetchableRecord, PersistableRecord {
     func insertIgnoringDuplicate(_ db: Database) throws {
         try db.execute(sql: "insert or ignore into moment_entity (memory_id, entity_id, relation, role_text, origin, person_handle) values (?, ?, ?, ?, ?, ?)",
                        arguments: [memoryID.rawValue, entityID.rawValue, relation.rawValue, roleText, origin?.rawValue, personHandle])
+    }
+
+    /// Inserts the link, or, when the memory already has it, keeps that row (its role text and
+    /// handle) and raises its origin when this one is stronger. A link is never weakened.
+    func insertKeepingStrongerOrigin(_ db: Database) throws {
+        try insertIgnoringDuplicate(db)
+        try Self.raiseOrigin(memoryID, entityID, relation, to: origin, in: db)
+    }
+
+    /// Sets the row's origin to the stronger of its own and `origin`. No row, no change.
+    static func raiseOrigin(_ memory: MemoryID, _ entity: EntityID, _ relation: EntityRelation, to origin: LinkOrigin?, in db: Database) throws {
+        guard let origin else { return }
+        let key: [any DatabaseValueConvertible] = [memory.rawValue, entity.rawValue, relation.rawValue]
+        guard let row = try Row.fetchOne(db, sql: "select origin from moment_entity where memory_id = ? and entity_id = ? and relation = ?",
+                                         arguments: StatementArguments(key)) else { return }
+        let current = (row["origin"] as String?).flatMap(LinkOrigin.init(rawValue:))
+        guard let stronger = LinkOrigin.stronger(current, origin), stronger != current else { return }
+        try db.execute(sql: "update moment_entity set origin = ? where memory_id = ? and entity_id = ? and relation = ?",
+                       arguments: StatementArguments([stronger.rawValue] + key))
     }
 }
 

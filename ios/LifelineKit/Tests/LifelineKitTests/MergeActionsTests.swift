@@ -43,7 +43,10 @@ private struct Env {
     #expect(spans[1].titleText == "Grew up in an orange house" && spans[1].candidateID == c.id)
     #expect(try env.store.memories.allMemories().count == before, "no new memory row")
     #expect(try env.store.candidates.fetch(c.id)?.status == .accepted)
-    #expect(result.newMentions.map(\.text) == ["Maya"])
+    // Task 3: a name the app does not know becomes a person marked new, not a "Who's this?" mention.
+    #expect(result.newMentions.isEmpty)
+    #expect(try env.store.memories.people(of: target.id).map(\.displayName) == ["Maya"])
+    #expect(try env.store.entities.links(of: target.id).filter { $0.entity.type == .person }.map(\.link.origin) == [.new])
     #expect(try env.store.memories.places(of: target.id).map(\.nameText) == ["Florida"])
     #expect(result.receipt.target == target.id && result.receipt.candidateID == c.id && result.receipt.before.count == 1)
     #expect(throws: CandidateActions.Error.notPending) { try env.actions.mergeCandidate(c, into: target.id) }
@@ -292,7 +295,8 @@ private struct Env {
     #expect(spans.count == 4 && spans.map(\.order) == [0, 1, 2, 3] && spans[3].segmentID == segment.id)
     #expect(spans[1].titleText == "Orange house canal" && spans[2].titleText == "Orange house again" && spans[3].titleText == "Grew up in an orange house")
     #expect(try env.store.chapters.collections(of: first.id).map(\.title) == ["Home"])
-    #expect(result.newMentions.map(\.text) == ["Maya"])
+    #expect(result.newMentions.isEmpty, "Task 3: Maya is a new person, not a mention")
+    #expect(try env.store.memories.people(of: first.id).map(\.displayName) == ["Maya"])
     #expect(try env.store.candidates.fetch(c.id)?.status == .accepted)
 
     try env.actions.unmerge(result.receipt)
