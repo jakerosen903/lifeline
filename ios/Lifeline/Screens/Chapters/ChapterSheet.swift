@@ -34,6 +34,8 @@ struct ChapterSheet: View {
             }
         }
         .presentationDetents([.medium, .large])
+        // A chapter already gone when the sheet opens sets `isGone` before any change can be seen.
+        .onAppear { if viewModel.isGone { dismiss() } }
         .onChange(of: viewModel.isGone) { _, gone in if gone { dismiss() } }
         .alert("Rename", isPresented: $renaming) {
             TextField("Chapter name", text: $renameText)
@@ -41,7 +43,7 @@ struct ChapterSheet: View {
             Button("Save") { if viewModel.rename(to: renameText) { renameText = "" } }
                 .disabled(!canSave)
                 .accessibilityIdentifier("chapter.renameSave")
-            Button("Cancel", role: .cancel) {}
+            Button("Cancel", role: .cancel) { viewModel.cancelRename() }
         } message: {
             Text(viewModel.renameTaken ? Self.takenText : "In your own words.")
         }

@@ -74,6 +74,9 @@ final class ChapterSheetViewModel: Identifiable {
         }
     }
 
+    /// Cancel on the rename alert: the refused name is no longer the question, so its line goes.
+    func cancelRename() { renameTaken = false }
+
     func sayWhen(_ range: TimeRange) {
         do { try actions.sayWhen(id, range); reload() }
         catch { self.error = "Could not save those years: \(error.localizedDescription)" }
