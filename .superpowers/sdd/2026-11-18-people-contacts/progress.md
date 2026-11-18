@@ -67,3 +67,8 @@ Spec: docs/specs/2026-11-18-people-contacts.md. Branch claude/people-contacts-16
 - Task 7: fix round 1/5 (3 addressed, 0 open — kept-card chips read fresh after Change…; sheet model built once at the tap; fixed sentence for a failed undo; commits a16e3d5..3a19ac2)
 - Task 7: complete (commits e6a5b47..3a19ac2, review clean)
 - Task 7: minor (deferred): no automated test covers the kept-card refresh after Change… or the once-built sheet model (UI wiring).
+- Task 8: implemented (commits 9811364..4e14c94). App builds; EntityPageUITests 8/8. Review needs fixes — 2 Important (no Undo reachable when a move removes the person: ruled as delayed close, R34; the guesses rule untested and build/UI evidence missing from the report).
+- Task 8: minor (deferred): a failed confirm shows its error in the page body, far from the card.
+- Task 8: minor (deferred): PersonChip uses two overlays for the outline; one conditional would do.
+- Task 8: to check in Task 9: `entity.moment.assumed` sits on a plain VStack; confirm XCUITest can find it.
+- Note: a second timing flake seen, `CascadeVoiceSessionTests.interruptionClosesOpenSegment`; not touched by this plan.
