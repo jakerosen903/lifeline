@@ -62,6 +62,7 @@ The card is one view. The landing and the session's page in Sessions both use it
 - Title: "Also show this photo on". Line under it: "Tap to add. Tap again to take it off."
 - The pages are the entities that the kept memories of the session name, with the same rules as today (`PhotoStory.card`): not hidden from browsing, each one time.
 - A page that already holds the photo is in the list too, in the chosen state. Today the card leaves such a page out.
+- A page that holds the photo and that no kept memory names is in the list too, in the chosen state, unless it is hidden from browsing. The person must always see each page the photo is on. Example: the person moves a moment from one person to another; the photo stays on the first person's page, and the card still shows that chip.
 - The pages are in groups, in this order: People, Places, Things, Ideas. A group with no page does not show. Each group has its name and a small symbol.
 - In a group, the owner's page is first and its chip reads "You". The other pages follow by title.
 - Each page is a chip with the entity's title.
@@ -112,6 +113,18 @@ No change. It shows on the session's page only, and it asks first.
 - The store allows one cover for each page. A write that changes the cover must take the role from the old cover before it gives the role to the new one.
 - A drag must not start the photo viewer, and a tap must still open it.
 
+## Together with the people and contacts spec
+
+`docs/specs/2026-11-18-people-contacts.md` is written at the same time on another branch. These points keep the two specs in agreement. The spec that ships second must follow them.
+
+1. **Words.** That spec says "cover" and "Make this the cover". With this spec the person reads "key photo" and "Make this the key photo".
+2. **A contact's picture.** That spec stores the contact's picture as a photo of the person, and it is the key photo only when the person has no photo. That is the add rule of this spec. The picture is then a photo like any other: the person can drag another photo to the front.
+3. **A changed contact picture.** That spec replaces the picture only while it is still the key photo. After the person drags another photo to the front, the app must leave the photos alone.
+4. **Photos do not move with a name.** When the person moves a moment to another person, the photo stays on the first person's page. Part 2 of the card shows both chips, so the person can take the photo off one page and put it on the other.
+5. **A guessed person.** That spec marks a person the app assumed. A chip on the photo card does not carry the mark. The mark is on the memory's people, where the person settles it.
+6. **Merging two people.** That spec joins the photos of two people and keeps the key photo of the person that stays. The joined photos keep one order, with that key photo first.
+7. **Undo.** That spec shows Undo in the message slot for 6 seconds. The date on the photo card keeps its Undo in the card while the screen is open, because the card is where the person reads the result.
+
 ## Data
 
 - No migration. `photo_link.sort_order` and `role` exist.
@@ -159,3 +172,5 @@ No change. It shows on the session's page only, and it asks first.
 8. The groups include Ideas when a memory names one.
 9. The photo shelf stays one row that scrolls sideways. KP1 draws a grid.
 10. Moving the key photo away from the front changes the key photo, with no question.
+11. A chip for a guessed person has no "Assumed" mark on the photo card.
+12. The card lists every page that holds the photo, also a page that no memory of the story names.
