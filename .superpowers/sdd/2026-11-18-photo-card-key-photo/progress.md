@@ -55,3 +55,10 @@ Spec addition after the plan was drafted: Undo cannot bring back a guess with no
 - Task 5: minor (deferred): no direct test for a tap right after a drop.
 - Task 5: complete (commits 541c356..6e5f307, review clean after one fix round; minors deferred above)
 - Task 6: dispatched from 6e5f307 (docs only), in parallel with the Task 5 re-review.
+- Task 6: built at 6b52277 (base 329be7f). Review: approved, no Critical or Important.
+- Task 6: minor (deferred): "Known small items" in the device check misses two Task 5 minors (the flag's clear at the 0.35 s edge; no test for a tap right after a drop).
+- Task 6: minor (deferred): OVERVIEW says "a checkbox for each memory"; the code draws a Toggle (switch). The spec says checkboxes: either the view or the docs must change.
+- Task 6: minor (deferred): the known item "the pill has no width limit" is stale (the pill is capped at xLarge with one line); reword to the slot math at large text.
+- Task 6: minor (deferred): the DECISIONS status line is long; split it.
+- Task 6: cannot verify from diff: the seven agreed points against the contacts spec (not on this branch); DECISIONS' claim that a write demotes the old cover before it promotes the new one — true by Task 3's `writeOrder` (reviewed there).
+- Task 6: complete (commits 329be7f..6b52277, approved; minors deferred above)
