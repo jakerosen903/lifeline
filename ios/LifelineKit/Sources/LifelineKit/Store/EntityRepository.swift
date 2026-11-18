@@ -248,10 +248,13 @@ public struct EntityRepository: Sendable {
     }
 
     /// A detail leaves every entity it was on and lands on `entity` (nil: none), in one write.
+    /// The owner placed it, so a person's detail is `confirmed`; a thing, place or idea has no origin.
     public func moveDetail(_ memory: MemoryID, to entity: EntityID?) throws {
         try db.writer.write { db in
             try db.execute(sql: "delete from moment_entity where memory_id = ? and relation = 'detail'", arguments: [memory.rawValue])
-            if let entity { try MomentEntity(memoryID: memory, entityID: entity, relation: .detail).insertIgnoringDuplicate(db) }
+            guard let entity else { return }
+            let origin: LinkOrigin? = try Person.exists(db, key: entity.rawValue) ? .confirmed : nil
+            try MomentEntity(memoryID: memory, entityID: entity, relation: .detail, origin: origin).insertIgnoringDuplicate(db)
         }
     }
 
