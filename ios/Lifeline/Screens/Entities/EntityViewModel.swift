@@ -24,6 +24,9 @@ final class EntityViewModel {
     private(set) var tags: [String] = []
     private(set) var firstTelling: (span: EntitySpan, session: Session)?
     private(set) var isGone = false
+    /// The page closes when the entity is gone and no notice is still offering Undo or its reason.
+    /// A move that removed this person keeps the page up, read-only, until its notice ends (R34).
+    var shouldClose: Bool { isGone && personMove.text == nil }
     /// False until the first `refresh()`: a page reads nothing until it is on screen.
     private(set) var isLoaded = false
     /// The owner's own page ("About you"): a session from here is about "yourself".
@@ -65,6 +68,8 @@ final class EntityViewModel {
         do {
             let store = deps.extractionStore
             guard let current = try store.entities.entity(id: entity.id) else { isGone = true; return }
+            // An Undo that restored the person brings the page back.
+            isGone = false
             entity = current
             // A failed owner lookup costs only the bar's wording, never the page.
             isOwner = (try? store.profile.owner()?.entityID) == entity.id
@@ -91,7 +96,7 @@ final class EntityViewModel {
                 strip = LifeStrip(moments: sections.moments.map(\.range), stated: entity.range,
                                   birthYear: birth?.year, currentYear: CivilDate.today().year)
             }
-            guessed = isOwner || entity.type != .person ? [:] : try Self.guesses(to: PersonID(rawValue: entity.id.rawValue), in: store)
+            guessed = isOwner || entity.type != .person ? [:] : PersonLink.guesses(among: try store.personLinks.links(to: PersonID(rawValue: entity.id.rawValue)))
             tags = try store.tags.tags(of: .entity, entity.id.rawValue)
             if let span = try store.entities.spans(of: entity.id).first, let segment = try store.sessions.fetchSegment(span.segmentID),
                let session = try store.sessions.fetch(segment.sessionID) {
@@ -108,16 +113,6 @@ final class EntityViewModel {
 
     // MARK: - Guessed moments
 
-    /// The assumed links to a person, one for each memory. The mention wins over a detail of the same memory.
-    private static func guesses(to person: PersonID, in store: ExtractionStore) throws -> [MemoryID: PersonLink] {
-        var found: [MemoryID: PersonLink] = [:]
-        for link in try store.personLinks.links(to: person) where link.isGuess {
-            if let have = found[link.memoryID], have.relation == .mention { continue }
-            found[link.memoryID] = link
-        }
-        return found
-    }
-
     /// "Yes, this {name}": settles that one link. The mark goes at once; there is no notice.
     func confirm(_ memory: MemoryID) {
         guard let link = guessed[memory] else { return }
@@ -129,8 +124,8 @@ final class EntityViewModel {
         }
     }
 
-    /// What "Done" in the sheet did. A move shows its notice; the page then reads again, and closes
-    /// when the move removed this person (`isGone`).
+    /// What "Done" in the sheet did. A move shows its notice; the page then reads again, and stays up,
+    /// read-only, when the move removed this person (`shouldClose`, R34).
     func personSheetDone(_ outcome: WhoIsThisViewModel.Outcome) {
         if case .unchanged = outcome { return }
         if case .failed(let message) = outcome { error = message; return }

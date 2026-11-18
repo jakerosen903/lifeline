@@ -19,3 +19,16 @@ public struct PersonLink: Sendable, Equatable, Identifiable {
     /// A guess the owner has not seen. It carries the ochre mark.
     public var isGuess: Bool { origin == .assumed }
 }
+
+extension PersonLink {
+    /// The guesses among a person's links, one for each memory. Only `assumed` links count. A memory with
+    /// a guessed mention and a guessed detail gives the mention link, so one memory shows one pair of answers.
+    public static func guesses(among links: [PersonLink]) -> [MemoryID: PersonLink] {
+        var found: [MemoryID: PersonLink] = [:]
+        for link in links where link.isGuess {
+            if let have = found[link.memoryID], have.relation == .mention { continue }
+            found[link.memoryID] = link
+        }
+        return found
+    }
+}

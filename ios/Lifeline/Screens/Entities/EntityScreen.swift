@@ -138,6 +138,8 @@ struct EntityScreen: View {
             .onChange(of: viewModel.shelf.cover?.id) { withAnimation { proxy.scrollTo(Self.top, anchor: .top) } }
         }
         .scrollContentBackground(.hidden)
+        // The person is gone and the notice is still up: the page shows what it last read, and writes nothing.
+        .disabled(viewModel.isGone)
         .navigationDestination(item: $opened) { other in
             EntityScreen(viewModel: EntityViewModel(entity: other, deps: viewModel.deps), onChange: onChange)
         }
@@ -156,6 +158,7 @@ struct EntityScreen: View {
                         .accessibilityIdentifier("entity.addDates")
                 }
             } label: { Image(systemName: "ellipsis.circle") }
+                .disabled(viewModel.isGone)
                 .accessibilityIdentifier("entity.more")
         }
         .alert("Change the name", isPresented: $renaming) {
@@ -197,7 +200,7 @@ struct EntityScreen: View {
         // A session started here lands under a cover; when it closes, read what it added.
         .onChange(of: home?.coverClosings) { if isVisible { viewModel.refresh() } }
         .sessionContext(viewModel.subject)
-        .onChange(of: viewModel.isGone) { if viewModel.isGone { onChange(); dismiss() } }
+        .onChange(of: viewModel.shouldClose) { if viewModel.shouldClose { onChange(); dismiss() } }
     }
 
     /// The header row's id, for the scroll back to the cover.
