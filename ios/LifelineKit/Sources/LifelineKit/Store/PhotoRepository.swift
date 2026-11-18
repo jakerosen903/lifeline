@@ -93,17 +93,40 @@ public struct PhotoRepository: Sendable {
         try db.writer.write { try Self.link(photo, to: subject, in: $0) }
     }
 
+    /// One write. The page's photos get `sort_order` 0, 1, 2…: first the ids of `photos` that the page holds, each one time, in the
+    /// order given; then the page's other photos in the order a read shows them today. The first is the cover.
+    public func reorder(_ photos: [PhotoID], of subject: PhotoSubject) throws {
+        try db.writer.write { try Self.writeOrder(photos, of: subject, in: $0) }
+    }
+
+    /// Moves the photo to the front: `reorder([photo], of: subject)`. A photo the page does not hold changes nothing.
     public func setCover(_ photo: PhotoID, of subject: PhotoSubject) throws {
         try db.writer.write { db in
             let (column, value) = subject.key
             let linked = try Int.fetchOne(db, sql: "select count(*) from photo_link where \(column) = ? and photo_id = ?",
                                           arguments: [value, photo.rawValue]) ?? 0
             guard linked == 1 else { return }
-            // The unique index allows one cover, so the old one steps down first.
-            try db.execute(sql: "update photo_link set role = 'attached' where \(column) = ? and role = 'cover' and photo_id <> ?",
-                           arguments: [value, photo.rawValue])
-            try db.execute(sql: "update photo_link set role = 'cover' where \(column) = ? and photo_id = ?", arguments: [value, photo.rawValue])
+            try Self.writeOrder([photo], of: subject, in: db)
         }
+    }
+
+    /// The five steps, in this order, because the unique cover index allows one cover per page and is checked per statement:
+    /// read the rows as a read shows them; stop on none; demote every cover; number the rows from 0; promote the first.
+    private static func writeOrder(_ wanted: [PhotoID], of subject: PhotoSubject, in db: Database) throws {
+        let (column, value) = subject.key
+        let held = try String.fetchAll(db, sql: """
+            select photo_id from photo_link where \(column) = ? order by role = 'cover' desc, sort_order, rowid
+            """, arguments: [value]).map(PhotoID.init(rawValue:))
+        guard !held.isEmpty else { return }
+        var ordered: [PhotoID] = [], seen = Set<PhotoID>()
+        for id in wanted where held.contains(id) && seen.insert(id).inserted { ordered.append(id) }
+        ordered += held.filter { !seen.contains($0) }
+        try db.execute(sql: "update photo_link set role = 'attached' where \(column) = ? and role = 'cover'", arguments: [value])
+        for (index, id) in ordered.enumerated() {
+            try db.execute(sql: "update photo_link set sort_order = ? where \(column) = ? and photo_id = ?",
+                           arguments: [index, value, id.rawValue])
+        }
+        try db.execute(sql: "update photo_link set role = 'cover' where \(column) = ? and photo_id = ?", arguments: [value, ordered[0].rawValue])
     }
 
     /// One transaction. Removes the link; a removed cover passes to the oldest-added photo left. Returns

@@ -497,3 +497,180 @@ private extension Fixture {
     let none = try f.photos.subjects(of: lone.id)
     #expect(none.memories.isEmpty && none.entities.isEmpty)
 }
+
+// MARK: - Order and the key photo
+
+private final class BeginCounter: @unchecked Sendable {
+    private let lock = NSLock()
+    private var value = 0
+    func note(_ sql: String) { if sql.uppercased().hasPrefix("BEGIN IMMEDIATE") { lock.withLock { value += 1 } } }
+    var count: Int { lock.withLock { value } }
+}
+
+private func rows(of entity: Entity, in db: AppDatabase) throws -> [(PhotoID, Int, String)] {
+    try db.writer.read { db in
+        try Row.fetchAll(db, sql: "select photo_id, sort_order, role from photo_link where entity_id = ? order by sort_order, rowid",
+                         arguments: [entity.id.rawValue])
+            .map { (PhotoID(rawValue: $0["photo_id"]), $0["sort_order"], $0["role"]) }
+    }
+}
+
+/// Three photos on Maya, a, b, c, in that order.
+private func mayaWithThree(_ f: Fixture) throws -> (maya: Entity, a: Photo, b: Photo, c: Photo) {
+    let maya = try f.person("Maya")
+    let a = photo("a", at: 1), b = photo("b", at: 2), c = photo("c", at: 3)
+    for p in [a, b, c] { try f.photos.insert(p, linkingTo: .entity(maya.id)) }
+    return (maya, a, b, c)
+}
+
+/// The old shape: a attached, c cover, sort_order still 0, 1, 2.
+private func makeTheOldShape(_ f: Fixture, _ maya: Entity, a: Photo, c: Photo) throws {
+    try f.db.writer.write { db in
+        try db.execute(sql: "update photo_link set role = 'attached' where entity_id = ? and photo_id = ?", arguments: [maya.id.rawValue, a.id.rawValue])
+        try db.execute(sql: "update photo_link set role = 'cover' where entity_id = ? and photo_id = ?", arguments: [maya.id.rawValue, c.id.rawValue])
+    }
+}
+
+@Test func reorderSetsTheOrderAndTheCover() throws {
+    let f = try Fixture(), (maya, a, b, c) = try mayaWithThree(f)
+    try f.photos.reorder([c.id, a.id, b.id], of: .entity(maya.id))
+    #expect(try f.photos.photos(of: .entity(maya.id)).map(\.id) == [c.id, a.id, b.id])
+    #expect(try f.photos.photos(of: .entity(maya.id)).map(\.isCover) == [true, false, false])
+    let stored = try rows(of: maya, in: f.db)
+    #expect(stored.map(\.1) == [0, 1, 2])
+    #expect(stored.map(\.2) == ["cover", "attached", "attached"])
+}
+
+@Test func reorderMovesTheCoverWithoutBreakingTheIndex() throws {
+    let f = try Fixture(), (maya, a, b, c) = try mayaWithThree(f)
+    #expect(try f.photos.photos(of: .entity(maya.id)).first?.id == a.id)
+    try f.photos.reorder([b.id, a.id, c.id], of: .entity(maya.id))
+    let stored = try rows(of: maya, in: f.db)
+    #expect(stored.filter { $0.2 == "cover" }.map(\.0) == [b.id])
+}
+
+@Test func reorderIgnoresWhatThePageDoesNotHoldAndKeepsWhatWasLeftOut() throws {
+    let f = try Fixture(), (maya, a, b, c) = try mayaWithThree(f), dad = try f.person("Dad")
+    let x = photo("x", at: 4)
+    try f.photos.insert(x, linkingTo: .entity(dad.id))
+    let dadBefore = try rows(of: dad, in: f.db)
+    try f.photos.reorder([c.id, x.id, c.id], of: .entity(maya.id))
+    #expect(try f.photos.photos(of: .entity(maya.id)).map(\.id) == [c.id, a.id, b.id])
+    let dadAfter = try rows(of: dad, in: f.db)
+    #expect(dadAfter.map(\.0) == dadBefore.map(\.0) && dadAfter.map(\.1) == dadBefore.map(\.1) && dadAfter.map(\.2) == dadBefore.map(\.2))
+    #expect(try f.photos.isLinked(x.id, to: .entity(maya.id)) == false)
+}
+
+@Test func reorderOnAnEmptyPageChangesNothing() throws {
+    let f = try Fixture(), maya = try f.person("Maya")
+    try f.photos.reorder([PhotoID()], of: .entity(maya.id))
+    #expect(try rows(of: maya, in: f.db).isEmpty)
+}
+
+@Test func reorderKeepsOtherPagesAndTheMemorySubject() throws {
+    let f = try Fixture(), maya = try f.person("Maya"), treeHouse = try f.memory("The tree house", segment: 0)
+    let a = photo("a", at: 1), b = photo("b", at: 2)
+    try f.photos.insert(a, linkingTo: .entity(maya.id))
+    try f.photos.link(a.id, to: .memory(treeHouse.id))
+    try f.photos.insert(b, linkingTo: .memory(treeHouse.id))
+    let mayaBefore = try rows(of: maya, in: f.db)
+    try f.photos.reorder([b.id, a.id], of: .memory(treeHouse.id))
+    let placed = try f.photos.photos(of: .memory(treeHouse.id))
+    #expect(placed.map(\.id) == [b.id, a.id])
+    #expect(placed.map(\.isCover) == [true, false])
+    let mayaAfter = try rows(of: maya, in: f.db)
+    #expect(mayaAfter.map(\.0) == mayaBefore.map(\.0) && mayaAfter.map(\.1) == mayaBefore.map(\.1) && mayaAfter.map(\.2) == mayaBefore.map(\.2))
+}
+
+@Test func aShelfWhoseCoverIsNotFirstIsRepairedByTheNextChange() throws {
+    let f = try Fixture(), (maya, a, b, c) = try mayaWithThree(f)
+    try makeTheOldShape(f, maya, a: a, c: c)
+    #expect(try f.photos.photos(of: .entity(maya.id)).map(\.id) == [c.id, a.id, b.id])
+    try f.photos.setCover(b.id, of: .entity(maya.id))
+    #expect(try f.photos.photos(of: .entity(maya.id)).map(\.id) == [b.id, c.id, a.id])
+    let stored = try rows(of: maya, in: f.db)
+    #expect(stored.map(\.0) == [b.id, c.id, a.id])
+    #expect(stored.map(\.1) == [0, 1, 2])
+    #expect(stored.map(\.2) == ["cover", "attached", "attached"])
+}
+
+@Test func equalSortOrdersAreRepaired() throws {
+    let f = try Fixture(), (maya, a, b, c) = try mayaWithThree(f)
+    try f.db.writer.write { db in
+        try db.execute(sql: "update photo_link set sort_order = 1 where entity_id = ? and photo_id in (?, ?)",
+                       arguments: [maya.id.rawValue, b.id.rawValue, c.id.rawValue])
+    }
+    let before = try f.photos.photos(of: .entity(maya.id)).map(\.id)
+    #expect(before.first == a.id)
+    try f.photos.reorder([], of: .entity(maya.id))
+    #expect(try f.photos.photos(of: .entity(maya.id)).map(\.id) == before)
+    #expect(try rows(of: maya, in: f.db).map(\.1) == [0, 1, 2])
+}
+
+@Test func setCoverMovesThePhotoToTheFront() throws {
+    let f = try Fixture(), (maya, a, b, c) = try mayaWithThree(f)
+    try f.photos.setCover(c.id, of: .entity(maya.id))
+    let stored = try rows(of: maya, in: f.db)
+    #expect(stored.map(\.0) == [c.id, a.id, b.id])
+    #expect(stored.map(\.1) == [0, 1, 2])
+    #expect(stored.map(\.2) == ["cover", "attached", "attached"])
+}
+
+@Test func movingTheCoverAwayMakesTheNextFirstPhotoTheCover() throws {
+    let f = try Fixture(), (maya, a, b, c) = try mayaWithThree(f)
+    try f.photos.reorder([b.id, c.id, a.id], of: .entity(maya.id))
+    let placed = try f.photos.photos(of: .entity(maya.id))
+    #expect(placed.first?.id == b.id && placed.first?.isCover == true)
+    #expect(placed.filter(\.isCover).count == 1)
+}
+
+@Test func setCoverOfAPhotoThePageDoesNotHoldWritesNothing() throws {
+    let f = try Fixture(), (maya, a, _, c) = try mayaWithThree(f), dad = try f.person("Dad")
+    try makeTheOldShape(f, maya, a: a, c: c)
+    let x = photo("x", at: 4)
+    try f.photos.insert(x, linkingTo: .entity(dad.id))
+    let before = try rows(of: maya, in: f.db)
+    try f.photos.setCover(x.id, of: .entity(maya.id))
+    let after = try rows(of: maya, in: f.db)
+    #expect(after.map(\.0) == before.map(\.0) && after.map(\.1) == before.map(\.1) && after.map(\.2) == before.map(\.2))
+    #expect(after.map(\.2).sorted() == ["attached", "attached", "cover"])
+}
+
+@Test func aPhotoPutBackOnAPageComesBackLast() throws {
+    let f = try Fixture(), maya = try f.person("Maya"), dad = try f.person("Dad")
+    let a = photo("a", at: 1), b = photo("b", at: 2)
+    try f.photos.insert(a, linkingTo: .entity(maya.id)); try f.photos.insert(b, linkingTo: .entity(maya.id))
+    try f.photos.link(a.id, to: .entity(dad.id))   // a keeps a home, so its row stays when it leaves Maya
+    _ = try f.photos.unlink(a.id, from: .entity(maya.id))
+    #expect(try f.photos.photos(of: .entity(maya.id)).map(\.id) == [b.id])
+    try f.photos.link(a.id, to: .entity(maya.id))
+    let placed = try f.photos.photos(of: .entity(maya.id))
+    #expect(placed.map(\.id) == [b.id, a.id])
+    #expect(placed.map(\.role) == [.cover, .attached])
+}
+
+@Test func aPhotoPutBackOnAnEmptyPageIsItsCover() throws {
+    let f = try Fixture(), maya = try f.person("Maya"), dad = try f.person("Dad")
+    let a = photo("a", at: 1)
+    try f.photos.insert(a, linkingTo: .entity(maya.id)); try f.photos.link(a.id, to: .entity(dad.id))
+    _ = try f.photos.unlink(a.id, from: .entity(maya.id))
+    try f.photos.link(a.id, to: .entity(maya.id))
+    #expect(try f.photos.photos(of: .entity(maya.id)).map(\.role) == [.cover])
+}
+
+@Test func aNewPhotoGoesLastAfterAReorder() throws {
+    let f = try Fixture(), (maya, a, b, c) = try mayaWithThree(f)
+    try f.photos.reorder([c.id, a.id, b.id], of: .entity(maya.id))
+    let d = photo("d", at: 4)
+    try f.photos.insert(d, linkingTo: .entity(maya.id))
+    #expect(try f.photos.photos(of: .entity(maya.id)).map(\.id) == [c.id, a.id, b.id, d.id])
+    #expect(try rows(of: maya, in: f.db).last?.1 == 3)
+}
+
+@Test func reorderIsOneWrite() throws {
+    let f = try Fixture(), (maya, a, b, c) = try mayaWithThree(f)
+    let counter = BeginCounter()
+    try f.db.writer.write { db in db.trace { counter.note($0.expandedDescription) } }
+    try f.photos.reorder([c.id, b.id, a.id], of: .entity(maya.id))
+    #expect(counter.count == 1)
+}
