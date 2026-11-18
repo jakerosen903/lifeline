@@ -96,6 +96,13 @@ public struct ResolverRunner: Sendable {
             return MemoryRef(id: memory.id, title: memory.title, range: memory.range,
                              primarySpan: MemoryRef.Span(segmentID: span?.segmentID ?? SegmentID(rawValue: ""), startMs: span?.startMs ?? 0, endMs: span?.endMs ?? 0), kind: memory.kind)
         }
-        return ResolverInput(memories: refs, anchors: anchors, birthDate: birth, chapters: chapters, config: config)
+        // A chapter is read by its stated years, else by the span of its moments. The span is
+        // computed for each call, so the second pass sees what the first placed, and is never stored.
+        let anchored = try chapters.map { chapter in
+            var copy = chapter
+            copy.range = chapter.anchorRange(members: try store.memories.moments(inChapter: chapter.id).map(\.range))
+            return copy
+        }
+        return ResolverInput(memories: refs, anchors: anchors, birthDate: birth, chapters: anchored, config: config)
     }
 }
