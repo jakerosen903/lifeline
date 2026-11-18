@@ -62,6 +62,26 @@ private func offerPart(_ text: String, _ button: String, _ memories: [Memory], c
     #expect(o.date == d)
 }
 
+@Test func aTapMarksSeenOnlyWhatItWroteAndWhatThePersonLeftUnchecked() {
+    let all = m(5)
+    let offered = Array(all[..<4]), chosen = Array(all[..<3])
+    // all[0] and all[1] were written; all[2] was chosen but skipped as stale; all[3] was offered and left unchecked;
+    // all[4] was kept while the sheet was open, so it was never offered.
+    let seen = PhotoDatePart.seen(offered: offered, chosen: chosen, changed: [all[0].id, all[1].id])
+    #expect(seen == [all[0].id, all[1].id, all[3].id])
+    // The main button: offered and chosen are the same.
+    #expect(PhotoDatePart.seen(offered: offered, chosen: offered, changed: [all[0].id]) == [all[0].id])
+    // A changed id that was not offered is not marked.
+    #expect(PhotoDatePart.seen(offered: [all[0]], chosen: [all[0]], changed: [all[0].id, all[4].id]) == [all[0].id])
+}
+
+@Test func aMemorySkippedAsStaleIsOfferedAgain() {
+    let all = m(2)
+    let seen = PhotoDatePart.seen(offered: all, chosen: all, changed: [all[0].id])
+    let part = PhotoDatePart.state(offer: offer([all[1]]), holdingCount: 2, used: [change(all[0])], seen: seen)
+    #expect(part == offerPart("The photo is dated 14 July 2019. One moment has no date you said.", "Use for that one", [all[1]], canUndo: true))
+}
+
 @Test func chooseButton() {
     #expect(PhotoDatePart.chooseButton(count: 1) == "Use for 1")
     #expect(PhotoDatePart.chooseButton(count: 3) == "Use for 3")

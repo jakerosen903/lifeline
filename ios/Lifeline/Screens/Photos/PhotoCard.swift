@@ -36,7 +36,7 @@ struct PhotoCard: View {
                 }
                 let part = viewModel.datePart
                 if part != .hidden {
-                    PhotoCardDate(part: part, onUse: { viewModel.useDate(for: $0) }, onChoose: {
+                    PhotoCardDate(part: part, onUse: { viewModel.useDate(for: $0, offered: $0) }, onChoose: {
                         if case .offer(let offer) = part { sheet = .choosing(offer.memories) }
                     }, onUndo: { viewModel.undoDate() })
                 }
@@ -121,7 +121,7 @@ struct PhotoCard: View {
             PhotoCardMomentsSheet(title: viewModel.card?.momentsLine ?? "", memories: viewModel.card?.memories ?? [],
                                   mode: .holding(remove: { memory in Task { await viewModel.removeFromMemory(memory) } }))
         case .choosing(let memories):
-            PhotoCardMomentsSheet(title: "Choose moments", memories: memories, mode: .choosing(use: { viewModel.useDate(for: $0) }))
+            PhotoCardMomentsSheet(title: "Choose moments", memories: memories, mode: .choosing(use: { viewModel.useDate(for: $0, offered: memories) }))
         }
     }
 }

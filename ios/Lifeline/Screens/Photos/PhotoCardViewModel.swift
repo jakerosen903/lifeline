@@ -24,7 +24,7 @@ final class PhotoCardViewModel {
     private var actionError: String?
     /// What the date taps on this screen changed, for "Undo" (plan decisions 3 and 4). It lives as long as the screen.
     private var used: [PhotoDateChange] = []
-    /// Every memory the card offered at those taps: one left unchecked does not bring the offer back (decision 5).
+    /// The memories those taps settled: written, or offered and left unchecked (decision 5; `PhotoDatePart.seen`).
     private var seen: Set<MemoryID> = []
     /// Pages whose tap is still being written: a second tap on the same chip waits for the first to land.
     private var toggling: Set<EntityID> = []
@@ -68,10 +68,12 @@ final class PhotoCardViewModel {
         }
     }
 
-    /// "Use for those 2", or the sheet's "Use for {n}": the offer's day for these memories, in one write.
+    /// "Use for those 2", or the sheet's "Use for {n}": the offer's day for the `chosen` memories, in one write. `offered` is
+    /// what the control showed when it was drawn (the button's offer, or the set the sheet captured), not the card's offer now:
+    /// a memory kept while the sheet was open, or skipped as stale, was never declined and keeps its offer.
     /// If the write lands and the resolver run after it throws, the dates are stored but no change comes back: the error shows,
     /// the card reads the store again, and those memories are no longer offered. Their pages show "from a photo".
-    func useDate(for memories: [Memory]) {
+    func useDate(for memories: [Memory], offered: [Memory]) {
         guard let offer = card?.dateOffer else { return }
         var once = Set(used.map(\.memory))
         // Each memory once: a second change for one memory would make Undo put back the photo's date, not the range before.
@@ -82,7 +84,7 @@ final class PhotoCardViewModel {
             // A tap that changed nothing (every memory changed elsewhere first) leaves the part as it was.
             guard !changes.isEmpty else { return }
             used += changes
-            seen.formUnion(offer.memories.map(\.id))
+            seen.formUnion(PhotoDatePart.seen(offered: offered, chosen: memories, changed: changes.map(\.memory)))
         }
     }
 
