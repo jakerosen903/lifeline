@@ -1,0 +1,344 @@
+import XCTest
+
+/// Chapters on the Timeline: a tag you can tap, the chapter's sheet, the life map, "Add to a chapter…", "Take out",
+/// and the removal notice with Undo. The seed (`-uiTesting-seedSpine`) has "The tree house" (1999, inferred) in
+/// "Maple Street", "The science fair" (2001) in a chapter with no name, and "Learning to swim" (2000) in none.
+final class ChaptersUITests: XCTestCase {
+
+    override func setUp() { continueAfterFailure = false }
+
+    // MARK: - Finding things
+
+    private func memoryRow(_ app: XCUIApplication, _ title: String) -> XCUIElement {
+        app.buttons.matching(identifier: "timeline.memory").matching(NSPredicate(format: "label BEGINSWITH %@", title)).firstMatch
+    }
+
+    private func allTags(_ app: XCUIApplication) -> XCUIElementQuery {
+        app.descendants(matching: .any).matching(identifier: "timeline.tag")
+    }
+
+    /// The tags on screen that sit in this row: below the top of its button and no further than a tag's height under it.
+    private func tags(in title: String, _ app: XCUIApplication) -> [XCUIElement] {
+        let row = memoryRow(app, title)
+        guard row.exists else { return [] }
+        let frame = row.frame
+        return allTags(app).allElementsBoundByIndex.filter { $0.exists && $0.frame.minY >= frame.minY && $0.frame.minY <= frame.maxY + 24 }
+    }
+
+    /// The row's own "…" button: the nearest one to the top of the row.
+    private func moreButton(of title: String, _ app: XCUIApplication) -> XCUIElement {
+        let top = memoryRow(app, title).frame.minY
+        let buttons = app.buttons.matching(identifier: "row.more").allElementsBoundByIndex.filter { $0.exists && !$0.frame.isEmpty }
+        return buttons.min { abs($0.frame.minY - top) < abs($1.frame.minY - top) } ?? app.buttons["row.more"].firstMatch
+    }
+
+    /// Every tag on the whole Timeline as (row title: tag label). The list is lazy, so this scrolls to the last row,
+    /// "The blue kite", and keeps what each screen showed. A tag belongs to the row whose top is the nearest above it.
+    private func tagsOnTheWholeTimeline(_ app: XCUIApplication) -> [String: String] {
+        var seen: [String: String] = [:]
+        func record() {
+            let rows = app.buttons.matching(identifier: "timeline.memory").allElementsBoundByIndex
+                .filter { $0.exists && !$0.frame.isEmpty }
+                .map { (title: $0.label.components(separatedBy: " · ")[0], y: $0.frame.minY) }
+            for tag in allTags(app).allElementsBoundByIndex where tag.exists && !tag.frame.isEmpty {
+                guard let row = rows.filter({ $0.y <= tag.frame.minY }).max(by: { $0.y < $1.y }) else { continue }
+                seen[row.title] = tag.label
+            }
+        }
+        let last = memoryRow(app, "The blue kite")
+        for _ in 0..<10 {
+            record()
+            if last.exists && app.waitHittable(last, timeout: 1) { break }
+            app.swipeUp()
+        }
+        record()
+        XCTAssertTrue(last.exists, "the scroll reached the last row, so every tag above it was on screen once")
+        return seen
+    }
+
+    private func waitUntilGone(_ element: XCUIElement, timeout: TimeInterval) -> Bool {
+        let gone = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: element)
+        return XCTWaiter().wait(for: [gone], timeout: timeout) == .completed
+    }
+
+    // MARK: - Moves
+
+    /// The tree house's tag, then the chapter's sheet once its name is up.
+    @discardableResult
+    private func openMapleStreet(_ app: XCUIApplication) -> XCUIElement {
+        let tag = tags(in: "The tree house", app).first ?? allTags(app).firstMatch
+        XCTAssertTrue(app.waitHittable(tag, timeout: 10), "the Maple Street tag is on screen")
+        tag.tap()
+        let name = app.staticTexts["chapter.name"]
+        XCTAssertTrue(name.waitForExistence(timeout: 5), "the chapter's sheet opens")
+        return name
+    }
+
+    private func openLifeMap(_ app: XCUIApplication) {
+        let more = app.buttons["timeline.more"]
+        XCTAssertTrue(app.waitHittable(more, timeout: 10), "the Timeline's menu is on screen")
+        more.tap()
+        let chapters = app.buttons["timeline.chapters"]
+        XCTAssertTrue(app.waitHittable(chapters, timeout: 5), "Chapters is in the menu")
+        chapters.tap()
+        XCTAssertTrue(app.any("lifemap.sheet").waitForExistence(timeout: 5), "the life map opens")
+    }
+
+    private func closeSheet(_ app: XCUIApplication, done: String) {
+        let button = app.buttons[done]
+        XCTAssertTrue(app.waitHittable(button, timeout: 5), "\(done) is on screen")
+        button.tap()
+        XCTAssertTrue(waitUntilGone(button, timeout: 5), "the sheet closed")
+    }
+
+    /// Menu "Between two years", wheels, Save.
+    private func sayWhen(_ app: XCUIApplication, from first: String, to second: String) {
+        let shape = app.buttons["when.shape"]
+        XCTAssertTrue(app.waitHittable(shape, timeout: 5), "the date sheet is up")
+        shape.tap()
+        let between = app.buttons["Between two years"]
+        XCTAssertTrue(app.waitHittable(between, timeout: 5), "Between two years is in the menu")
+        between.tap()
+        let wheels = app.pickerWheels
+        XCTAssertTrue(wheels.element(boundBy: 1).waitForExistence(timeout: 5), "two year wheels")
+        wheels.element(boundBy: 0).adjust(toPickerWheelValue: first)
+        wheels.element(boundBy: 1).adjust(toPickerWheelValue: second)
+        app.buttons["when.save"].tap()
+    }
+
+    /// Removes the open chapter: "Remove chapter…", then the confirmation. The sheet closes.
+    private func removeOpenChapter(_ app: XCUIApplication) {
+        let remove = app.buttons["chapter.remove"]
+        XCTAssertTrue(app.waitHittable(remove, timeout: 5), "Remove chapter… is on screen")
+        remove.tap()
+        // The dialog button shows twice in the tree (the same button under its wrapper), so take the first.
+        let confirm = app.buttons.matching(identifier: "chapter.confirmRemove").firstMatch
+        XCTAssertTrue(app.waitHittable(confirm, timeout: 5), "the removal asks first")
+        confirm.tap()
+    }
+
+    // MARK: - Tests
+
+    // The tag is an element of its own; it opens the sheet with the name, no years and the one member.
+    @MainActor
+    func testATagOpensItsChaptersSheet() {
+        let app = XCUIApplication.launchWithSpine()
+        openMapleStreet(app)
+        XCTAssertEqual(app.staticTexts["chapter.name"].label, "Maple Street")
+        XCTAssertEqual(app.staticTexts["chapter.years"].label, "No dates yet", "the inferred 1999 is not shown as the chapter's years")
+        let members = app.descendants(matching: .any).matching(identifier: "chapter.member")
+        XCTAssertEqual(members.count, 1, "one moment is in the chapter")
+        XCTAssertEqual(members.firstMatch.label, "The tree house")
+    }
+
+    // Before the save the chapter is under "Not placed in time yet"; after it, one row on the map.
+    @MainActor
+    func testSayWhenPutsTheChapterOnTheLifeMap() {
+        let app = XCUIApplication.launchWithSpine()
+        openLifeMap(app)
+        let unplaced = app.any("lifemap.unplaced")
+        XCTAssertTrue(unplaced.waitForExistence(timeout: 5), "chapters with no years wait in their own section")
+        XCTAssertTrue(unplaced.buttons["Maple Street"].exists, "Maple Street is not placed yet")
+        XCTAssertEqual(app.buttons.matching(identifier: "lifemap.row").count, 0, "no chapter is on the map yet")
+        closeSheet(app, done: "lifemap.done")
+
+        openMapleStreet(app)
+        app.buttons["chapter.sayWhen"].tap()
+        sayWhen(app, from: "1998", to: "2001")
+        let years = app.staticTexts["chapter.years"]
+        let shown = NSPredicate(format: "label CONTAINS '1998' AND label CONTAINS '01'")
+        XCTAssertEqual(XCTWaiter().wait(for: [XCTNSPredicateExpectation(predicate: shown, object: years)], timeout: 5), .completed,
+                       "the sheet reads the range: \(years.label)")
+        closeSheet(app, done: "chapter.done")
+
+        openLifeMap(app)
+        let rows = app.buttons.matching(identifier: "lifemap.row")
+        XCTAssertEqual(rows.count, 1, "one chapter is on the map")
+        XCTAssertTrue(rows.firstMatch.label.hasPrefix("Maple Street, 1998"), rows.firstMatch.label)
+        XCTAssertFalse(app.any("lifemap.unplaced").buttons["Maple Street"].exists, "Maple Street left the unplaced section")
+    }
+
+    // Review Focus 4: a date inside the stated years is no claim about a moment.
+    @MainActor
+    func testADatedMomentInsideAChaptersYearsGetsNoTag() {
+        let app = XCUIApplication.launchWithSpine()
+        openMapleStreet(app)
+        app.buttons["chapter.sayWhen"].tap()
+        sayWhen(app, from: "1998", to: "2001")
+        XCTAssertTrue(app.staticTexts["chapter.years"].waitForExistence(timeout: 5))
+        closeSheet(app, done: "chapter.done")
+
+        let swim = memoryRow(app, "Learning to swim")
+        XCTAssertTrue(app.reveal(swim), "Learning to swim (2000) is on the timeline")
+        XCTAssertEqual(tags(in: "Learning to swim", app).count, 0, "2000 is inside 1998 to 2001, and the moment still has no tag")
+        XCTAssertEqual(tagsOnTheWholeTimeline(app), ["The tree house": "Maple Street"], "one tag on the whole timeline")
+    }
+
+    @MainActor
+    func testRenameShowsOnTheTag() {
+        let app = XCUIApplication.launchWithSpine()
+        openMapleStreet(app)
+        app.buttons["chapter.rename"].tap()
+        let field = app.alerts.textFields.firstMatch
+        XCTAssertTrue(field.waitForExistence(timeout: 5), "the rename alert is up")
+        field.tap()
+        field.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: 20))
+        XCTAssertFalse(app.alerts.buttons["Save"].firstMatch.isEnabled, "an empty name cannot be saved")
+        field.typeText("Maple St")
+        XCTAssertTrue(app.alerts.buttons["Save"].firstMatch.isEnabled)
+        app.alerts.buttons["Save"].firstMatch.tap()
+        let name = app.staticTexts["chapter.name"]
+        XCTAssertEqual(XCTWaiter().wait(for: [XCTNSPredicateExpectation(predicate: NSPredicate(format: "label == 'Maple St'"), object: name)], timeout: 5),
+                       .completed, "the sheet shows the new name: \(name.label)")
+        closeSheet(app, done: "chapter.done")
+        XCTAssertTrue(app.waitHittable(tags(in: "The tree house", app).first ?? allTags(app).firstMatch, timeout: 5))
+        XCTAssertEqual(tags(in: "The tree house", app).map(\.label), ["Maple St"], "the tag on the Timeline reads the new name")
+    }
+
+    @MainActor
+    func testRemoveKeepsTheMomentAndUndoBringsTheTagBack() {
+        let app = XCUIApplication.launchWithSpine()
+        openMapleStreet(app)
+        removeOpenChapter(app)
+        let notice = app.any("chapter.removed")
+        XCTAssertTrue(notice.waitForExistence(timeout: 5), "the notice shows")
+        XCTAssertEqual(notice.label, "Removed “Maple Street”.")
+        XCTAssertTrue(memoryRow(app, "The tree house").exists, "the moment is still on the spine")
+        XCTAssertEqual(tags(in: "The tree house", app).count, 0, "and has no tag")
+        let undo = app.buttons.matching(identifier: "chapter.undo").firstMatch
+        XCTAssertTrue(app.waitHittable(undo, timeout: 3), "Undo is tappable inside the six seconds")
+        undo.tap()
+        XCTAssertTrue(waitUntilGone(notice, timeout: 5), "the notice goes after Undo")
+        let back = allTags(app).matching(NSPredicate(format: "label == 'Maple Street'")).firstMatch
+        XCTAssertTrue(back.waitForExistence(timeout: 5), "the tag is back")
+        XCTAssertEqual(tags(in: "The tree house", app).map(\.label), ["Maple Street"])
+    }
+
+    @MainActor
+    func testTheNoticeLeavesAfterSixSeconds() {
+        let app = XCUIApplication.launchWithSpine()
+        openMapleStreet(app)
+        removeOpenChapter(app)
+        let notice = app.any("chapter.removed")
+        XCTAssertTrue(notice.waitForExistence(timeout: 5), "the notice shows")
+        XCTAssertTrue(waitUntilGone(notice, timeout: 8), "the notice is gone within eight seconds")
+        XCTAssertEqual(tags(in: "The tree house", app).count, 0, "the tag stays gone")
+        XCTAssertTrue(memoryRow(app, "The tree house").exists)
+    }
+
+    @MainActor
+    func testAddToANewChapterTagsTheMoment() {
+        let app = XCUIApplication.launchWithSpine()
+        let swim = memoryRow(app, "Learning to swim")
+        XCTAssertTrue(app.reveal(swim), "Learning to swim is on the timeline")
+        moreButton(of: "Learning to swim", app).tap()
+        let add = app.buttons["row.addChapter"]
+        XCTAssertTrue(app.waitHittable(add, timeout: 5), "Add to a chapter… is in the row's menu")
+        add.tap()
+        let field = app.textFields["chapter.newName"]
+        XCTAssertTrue(field.waitForExistence(timeout: 5), "the sheet asks for a name")
+        XCTAssertFalse(app.buttons["chapter.add"].isEnabled, "Add is disabled with an empty field")
+        field.tap()
+        field.typeText("   ")
+        XCTAssertFalse(app.buttons["chapter.add"].isEnabled, "Add is disabled with only spaces")
+        field.typeText("Swim team")
+        XCTAssertTrue(app.buttons["chapter.add"].isEnabled)
+        app.buttons["chapter.add"].tap()
+        XCTAssertTrue(waitUntilGone(field, timeout: 5), "the sheet closed")
+        XCTAssertTrue(app.waitHittable(memoryRow(app, "Learning to swim"), timeout: 5))
+        XCTAssertEqual(tags(in: "Learning to swim", app).map(\.label), ["Swim team"], "the row has the tag")
+    }
+
+    @MainActor
+    func testAddToAnExistingChapterAndTakeOut() {
+        let app = XCUIApplication.launchWithSpine()
+        let swim = memoryRow(app, "Learning to swim")
+        XCTAssertTrue(app.reveal(swim), "Learning to swim is on the timeline")
+        moreButton(of: "Learning to swim", app).tap()
+        app.buttons["row.addChapter"].tap()
+        let pick = app.buttons.matching(identifier: "chapter.pick").matching(NSPredicate(format: "label CONTAINS 'Maple Street'")).firstMatch
+        XCTAssertTrue(app.waitHittable(pick, timeout: 5), "Maple Street is on the list")
+        pick.tap()
+        XCTAssertTrue(waitUntilGone(pick, timeout: 5), "the sheet closed")
+        XCTAssertTrue(app.waitHittable(memoryRow(app, "Learning to swim"), timeout: 5))
+        XCTAssertEqual(tags(in: "Learning to swim", app).map(\.label), ["Maple Street"], "the moment has the tag")
+        XCTAssertEqual(tagsOnTheWholeTimeline(app), ["The tree house": "Maple Street", "Learning to swim": "Maple Street"], "two tags show")
+
+        XCTAssertTrue(app.reveal(memoryRow(app, "Learning to swim")))
+        moreButton(of: "Learning to swim", app).tap()
+        let takeOut = app.buttons["row.takeOutOfChapter"]
+        XCTAssertTrue(app.waitHittable(takeOut, timeout: 5), "Take out is in the menu of a moment with a tag")
+        takeOut.tap()
+        XCTAssertTrue(waitUntilGone(takeOut, timeout: 5))
+        XCTAssertEqual(tagsOnTheWholeTimeline(app), ["The tree house": "Maple Street"], "one tag shows")
+    }
+
+    // The chapter with no name shows on the life map, never on the Timeline. Naming it puts its tag on its moment.
+    @MainActor
+    func testAChapterWithNoNameShowsOnTheLifeMapOnly() {
+        let app = XCUIApplication.launchWithSpine()
+        let last = memoryRow(app, "The blue kite")
+        app.scrollTimelineToItsEnd(last: last)
+        for text in ["Untitled chapter", "No name yet"] {
+            XCTAssertEqual(app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", text)).count, 0, "\(text) is not on the Timeline")
+        }
+        for _ in 0..<10 where memoryRow(app, "The tree house").frame.minY < 0 || !memoryRow(app, "The tree house").exists { app.swipeDown() }
+
+        openLifeMap(app)
+        let unnamed = app.any("lifemap.unplaced").buttons["No name yet"]
+        XCTAssertTrue(app.waitHittable(unnamed, timeout: 5), "the chapter with no name is under Not placed in time yet")
+        unnamed.tap()
+        XCTAssertTrue(app.staticTexts["chapter.name"].waitForExistence(timeout: 5))
+        app.buttons["chapter.rename"].tap()
+        let field = app.alerts.textFields.firstMatch
+        XCTAssertTrue(field.waitForExistence(timeout: 5))
+        field.tap()
+        field.typeText("Mr. Okafor's class")
+        app.alerts.buttons["Save"].firstMatch.tap()
+        let name = app.staticTexts["chapter.name"]
+        XCTAssertEqual(XCTWaiter().wait(for: [XCTNSPredicateExpectation(predicate: NSPredicate(format: "label BEGINSWITH 'Mr. Okafor'"), object: name)], timeout: 5),
+                       .completed, "the sheet shows the name: \(name.label)")
+        closeSheet(app, done: "chapter.done")
+        closeSheet(app, done: "lifemap.done")
+
+        XCTAssertEqual(tagsOnTheWholeTimeline(app)["The science fair"], "Mr. Okafor's class", "the new name is the tag on its moment")
+    }
+
+    // `-uiTesting-seed` makes memories with no chapter, so the life map has nothing to list.
+    @MainActor
+    func testWithNoChaptersTheLifeMapSaysWhatAChapterIs() {
+        let app = XCUIApplication()
+        app.launchArguments += ["-uiTesting", "-uiTesting-seed"]
+        app.launch()
+        app.skipFirstOpen()
+        XCTAssertTrue(app.waitHittable(app.buttons["home.start"], timeout: 10), "the seeded app lands on the timeline")
+        openLifeMap(app)
+        XCTAssertTrue(app.any("lifemap.empty").waitForExistence(timeout: 5), "the life map says what a chapter is")
+        XCTAssertEqual(app.buttons.matching(identifier: "lifemap.row").count, 0, "no row")
+        XCTAssertFalse(app.staticTexts["Not placed in time yet"].exists, "no empty section")
+    }
+
+    @MainActor
+    func testAtTheLargestTextTheSheetsAreReachable() {
+        let app = XCUIApplication.launchWithSpine(["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"])
+        let row = memoryRow(app, "The tree house")
+        XCTAssertTrue(app.scrollIntoView(row, swipes: 4), "The tree house is on screen")
+        var tag = tags(in: "The tree house", app).first ?? allTags(app).firstMatch
+        if !app.waitHittable(tag, timeout: 2) { app.swipeUp(); tag = tags(in: "The tree house", app).first ?? allTags(app).firstMatch }
+        XCTAssertTrue(app.waitHittable(tag, timeout: 5), "the tag is hittable")
+        tag.tap()
+        XCTAssertTrue(app.staticTexts["chapter.name"].waitForExistence(timeout: 5), "the sheet opens")
+        let sheet = app.any("chapter.sheet")
+        for id in ["chapter.rename", "chapter.sayWhen", "chapter.remove"] {
+            let button = app.buttons[id]
+            var swipes = 0
+            while !app.waitHittable(button, timeout: 1) && swipes < 6 { sheet.swipeUp(); swipes += 1 }
+            XCTAssertTrue(app.waitHittable(button, timeout: 2), "\(id) is hittable after a scroll")
+        }
+        for _ in 0..<6 where !app.waitHittable(app.buttons["chapter.done"], timeout: 1) { sheet.swipeDown() }
+        closeSheet(app, done: "chapter.done")
+
+        openLifeMap(app)
+        XCTAssertTrue(app.waitHittable(app.buttons["lifemap.done"], timeout: 5), "Done on the life map is hittable")
+    }
+}
