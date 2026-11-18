@@ -111,6 +111,11 @@ final class EntityViewModel {
         await shelf.makeCover(photo)
     }
 
+    func movePhoto(_ photo: PhotoID, to index: Int) async {
+        photoError = nil
+        await shelf.move(photo, to: index)
+    }
+
     func removePhoto(_ photo: PhotoID) async {
         photoError = nil
         await shelf.remove(photo)
