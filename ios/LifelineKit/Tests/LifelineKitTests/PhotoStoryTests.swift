@@ -213,6 +213,28 @@ private func pages(_ card: PhotoStoryCard) -> [PhotoStoryCard.Page] { card.pageG
     #expect(result.dateOffer?.memories == [a])
 }
 
+@Test func aNonMomentThatHoldsThePhotoIsNotOfferedTheDate() {
+    let a = memory("A"), c = memory("C")
+    var fact = memory("Dad was a baker"); fact.kind = .fact
+    var feeling = memory("I felt free"); feeling.kind = .feeling
+    var goal = memory("I want to sail"); goal.kind = .goal
+    var other = memory("Something"); other.kind = .other
+    let result = card(memories: [a, fact, c, feeling, goal, other])
+    #expect(result.dateOffer?.memories == [a, c, other], "only moments take the photo's date: a non-moment's page shows no date")
+    let part = PhotoDatePart.state(offer: result.dateOffer, holdingCount: result.memories.count, used: [], seen: [])
+    guard case .offer(let offer) = part else { Issue.record("expected an offer"); return }
+    #expect(offer.text == "The photo is dated 14 July 2019. Three moments have no date you said.")
+    #expect(offer.button == "Use for those 3", "the count leaves out the fact, the feeling and the goal")
+}
+
+@Test func onlyNonMomentsLeftHideTheDatePart() {
+    var fact = memory("Dad was a baker"); fact.kind = .fact
+    var goal = memory("I want to sail"); goal.kind = .goal
+    let result = card(memories: [fact, goal])
+    #expect(result.dateOffer == nil)
+    #expect(PhotoDatePart.state(offer: result.dateOffer, holdingCount: result.memories.count, used: [], seen: []) == .hidden)
+}
+
 @Test func theMomentsLine() {
     func result(pending: Bool, kept: Int) -> PhotoStoryCard {
         let memories = (0..<kept).map { memory("M\($0)") }

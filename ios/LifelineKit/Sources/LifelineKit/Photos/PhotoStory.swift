@@ -38,7 +38,7 @@ public struct PhotoStoryCard: Sendable, Equatable {
     /// The pages the kept memories name and the pages that hold the photo, not hidden from browsing, each once.
     /// In the order person, place, thing, idea. A group with no page is left out.
     public var pageGroups: [PageGroup]
-    /// Nil when the photo has no date or no memory that holds it can take the date.
+    /// Nil when the photo has no date or no moment that holds it can take the date. A fact, a feeling or a goal never takes it.
     public var dateOffer: StoryDateOffer?
 
     public init(photo: Photo, hasPendingMoments: Bool, memories: [Memory], hasOtherHome: Bool, pageGroups: [PageGroup] = [],
@@ -97,8 +97,10 @@ public enum PhotoStory {
                 PhotoStoryCard.Page(entity: $0, isChosen: holders.contains($0.id), isOwner: $0.id == ownerEntity)
             })
         }
+        // Only a moment takes the photo's date: a fact, a feeling or a goal shows no date on its page, so a date written
+        // there could not be seen or changed.
         let canTakeDate = date.map { day in
-            (day, memories.filter { offersDate(day, for: $0.range) })
+            (day, memories.filter { $0.isMoment && offersDate(day, for: $0.range) })
         }
         let storyOffer = canTakeDate.flatMap { day, takers in
             takers.isEmpty ? nil : PhotoStoryCard.StoryDateOffer(date: day, memories: takers)
