@@ -28,11 +28,11 @@ public struct PhotoStoryReader: Sendable {
         try store.photos.link(photo, to: .entity(entity))
     }
 
-    /// The memory takes the photo's day, and its chapter follows in the same write. The resolver then runs, so a memory
+    /// The memory takes the photo's day in one write; its chapter's stated years do not change (S6c). The resolver then runs, so a memory
     /// placed relative to this one is placed again at once; it leaves a settled date alone.
     /// A memory whose range changed since the card was drawn is left alone: the offer was made against the older range.
     public func useDate(_ offer: PhotoStoryCard.DateOffer) throws {
-        guard try store.memories.updateRange(offer.memory.id, .fromPhoto(offer.date), ifCurrently: offer.memory.range, refreshingChapter: true) else { return }
+        guard try store.memories.updateRange(offer.memory.id, .fromPhoto(offer.date), ifCurrently: offer.memory.range) else { return }
         _ = try ResolverRunner(store: store).run()
     }
 }

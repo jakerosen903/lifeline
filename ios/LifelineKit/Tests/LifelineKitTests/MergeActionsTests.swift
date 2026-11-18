@@ -133,6 +133,21 @@ private struct Env {
     #expect(try env.store.candidates.fetch(c.id)?.status == .pending, "the card waits again")
 }
 
+@Test func unmergeAfterTheSourcesChapterWasRemovedBringsItBackWithNoChapter() throws {
+    let env = try Env()
+    let (_, target) = try env.kept("we lived in an orange house", title: "Orange house")
+    let (_, source) = try env.kept("we drove to disney", title: "The drive")
+    let chapters = ChapterActions(store: env.store)
+    let home = try #require(try chapters.add(target.id, toChapterNamed: "Home"))
+    let trips = try #require(try chapters.add(source.id, toChapterNamed: "Trips"))
+    let receipt = try env.actions.merge(source.id, into: target.id)
+    _ = try chapters.remove(trips.id)
+    try env.actions.unmerge(receipt)
+    let back = try #require(try env.store.memories.fetch(source.id))
+    #expect(back.chapterID == nil, "its chapter is gone, so it comes back with none")
+    #expect(try env.store.memories.fetch(target.id)?.chapterID == home.id)
+}
+
 @Test func unmergeAfterAForeignChangeIsRefused() throws {
     let env = try Env()
     let (_, target) = try env.kept("we lived in an orange house", title: "Orange house")

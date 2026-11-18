@@ -101,7 +101,6 @@ extension CandidateActions {
                                       promotingStandIn: promotion, acceptingCandidate: candidate.id, acceptingContinuations: continuations.map(\.id))
         let newMentions = try finishEdges(edges, segment: candidate.segmentID)
         try reindex(oldest.id)
-        if let chapter = try store.memories.fetch(oldest.id)?.chapterID { try chapterRangeFromMembers(chapter) }
         _ = try ResolverRunner(store: store).run()
         guard let after = try store.memories.snapshot(of: oldest.id) else { throw Error.targetMissing }
         return MergedCandidate(receipt: MergeReceipt(target: oldest.id, targetTitle: oldest.title, before: before, after: after,
@@ -126,7 +125,6 @@ extension CandidateActions {
         guard !sourceMemory.isFloating else { throw Error.standIn }
         try store.memories.fold(sourceMemory, into: targetMemory)
         try reindex(target)
-        if let chapter = try store.memories.fetch(target)?.chapterID { try chapterRangeFromMembers(chapter) }
         _ = try ResolverRunner(store: store).run()
         guard let after = try store.memories.snapshot(of: target) else { throw Error.targetMissing }
         return MergeReceipt(target: target, targetTitle: targetMemory.title, before: [targetBefore, sourceBefore], after: after, candidateID: nil, mergedAt: .now)
