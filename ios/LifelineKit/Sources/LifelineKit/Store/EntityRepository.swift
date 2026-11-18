@@ -548,7 +548,8 @@ extension MomentEntity: FetchableRecord, PersistableRecord {
 
     public init(row: Row) throws {
         self.init(memoryID: MemoryID(rawValue: row["memory_id"]), entityID: EntityID(rawValue: row["entity_id"]),
-                  relation: EntityRelation(rawValue: row["relation"]) ?? .mention, roleText: row["role_text"])
+                  relation: EntityRelation(rawValue: row["relation"]) ?? .mention, roleText: row["role_text"],
+                  origin: (row["origin"] as String?).flatMap(LinkOrigin.init(rawValue:)), personHandle: row["person_handle"])
     }
 
     public func encode(to container: inout PersistenceContainer) throws {
@@ -556,11 +557,13 @@ extension MomentEntity: FetchableRecord, PersistableRecord {
         container["entity_id"] = entityID.rawValue
         container["relation"] = relation.rawValue
         container["role_text"] = roleText
+        container["origin"] = origin?.rawValue
+        container["person_handle"] = personHandle
     }
 
     func insertIgnoringDuplicate(_ db: Database) throws {
-        try db.execute(sql: "insert or ignore into moment_entity (memory_id, entity_id, relation, role_text) values (?, ?, ?, ?)",
-                       arguments: [memoryID.rawValue, entityID.rawValue, relation.rawValue, roleText])
+        try db.execute(sql: "insert or ignore into moment_entity (memory_id, entity_id, relation, role_text, origin, person_handle) values (?, ?, ?, ?, ?, ?)",
+                       arguments: [memoryID.rawValue, entityID.rawValue, relation.rawValue, roleText, origin?.rawValue, personHandle])
     }
 }
 

@@ -72,9 +72,15 @@ public struct MomentEntity: Sendable, Equatable, Hashable {
     public var relation: EntityRelation
     /// The person's phrase for the entity in this memory ("my sister").
     public var roleText: String?
+    /// How the link was made. Nil for a link made before v14 and for a link to a thing or a place.
+    public var origin: LinkOrigin?
+    /// The said name this link stands for, so a change can find the other moments that said it.
+    public var personHandle: String?
 
-    public init(memoryID: MemoryID, entityID: EntityID, relation: EntityRelation, roleText: String? = nil) {
+    public init(memoryID: MemoryID, entityID: EntityID, relation: EntityRelation, roleText: String? = nil,
+                origin: LinkOrigin? = nil, personHandle: String? = nil) {
         self.memoryID = memoryID; self.entityID = entityID; self.relation = relation; self.roleText = roleText
+        self.origin = origin; self.personHandle = personHandle
     }
 }
 

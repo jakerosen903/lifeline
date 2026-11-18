@@ -30,15 +30,32 @@ public struct Person: Codable, Sendable, Equatable, Identifiable {
     public var isOwner: Bool
     public var birthDate: Date?
     public var birthDateOrigin: BirthDateOrigin?
+    /// Where the name came from; nil for a person made before v14.
+    public var nameOrigin: NameOrigin? = nil
+    /// True when the app made this person from a guess, not from the owner's action.
+    public var createdByGuess: Bool = false
+    /// The linked contact's identifier, name and state, and the photo copied from it.
+    public var contactIdentifier: String? = nil
+    public var contactName: String? = nil
+    public var contactState: String? = nil
+    public var contactPhotoID: PhotoID? = nil
     /// A person is an entity (M7); they share one id.
     public var entityID: EntityID { EntityID(rawValue: id.rawValue) }
 
-    public init(id: PersonID, displayName: String, notes: String?, isOwner: Bool, birthDate: Date?, birthDateOrigin: BirthDateOrigin?) {
+    public init(id: PersonID, displayName: String, notes: String?, isOwner: Bool, birthDate: Date?, birthDateOrigin: BirthDateOrigin?,
+                nameOrigin: NameOrigin? = nil, createdByGuess: Bool = false, contactIdentifier: String? = nil,
+                contactName: String? = nil, contactState: String? = nil, contactPhotoID: PhotoID? = nil) {
         self.id = id
         self.displayName = displayName
         self.notes = notes
         self.isOwner = isOwner
         self.birthDate = birthDate
         self.birthDateOrigin = birthDateOrigin
+        self.nameOrigin = nameOrigin
+        self.createdByGuess = createdByGuess
+        self.contactIdentifier = contactIdentifier
+        self.contactName = contactName
+        self.contactState = contactState
+        self.contactPhotoID = contactPhotoID
     }
 }

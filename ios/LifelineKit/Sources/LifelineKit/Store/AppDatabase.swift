@@ -59,12 +59,16 @@ extension Person: FetchableRecord, PersistableRecord {
     /// Columns named one by one: the row's own old name column is read nowhere (M7).
     static let selectSQL = """
         select person.id, person.entity_id, person.notes, person.is_owner, person.birth_date, person.birth_date_origin,
+               person.name_origin, person.created_by_guess, person.contact_identifier, person.contact_name,
+               person.contact_state, person.contact_photo_id,
                entity.title as display_name
         from person join entity on entity.id = person.entity_id 
         """
     enum CodingKeys: String, CodingKey {
         case id, displayName = "display_name", notes, isOwner = "is_owner"
         case birthDate = "birth_date", birthDateOrigin = "birth_date_origin"
+        case nameOrigin = "name_origin", createdByGuess = "created_by_guess", contactIdentifier = "contact_identifier"
+        case contactName = "contact_name", contactState = "contact_state", contactPhotoID = "contact_photo_id"
     }
 
     public func encode(to container: inout PersistenceContainer) throws {
@@ -76,6 +80,12 @@ extension Person: FetchableRecord, PersistableRecord {
         container["is_owner"] = isOwner
         container["birth_date"] = birthDate
         container["birth_date_origin"] = birthDateOrigin?.rawValue
+        container["name_origin"] = nameOrigin?.rawValue
+        container["created_by_guess"] = createdByGuess
+        container["contact_identifier"] = contactIdentifier
+        container["contact_name"] = contactName
+        container["contact_state"] = contactState
+        container["contact_photo_id"] = contactPhotoID?.rawValue
     }
 
     /// The entity row first, then the person row, in the caller's transaction.
