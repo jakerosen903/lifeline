@@ -50,3 +50,9 @@ Spec: docs/specs/2026-11-18-people-contacts.md. Branch claude/people-contacts-16
 - Task 5: fix round 1/5 (7 addressed, 0 open — fact detail follows its mention; move clears guess flag; no-op undo; undo refused after rename or deletion; first telling only from a visible moment; missing tests; commits bee8736..ceeac4e)
 - Task 5: complete (commits 28c8808..ceeac4e, review clean)
 - Task 5: minor (deferred): Undo's span restore could hit a foreign-key error if a segment were deleted without its memory; the existence checks cover memories and entities only.
+- Task 6: complete (commits bd2ff2b..3e21501, review clean). ⚠️ items checked by the controller: Theme.hairline is the card border colour; the writes throw PersonLinkActions.Error; the chip's "Assumed" word comes from the caller (Task 7 must pass PersonChipLine's text and label). Ruling R29.
+- Task 6: minor (deferred): `WhoIsThisViewModel.done()` mapping is untested (app target); a pure kit function with a table test would cover it.
+- Task 6: minor (deferred): `links(to:)` runs once per person at sheet open (N queries).
+- Task 6: minor (deferred): `Theme.secondaryText.opacity(0.6)` on the "Someone new" circle is a derived colour value.
+- Task 6: minor (deferred): the sheet's error text is not cleared when the selection changes.
+- Task 6: minor (deferred): `who.else` sits on the DisclosureGroup; confirm in a UI test that it addresses the toggle.
