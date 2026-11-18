@@ -72,3 +72,7 @@ Spec: docs/specs/2026-11-18-people-contacts.md. Branch claude/people-contacts-16
 - Task 8: minor (deferred): PersonChip uses two overlays for the outline; one conditional would do.
 - Task 8: to check in Task 9: `entity.moment.assumed` sits on a plain VStack; confirm XCUITest can find it.
 - Note: a second timing flake seen, `CascadeVoiceSessionTests.interruptionClosesOpenSegment`; not touched by this plan.
+- Task 8: fix round 1/5 (3 addressed, 0 open — page held for Undo after a move removes the person (R34); guess selection moved to the kit with tests; report file untracked; commits 73ecb6f..053d7ff)
+- Task 8: complete (commits 9811364..053d7ff, review clean). Kit clean run 1150/1150; build ok; EntityPageUITests 8/8.
+- Task 8: minor (deferred): if the refresh after a successful Undo throws, the held page closes.
+- Task 8: to cover in Task 9: UI tests for the held page and Undo restoring it.
