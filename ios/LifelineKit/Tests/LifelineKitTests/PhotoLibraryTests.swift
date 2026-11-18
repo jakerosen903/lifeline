@@ -330,3 +330,112 @@ private func properties(of file: URL) throws -> [CFString: Any] {
     #expect(try FileManager.default.contentsOfDirectory(atPath: tmp.path).sorted() == ["Lifeline-2026-11-16.lifeline", "notes.txt", "pickedup.txt"])
     #expect(PickedPhotoCopy.removeLeftovers(in: tmp.appending(path: "missing")) == 0, "a folder that cannot be read removes nothing")
 }
+
+// MARK: - Store and let go (photo story)
+
+/// A session row that points at `photo`.
+private func photoSession(in f: Fixture, pointingAt photo: Photo) throws -> SessionID {
+    let session = Session(id: SessionID(), startedAt: .now, endedAt: nil, audioPath: "photo.m4a", stageLog: "[]", landingChoiceMade: false,
+                          subjectPhotoID: photo.id, startedFrom: .photo)
+    try f.store.sessions.insert(session)
+    return session.id
+}
+
+@Test func storeWritesTheFileAndARowWithNoLink() async throws {
+    let f = try Fixture()
+    let photo = try await f.library.store(fileAt: try f.source(), assetLocalID: "invented/L0/002", now: Date(timeIntervalSince1970: 1_700_000_000))
+    #expect(FileManager.default.fileExists(atPath: f.library.url(for: photo).path))
+    #expect(f.photoFiles == ["\(photo.id.rawValue).jpg"])
+    #expect(try f.store.photos.photos(of: .entity(f.maya.id)).isEmpty)
+    #expect(try f.store.photos.photos(of: .entity(f.dad.id)).isEmpty)
+    #expect(try f.store.photos.photos(of: .memory(f.treeHouse.id)).isEmpty)
+    #expect(try f.store.photos.photo(id: photo.id) == photo)
+    #expect(photo.assetLocalID == "invented/L0/002")
+}
+
+@Test func storingTheSamePhotoTwiceKeepsOneCopy() async throws {
+    let f = try Fixture()
+    let first = try await f.library.store(fileAt: try f.source(), assetLocalID: nil)
+    let second = try await f.library.store(fileAt: try f.source(), assetLocalID: nil)
+    #expect(second.id == first.id)
+    #expect(f.photoFiles == ["\(first.id.rawValue).jpg"])
+}
+
+@Test func storingRepairsAMissingFile() async throws {
+    let f = try Fixture()
+    let first = try await f.library.store(fileAt: try f.source(), assetLocalID: nil)
+    try FileManager.default.removeItem(at: f.library.url(for: first))
+    let again = try await f.library.store(fileAt: try f.source(), assetLocalID: nil)
+    #expect(again.id == first.id)
+    #expect(FileManager.default.fileExists(atPath: f.library.url(for: first).path))
+    #expect(try f.store.photos.photos(of: .entity(f.maya.id)).isEmpty, "a repair adds no link")
+}
+
+@Test func aStoredPhotoWithNoHomeGoesAtTheSweep() async throws {
+    let f = try Fixture()   // a kill between the store and the session row
+    let photo = try await f.library.store(fileAt: try f.source(), assetLocalID: nil)
+    #expect(try await f.library.sweep() == .init(rows: 1, files: 1))
+    #expect(try f.store.photos.photo(id: photo.id) == nil)
+    #expect(f.photoFiles.isEmpty)
+}
+
+@Test func aStoredPhotoAStoryPointsAtSurvivesTheSweep() async throws {
+    let f = try Fixture()
+    let photo = try await f.library.store(fileAt: try f.source(), assetLocalID: nil)
+    _ = try photoSession(in: f, pointingAt: photo)
+    #expect(try await f.library.sweep() == .init(rows: 0, files: 0))
+    #expect(f.photoFiles == ["\(photo.id.rawValue).jpg"])
+}
+
+@Test func lettingGoOfTheLastHomeDeletesRowAndFile() async throws {
+    let f = try Fixture()
+    let photo = try await f.library.store(fileAt: try f.source(), assetLocalID: nil)
+    let session = try photoSession(in: f, pointingAt: photo)
+    try await f.library.removeFromStory(session)
+    #expect(try f.store.photos.photo(id: photo.id) == nil)
+    #expect(f.photoFiles.isEmpty)
+}
+
+@Test func lettingGoKeepsTheFileOfAPhotoWithAPage() async throws {
+    let f = try Fixture()
+    let photo = try await f.library.store(fileAt: try f.source(), assetLocalID: nil)
+    try f.store.photos.link(photo.id, to: .entity(f.maya.id))
+    let session = try photoSession(in: f, pointingAt: photo)
+    try await f.library.removeFromStory(session)
+    #expect(try f.store.photos.photo(id: photo.id) != nil)
+    #expect(f.photoFiles == ["\(photo.id.rawValue).jpg"])
+}
+
+@Test func aFailedStoreLeavesNoFileAndNoRow() async throws {
+    struct Disk: Error {}
+    let f = try Fixture()
+    let library = PhotoLibrary(root: f.root, photos: f.store.photos, writeCopy: { _, destination in
+        try Data([1, 2, 3]).write(to: destination)
+        throw Disk()
+    })
+    await #expect(throws: Disk.self) { try await library.store(fileAt: try f.source(), assetLocalID: nil) }
+    #expect(f.photoFiles.isEmpty)
+    #expect(try f.store.photos.fileNames().isEmpty)
+}
+
+/// The delete dialog says "Its photo goes too." and the app then runs the library's sweep: the file is gone at once.
+@Test func deletingAPhotoSessionAndSweepingRemovesItsPhotoRowAndFile() async throws {
+    let f = try Fixture()
+    let photo = try await f.library.store(fileAt: try f.source(), assetLocalID: nil)
+    let session = try photoSession(in: f, pointingAt: photo)
+    #expect(try await f.library.sweep() == .init(rows: 0, files: 0), "a session that points at it is a home")
+    try f.store.sessions.deleteSession(session)
+    #expect(try await f.library.sweep() == .init(rows: 1, files: 1))
+    #expect(f.photoFiles.isEmpty)
+    #expect(try f.store.photos.photo(id: photo.id) == nil)
+}
+
+@Test func deletingAPhotoSessionKeepsAPhotoAPageHolds() async throws {
+    let f = try Fixture()
+    let photo = try await f.library.store(fileAt: try f.source(), assetLocalID: nil)
+    try f.store.photos.link(photo.id, to: .entity(f.maya.id))
+    let session = try photoSession(in: f, pointingAt: photo)
+    try f.store.sessions.deleteSession(session)
+    #expect(try await f.library.sweep() == .init(rows: 0, files: 0))
+    #expect(f.photoFiles == ["\(photo.id.rawValue).jpg"])
+}

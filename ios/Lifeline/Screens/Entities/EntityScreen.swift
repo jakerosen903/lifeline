@@ -169,10 +169,11 @@ struct EntityScreen: View {
         .addPhotoFlow(isPresented: $addingPhoto, deps: viewModel.deps, shelf: viewModel.shelf,
                       onFile: { file, assetID in await viewModel.addPhoto(fileAt: file, assetLocalID: assetID); onChange() },
                       onError: { viewModel.photoFailed($0) })
-        .sheet(item: $viewing) { placed in
+        .photoViewerSheet(item: $viewing, home: home) { placed, tellStory in
             PhotoViewer(photo: placed, label: viewModel.photoLabel, canMakeCover: !placed.isCover, cache: viewModel.deps.photoImages,
                         onMakeCover: { await viewModel.makeCover(placed.id); onChange() },
-                        onRemove: { await viewModel.removePhoto(placed.id); onChange() })
+                        onRemove: { await viewModel.removePhoto(placed.id); onChange() },
+                        onTellStory: tellStory)
         }
         .photoErrorSlot(viewModel.photoError)
         .onAppear { isVisible = true; viewModel.refresh() }

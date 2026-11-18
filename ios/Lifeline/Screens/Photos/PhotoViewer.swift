@@ -2,7 +2,7 @@ import LifelineKit
 import SwiftUI
 
 /// One photo in a sheet (decision 14): the photo fitted to the screen, its caption, "Make this the cover" when
-/// it is not the cover, "Remove photo…" (asks first) and "Done". Each action finishes, then the sheet closes,
+/// it is not the cover, "Tell its story" where a session can start, "Remove photo…" (asks first) and "Done". Each action finishes, then the sheet closes,
 /// so the page under it already shows the change. No zoom in S4.
 struct PhotoViewer: View {
     let photo: PlacedPhoto
@@ -11,6 +11,9 @@ struct PhotoViewer: View {
     let cache: PhotoImageCache
     let onMakeCover: () async -> Void
     let onRemove: () async -> Void
+    /// "Tell its story": called once the sheet has closed, so the session starts on a clear screen (decision 12).
+    /// Nil where no session can start (inside a landing's review): the button is not shown.
+    let onTellStory: (() -> Void)?
     @Environment(\.dismiss) private var dismiss
     @State private var confirmingRemove = false
 
@@ -31,6 +34,11 @@ struct PhotoViewer: View {
                         Text(caption).font(.footnote).foregroundStyle(Theme.secondaryText)
                             .fixedSize(horizontal: false, vertical: true)
                             .accessibilityIdentifier("photo.caption")
+                    }
+                    if let onTellStory {
+                        Button { dismiss(); onTellStory() } label: { fullWidth("Tell its story") }
+                            .buttonStyle(.borderedProminent).tint(Theme.oliveOnFill)
+                            .accessibilityIdentifier("photo.tellStory")
                     }
                     if canMakeCover {
                         Button { Task { await onMakeCover(); dismiss() } } label: { fullWidth("Make this the cover") }

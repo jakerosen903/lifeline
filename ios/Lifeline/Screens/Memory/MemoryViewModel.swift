@@ -45,7 +45,8 @@ final class MemoryViewModel {
 
     var rangeText: String { memory.range.displayText }
     var isGuess: Bool { memory.range.origin == .inferred }
-    var evidence: String? { memory.range.evidenceText }
+    /// The words behind the date, for "you said". None for a date from a photo: the "from a photo" mark states the source.
+    var evidence: String? { memory.range.saidEvidence }
     var isPlaying: Bool { player.isPlaying }
     /// "Photo for The tree house" (decision 19).
     var photoLabel: String { PhotoCaption.label(title: memory.title, isOwner: false, isMemory: true) }

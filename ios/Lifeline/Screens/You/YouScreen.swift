@@ -98,10 +98,11 @@ struct YouScreen: View {
         .addPhotoFlow(isPresented: $addingPhoto, deps: viewModel.deps, shelf: viewModel.shelf,
                       onFile: { file, assetID in await viewModel.addPhoto(fileAt: file, assetLocalID: assetID) },
                       onError: { viewModel.photoFailed($0) })
-        .sheet(item: $viewing) { placed in
+        .photoViewerSheet(item: $viewing, home: home) { placed, tellStory in
             PhotoViewer(photo: placed, label: viewModel.photoLabel, canMakeCover: !placed.isCover, cache: viewModel.deps.photoImages,
                         onMakeCover: { await viewModel.makeCover(placed.id) },
-                        onRemove: { await viewModel.removePhoto(placed.id) })
+                        onRemove: { await viewModel.removePhoto(placed.id) },
+                        onTellStory: tellStory)
         }
         .sheet(isPresented: $showSettings, onDismiss: changed) {
             SettingsScreen(deps: viewModel.deps, isSessionLive: isSessionLive)

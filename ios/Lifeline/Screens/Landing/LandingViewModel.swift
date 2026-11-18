@@ -24,6 +24,8 @@ final class LandingViewModel: Identifiable {
     var confirmingDelete = false
     let player = SegmentPlayer()
     let deps: Dependencies
+    /// The photo card of a photo session; it has no card for any other. Refreshed with the rows, on the same tick.
+    let photoCard: PhotoCardViewModel
     private var poll: Task<Void, Never>?
 
     init(session: Session, heavy: Bool, presentDanger: Bool, deps: Dependencies) {
@@ -31,6 +33,7 @@ final class LandingViewModel: Identifiable {
         liveWeight = SessionWeight(heavy: heavy, presentDanger: presentDanger)
         weight = liveWeight
         self.deps = deps
+        photoCard = PhotoCardViewModel(session: session.id, deps: deps, showsRemoveFromStory: false)
         refresh()
     }
 
@@ -42,6 +45,12 @@ final class LandingViewModel: Identifiable {
     var headline: String { Landing.headline(first: isFirst, heavy: heavy) }
     var crisisLine: CrisisLine? { presentDanger ? FixedResponses.crisisLine() : nil }
     var moreText: String? { more > 0 ? "and \(more) more in Sessions" : nil }
+
+    /// "…This cannot be undone." and, when the session was the photo's last home, "Its photo goes too."
+    var deleteMessage: String {
+        ["The audio, the words and the \(rows.count + more) moments from today go. This cannot be undone.",
+         PhotoStory.deleteSentence(card: photoCard.card)].compactMap { $0 }.joined(separator: " ")
+    }
 
     func refresh() {
         do {
@@ -62,6 +71,7 @@ final class LandingViewModel: Identifiable {
             stillSorting = Landing.stillSorting(pendingSegments: pending)
             closingLine = Landing.closingLine(topCuriosity: try store.curiosity.open().first, heavy: heavy)
             isFirst = Landing.isFirstSession(sessionCount: try store.sessions.listSessions().count)
+            photoCard.refresh()
             error = nil
             if pending > 0 { startPolling() } else { poll?.cancel() }
         } catch {
@@ -110,6 +120,9 @@ final class LandingViewModel: Identifiable {
         await deps.worker.cancel(session: session.id)
         do {
             try deps.actions.deleteSession(session.id, audioURL: try deps.audioURL(for: session))
+            // The dialog may have said "Its photo goes too.": the session's row is gone now, so the library's sweep takes the photo.
+            // A failed sweep is not a failed delete; the next launch sweeps again.
+            do { try await deps.photos.sweep() } catch { print("[photos] sweep after a delete failed: \(error)") }
         } catch {
             self.error = "Could not delete today's recording: \(error.localizedDescription)"
             return

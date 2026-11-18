@@ -6,12 +6,15 @@ public enum OpeningPrompt: Equatable, Sendable {
     case scene(ScenePrompt)
     /// A session about a page: it asks about the subject and nothing else.
     case subject(SessionSubject, text: String)
+    /// A session about one photo: it asks about that photo and nothing else.
+    case photo(PhotoID, text: String)
 
     public var text: String {
         switch self {
         case .curiosity(_, let text): text
         case .scene(let prompt): prompt.text
         case .subject(_, let text): text
+        case .photo(_, let text): text
         }
     }
 
@@ -21,6 +24,7 @@ public enum OpeningPrompt: Equatable, Sendable {
         case .curiosity(let item, _): "curiosity:\(item.id.rawValue)"
         case .scene(let prompt): prompt.id
         case .subject(let subject, _): "subject:\(subject.entityID.rawValue)"
+        case .photo: "photo"
         }
     }
 }
@@ -36,13 +40,19 @@ public struct Opening: Equatable, Sendable {
 /// last week; otherwise the first never-used scene prompt, and once every prompt has been used,
 /// the least recently used. Alternates are the next three by the same order, never the main.
 /// With a subject, that subject's own open question leads (the cooldown does not apply); with none,
-/// "Tell me about {title}." A subject kept from the AI is ignored: the opening is the plain tab opening.
+/// "Tell me about {title}." A photo wins over a subject: its opening is "Tell me about this one." with the
+/// first three scenes as alternates, and no open question leads. A subject kept from the AI is ignored: the opening is the plain tab opening.
 public enum OpeningChooser {
     public static let curiosityCooldown: TimeInterval = 7 * 86_400
 
-    public static func choose(subject: SessionSubject? = nil, curiosity: [CuriosityItem], bank: [ScenePrompt], lastUsed: [String: Date], now: Date,
+    public static let photoOpeningText = "Tell me about this one."
+
+    public static func choose(photo: PhotoID? = nil, subject: SessionSubject? = nil, curiosity: [CuriosityItem], bank: [ScenePrompt], lastUsed: [String: Date], now: Date,
                               alternateCount: Int = 3) -> Opening {
         let scenes = orderedScenes(bank, lastUsed: lastUsed)
+        if let photo {
+            return Opening(main: .photo(photo, text: photoOpeningText), alternates: scenes.prefix(alternateCount).map(OpeningPrompt.scene))
+        }
         if let subject, !subject.excludedFromAI {
             let main = curiosity
                 .filter { $0.status == .open && $0.entityID == subject.entityID }
