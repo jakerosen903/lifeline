@@ -31,3 +31,11 @@ Spec: docs/specs/2026-11-18-people-contacts.md. Branch claude/people-contacts-16
 - Task 2: minor (deferred): `PersonGuess.Result` has no public initializer.
 - Task 2: minor (deferred): a person who matches only through a linked contact and holds the relation alias resolves as assumed, not said.
 - Note: `ExtractionQueueTests.drainGivesUpAtItsDeadline` failed once on timing and passed on rerun; not touched by this plan.
+- Task 3: implemented (commits 236bb08..310ec90). App target builds (xcodebuild exit 0, controller run). Review: needs fixes — 1 Important (pre-v14 pending person candidates give a second link), R12 ruled (R13).
+- Task 3: minor (deferred): `aboutEntity` guesses the detail by the mention text and the mention link by the people ref; with a stored choice keyed on "my roommate, Robin" the detail and the mention can go to two persons. Carry into Task 5 (R9).
+- Task 3: minor (deferred): `MergeActions.people(named:in:)` matches only the whole ref's key against role_text; a comma-form ref in the staying telling is missed, so Separate can move a link the remaining telling still names.
+- Task 3: minor (deferred): "stored new" sets createdByGuess false; not in a ruling (now R14).
+- Task 3: minor (deferred): an old alias that is a group phrase ("our parents") no longer links on Keep; matches the spec; now R15.
+- Task 3: minor (deferred): stale doc comment at PeopleRepository.swift:108-109 ("A name the extractor found goes through findPerson").
+- Task 3: minor (deferred): guessInputs reads all people and aliases for every segment of a Keep, also when the card names nobody.
+- Task 3: minor (deferred): `aCarriedPersonNameShowsNoCard` stops at the queue and does not keep the card.
