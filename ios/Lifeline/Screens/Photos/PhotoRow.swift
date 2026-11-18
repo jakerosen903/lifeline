@@ -14,7 +14,7 @@ struct PhotoRow: View {
     /// The photo and the index where the drag ended. The shelf asks the kit for the order; a move to the same place writes nothing.
     let onMove: (PhotoID, Int) -> Void
 
-    @GestureState private var drag: PhotoRowDrag?
+    @GestureState private var drag: PhotoShelfDrag?
     /// True from the moment a press is held until it ends or is cancelled: a gesture state resets on both.
     @GestureState private var isHolding = false
     /// One shot: set when a press is held, used up by the button's action. The button can fire on the release of a
@@ -125,7 +125,7 @@ struct PhotoRow: View {
             .sequenced(before: DragGesture(minimumDistance: 0, coordinateSpace: .named(Self.space)))
             .updating($drag) { value, state, _ in
                 guard case .second(true, let moved?) = value else { return }
-                if state == nil { state = PhotoRowDrag(photo: photo, from: from, startX: moved.startLocation.x, currentX: moved.location.x) }
+                if state == nil { state = PhotoShelfDrag(photo: photo, from: from, startX: moved.startLocation.x, currentX: moved.location.x) }
                 state?.currentX = moved.location.x
             }
             .updating($isHolding) { value, state, _ in
@@ -136,7 +136,7 @@ struct PhotoRow: View {
             }
             .onEnded { value in
                 guard case .second(true, let moved?) = value else { return }
-                let end = PhotoRowDrag(photo: photo, from: from, startX: moved.startLocation.x, currentX: moved.location.x)
+                let end = PhotoShelfDrag(photo: photo, from: from, startX: moved.startLocation.x, currentX: moved.location.x)
                 onMove(photo, end.target(count: photos.count, stride: Self.stride))
             }
     }
