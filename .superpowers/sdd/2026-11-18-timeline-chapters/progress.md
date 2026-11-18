@@ -22,3 +22,4 @@ Pre-flight:
 | 4 → 5, 7 | ChapterActions, ChapterReceipt | Agree. |
 | 6 → 7 | LifeMap, summary(of:) | Agree. |
 | 5, 7 | TimelineScreen, TimelineViewModel, MemoryRowView | Both edit them, in sequence. No conflict. |
+Task 1: complete (commits 5944fcc..6a5f93b, review clean; swift test 1029). Minor (deferred): the derived and inferred cases rely on `.year` being placed; `name` has no test with a newline.
