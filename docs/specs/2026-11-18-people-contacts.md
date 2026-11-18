@@ -1,6 +1,6 @@
 # People and contacts: one person, one contact, and every guess in view
 
-Status: draft for the owner's approval. The owner set the direction in a brainstorm on 2026-11-18 and approved four screens. A plan must follow before code. The section "Calls the builder made" lists every choice the owner has not confirmed.
+Status: approved by the owner on 2026-11-18, with the calls in "Calls the builder made" as written. The owner can still overrule each call. Plan for the first PR: `docs/plans/2026-11-18-people-contacts.md`.
 
 Mock-ups: `docs/design/PC1_Assumed.dc.html`, `PC2_WhoIsThis.dc.html`, `PC3_PersonLinked.dc.html` and `PC4_NoContact.dc.html`. The canvas: https://claude.ai/artifact/6vReaCCBrkFqzSkMk6JfRN, bottom row "People and contacts". The wording on the screens is the designer's draft. The owner writes the final copy.
 
@@ -398,7 +398,7 @@ On approval, `docs/DECISIONS.md` gets an entry, `docs/OVERVIEW.md` gets the new 
 
 The owner said these on 2026-11-18, and they are not in this list: a person is backed by a contact; a person needs no contact; the contact's picture is the first picture; a guess is visible and easy to change; the four screens; the design assumes contacts access and stays usable with none; words said with a name ("Danielle, my sister") settle who it is.
 
-The owner must confirm or overrule each of these.
+The owner approved the spec with these calls on 2026-11-18. No call was discussed one by one, so each stays open to an overrule.
 
 **Read from the owner's messages, which may have been meant for another session:**
 

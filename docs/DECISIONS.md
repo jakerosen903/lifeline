@@ -2,6 +2,24 @@
 
 One entry per decision. Newest first. Status is Decided, Open, or Superseded.
 
+## 2026-11-18 · People are backed by contacts, and every guess about a name shows
+
+**Status:** Decided. Source: the owner's brainstorm of 2026-11-18, four approved screens (`docs/design/PC1_Assumed.dc.html` to `PC4_NoContact.dc.html`) and the owner's approval of `docs/specs/2026-11-18-people-contacts.md`. Supersedes the line "`contact_identifier` is deferred; no Contacts framework in V1" in the first spec.
+
+**Decision.** A person can hold one contact, and a contact one person. A person needs no contact, and the app works with full, limited or no contacts access. A link between a memory and a person records how it was made: `assumed`, `said`, `confirmed` or `new`. A link the app chose from a name alone shows a dashed ochre outline and the word "Assumed" until the owner settles it. Keep does not settle it.
+
+- A name said with a relation phrase that one person holds ("Danielle, my sister") is not a guess.
+- A guess teaches the app no name. An alias is saved only from the owner's own words or choice.
+- One answer carries inside one recording only.
+- The contact's picture is the person's first picture when the person has none.
+- Nothing from a contact goes to the model.
+- Two people can be merged, by a drag on People or by a button, with a confirm and Undo.
+- The extractor will give each person in a recording a handle, so two people with one name stay apart (step 2, its own plan).
+
+**Why.** On first use a story about a roommate was filed under a friend with the same spoken name, with no sign of a guess and no way to change it. A guess shown as a fact breaks principle 5. A contact gives a real person one identity across stories.
+
+**Costs.** Marks are common, because every bare name is a guess. Links older than this feature show no mark, so an old wrong link looks settled until the owner changes it. A name the app does not know becomes a person on Keep, so a misheard name is a person until the owner removes or merges it. The extractor does not see a contact's full name.
+
 ## 2026-11-16 · S6a: rulings made while building the spine
 
 **Status:** Decided by the builder. The owner can overrule each one. Source: `docs/plans/2026-11-16-timeline-spine.md`, ledger `.superpowers/sdd/2026-11-16-timeline-spine/rulings.md`.
