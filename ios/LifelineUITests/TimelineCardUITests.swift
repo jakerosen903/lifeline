@@ -132,7 +132,8 @@ final class TimelineCardUITests: XCTestCase {
         let rows = app.buttons.matching(identifier: "timeline.memory").allElementsBoundByIndex
             .filter { $0.exists && $0.frame.minY >= card.frame.minY && $0.isHittable }
         guard let firstRow = rows.min(by: { $0.frame.minY < $1.frame.minY }) else { return XCTFail("a spine row is hittable under the card") }
-        XCTAssertLessThanOrEqual(card.frame.maxY, firstRow.frame.minY + 0.5, "the card's bottom is above the first spine row: \(card.frame) \(firstRow.frame)")
+        // R6: rows scroll under the card, so a row's top may be under it; the row's middle is what a tap reaches.
+        XCTAssertGreaterThanOrEqual(firstRow.frame.midY, card.frame.maxY, "the first hittable row's middle is below the card: \(card.frame) \(firstRow.frame)")
     }
 
     // Review Focus 1.
@@ -145,6 +146,55 @@ final class TimelineCardUITests: XCTestCase {
         XCTAssertTrue(label.contains("to 2010."), "the years on screen end at 2010: \(label)")
         XCTAssertFalse(label.contains("On screen: 1999"), "the years on screen no longer start at 1999: \(label)")
         XCTAssertTrue(label.hasPrefix("Your life from 1990 to now."), "the strip still runs from 1990: \(label)")
+    }
+
+    // Guards the tab-return path: the rows report again when the Timeline comes back.
+    @MainActor
+    func testTheFrameSurvivesLeavingTheTabAndComingBack() {
+        let app = XCUIApplication.launchWithSpine()
+        XCTAssertTrue(waitForLabel(app, "label BEGINSWITH %@", Self.lifePrefix), "the frame starts at 1999: \(card(app).label)")
+        let before = card(app).label
+        app.openTab("People")
+        XCTAssertTrue(app.waitHittable(app.tabBars.buttons["Timeline"], timeout: 10), "the tab bar is up on People")
+        app.openTab("Timeline")
+        XCTAssertTrue(app.waitHittable(card(app), timeout: 10), "the card is back")
+        XCTAssertTrue(waitForLabel(app, "label == %@", before), "the same years are on screen after the return: \(card(app).label) (was \(before))")
+        scrollToTheEndOfTheSpine(app)
+        let label = card(app).label
+        XCTAssertTrue(label.contains("to 2010."), "the years on screen end at 2010: \(label)")
+        XCTAssertFalse(label.contains("On screen: 1999"), "the years on screen no longer start at 1999: \(label)")
+    }
+
+    // The standing guard for the render loop: Maple Street's year 1999 sits at the edge of the frame, and "The tree house"
+    // crosses the card's bottom edge slowly. A frozen main thread cannot answer the label query within five seconds.
+    @MainActor
+    func testADuringChapterAtTheEdgeDoesNotFreezeTheList() {
+        let app = XCUIApplication.launchWithSpine()
+        sayWhenMapleStreetWas1999(app)
+        XCTAssertTrue(waitForLabel(app, "label ENDSWITH %@", "During Maple Street."), "the card names Maple Street: \(card(app).label)")
+        let row = memoryRow(app, "The tree house")
+        XCTAssertTrue(app.waitHittable(row, timeout: 10), "The tree house is on screen")
+        // A drag of about a quarter of a row (a row is about 55 points).
+        let start = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.6))
+        let end = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.6 - 14 / app.frame.height))
+        func readsWithin5Seconds(_ step: String) {
+            XCTAssertTrue(card(app).waitForExistence(timeout: 5), "the card exists after \(step)")
+            let started = Date()
+            let label = card(app).label
+            XCTAssertLessThan(Date().timeIntervalSince(started), 5, "the label reads within 5 seconds after \(step)")
+            XCTAssertTrue(label.hasPrefix("Your life from 1990 to now."), "the label is a sentence after \(step): \(label)")
+        }
+        for i in 1...5 {
+            start.press(forDuration: 0.1, thenDragTo: end)
+            readsWithin5Seconds("small swipe up \(i)")
+        }
+        for i in 1...5 {
+            end.press(forDuration: 0.1, thenDragTo: start)
+            readsWithin5Seconds("small swipe down \(i)")
+        }
+        let label = card(app).label
+        XCTAssertTrue(label.hasPrefix("Your life from 1990 to now. On screen: "), "the label ends as a well-formed sentence: \(label)")
+        XCTAssertTrue(label.hasSuffix("."), "the sentence ends with a full stop: \(label)")
     }
 
     // Maple Street is stated as the year 1999. The frame at the top (1999 to 2006) touches it; the frame at the end (2000 to 2010) does not.
