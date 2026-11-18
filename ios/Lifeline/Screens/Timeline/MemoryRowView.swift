@@ -15,6 +15,8 @@ struct MemoryRowActions {
     /// Chapters: offered on every row; "Take out" only when the row's chapter has a name.
     var addToChapter: (MemoryRow) -> Void = { _ in }
     var takeOutOfChapter: (MemoryRow) -> Void = { _ in }
+    /// A tap on the row's chapter tag: the chapter's sheet.
+    var openChapter: (MemoryRow) -> Void = { _ in }
 }
 
 /// A memory row: its text (tap opens it), its chapter tag, its Check-this tags, and the visible
@@ -40,7 +42,8 @@ struct MemoryRowView: View {
                     .accessibilityIdentifier("timeline.memory")
                 // Outside the button, so the tag is an element of its own; the button's label names the chapter too.
                 if let chapterTitle = row.chapterTitle {
-                    ChapterTag(title: chapterTitle).padding(.bottom, 6)
+                    // The tag's own vertical padding is its tap target and gives the row its space below.
+                    ChapterTag(title: chapterTitle) { actions.openChapter(row) }.padding(.top, -6)
                 }
                 if !row.checkThis.isEmpty {
                     FlowLayout(spacing: 8) {

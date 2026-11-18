@@ -15,6 +15,8 @@ struct TimelineScreen: View {
     @State private var splitTarget: StoryRow?
     @State private var moveTarget: MemoryRow?
     @State private var chapterTarget: MemoryRow?
+    @State private var openChapter: ChapterSheetViewModel?
+    @State private var lifeMap: LifeMapViewModel?
     /// The list row to scroll to the top: a story just opened, so its members show above the record bar.
     @State private var scrollTarget: StoryScrollTarget?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -35,7 +37,8 @@ struct TimelineScreen: View {
                          moveToStory: { moveTarget = $0 },
                          takeOutOfStory: { viewModel.takeOutOfStory($0.id) },
                          addToChapter: { chapterTarget = $0 },
-                         takeOutOfChapter: { viewModel.takeOutOfChapter($0.id) })
+                         takeOutOfChapter: { viewModel.takeOutOfChapter($0.id) },
+                         openChapter: { row in row.chapterID.map { openChapter = viewModel.chapterSheet(for: $0) } })
     }
 
     private var storyActions: StoryRowActions {
@@ -48,6 +51,7 @@ struct TimelineScreen: View {
             .linenBackground()
             .navigationTitle("Your story so far")
             .storyDialogs(rename: $renameTarget, title: $storyTitle, split: $splitTarget, move: $moveTarget, viewModel: viewModel)
+            .chapterSheets(open: $openChapter, lifeMap: $lifeMap, viewModel: viewModel)
             .navigationDestination(item: Binding(get: { viewModel.openedEntity }, set: { viewModel.openedEntity = $0 })) { entity in
                 EntityScreen(viewModel: EntityViewModel(entity: entity, deps: viewModel.deps)) { viewModel.refresh() }
             }
@@ -58,6 +62,8 @@ struct TimelineScreen: View {
                 NavigationLink("Sessions") { SessionsScreen(viewModel: viewModel.home) }
                     .accessibilityIdentifier("timeline.sessions")
                 Menu {
+                    Button("Chapters", systemImage: "books.vertical") { lifeMap = viewModel.lifeMap() }
+                        .accessibilityIdentifier("timeline.chapters")
                     Toggle("Show hidden memories", isOn: Binding(get: { viewModel.showHidden }, set: { viewModel.showHidden = $0 }))
                         .accessibilityIdentifier("timeline.showHidden")
                     if !viewModel.allTags.isEmpty {
@@ -112,7 +118,13 @@ struct TimelineScreen: View {
             .onAppear { viewModel.refresh() }
     }
 
+    /// The list, with the removal notice pinned above the record bar where You shows its notice.
     private var timelineList: some View {
+        timelineRows
+            .safeAreaInset(edge: .bottom, spacing: 0) { ChapterRemovedNotice(timeline: viewModel) }
+    }
+
+    private var timelineRows: some View {
         ScrollViewReader { proxy in
             List {
                 summarySection
@@ -288,5 +300,25 @@ private struct StoryDialogs: ViewModifier {
 private extension View {
     func storyDialogs(rename: Binding<StoryRow?>, title: Binding<String>, split: Binding<StoryRow?>, move: Binding<MemoryRow?>, viewModel: TimelineViewModel) -> some View {
         modifier(StoryDialogs(renameTarget: rename, storyTitle: title, splitTarget: split, moveTarget: move, viewModel: viewModel))
+    }
+}
+
+/// The chapter's sheet (from a tag) and the life map (from the "…" menu). Closing either reads the
+/// Timeline again, so a rename or new years show on the tags.
+private struct ChapterSheets: ViewModifier {
+    @Binding var openChapter: ChapterSheetViewModel?
+    @Binding var lifeMap: LifeMapViewModel?
+    let viewModel: TimelineViewModel
+
+    func body(content: Content) -> some View {
+        content
+            .sheet(item: $openChapter, onDismiss: { viewModel.refresh() }) { ChapterSheet(viewModel: $0) }
+            .sheet(item: $lifeMap, onDismiss: { viewModel.refresh() }) { LifeMapSheet(viewModel: $0, timeline: viewModel) }
+    }
+}
+
+private extension View {
+    func chapterSheets(open: Binding<ChapterSheetViewModel?>, lifeMap: Binding<LifeMapViewModel?>, viewModel: TimelineViewModel) -> some View {
+        modifier(ChapterSheets(openChapter: open, lifeMap: lifeMap, viewModel: viewModel))
     }
 }

@@ -1,5 +1,6 @@
 import Foundation
 import LifelineKit
+import Accessibility
 
 /// One memory as the timeline shows it.
 struct MemoryRow: Identifiable, Equatable, Hashable {
@@ -86,6 +87,11 @@ final class TimelineViewModel {
     private(set) var allStories: [Story] = []
     /// Chapters with a name, for "Add to a chapter…". An unnamed chapter is not offered: the person has no word for it.
     private(set) var namedChapters: [Chapter] = []
+    /// The chapter just removed, while its Undo lasts (`ShellNotice.duration`); nil after.
+    private(set) var removedChapter: ChapterReceipt?
+    @ObservationIgnored private var removalTimer: Task<Void, Never>?
+    /// Says the removal notice to VoiceOver when it shows.
+    @ObservationIgnored var announce: (String) -> Void = { AccessibilityNotification.Announcement($0).post() }
     /// Story rows the person opened.
     var expandedStories: Set<StoryID> = []
     private(set) var floatingCount = 0
@@ -438,17 +444,55 @@ final class TimelineViewModel {
 
     // MARK: - Chapters
 
+    private var chapterActions: ChapterActions { ChapterActions(store: deps.extractionStore) }
+
     func addToChapter(_ memory: MemoryID, chapter: ChapterID) {
-        attempt("Could not add that to a chapter") { _ = try ChapterActions(store: deps.extractionStore).add(memory, to: chapter) }
+        attempt("Could not add that to a chapter") { _ = try chapterActions.add(memory, to: chapter) }
     }
 
     /// An empty or spaces-only name writes nothing; a name that matches a chapter in other capitals reuses it (kit).
     func addToChapter(_ memory: MemoryID, named name: String) {
-        attempt("Could not add that to a chapter") { _ = try ChapterActions(store: deps.extractionStore).add(memory, toChapterNamed: name) }
+        attempt("Could not add that to a chapter") { _ = try chapterActions.add(memory, toChapterNamed: name) }
     }
 
     func takeOutOfChapter(_ memory: MemoryID) {
-        attempt("Could not take that out of its chapter") { try ChapterActions(store: deps.extractionStore).takeOut(memory) }
+        attempt("Could not take that out of its chapter") { try chapterActions.takeOut(memory) }
+    }
+
+    /// The chapter's sheet, opened from a tag. A removal there comes back here, so its notice outlives the sheet.
+    func chapterSheet(for chapter: ChapterID) -> ChapterSheetViewModel {
+        ChapterSheetViewModel(chapter: chapter, store: deps.extractionStore) { [weak self] in self?.chapterRemoved($0) }
+    }
+
+    /// The life map, from the "…" menu. A removal from a sheet it opens comes back here too.
+    func lifeMap() -> LifeMapViewModel {
+        LifeMapViewModel(store: deps.extractionStore) { [weak self] in self?.chapterRemoved($0) }
+    }
+
+    /// "Removed “{name}”." for `ShellNotice.duration`. A second removal replaces the first, whose time
+    /// stops: only the newest removal can be undone.
+    func chapterRemoved(_ receipt: ChapterReceipt) {
+        removalTimer?.cancel()
+        removedChapter = receipt
+        refresh()
+        if let removedChapterNotice { announce(removedChapterNotice) }
+        removalTimer = Task { [weak self] in
+            try? await Task.sleep(for: ShellNotice.duration)
+            guard !Task.isCancelled else { return }
+            self?.removedChapter = nil
+        }
+    }
+
+    /// Puts the chapter back with its tags. After the time ran out there is no receipt, and nothing happens.
+    func undoRemoveChapter() {
+        guard let receipt = removedChapter else { return }
+        removalTimer?.cancel()
+        removedChapter = nil
+        attempt("Could not put that chapter back") { try chapterActions.undoRemove(receipt) }
+    }
+
+    var removedChapterNotice: String? {
+        removedChapter.map { "Removed “\($0.chapter.name ?? ChapterSheetViewModel.untitledInNotice)”." }
     }
 
     /// Stories a memory could move to: every other one.
