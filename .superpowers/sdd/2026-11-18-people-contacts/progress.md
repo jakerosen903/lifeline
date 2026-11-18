@@ -22,3 +22,4 @@ Spec: docs/specs/2026-11-18-people-contacts.md. Branch claude/people-contacts-16
 - R2: `PersonLinkRepository.links(of:)` includes the owner when the owner is linked, with whatever origin the row has — today's memory page shows the owner when they typed their own name, and dropping them is a regression the spec does not ask for — if wrong, the owner shows as a chip on a memory page.
 
 ## Tasks
+- Task 1 (migration v14, LinkOrigin): done, full kit suite 1031 passing.
