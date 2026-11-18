@@ -196,6 +196,50 @@ enum UITestSeed {
         let untitled = try store.chapters.insertChapter(title: nil)
         try store.chapters.assign(memory: fair, toChapter: untitled.id)
     }
+
+    /// Under `-uiTesting-seedGuesses`: links that Keep guessed, for the "Who is this?" sheet and the marks. Jordan is
+    /// the owner. An earlier session holds Robin Okafor's two older moments (links with no origin) and Priya's one
+    /// moment: the guess made Priya and links her as an assumed "Priya", so a move from her page removes her. The
+    /// latest session keeps "The flat on Alder Street" and "The night the boiler went" (Robin Okafor, assumed, said
+    /// "Robin") and "Dinner on the deposit" (Tomas, whom the guess made, origin `new`; Danielle, said "my sister").
+    /// With `landingOpen` the latest session has no landing choice yet, so its landing opens at launch.
+    static func writeGuesses(store: ExtractionStore, profile: ProfileRepository, sessions: SessionRepository, landingOpen: Bool) throws {
+        try profile.save(Profile(displayName: "Jordan", birthDate: nil, birthPlaceText: nil, freeText: nil, updatedAt: .now))
+        let robin = try store.people.insertPerson(displayName: "Robin Okafor").entityID
+        try store.people.addAlias("Robin", to: PersonID(rawValue: robin.rawValue))
+        let danielle = try store.people.insertPerson(displayName: "Danielle").entityID
+        try store.people.addAlias("my sister", to: PersonID(rawValue: danielle.rawValue))
+        let priya = guessedPerson("Priya"), tomas = guessedPerson("Tomas")
+
+        let earlier = Session(id: .init(), startedAt: .now.addingTimeInterval(-86_400), endedAt: .now.addingTimeInterval(-86_000),
+                              audioPath: "seed-earlier.m4a", stageLog: "[]", landingChoiceMade: true)
+        try sessions.insert(earlier)
+        var older = SeedSession(session: earlier, store: store, sessions: sessions, start: earlier.startedAt)
+        try older.keep("Robin's first car", kind: .event, year: 2004, relation: .mention, links: [(robin, nil)])
+        try older.keep("The summer at the cannery", kind: .event, year: 2006, relation: .mention, links: [(robin, nil)])
+        try older.keep("The bike ride to the coast", kind: .event, year: 2009, relation: .mention, links: [(priya.entity.id, "Priya")],
+                       origins: [priya.entity.id: .assumed], plan: priya.plan)
+
+        let latest = Session(id: .init(), startedAt: .now, endedAt: .now, audioPath: "seed.m4a", stageLog: "[]", landingChoiceMade: !landingOpen)
+        try sessions.insert(latest)
+        var seed = SeedSession(session: latest, store: store, sessions: sessions)
+        try seed.keep("The flat on Alder Street", kind: .event, year: 2011, relation: .mention, links: [(robin, "Robin")], origins: [robin: .assumed])
+        try seed.keep("The night the boiler went", kind: .event, year: 2012, relation: .mention, links: [(robin, "Robin")], origins: [robin: .assumed])
+        try seed.keep("Dinner on the deposit", kind: .event, year: 2012, relation: .mention, links: [(tomas.entity.id, "Tomas"), (danielle, "my sister")],
+                       origins: [tomas.entity.id: .new, danielle: .said], plan: tomas.plan)
+    }
+
+    /// A person the guess made (`created_by_guess`), written with the first moment that links them, as Keep writes one
+    /// (the plan also gives them their name as an alias).
+    private static func guessedPerson(_ name: String) -> (entity: Entity, plan: EntityRepository.Write) {
+        let person = Person(id: .init(), displayName: name, notes: nil, isOwner: false, birthDate: nil, birthDateOrigin: nil,
+                            nameOrigin: .said, createdByGuess: true)
+        let entity = Entity(id: person.entityID, type: .person, title: name)
+        var plan = EntityRepository.Write()
+        plan.entities = [entity]
+        plan.persons = [person]
+        return (entity, plan)
+    }
 }
 
 /// The error a detached seed step threw, read back on the waiting thread.
@@ -211,12 +255,13 @@ private struct SeedSession {
     let session: Session
     let store: ExtractionStore
     let sessions: SessionRepository
-    let start = Date.now
+    var start = Date.now
     var index = 0
 
+    /// `origins` gives a link its origin (none: a link older than v14). `plan` writes the people a link needs first.
     @discardableResult
     mutating func keep(_ title: String, kind: MemoryKind, year: Int? = nil, relation: EntityRelation = .detail, quote: String? = nil,
-                       links: [(EntityID, String?)]) throws -> MemoryID {
+                       links: [(EntityID, String?)], origins: [EntityID: LinkOrigin] = [:], plan: EntityRepository.Write = .init()) throws -> MemoryID {
         let text = quote ?? "\(title), as told"
         let segment = Segment(id: .init(), sessionID: session.id, index: index, startMs: index * 5_000, endMs: index * 5_000 + 4_000,
                               text: text, status: .extracted)
@@ -232,8 +277,8 @@ private struct SeedSession {
                             createdFromCandidateID: candidate.id, createdAt: told, range: range, kind: kind)
         try store.memories.insert(memory, spans: [MemorySpan(memoryID: memory.id, segmentID: segment.id, startMs: segment.startMs, endMs: segment.endMs, order: 0)],
                                   people: [], places: [],
-                                  links: links.map { MomentEntity(memoryID: memory.id, entityID: $0.0, relation: relation, roleText: $0.1) },
-                                  anchors: [], acceptingCandidate: candidate.id)
+                                  links: links.map { MomentEntity(memoryID: memory.id, entityID: $0.0, relation: relation, roleText: $0.1, origin: origins[$0.0]) },
+                                  entities: plan, anchors: [], acceptingCandidate: candidate.id)
         return memory.id
     }
 }
