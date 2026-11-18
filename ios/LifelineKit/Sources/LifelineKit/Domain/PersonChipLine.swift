@@ -1,0 +1,36 @@
+import Foundation
+
+/// The words under a person chip and on the landing page. Pure text; the views choose the colour.
+/// The copy is a draft until the owner writes the final copy.
+public enum PersonChipLine {
+    /// nil for a link with no line (said, confirmed, older).
+    public static func text(origin: LinkOrigin?, saidName: String?) -> String? {
+        switch origin {
+        case .assumed:
+            guard let said = clean(saidName) else { return "Assumed" }
+            return "Assumed \u{00B7} you said \u{201C}\(said)\u{201D}"
+        case .new: return "New"
+        case .said, .confirmed, nil: return nil
+        }
+    }
+
+    public static func accessibilityLabel(name: String, origin: LinkOrigin?, saidName: String?) -> String {
+        guard origin == .assumed else { return "\(name). Change who this is." }
+        guard let said = clean(saidName) else { return "\(name), assumed. Change who this is." }
+        return "\(name), assumed, you said \(said). Change who this is."
+    }
+
+    /// The sub-line on the landing page. nil when there is no guess to report.
+    public static func landingLine(guesses: Int) -> String? {
+        switch guesses {
+        case ..<1: nil
+        case 1: "I made one guess about who you meant."
+        default: "I made \(guesses) guesses about who you meant."
+        }
+    }
+
+    private static func clean(_ said: String?) -> String? {
+        let trimmed = said?.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed?.isEmpty == false ? trimmed : nil
+    }
+}
