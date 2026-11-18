@@ -169,7 +169,7 @@ private let photoDay = CivilDate(iso: "2019-07-14")!
     let reader = PhotoStoryReader(store: env.store)
     // The card reads the store, so its offer carries the range the resolver set, not the one `accept` returned.
     let onCard = try #require(try env.store.memories.fetch(memory.id))
-    try reader.useDate(PhotoStoryCard.DateOffer(memory: onCard, date: photoDay))
+    try reader.useDate(photoDay, for: [onCard])
     #expect(try env.store.memories.fetch(memory.id)?.range == .fromPhoto(photoDay))
     try env.accept("One more thing", anchors: [], ordinal: 1)
     _ = try env.runner.run()
@@ -184,4 +184,47 @@ private let photoDay = CivilDate(iso: "2019-07-14")!
     _ = try env.runner.run()
     #expect(try env.store.memories.anchors(of: job.id).allSatisfy(\.resolved), "a photo date does not un-resolve")
     #expect(try env.store.curiosity.open().isEmpty, "no question about a memory dated from a photo")
+}
+
+// MARK: - Undo of a photo date (photo card)
+
+@Test func undoGivesAGuessWithAnAnchorItsDateBack() throws {
+    let env = try Env()
+    try env.birthday("1986-05-10")
+    let memory = try env.accept("The blue door", anchors: [AnchorOut(phrase: "I was six", relation: .age, targetText: nil, value: nil)], ordinal: 0)
+    let before = try #require(try env.store.memories.fetch(memory.id))
+    #expect(before.range.origin == .inferred && before.range.earliest?.iso == "1992-05-10")
+    let inBand = CivilDate(iso: "1992-08-01")!  // inside the guessed band: the tap is still allowed
+    let reader = PhotoStoryReader(store: env.store)
+    let changes = try reader.useDate(inBand, for: [before])
+    #expect(try env.store.memories.fetch(memory.id)?.range == .fromPhoto(inBand))
+    try reader.undoDate(changes)
+    #expect(try env.store.memories.fetch(memory.id)?.range == before.range)
+    #expect(try env.store.memories.anchors(of: memory.id).allSatisfy(\.resolved))
+}
+
+@Test func undoOfAGuessWithNoAnchorLeavesItUnplaced() throws {
+    let env = try Env()
+    let memory = try env.accept("The blue door", anchors: [], ordinal: 0)
+    try env.store.memories.updateRange(memory.id, .year(1999, origin: .inferred, evidence: nil))
+    let before = try #require(try env.store.memories.fetch(memory.id))
+    let reader = PhotoStoryReader(store: env.store)
+    let changes = try reader.useDate(photoDay, for: [before])
+    #expect(try reader.undoDate(changes) == [memory.id])
+    #expect(try env.store.memories.fetch(memory.id)?.range == .unplaced, "the resolver erases a guess that nothing supports; decision 2")
+}
+
+@Test func undoPlacesAgainAMemoryThatPointedAtTheChangedOne() throws {
+    let env = try Env(text: "we went to the beach and then we had a picnic after the beach")
+    let beach = try env.accept("The beach", anchors: [], ordinal: 0)
+    let picnic = try env.accept("The picnic", anchors: [AnchorOut(phrase: "after the beach", relation: .after, targetText: "The beach", value: nil)], ordinal: 1)
+    _ = try env.runner.run()
+    let picnicBefore = try #require(try env.store.memories.fetch(picnic.id)).range
+    let beachBefore = try #require(try env.store.memories.fetch(beach.id))
+    let reader = PhotoStoryReader(store: env.store)
+    let changes = try reader.useDate(photoDay, for: [beachBefore])
+    #expect(try env.store.memories.fetch(picnic.id)?.range.isPlaced == true)
+    try reader.undoDate(changes)
+    #expect(try env.store.memories.fetch(beach.id)?.range == .unplaced)
+    #expect(try env.store.memories.fetch(picnic.id)?.range == picnicBefore)
 }

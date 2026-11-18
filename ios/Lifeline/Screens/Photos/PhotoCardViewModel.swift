@@ -52,7 +52,7 @@ final class PhotoCardViewModel {
     }
 
     func useDate(_ offer: PhotoStoryCard.DateOffer) {
-        run("Could not use the photo's date") { try PhotoStoryReader(store: deps.extractionStore).useDate(offer) }
+        run("Could not use the photo's date") { _ = try PhotoStoryReader(store: deps.extractionStore).useDate(offer.date, for: [offer.memory]) }
     }
 
     /// "Remove" on one memory: unlinks the photo from it. The photo stays on the story while the session points at it.

@@ -232,7 +232,8 @@ private struct StoryFixture {
     let card = try #require(try f.reader.card(for: f.sessionID))
     #expect(card.pageOffers.map(\.id) == [maya.id])
     try f.reader.addToPage(f.subject.id, maya.id)
-    try f.reader.useDate(try #require(card.dateOffers.first))
+    let offer = try #require(card.dateOffers.first)
+    try f.reader.useDate(offer.date, for: [offer.memory])
     let after = try #require(try f.reader.card(for: f.sessionID))
     #expect(after.pageOffers.isEmpty && after.dateOffers.isEmpty)
     #expect(try f.store.memories.fetch(kept.id)?.range == .fromPhoto(day(2019, 7, 14)))
@@ -254,7 +255,7 @@ private struct StoryFixture {
     let f = try StoryFixture()
     let kept = try CandidateActions(store: f.store).acceptMemory(try f.pendingCard()).memory
     let chapter = try CandidateActions(store: f.store).createChapter(title: "Summers", containing: kept.id)
-    try f.reader.useDate(PhotoStoryCard.DateOffer(memory: kept, date: day(2019, 7, 14)))
+    try f.reader.useDate(day(2019, 7, 14), for: [kept])
     #expect(try f.store.chapters.chapter(id: chapter.id)?.range.earliest == day(2019, 7, 14))
 }
 
@@ -263,11 +264,11 @@ private struct StoryFixture {
 @Test func usingTheDateSkipsAMemoryWhoseRangeChangedSinceTheCard() throws {
     let f = try StoryFixture()
     let kept = try CandidateActions(store: f.store).acceptMemory(try f.pendingCard()).memory
-    let offer = PhotoStoryCard.DateOffer(memory: kept, date: day(2019, 7, 14))
     let said = TimeRange.year(2012, origin: .stated, evidence: "in 2012")
     try f.store.memories.updateRange(kept.id, said)
-    try f.reader.useDate(offer)
+    let changes = try f.reader.useDate(day(2019, 7, 14), for: [kept])
     #expect(try f.store.memories.fetch(kept.id)?.range == said)
+    #expect(changes.isEmpty)
 }
 
 private final class WriteCounter: @unchecked Sendable {
@@ -300,7 +301,7 @@ private final class WriteCounter: @unchecked Sendable {
     let picnic = try actions.acceptMemory(c).memory
     try f.store.memories.updateRange(beach.id, .unplaced)
     #expect(try f.store.memories.fetch(picnic.id)?.range.isPlaced == false)
-    try f.reader.useDate(PhotoStoryCard.DateOffer(memory: beach, date: day(2019, 7, 14)))
+    try f.reader.useDate(day(2019, 7, 14), for: [beach])
     #expect(try f.store.memories.fetch(beach.id)?.range == .fromPhoto(day(2019, 7, 14)), "the photo-dated memory does not move")
     let placed = try #require(try f.store.memories.fetch(picnic.id)?.range)
     #expect(placed.isPlaced && placed.earliest.map { $0 >= day(2019, 7, 14) } == true, "the memory that points at it is placed after it")
@@ -311,10 +312,110 @@ private final class WriteCounter: @unchecked Sendable {
     let f = try StoryFixture()
     let actions = CandidateActions(store: f.store)
     let kept = try actions.acceptMemory(try f.pendingCard()).memory
-    try f.reader.useDate(PhotoStoryCard.DateOffer(memory: kept, date: day(2019, 7, 14)))
+    try f.reader.useDate(day(2019, 7, 14), for: [kept])
     #expect(try f.store.memories.fetch(kept.id)?.range.origin == .photo)
     try actions.setStatedRange(kept.id, .stated(year: 2018))
     let after = try #require(try f.store.memories.fetch(kept.id)?.range)
     #expect(after.origin == .stated && !after.isFromPhoto)
     #expect(after == .stated(year: 2018))
+}
+
+// MARK: - Several ranges in one write, and Undo
+
+private let d = day(2019, 7, 14)
+
+/// Two kept memories, both unplaced, and a chapter "Summers" that holds the first.
+private struct TwoMemories {
+    let f: StoryFixture
+    let a: Memory, b: Memory
+    let chapter: Chapter
+    init() throws {
+        f = try StoryFixture()
+        let actions = CandidateActions(store: f.store)
+        let first = try actions.acceptMemory(try f.pendingCard(ordinal: 0)).memory
+        let second = try actions.acceptMemory(try f.pendingCard(title: "The beach", ordinal: 1)).memory
+        chapter = try actions.createChapter(title: "Summers", containing: first.id)
+        // Read from the store, as the card does.
+        a = try #require(try f.store.memories.fetch(first.id))
+        b = try #require(try f.store.memories.fetch(second.id))
+    }
+    func range(_ m: Memory) throws -> TimeRange { try #require(try f.store.memories.fetch(m.id)).range }
+    func chapterEarliest() throws -> CivilDate? { try f.store.chapters.chapter(id: chapter.id)?.range.earliest }
+}
+
+@Test func updateRangesChangesSeveralMemoriesInOneWrite() throws {
+    let t = try TwoMemories()
+    let counter = WriteCounter()
+    try t.f.db.writer.write { db in db.trace { counter.note($0.expandedDescription) } }
+    let changed = try t.f.store.memories.updateRanges([.init(memory: t.a.id, range: .fromPhoto(d), ifCurrently: t.a.range),
+                                                       .init(memory: t.b.id, range: .fromPhoto(d), ifCurrently: t.b.range)])
+    #expect(changed == [t.a.id, t.b.id])
+    #expect(counter.count == 1)
+    #expect(try t.range(t.a) == .fromPhoto(d) && t.range(t.b) == .fromPhoto(d))
+    #expect(try t.chapterEarliest() == d)
+}
+
+@Test func updateRangesSkipsAMemoryWhoseRangeChanged() throws {
+    let t = try TwoMemories()
+    let changes: [MemoryRepository.RangeChange] = [.init(memory: t.a.id, range: .fromPhoto(d), ifCurrently: t.a.range),
+                                                   .init(memory: t.b.id, range: .fromPhoto(d), ifCurrently: t.b.range)]
+    let said = TimeRange.year(2012, origin: .stated, evidence: "in 2012")
+    try t.f.store.memories.updateRange(t.b.id, said)
+    #expect(try t.f.store.memories.updateRanges(changes) == [t.a.id])
+    #expect(try t.range(t.b) == said)
+}
+
+@Test func updateRangesSkipsAMemoryThatIsGone() throws {
+    let t = try TwoMemories()
+    let changes: [MemoryRepository.RangeChange] = [.init(memory: t.a.id, range: .fromPhoto(d), ifCurrently: t.a.range),
+                                                   .init(memory: t.b.id, range: .fromPhoto(d), ifCurrently: t.b.range)]
+    try t.f.db.writer.write { db in _ = try Memory.deleteOne(db, key: t.b.id.rawValue) }
+    #expect(try t.f.store.memories.updateRanges(changes) == [t.a.id])
+}
+
+@Test func updateRangesWithNothingWritesNothing() throws {
+    let t = try TwoMemories()
+    let counter = WriteCounter()
+    try t.f.db.writer.write { db in db.trace { counter.note($0.expandedDescription) } }
+    #expect(try t.f.store.memories.updateRanges([]) == [])
+    #expect(counter.count == 0)
+}
+
+@Test func useDateReturnsTheOldRangeOfEachMemoryItChanged() throws {
+    let t = try TwoMemories()
+    let staleB = t.b
+    try t.f.store.memories.updateRange(t.b.id, .year(2012, origin: .stated, evidence: "in 2012"))
+    #expect(try t.f.reader.useDate(d, for: [t.a, staleB]) == [PhotoDateChange(memory: t.a.id, before: .unplaced, date: d)])
+}
+
+@Test func undoDatePutsBackEachRange() throws {
+    let t = try TwoMemories()
+    let changes = try t.f.reader.useDate(d, for: [t.a, t.b])
+    #expect(try t.f.reader.undoDate(changes) == [t.a.id, t.b.id])
+    #expect(try t.range(t.a) == .unplaced && t.range(t.b) == .unplaced)
+}
+
+@Test func undoDateSkipsAMemoryThatChangedAfterTheTap() throws {
+    let t = try TwoMemories()
+    let changes = try t.f.reader.useDate(d, for: [t.a, t.b])
+    try CandidateActions(store: t.f.store).setStatedRange(t.a.id, .stated(year: 2018))
+    #expect(try t.f.reader.undoDate(changes) == [t.b.id])
+    #expect(try t.range(t.a) == .stated(year: 2018))
+    #expect(try t.range(t.b) == .unplaced)
+}
+
+@Test func undoDateStillWorksAfterThePhotoLeftTheMemory() throws {
+    let t = try TwoMemories()
+    let changes = try t.f.reader.useDate(d, for: [t.a])
+    _ = try t.f.store.photos.unlink(t.f.subject.id, from: .memory(t.a.id))
+    #expect(try t.f.reader.undoDate(changes) == [t.a.id])
+    #expect(try t.range(t.a) == .unplaced)
+}
+
+@Test func undoDateMovesTheChapterBack() throws {
+    let t = try TwoMemories()
+    let changes = try t.f.reader.useDate(d, for: [t.a])
+    #expect(try t.chapterEarliest() == d)
+    try t.f.reader.undoDate(changes)
+    #expect(try t.chapterEarliest() == nil)
 }
