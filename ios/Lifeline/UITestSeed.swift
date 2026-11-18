@@ -120,13 +120,16 @@ enum UITestSeed {
     /// "The beach" (unplaced; names Maya and Dad) and "The drive home" (stated 2012; names Dad). Maya's page holds the photo; Dad's
     /// does not. The second (newer, one sorted moment) has no kept memory, and its photo has no other home.
     /// `unlanded` leaves one of them with no landing choice made, so the app opens on its landing (`-uiTesting-photoStoryLanding`).
+    /// `withGuess` (`-uiTesting-photoStoryGuess`) adds a third kept memory to the first story: "The picnic", which names Maya and
+    /// Alder Street, holds the photo, and has a guessed date from the age anchor "when I was 22" (the band holds 14 June 2012).
     enum PhotoStoryLanding: String { case first, second }
 
     static func writePhotoStory(store: ExtractionStore, profile: ProfileRepository, sessions: SessionRepository, library: PhotoLibrary,
-                                unlanded: PhotoStoryLanding?) throws {
+                                unlanded: PhotoStoryLanding?, withGuess: Bool = false) throws {
         guard try people(store: store, profile: profile, sessions: sessions) != nil,
               let maya = try store.entities.entities(type: .person).first(where: { $0.title == person })?.id,
-              let dad = try store.entities.entities(type: .person).first(where: { $0.title == "Dad" })?.id else { return }
+              let dad = try store.entities.entities(type: .person).first(where: { $0.title == "Dad" })?.id,
+              let alder = try store.entities.entities(type: .place).first(where: { $0.title == "Alder Street" })?.id else { return }
         let folder = FileManager.default.temporaryDirectory.appending(path: "seed-photo-story-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: folder) }
@@ -142,6 +145,16 @@ enum UITestSeed {
         try store.photos.link(beachPhoto.id, to: .memory(beach))
         try store.photos.link(beachPhoto.id, to: .memory(drive))
         try store.photos.link(beachPhoto.id, to: .entity(maya))
+        // The range is the one the resolver gives this anchor, so a resolver run (after Undo) puts back the same range.
+        // `people` saved Jordan's birthday, so the birth date is there; the second story is written either way.
+        let phrase = "when I was 22"
+        if withGuess, let birth = try profile.ownerBirthDate(), let age = AnchorPhrase.parseAge(phrase, value: "22") {
+            var guess = TimeRange.stated(age: age, birth: birth, evidence: phrase)
+            guess.origin = .inferred
+            let picnic = try seed.keep("The picnic", kind: .event, range: guess, relation: .mention, links: [(maya, nil), (alder, nil)],
+                                       ageAnchor: (phrase: phrase, value: "22"))
+            try store.photos.link(beachPhoto.id, to: .memory(picnic))
+        }
 
         // The second story: one sorted moment, no memory kept, and a photo nothing else holds.
         let lonePhoto = try storePhoto(library, in: folder, named: "story-lone", rgb: 0x5F7046, takenAt: nil)
@@ -274,9 +287,10 @@ private struct SeedSession {
     let start = Date.now
     var index = 0
 
+    /// `ageAnchor` stores one resolved age anchor ("when I was 22") on the memory, so the resolver keeps its guessed range.
     @discardableResult
     mutating func keep(_ title: String, kind: MemoryKind, year: Int? = nil, range dated: TimeRange? = nil, relation: EntityRelation = .detail, quote: String? = nil,
-                       links: [(EntityID, String?)]) throws -> MemoryID {
+                       links: [(EntityID, String?)], ageAnchor: (phrase: String, value: String)? = nil) throws -> MemoryID {
         let text = quote ?? "\(title), as told"
         let segment = Segment(id: .init(), sessionID: session.id, index: index, startMs: index * 5_000, endMs: index * 5_000 + 4_000,
                               text: text, status: .extracted)
@@ -293,7 +307,9 @@ private struct SeedSession {
         try store.memories.insert(memory, spans: [MemorySpan(memoryID: memory.id, segmentID: segment.id, startMs: segment.startMs, endMs: segment.endMs, order: 0)],
                                   people: [], places: [],
                                   links: links.map { MomentEntity(memoryID: memory.id, entityID: $0.0, relation: relation, roleText: $0.1) },
-                                  anchors: [], acceptingCandidate: candidate.id)
+                                  anchors: ageAnchor.map { [Anchor(id: .init(), memoryID: memory.id, phrase: $0.phrase, relation: .age, targetKind: .none,
+                                                                   targetID: nil, value: $0.value, resolved: true)] } ?? [],
+                                  acceptingCandidate: candidate.id)
         return memory.id
     }
 }

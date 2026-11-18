@@ -85,47 +85,36 @@ private func card(_ photo: Photo = photo(), memories: [Memory], holding: Set<Mem
     #expect(result.memories.map(\.id) == [a.id, c.id], "only the memories that hold it, in the order given")
 }
 
-@Test func aPageThatHoldsThePhotoIsNotOffered() {
-    let m = memory("The tree house"), maya = entity("Maya"), dad = entity("Dad")
-    let result = card(memories: [m], linked: [m.id: [maya, dad]], pagesWithPhoto: [maya])
-    #expect(result.pageOffers.map(\.id) == [dad.id])
-}
-
 @Test func aPageIsOfferedOnceWhenTwoMemoriesNameIt() {
     let a = memory("A"), b = memory("B"), maya = entity("Maya"), house = entity("Tree house", type: .thing)
     let result = card(memories: [a, b], linked: [a.id: [maya, house], b.id: [maya]])
-    #expect(result.pageOffers.count == 2)
-    #expect(Set(result.pageOffers.map(\.id)) == [maya.id, house.id], "every entity type is offered")
-}
-
-@Test func theOwnersPageLeadsTheOffers() {
-    let m = memory("The tree house"), me = entity("Jo"), amy = entity("Amy"), zed = entity("Zed")
-    let result = card(memories: [m], linked: [m.id: [zed, amy, me]], owner: me.id)
-    #expect(result.pageOffers.map(\.title) == ["Jo", "Amy", "Zed"])
+    #expect(pages(result).count == 2)
+    #expect(Set(pages(result).map(\.id)) == [maya.id, house.id], "every entity type is offered")
+    #expect(result.pageGroups.map(\.type) == [.person, .thing])
 }
 
 @Test func aHiddenPageIsNotOffered() {
     let m = memory("The tree house"), hidden = entity("Hidden", hidden: true), kept = entity("Private", excluded: true)
     let result = card(memories: [m], linked: [m.id: [hidden, kept]])
-    #expect(result.pageOffers.map(\.id) == [kept.id], "hidden from browsing blocks an offer; kept from the AI does not")
+    #expect(pages(result).map(\.id) == [kept.id], "hidden from browsing blocks an offer; kept from the AI does not")
 }
 
 @Test func aMemoryWithoutThePhotoGetsNoDateOffer() {
     let holds = memory("Holds"), doesNot = memory("Does not")
     let result = card(memories: [holds, doesNot], holding: [holds.id])
-    #expect(result.dateOffers.map(\.id) == [holds.id])
-    #expect(result.dateOffers.first?.date == day(2019, 7, 14))
+    #expect(result.dateOffer?.memories.map(\.id) == [holds.id])
+    #expect(result.dateOffer?.date == day(2019, 7, 14))
 }
 
 @Test func aPhotoWithNoDateOffersNoDate() {
     let m = memory("The tree house")
-    #expect(card(photo(taken: nil), memories: [m]).dateOffers.isEmpty)
+    #expect(card(photo(taken: nil), memories: [m]).dateOffer == nil)
 }
 
 @Test func theCardNamesTheOwnersPage() {
     let m = memory("The tree house"), me = entity("Jo"), amy = entity("Amy")
-    #expect(card(memories: [m], linked: [m.id: [me, amy]], owner: me.id).ownerEntity == me.id)
-    #expect(card(memories: [m], linked: [m.id: [me, amy]]).ownerEntity == nil)
+    #expect(pages(card(memories: [m], linked: [m.id: [me, amy]], owner: me.id)).map(\.isOwner) == [true, false])
+    #expect(pages(card(memories: [m], linked: [m.id: [me, amy]])).map(\.isOwner) == [false, false])
 }
 
 // MARK: - Pages in groups, and the story's date offer
@@ -153,6 +142,8 @@ private func pages(_ card: PhotoStoryCard) -> [PhotoStoryCard.Page] { card.pageG
     #expect(pages(result).map(\.title) == ["Dad", "Maya"])
     #expect(pages(result).map(\.isChosen) == [false, true])
     #expect(pages(result).map(\.stateValue) == ["not added", "added"])
+    #expect(pages(result).first { $0.id == dad.id }?.isChosen == false, "Dad is listed, not chosen")
+    #expect(pages(result).first { $0.id == maya.id }?.isChosen == true, "Maya is listed, chosen")
 }
 
 @Test func aPageThatHoldsThePhotoAndNoMemoryNamesIsListedChosen() {
@@ -306,7 +297,7 @@ private struct StoryFixture {
     let after = try #require(try f.reader.card(for: f.sessionID))
     #expect(after.memories.map(\.id) == [kept.id])
     #expect(!after.hasPendingMoments)
-    #expect(after.dateOffers.map(\.id) == [kept.id], "the kept memory is unplaced, so the photo's date is offered")
+    #expect(after.dateOffer?.memories.map(\.id) == [kept.id], "the kept memory is unplaced, so the photo's date is offered")
     #expect(!after.hasOtherHome)
 }
 
@@ -320,8 +311,9 @@ private struct StoryFixture {
     let card = try #require(try f.reader.card(for: f.sessionID))
     #expect(card.memories.map(\.id) == [target.id], "the memory the telling went into holds the photo, so the card lists it")
     #expect(card.memories.map(\.title) == ["The old house"])
-    #expect(card.pageOffers.map(\.id) == [dad.id], "the merged-into memory's pages are offered")
-    #expect(card.dateOffers.map(\.id) == [target.id], "the merged-into memory is unplaced, so its date is offered")
+    #expect(pages(card).map(\.id) == [dad.id], "the merged-into memory's pages are listed")
+    #expect(pages(card).map(\.isChosen) == [false])
+    #expect(card.dateOffer?.memories.map(\.id) == [target.id], "the merged-into memory is unplaced, so its date is offered")
 }
 
 @Test func theCardListsEachMemoryOnceInTheOrderThisSessionToldIt() throws {
@@ -342,12 +334,14 @@ private struct StoryFixture {
     let maya = try f.store.entities.insert(type: .person, title: "Maya")
     try f.store.entities.link(kept.id, maya.id, relation: .mention)
     let card = try #require(try f.reader.card(for: f.sessionID))
-    #expect(card.pageOffers.map(\.id) == [maya.id])
+    #expect(pages(card).map(\.id) == [maya.id])
+    #expect(pages(card).map(\.isChosen) == [false])
     try f.reader.addToPage(f.subject.id, maya.id)
-    let offer = try #require(card.dateOffers.first)
-    try f.reader.useDate(offer.date, for: [offer.memory])
+    let offer = try #require(card.dateOffer)
+    _ = try f.reader.useDate(offer.date, for: offer.memories)
     let after = try #require(try f.reader.card(for: f.sessionID))
-    #expect(after.pageOffers.isEmpty && after.dateOffers.isEmpty)
+    #expect(pages(after).map(\.isChosen) == [true], "the page stays, chosen")
+    #expect(after.dateOffer == nil)
     #expect(try f.store.memories.fetch(kept.id)?.range == .fromPhoto(day(2019, 7, 14)))
     #expect(after.hasOtherHome)
 }

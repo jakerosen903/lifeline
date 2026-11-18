@@ -304,7 +304,8 @@ struct Dependencies {
         if args.contains("-uiTesting-seedPhotoStory") {
             let landing = args.firstIndex(of: "-uiTesting-photoStoryLanding").flatMap { $0 + 1 < args.count ? args[$0 + 1] : nil }
             try UITestSeed.writePhotoStory(store: store, profile: deps.profile, sessions: deps.sessions, library: deps.photos,
-                                           unlanded: landing.flatMap(UITestSeed.PhotoStoryLanding.init(rawValue:)))
+                                           unlanded: landing.flatMap(UITestSeed.PhotoStoryLanding.init(rawValue:)),
+                                           withGuess: args.contains("-uiTesting-photoStoryGuess"))
         }
         if args.contains("-uiTesting-seedPortrait") { try UITestSeed.writePortrait(store: store, profile: deps.profile, sessions: deps.sessions) }
         if args.contains("-uiTesting-seedTaggedMoment") { try UITestSeed.tagOneMoment(store: store) }

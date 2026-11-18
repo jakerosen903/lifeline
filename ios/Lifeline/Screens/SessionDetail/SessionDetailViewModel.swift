@@ -38,6 +38,8 @@ final class SessionDetailViewModel {
         // The screen's onAppear loads it: SwiftUI may build and discard a model on a parent's render, so init stays cheap.
         flow = CardFlow(deps: deps)
         flow.onAutoClose = { [weak self] in self?.refresh() }
+        // A date the card sets must show on the memory pages this screen opens: they start from its rows.
+        photoCard.onAction = { [weak self] in self?.refresh() }
     }
 
     func refresh() {

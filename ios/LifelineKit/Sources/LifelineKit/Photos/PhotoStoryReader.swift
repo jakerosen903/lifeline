@@ -1,6 +1,6 @@
 import Foundation
 
-/// Gathers what `PhotoStory.card` needs from the store, and applies the two taps the card offers.
+/// Gathers what `PhotoStory.card` needs from the store, and applies the card's taps: a page, the date and its Undo.
 public struct PhotoStoryReader: Sendable {
     private let store: ExtractionStore
 
