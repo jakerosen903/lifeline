@@ -45,3 +45,5 @@ Spec: docs/specs/2026-11-18-people-contacts.md. Branch claude/people-contacts-16
 - Task 4: minor (deferred): no test that a detail link is left out of a mention's group (R16).
 - Task 4: minor (deferred): `group(of:)` uses two separate reads; one read would be tidier.
 - Task 4: minor (deferred): the owner-order test compares with localizedCaseInsensitiveCompare while SQL uses collate nocase.
+- Task 5: implemented (commits 28c8808..18ef780). Review: needs fixes — 1 Important (a fact's own mention can move while its detail stays). Controller promoted four Undo-safety minors and one ruling (a move clears the target's created_by_guess) into round 1, because a wrong Undo writes to the owner's only copy; first-telling rule clarified (moment, mention, not hidden).
+- Task 5: minor (deferred): `PersonLinkRepository.db` went from private to internal for the writes file (R22).
