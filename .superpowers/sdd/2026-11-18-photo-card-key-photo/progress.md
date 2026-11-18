@@ -62,3 +62,13 @@ Spec addition after the plan was drafted: Undo cannot bring back a guess with no
 - Task 6: minor (deferred): the DECISIONS status line is long; split it.
 - Task 6: cannot verify from diff: the seven agreed points against the contacts spec (not on this branch); DECISIONS' claim that a write demotes the old cover before it promotes the new one — true by Task 3's `writeOrder` (reviewed there).
 - Task 6: complete (commits 329be7f..6b52277, approved; minors deferred above)
+
+## Final review (0787f3b..7297eca)
+- Verdict: ready with fixes. No Critical. Important 1: the date offer takes facts, feelings and goals, whose date the memory page hides. Important 2: no test for the drag's slot math with three or more photos.
+- Ruling: only moments (`isMoment`) take the photo's date — a non-moment's page shows no date and no date control, so a date written there is hidden and cannot be changed, against "uncertainty is shown, never hidden" — if wrong, one filter line and a mark on the fact's page are needed.
+- Ruling: `PhotoRowDrag`'s slot math moves into the kit with a table test, in place of a third seeded photo and a UI test — cheaper, and the math is pure — if wrong, a UI test is still missing for three tiles; device check carries it.
+- Ruling: "Choose moments" keeps switches; OVERVIEW says "switch"; the spec's word "checkbox" stays and the difference is an open item for the owner — a switch is the iOS idiom — if wrong, one view changes.
+- Fix wave takes: Important 1, Important 2, Minor 3 (`seen` takes offered and written-or-unchecked only), Minor 5 (VoiceOver announcement and header traits), Minor 7 (OVERVIEW), Minor 8 and the Task 6 minors (device-check known items), the viewer assertion in `testOnePhotoHasNoHintAndNoDrag`.
+- Parked — Minor 4, a resolver failure after the date write leaves no Undo handle — Ruling: real, store-failure only, changes the reader's interface; left for the owner's list.
+- Parked — Minor 6 (a failed Remove shows its error under the sheet), Minor 9 (`toggle` trusts the last read), Minor 10 (`onChange()` after a drag that moved nothing) — Ruling: real and small; nothing builds on them.
+- Owner's call, from the final review: a memory dated from an age ("when I was 22") has origin `inferred`, is counted under "no date you said" and is replaced on tap; Undo covers it, the sentence may not be true for it.
