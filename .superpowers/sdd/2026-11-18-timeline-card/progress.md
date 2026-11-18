@@ -18,3 +18,4 @@ Pre-flight:
 | 2 → 4, 5 | TimelineCard, spokenText | Agree. |
 | 3 → 4 | LifeStripAxis(strip:frame:) | Agree. |
 Task 1: complete (commits 7aa9522..ad5717f, review clean; swift test 1164, the known flake only). For the final review: a tick sits at `LifeStrip`'s start year (likely start, else earliest) and the frame uses `SpineLayout`'s shown years; confirm that a row on screen always has its tick inside the frame. Minor (deferred): the mark placement is one long line; `oneMomentIsOneMark` asserts a range, not the value.
+Task 2: complete (commits ad5717f..075e1d7, review clean; swift test 1188). `LifeMap.years(of:)` became internal so the chapter-years rule is not written twice. Minor (deferred): `aFrameIsClampedToTheStrip` asserts a range, not `0...0`; no frame test with no birth year; the reviewer could not confirm from the diff that `aChapterWithNoEndRunsToNow` builds a range with no end (for the final review).
