@@ -45,7 +45,7 @@ extension PersonLinkRepository {
     // MARK: - Settle
 
     private struct Settled {
-        var before: [MomentEntity] = [], after: [MomentEntity] = [], addedAliases: [Alias] = [], clearedGuess = false
+        var before: [MomentEntity] = [], after: [MomentEntity] = [], addedAliases: [Alias] = [], clearedGuess: PersonMoveReceipt.PersonName?
     }
 
     /// Origin `confirmed` for the link or its group; the said names become the person's aliases;
@@ -61,11 +61,16 @@ extension PersonLinkRepository {
             settled.after.append(row)
         }
         settled.addedAliases = try addAliases(from: open, to: current.person.id, in: db)
-        if current.person.createdByGuess {
-            try db.execute(sql: "update person set created_by_guess = 0 where id = ?", arguments: [current.person.id.rawValue])
-            settled.clearedGuess = true
-        }
+        settled.clearedGuess = try clearGuess(current.person, in: db)
         return settled
+    }
+
+    /// The owner stands behind this person now: no longer a guess a move may remove. Returns the
+    /// person's name as it is, so Undo can see a rename since; nil when there was no flag to clear.
+    private static func clearGuess(_ person: Person, in db: Database) throws -> PersonMoveReceipt.PersonName? {
+        guard person.createdByGuess else { return nil }
+        try db.execute(sql: "update person set created_by_guess = 0 where id = ?", arguments: [person.id.rawValue])
+        return PersonMoveReceipt.PersonName(id: person.id, name: person.displayName, origin: person.nameOrigin)
     }
 
     // MARK: - Move
@@ -75,25 +80,30 @@ extension PersonLinkRepository {
         let old = current.person
         if case .person(let id) = target, id == old.id {
             let s = try settle(current, wholeGroup: wholeGroup, in: db)
-            let unchanged = try spans(of: [old.entityID], in: db)   // a settle moves no first telling
+            // A settle moves no first telling. One that changed nothing records nothing, so its Undo does nothing (R25).
+            let unchanged = s.before.isEmpty ? [] : try spans(of: [old.entityID], in: db)
             return PersonMoveReceipt(before: s.before, after: s.after, removedPerson: nil, addedAliases: s.addedAliases, createdPerson: nil,
-                                     newName: old.displayName, spansBefore: unchanged, spansAfter: unchanged,
-                                     clearedGuess: s.clearedGuess ? old.id : nil)
+                                     newName: old.displayName, spansBefore: unchanged, spansAfter: unchanged, clearedGuess: s.clearedGuess)
         }
         let group = try group(of: current, in: db)
         var scope = try rows(of: wholeGroup ? group : [current], in: db)
-        // A detail follows a whole answer only: moving one moment of several leaves the fact with the others (R19).
-        if current.relation == .mention, wholeGroup || group.count == 1 { scope += try details(about: current, in: db) }
+        if current.relation == .mention {
+            // A fact whose own mention moves takes its detail along, so the two never part (R23). A fact
+            // elsewhere in the recording follows a whole answer only (R19).
+            let mentioned = Set(scope.map(\.memoryID))
+            let whole = wholeGroup || group.count == 1
+            scope += try details(about: current, in: db).filter { whole || mentioned.contains($0.memoryID) }
+        }
 
         let person: Person?
-        var created: PersonID?
+        var created: PersonMoveReceipt.PersonName?
         switch target {
         case .person(let id):
             guard let p = try Person.fetchOne(db, sql: Person.selectSQL + "where person.id = ?", arguments: [id.rawValue]) else { throw Error.notFound }
             person = p
         case .someoneNew:
             let p = try newPerson(for: current, in: db)
-            (person, created) = (p, p.id)
+            (person, created) = (p, PersonMoveReceipt.PersonName(id: p.id, name: p.displayName, origin: p.nameOrigin))
         case .notAPerson:
             person = nil
         }
@@ -121,15 +131,17 @@ extension PersonLinkRepository {
         }
         // 2. The said names teach the new person; the old person keeps theirs. "Not a person" teaches nothing.
         let added = try person.map { try addAliases(from: scope, to: $0.id, in: db) } ?? []
+        // The owner picked this person and gave them the name: no longer a guess (R24).
+        let cleared = try person.flatMap { try clearGuess($0, in: db) }
         // 3. First tellings follow the moments.
         let moved = Set(scope.map(\.memoryID))
         try replaceFirstTelling(of: old.entityID, ifFrom: moved, in: db)
         if let person { try giveFirstTelling(to: person.entityID, fromOldestOf: moved, in: db) }
         // 4. Last: an empty guess goes, with its entity, aliases and first telling (they are in `spansBefore`).
         let removed = try removeIfEmptyGuess(old.id, in: db)
-        return PersonMoveReceipt(before: before, after: after, removedPerson: removed?.person, addedAliases: added, createdPerson: created,
+        return PersonMoveReceipt(before: before, after: after, removedPerson: removed?.person, addedAliases: added, createdPerson: created?.id,
                                  newName: person?.displayName ?? "", removedEntity: removed?.entity, removedAliases: removed?.aliases ?? [],
-                                 spansBefore: spansBefore, spansAfter: try spans(of: touched, in: db))
+                                 spansBefore: spansBefore, spansAfter: try spans(of: touched, in: db), clearedGuess: cleared, createdName: created)
     }
 
     /// "Someone new": a person named by the said name. The owner chose them, so they are not a guess (R14).
@@ -168,7 +180,8 @@ extension PersonLinkRepository {
     // MARK: - First tellings
 
     /// When the entity's first telling came from one of `moved`, it takes the first span of its
-    /// oldest remaining memory, or goes when none remains.
+    /// oldest remaining moment, or goes when none remains (R28). A moment is a mention in an
+    /// event or other memory that is not hidden: a fact or a hidden memory never becomes the first telling.
     private static func replaceFirstTelling(of entity: EntityID, ifFrom moved: Set<MemoryID>, in db: Database) throws {
         guard let first = try EntitySpan.fetchOne(db, sql: #"select * from entity_span where entity_id = ? and "order" = 0"#, arguments: [entity.rawValue]) else { return }
         let fromMoved = try moved.contains { memory in
@@ -178,7 +191,8 @@ extension PersonLinkRepository {
         let next = try MemorySpan.fetchOne(db, sql: """
             select ms.* from moment_entity me join memory on memory.id = me.memory_id
             join memory_span ms on ms.memory_id = memory.id and ms."order" = 0
-            where me.entity_id = ? order by memory.created_at, memory.id limit 1
+            where me.entity_id = ? and me.relation = 'mention' and memory.kind in ('event', 'other') and memory.hidden_from_timeline = 0
+            order by memory.created_at, memory.id limit 1
             """, arguments: [entity.rawValue])
         if let next {
             try db.execute(sql: #"update entity_span set segment_id = ?, start_ms = ?, end_ms = ? where entity_id = ? and "order" = 0"#,
@@ -239,6 +253,16 @@ extension PersonLinkRepository {
     /// still gone, and a person it made holds nothing else. Then every row goes back.
     private static func undo(_ r: PersonMoveReceipt, in db: Database) throws {
         for row in r.after where try fetchRow(row, in: db) != row { throw Error.stale }
+        // A memory or person deleted since leaves nowhere to put a row back (R27).
+        for memory in Set(r.before.map(\.memoryID.rawValue)) where try !Memory.exists(db, key: memory) { throw Error.stale }
+        for entity in Set(r.before.map(\.entityID)) where entity != r.removedEntity?.id {
+            if try !Entity.exists(db, key: entity.rawValue) { throw Error.stale }
+        }
+        // A person Undo would mark as a guess again, or delete, must not have been renamed since (R26).
+        for recorded in [r.clearedGuess, r.createdName].compactMap({ $0 }) {
+            let now = try Person.fetchOne(db, sql: Person.selectSQL + "where person.id = ?", arguments: [recorded.id.rawValue])
+            if now?.displayName != recorded.name || now?.nameOrigin != recorded.origin { throw Error.stale }
+        }
         let afterKeys = Set(r.after.map(key))
         for row in r.before where !afterKeys.contains(key(row)) {
             if try fetchRow(row, in: db) != nil { throw Error.stale }
@@ -272,7 +296,7 @@ extension PersonLinkRepository {
         }
         if let created = r.createdPerson { _ = try Entity.deleteOne(db, key: created.rawValue) }
         if let person = r.clearedGuess {
-            try db.execute(sql: "update person set created_by_guess = 1 where id = ?", arguments: [person.rawValue])
+            try db.execute(sql: "update person set created_by_guess = 1 where id = ?", arguments: [person.id.rawValue])
         }
     }
 

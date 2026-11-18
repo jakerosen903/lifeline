@@ -15,15 +15,22 @@ public struct PersonMoveReceipt: Sendable, Equatable {
     /// Every span of the persons the move touched, before and after (first tellings, and the removed person's).
     var spansBefore: [EntitySpan]
     var spansAfter: [EntitySpan]
-    /// The person whose `created_by_guess` a settle cleared (a move to the same person).
-    var clearedGuess: PersonID?
+    /// The person whose `created_by_guess` the action cleared, with their name as it was then.
+    var clearedGuess: PersonName?
+    /// The "Someone new" person's name as made. Undo refuses to delete them after a rename.
+    var createdName: PersonName?
+
+    /// A person's name and where it came from, so Undo can tell the owner renamed them since.
+    struct PersonName: Sendable, Equatable {
+        var id: PersonID; var name: String; var origin: NameOrigin?
+    }
 
     init(before: [MomentEntity], after: [MomentEntity], removedPerson: Person?, addedAliases: [Alias], createdPerson: PersonID?, newName: String,
          removedEntity: Entity? = nil, removedAliases: [Alias] = [], spansBefore: [EntitySpan] = [], spansAfter: [EntitySpan] = [],
-         clearedGuess: PersonID? = nil) {
+         clearedGuess: PersonName? = nil, createdName: PersonName? = nil) {
         self.before = before; self.after = after; self.removedPerson = removedPerson; self.addedAliases = addedAliases
         self.createdPerson = createdPerson; self.newName = newName; self.removedEntity = removedEntity; self.removedAliases = removedAliases
-        self.spansBefore = spansBefore; self.spansAfter = spansAfter; self.clearedGuess = clearedGuess
+        self.spansBefore = spansBefore; self.spansAfter = spansAfter; self.clearedGuess = clearedGuess; self.createdName = createdName
     }
 }
 

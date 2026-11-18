@@ -344,7 +344,7 @@ private struct Env {
 
 @Test func undoIsRefusedWhenALinkChangedSince() throws {
     let env = try Env()
-    let robin = try env.store.people.insertPerson(displayName: "Robin")
+    _ = try env.store.people.insertPerson(displayName: "Robin")
     let robyn = try env.store.people.insertPerson(displayName: "Robyn Vale")
     let kira = try env.store.people.insertPerson(displayName: "Kira")
     let m = try env.kept(in: try env.session(["Robin painted the fence"])[0], people: ["Robin"])
@@ -360,7 +360,6 @@ private struct Env {
     try env.store.memories.link(kira.id, to: m.id, roleText: "Kira")
     #expect(throws: PersonLinkActions.Error.stale) { try env.actions.undo(second) }
     #expect(Set(try env.personRows(m).map(\.entityID)) == [robyn.entityID, kira.entityID])
-    _ = robin
 }
 
 @Test func undoOfSomeoneNewIsRefusedOnceThatPersonHasMore() throws {
@@ -463,4 +462,130 @@ private struct Env {
     let person = try #require(try env.store.people.person(id: tomas))
     #expect(!person.createdByGuess, "a name the owner typed is not a guess")
     #expect(person.nameOrigin == .typed)
+}
+
+// MARK: - Review fixes (round 2)
+
+@Test func aFactsOwnMentionAndItsDetailMoveTogether() throws {
+    let env = try Env()
+    let robin = try env.store.people.insertPerson(displayName: "Robin")
+    let robyn = try env.store.people.insertPerson(displayName: "Robyn Vale")
+    let segs = try env.session(["Robin painted the fence", "Robin is the kindest person I know"])
+    let event = try env.kept(in: segs[0], people: ["Robin"])
+    let fact = try env.kept(in: segs[1], people: ["Robin"], kind: .fact, about: "p1", mentions: [("Robin", "p1", nil)])
+    #expect(try env.store.personLinks.group(of: try env.link(fact)).count == 2)
+
+    try env.actions.move(try env.link(fact), to: .person(robyn.id), wholeGroup: false)
+    #expect(try env.onlyPerson(fact) == robyn.id)
+    #expect(try env.onlyPerson(fact, .detail) == robyn.id, "a fact's mention and its detail never part")
+    #expect(try env.personRows(fact).map(\.origin) == [.confirmed])
+    #expect(try env.personRows(fact, .detail).map(\.origin) == [.confirmed])
+    #expect(try env.onlyPerson(event) == robin.id, "the checkbox was off")
+}
+
+@Test func aMoveClearsTheTargetsGuessFlagAndUndoPutsItBack() throws {
+    let env = try Env()
+    _ = try env.store.people.insertPerson(displayName: "Robin")
+    let segs = try env.session(["Tomas painted the fence", "Robin fixed the gate"])
+    let tomas = try env.onlyPerson(try env.kept(in: segs[0], people: ["Tomas"]))
+    let m = try env.kept(in: segs[1], people: ["Robin"])
+    let receipt = try env.actions.move(try env.link(m), to: .person(tomas), wholeGroup: false)
+    #expect(try env.store.people.person(id: tomas)?.createdByGuess == false, "the owner picked this person")
+    try env.actions.undo(receipt)
+    #expect(try env.store.people.person(id: tomas)?.createdByGuess == true)
+}
+
+@Test func undoOfAMoveThatChangedNothingDoesNothing() throws {
+    let env = try Env()
+    let robin = try env.store.people.insertPerson(displayName: "Robin")
+    let m = try env.kept(in: try env.session(["Robin painted the fence"])[0], people: ["Robin"])
+    try env.actions.settle(try env.link(m), wholeGroup: false)
+    let before = try env.dump()
+    let receipt = try env.actions.move(try env.link(m), to: .person(robin.id), wholeGroup: false)
+    #expect(receipt.before.isEmpty && receipt.after.isEmpty)
+    try env.actions.undo(receipt)
+    #expect(try env.dump() == before)
+}
+
+@Test func undoIsRefusedAfterARenameOfAPersonItWouldReflagOrDelete() throws {
+    let env = try Env()
+    // A settle cleared the guess flag; the owner then named the person.
+    let m = try env.kept(in: try env.session(["Tomas painted the fence"])[0], people: ["Tomas"])
+    let tomas = try env.onlyPerson(m)
+    let settled = try env.actions.move(try env.link(m), to: .person(tomas), wholeGroup: false)
+    try env.store.people.rename(tomas, to: "Tomas Reyes")
+    #expect(throws: PersonLinkActions.Error.stale) { try env.actions.undo(settled) }
+    #expect(try env.store.people.person(id: tomas)?.createdByGuess == false, "a person the owner named is never a guess again")
+
+    // "Someone new", then renamed: Undo must not delete them.
+    _ = try env.store.people.insertPerson(displayName: "Robin")
+    let other = try env.kept(in: try env.session(["Robin fixed the gate"])[0], people: ["Robin"])
+    let made = try env.actions.move(try env.link(other), to: .someoneNew, wholeGroup: false)
+    let created = try #require(made.createdPerson)
+    try env.store.people.rename(created, to: "Robin Hale")
+    #expect(throws: PersonLinkActions.Error.stale) { try env.actions.undo(made) }
+    #expect(try env.store.people.person(id: created) != nil)
+}
+
+@Test func undoIsRefusedWhenAMemoryWasDeletedSince() throws {
+    let env = try Env()
+    _ = try env.store.people.insertPerson(displayName: "Will")
+    let m = try env.kept(in: try env.session(["Will painted the fence"])[0], people: ["Will"])
+    let receipt = try env.actions.move(try env.link(m), to: .notAPerson, wholeGroup: false)
+    try env.store.memories.delete(m.id)
+    #expect(throws: PersonLinkActions.Error.stale) { try env.actions.undo(receipt) }
+}
+
+@Test func theFirstTellingIsNeverAFactOrAHiddenMoment() throws {
+    let env = try Env()
+    let robin = try env.store.people.insertPerson(displayName: "Robin")
+    let kira = try env.store.people.insertPerson(displayName: "Kira")
+    let robyn = try env.store.people.insertPerson(displayName: "Robyn Vale")
+    let segs = try env.session(["Robin and Kira painted the fence", "Robin and Kira are the kindest people I know",
+                                "Robin and Kira fixed the gate", "Robin dug the bed"])
+    let first = try env.kept(in: segs[0], people: ["Robin", "Kira"])
+    _ = try env.kept(in: segs[1], people: ["Robin", "Kira"], kind: .fact)
+    let hidden = try env.kept(in: segs[2], people: ["Robin", "Kira"])
+    try env.store.memories.setHidden(hidden.id, true)
+    let visible = try env.kept(in: segs[3], people: ["Robin"])
+
+    try env.actions.move(try env.link(first, of: robin.id), to: .person(robyn.id), wholeGroup: false)
+    #expect(try env.firstTelling(robin.id)?.segmentID == env.firstSpan(visible).segmentID, "the oldest remaining moment that shows")
+    try env.actions.move(try env.link(first, of: kira.id), to: .person(robyn.id), wholeGroup: false)
+    #expect(try env.firstTelling(kira.id) == nil, "a fact or a hidden memory is no first telling")
+}
+
+@Test func undoOfNotAPersonPutsTheDetailsBack() throws {
+    let env = try Env()
+    _ = try env.store.people.insertPerson(displayName: "Faith")
+    let segs = try env.session(["Faith carried me through", "Faith is what kept me going"])
+    let m = try env.kept(in: segs[0], people: ["Faith"])
+    let fact = try env.kept(in: segs[1], people: ["Faith"], kind: .fact, about: "p1", mentions: [("Faith", "p1", nil)])
+    let before = try env.dump()
+    let receipt = try env.actions.move(try env.link(m), to: .notAPerson, wholeGroup: true)
+    #expect(try env.personRows(fact, .detail).isEmpty, "the fact about that name is about no one")
+    try env.actions.undo(receipt)
+    #expect(try env.dump() == before)
+}
+
+@Test func settleNeverSavesAGroupPhrase() throws {
+    let env = try Env()
+    let robin = try env.store.people.insertPerson(displayName: "Robin")
+    let m = try env.kept(in: try env.session(["Robin and our parents painted the fence"])[0], people: ["Robin"],
+                         mentions: [("Robin", nil, "our parents")])
+    #expect(GroupPhrase.isGroup("our parents"))
+    try env.actions.settle(try env.link(m), wholeGroup: false)
+    #expect(try env.aliases(robin.id) == ["Robin"], "a phrase for several people is no one person's name")
+}
+
+@Test func someoneNewOnALinkWithNoSaidNameUsesThePersonsName() throws {
+    let env = try Env()
+    let robin = try env.store.people.insertPerson(displayName: "Robin")
+    let m = try env.kept(in: try env.session(["I painted the fence"])[0], people: [])
+    try env.store.entities.link(m.id, robin.entityID, relation: .mention, roleText: nil, origin: .assumed)
+    let receipt = try env.actions.move(try env.link(m), to: .someoneNew, wholeGroup: false)
+    let createdID = try #require(receipt.createdPerson)
+    let created = try #require(try env.store.people.person(id: createdID))
+    #expect(created.displayName == "Robin" && created.id != robin.id)
+    #expect(try env.personRows(m).map(\.roleText) == [nil])
 }
