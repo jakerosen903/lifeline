@@ -72,3 +72,8 @@ Spec addition after the plan was drafted: Undo cannot bring back a guess with no
 - Parked — Minor 4, a resolver failure after the date write leaves no Undo handle — Ruling: real, store-failure only, changes the reader's interface; left for the owner's list.
 - Parked — Minor 6 (a failed Remove shows its error under the sheet), Minor 9 (`toggle` trusts the last read), Minor 10 (`onChange()` after a drag that moved nothing) — Ruling: real and small; nothing builds on them.
 - Owner's call, from the final review: a memory dated from an age ("when I was 22") has origin `inferred`, is counted under "no date you said" and is replaced on tap; Undo covers it, the sentence may not be true for it.
+- Final fix wave: commits 90eedac..c89ed7b (1f5205d, 7ecd0e1, 4745da6, cc075a9, ba3e661, c89ed7b). Re-review: all seven findings addressed, no new Critical or Important.
+- Parked — an announcement flag stays set when a date tap changes nothing or fails, so one later change is announced once more — Ruling: harmless, one extra VoiceOver line.
+- Parked — the new viewer assertion in `testOnePhotoHasNoHintAndNoDrag` does not wait — Ruling: a weak negative check; fine.
+- Flaky under load, not ours, new name: `pausesAreLoggedNotEmitted` (same file as `hungFinalizeDoesNotBlockSegmentCloseOrStop`).
+- Whole UI suite: started on c89ed7b.
