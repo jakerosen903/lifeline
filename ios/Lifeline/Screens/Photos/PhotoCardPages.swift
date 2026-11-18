@@ -12,6 +12,7 @@ struct PhotoCardPages: View {
         VStack(alignment: .leading, spacing: 14) {
             VStack(alignment: .leading, spacing: 2) {
                 Text("Also show this photo on").font(.system(.title3, design: .serif).weight(.medium)).foregroundStyle(Theme.ink)
+                    .accessibilityAddTraits(.isHeader)
                 Text("Tap to add. Tap again to take it off.").font(.footnote).foregroundStyle(Theme.secondaryText)
             }
             .fixedSize(horizontal: false, vertical: true)
