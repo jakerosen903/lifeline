@@ -39,3 +39,5 @@ Spec: docs/specs/2026-11-18-people-contacts.md. Branch claude/people-contacts-16
 - Task 3: minor (deferred): stale doc comment at PeopleRepository.swift:108-109 ("A name the extractor found goes through findPerson").
 - Task 3: minor (deferred): guessInputs reads all people and aliases for every segment of a Keep, also when the card names nobody.
 - Task 3: minor (deferred): `aCarriedPersonNameShowsNoCard` stops at the queue and does not keep the card.
+- Task 3: fix round 1/5 (1 addressed, 0 open — pending person cards closed in the Keep transaction; commits ed405db..59f377d)
+- Task 3: complete (commits 236bb08..59f377d, review clean)
