@@ -15,7 +15,7 @@ public struct PhotoStoryReader: Sendable {
         let holding = Set(memories.map(\.id)).intersection(held.memories)
         var linked: [MemoryID: [Entity]] = [:]
         for id in holding { linked[id] = try store.entities.links(of: id).map(\.entity) }
-        let pagesWithPhoto = held.entities
+        let pagesWithPhoto = try held.entities.compactMap { try store.entities.entity(id: $0) }
         let pendingCards = try store.candidates.pending(in: session).contains { $0.kind == .memory }
         let pendingSegments = try !store.sessions.segments(in: session, status: .pending).isEmpty
         return PhotoStory.card(photo: photo, sessionMemories: memories, holding: holding, linked: linked, pagesWithPhoto: pagesWithPhoto,

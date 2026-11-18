@@ -13,23 +13,25 @@ private func range(_ a: CivilDate?, _ b: CivilDate?) -> TimeRange {
     let photoDay = day(2019, 7, 14)
     // Unplaced: the photo can place it.
     #expect(PhotoStory.offersDate(photoDay, for: .unplaced))
-    // Inside the band: the date does not contradict the memory, so nothing is offered.
-    #expect(!PhotoStory.offersDate(photoDay, for: range(day(2019, 1, 1), day(2019, 12, 31))))
+    // Inside the band: a guess is still a guess, so the photo can replace it.
+    #expect(PhotoStory.offersDate(photoDay, for: range(day(2019, 1, 1), day(2019, 12, 31))))
     // One day outside either edge.
     #expect(PhotoStory.offersDate(photoDay, for: range(day(2019, 7, 15), day(2019, 12, 31))))
     #expect(PhotoStory.offersDate(photoDay, for: range(day(2019, 1, 1), day(2019, 7, 13))))
     // On an edge.
-    #expect(!PhotoStory.offersDate(photoDay, for: range(day(2019, 7, 14), day(2019, 12, 31))))
-    #expect(!PhotoStory.offersDate(photoDay, for: range(day(2019, 1, 1), day(2019, 7, 14))))
+    #expect(PhotoStory.offersDate(photoDay, for: range(day(2019, 7, 14), day(2019, 12, 31))))
+    #expect(PhotoStory.offersDate(photoDay, for: range(day(2019, 1, 1), day(2019, 7, 14))))
     // No date on the photo.
     #expect(!PhotoStory.offersDate(nil, for: .unplaced))
     #expect(!PhotoStory.offersDate(nil, for: range(day(2019, 1, 1), day(2019, 12, 31))))
     // Already that day, from the photo.
     #expect(!PhotoStory.offersDate(photoDay, for: .fromPhoto(photoDay)))
-    // Half-open: a missing edge is unbounded.
-    #expect(!PhotoStory.offersDate(photoDay, for: range(day(2019, 1, 1), nil)))
+    // A date from another photo: the person changes it on the memory's page.
+    #expect(!PhotoStory.offersDate(photoDay, for: .fromPhoto(day(2012, 6, 1))))
+    // Half-open: a guess with one edge is still a guess.
+    #expect(PhotoStory.offersDate(photoDay, for: range(day(2019, 1, 1), nil)))
     #expect(PhotoStory.offersDate(photoDay, for: range(day(2020, 1, 1), nil)))
-    #expect(!PhotoStory.offersDate(photoDay, for: range(nil, day(2020, 1, 1))))
+    #expect(PhotoStory.offersDate(photoDay, for: range(nil, day(2020, 1, 1))))
     #expect(PhotoStory.offersDate(photoDay, for: range(nil, day(2018, 1, 1))))
 }
 
@@ -37,7 +39,7 @@ private func range(_ a: CivilDate?, _ b: CivilDate?) -> TimeRange {
 /// so the card must not offer it there, however far the photo's day is from the band.
 @Test func offersDateNeverReplacesADateThePersonSaid() {
     let photoDay = day(2019, 7, 14)
-    for origin in [RangeOrigin.stated, .confirmed] {
+    for origin in [RangeOrigin.stated, .confirmed, .photo] {
         let said = TimeRange(earliest: day(2012, 1, 1), latest: day(2012, 12, 31), likelyStart: nil, likelyEnd: nil,
                              granularity: .year, origin: origin, evidenceText: "in 2012")
         #expect(!PhotoStory.offersDate(photoDay, for: said), "\(origin)")
@@ -52,6 +54,8 @@ private func range(_ a: CivilDate?, _ b: CivilDate?) -> TimeRange {
         let guess = TimeRange(earliest: day(2012, 1, 1), latest: day(2012, 12, 31), likelyStart: nil, likelyEnd: nil,
                               granularity: .year, origin: origin, evidenceText: nil)
         #expect(PhotoStory.offersDate(photoDay, for: guess), "\(origin)")
+        // The same guess with the photo day inside its band.
+        #expect(PhotoStory.offersDate(day(2012, 6, 14), for: guess), "\(origin), inside")
     }
 }
 
@@ -70,7 +74,7 @@ private func entity(_ title: String, type: EntityType = .person, hidden: Bool = 
     Entity(type: type, title: title, hiddenFromTimeline: hidden, excludedFromAI: excluded)
 }
 private func card(_ photo: Photo = photo(), memories: [Memory], holding: Set<MemoryID>? = nil, linked: [MemoryID: [Entity]] = [:],
-                  pagesWithPhoto: Set<EntityID> = [], owner: EntityID? = nil) -> PhotoStoryCard {
+                  pagesWithPhoto: [Entity] = [], owner: EntityID? = nil) -> PhotoStoryCard {
     PhotoStory.card(photo: photo, sessionMemories: memories, holding: holding ?? Set(memories.map(\.id)), linked: linked,
                     pagesWithPhoto: pagesWithPhoto, ownerEntity: owner, hasPendingMoments: false, hasOtherHome: false)
 }
@@ -83,7 +87,7 @@ private func card(_ photo: Photo = photo(), memories: [Memory], holding: Set<Mem
 
 @Test func aPageThatHoldsThePhotoIsNotOffered() {
     let m = memory("The tree house"), maya = entity("Maya"), dad = entity("Dad")
-    let result = card(memories: [m], linked: [m.id: [maya, dad]], pagesWithPhoto: [maya.id])
+    let result = card(memories: [m], linked: [m.id: [maya, dad]], pagesWithPhoto: [maya])
     #expect(result.pageOffers.map(\.id) == [dad.id])
 }
 
@@ -122,6 +126,114 @@ private func card(_ photo: Photo = photo(), memories: [Memory], holding: Set<Mem
     let m = memory("The tree house"), me = entity("Jo"), amy = entity("Amy")
     #expect(card(memories: [m], linked: [m.id: [me, amy]], owner: me.id).ownerEntity == me.id)
     #expect(card(memories: [m], linked: [m.id: [me, amy]]).ownerEntity == nil)
+}
+
+// MARK: - Pages in groups, and the story's date offer
+
+private func pages(_ card: PhotoStoryCard) -> [PhotoStoryCard.Page] { card.pageGroups.flatMap(\.pages) }
+
+@Test func thePagesAreInGroupsInOrder() {
+    let m = memory("The picnic")
+    let idea = entity("Saying yes", type: .idea), thing = entity("The blue kayak", type: .thing)
+    let place = entity("Pelican Beach", type: .place), maya = entity("Maya")
+    let result = card(memories: [m], linked: [m.id: [idea, thing, place, maya]])
+    #expect(result.pageGroups.map(\.type) == [.person, .place, .thing, .idea])
+    #expect(result.pageGroups.map(\.title) == ["People", "Places", "Things", "Ideas"])
+}
+
+@Test func aGroupWithNoPageIsLeftOut() {
+    let m = memory("The picnic")
+    let result = card(memories: [m], linked: [m.id: [entity("The beach", type: .place), entity("Maya")]])
+    #expect(result.pageGroups.map(\.type) == [.person, .place])
+}
+
+@Test func aPageThatHoldsThePhotoIsChosen() {
+    let m = memory("The picnic"), maya = entity("Maya"), dad = entity("Dad")
+    let result = card(memories: [m], linked: [m.id: [maya, dad]], pagesWithPhoto: [maya])
+    #expect(pages(result).map(\.title) == ["Dad", "Maya"])
+    #expect(pages(result).map(\.isChosen) == [false, true])
+    #expect(pages(result).map(\.stateValue) == ["not added", "added"])
+}
+
+@Test func aPageThatHoldsThePhotoAndNoMemoryNamesIsListedChosen() {
+    let m = memory("The picnic"), maya = entity("Maya"), dad = entity("Dad")
+    let result = card(memories: [m], linked: [m.id: [dad]], pagesWithPhoto: [maya])
+    #expect(pages(result).map(\.title) == ["Dad", "Maya"])
+    #expect(pages(result).map(\.isChosen) == [false, true])
+}
+
+@Test func aHiddenPageThatHoldsThePhotoIsNotListed() {
+    let m = memory("The picnic")
+    let result = card(memories: [m], pagesWithPhoto: [entity("Hidden", hidden: true)])
+    #expect(result.pageGroups.isEmpty)
+}
+
+@Test func aPageKeptFromTheAIIsListed() {
+    let m = memory("The picnic"), kept = entity("Private", excluded: true)
+    let result = card(memories: [m], linked: [m.id: [kept]])
+    #expect(pages(result).map(\.id) == [kept.id])
+    #expect(pages(result).map(\.isChosen) == [false])
+}
+
+@Test func theOwnersChipIsFirstAndReadsYou() {
+    let m = memory("The picnic"), zed = entity("Zed"), amy = entity("Amy"), jo = entity("Jo")
+    let result = card(memories: [m], linked: [m.id: [zed, amy, jo]], owner: jo.id)
+    #expect(pages(result).map(\.title) == ["You", "Amy", "Zed"])
+    #expect(pages(result).map(\.isOwner) == [true, false, false])
+}
+
+@Test func aPageIsListedOnceWhenTwoMemoriesNameItAndItHoldsThePhoto() {
+    let a = memory("A"), b = memory("B"), maya = entity("Maya")
+    let result = card(memories: [a, b], linked: [a.id: [maya], b.id: [maya]], pagesWithPhoto: [maya])
+    #expect(pages(result).map(\.id) == [maya.id])
+    #expect(pages(result).map(\.isChosen) == [true])
+}
+
+@Test func twoPagesWithOneTitleAreBothListed() {
+    let m = memory("The picnic"), one = entity("Sam"), two = entity("Sam")
+    let result = card(memories: [m], linked: [m.id: [two, one]])
+    #expect(pages(result).count == 2)
+    #expect(pages(result).map(\.id.rawValue) == [one.id.rawValue, two.id.rawValue].sorted())
+}
+
+@Test func oneDateOfferForTheStory() {
+    let a = memory("A"), c = memory("C", range: range(day(2012, 1, 1), day(2012, 12, 31)))
+    let b = memory("B", range: TimeRange(earliest: day(2012, 1, 1), latest: day(2012, 12, 31), likelyStart: nil, likelyEnd: nil,
+                                         granularity: .year, origin: .stated, evidenceText: "in 2012"))
+    let d = memory("D", range: .fromPhoto(day(2012, 6, 1)))
+    let result = card(memories: [a, b, c, d])
+    #expect(result.dateOffer == .init(date: day(2019, 7, 14), memories: [a, c]))
+}
+
+@Test func noDateOfferWhenNoMemoryCanTakeIt() {
+    let b = memory("B", range: TimeRange(earliest: day(2012, 1, 1), latest: day(2012, 12, 31), likelyStart: nil, likelyEnd: nil,
+                                         granularity: .year, origin: .stated, evidenceText: "in 2012"))
+    let d = memory("D", range: .fromPhoto(day(2012, 6, 1)))
+    #expect(card(memories: [b, d]).dateOffer == nil)
+}
+
+@Test func noDateOfferWithoutAPhotoDate() {
+    #expect(card(photo(taken: nil), memories: [memory("A")]).dateOffer == nil)
+}
+
+@Test func aMemoryWithoutThePhotoIsNotInTheDateOffer() {
+    let a = memory("A"), c = memory("C", range: range(day(2012, 1, 1), day(2012, 12, 31)))
+    let result = card(memories: [a, c], holding: [a.id])
+    #expect(result.dateOffer?.memories == [a])
+}
+
+@Test func theMomentsLine() {
+    func result(pending: Bool, kept: Int) -> PhotoStoryCard {
+        let memories = (0..<kept).map { memory("M\($0)") }
+        return PhotoStory.card(photo: photo(), sessionMemories: memories, holding: Set(memories.map(\.id)), linked: [:], pagesWithPhoto: [],
+                               ownerEntity: nil, hasPendingMoments: pending, hasOtherHome: false)
+    }
+    let waiting = "This photo goes on each moment you keep."
+    #expect(result(pending: true, kept: 0).momentsLine == waiting && !result(pending: true, kept: 0).momentsLineOpens)
+    #expect(result(pending: true, kept: 1).momentsLine == waiting && !result(pending: true, kept: 1).momentsLineOpens)
+    #expect(result(pending: false, kept: 1).momentsLine == "On 1 moment from this story" && result(pending: false, kept: 1).momentsLineOpens)
+    #expect(result(pending: false, kept: 5).momentsLine == "On 5 moments from this story" && result(pending: false, kept: 5).momentsLineOpens)
+    #expect(result(pending: false, kept: 0).momentsLine == nil && !result(pending: false, kept: 0).momentsLineOpens)
 }
 
 // MARK: - The delete dialog's sentence
@@ -238,6 +350,17 @@ private struct StoryFixture {
     #expect(after.pageOffers.isEmpty && after.dateOffers.isEmpty)
     #expect(try f.store.memories.fetch(kept.id)?.range == .fromPhoto(day(2019, 7, 14)))
     #expect(after.hasOtherHome)
+}
+
+@Test func theReaderListsAPageThatHoldsThePhotoAndNoMemoryNames() throws {
+    let f = try StoryFixture()
+    let kept = try CandidateActions(store: f.store).acceptMemory(try f.pendingCard()).memory
+    let dad = try f.store.entities.insert(type: .person, title: "Dad"), maya = try f.store.entities.insert(type: .person, title: "Maya")
+    try f.store.entities.link(kept.id, dad.id, relation: .mention)
+    try f.store.photos.link(f.subject.id, to: .entity(maya.id))
+    let card = try #require(try f.reader.card(for: f.sessionID))
+    #expect(pages(card).map(\.title) == ["Dad", "Maya"])
+    #expect(pages(card).map(\.isChosen) == [false, true])
 }
 
 @Test func addToPageUsesTheCoverRule() throws {
