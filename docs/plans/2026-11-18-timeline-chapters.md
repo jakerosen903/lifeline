@@ -340,5 +340,11 @@ The seed `-uiTesting-seedSpine` (`launchWithSpine`) has "The tree house" (1999, 
 
 - S6b: the pinned card opens the life map; the "During" line reads `Chapter.statedYears`.
 - A tap on a said member in the chapter's sheet opens the memory.
-- `story.chapter_id` has no reader; a later migration can drop it.
+- The Timeline does not read `story.chapter_id`. The kit still reads and writes it (`ChapterRepository.remove` and `restore`, the prune, `StoryRepository`). A later migration can drop it after the kit stops using it.
+- Ruling R9 (final review). These minors are not fixed in S6c:
+  - No unit test guards "a second removal replaces the first". The app target has no unit tests. A later task must add one.
+  - The Undo of a removal lasts 6 seconds. That is short for a VoiceOver user. A later task must make it longer or make it stay until the next action.
+  - No sheet can state a chapter with no end. Life map rule 4 (an open-ended bar) is built, but the person cannot reach it.
+  - `LifeMapAxis.visibleYears` has no test.
+  - The memory screen reads a chapter's raw title, not `Chapter.name` as the Timeline does.
 - Carried from S6a: the place on a row and the tap on a person or place (spec "The spine", rule 5); a softer gap label next to a guessed date.

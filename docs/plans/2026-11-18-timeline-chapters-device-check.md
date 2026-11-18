@@ -13,7 +13,9 @@ Use the owner's iPhone with the owner's real archive, on branch `sections-chapte
 - [ ] 9. Tap "Say when it was" and state years, for example 2008 to 2012. The chapter shows those years and moves out of "Not placed in time yet". Its bar sits at the right place on the axis.
 - [ ] 10. Open a moment's "…" menu and tap "Add to a chapter…". Type a new name. The moment shows the new tag, and the life map shows the new chapter.
 - [ ] 11. Tap "Add to a chapter…" on another moment and choose an existing chapter by name. The moment shows that tag. No second chapter with the same name shows.
-- [ ] 12. Open the "…" menu of a tagged moment and tap "Take out of “{name}”". The tag goes and the moment stays. If it was the only moment in a chapter with no years, the chapter goes from the life map too.
+- [ ] 12. Open the "…" menu of a tagged moment and tap "Take out of “{name}”". The tag goes and the moment stays. Then check the chapter on the life map. There are two cases:
+  - The moment was the only moment in a chapter with no name and no years. The chapter must go from the life map.
+  - The moment was the only moment in a named chapter. The chapter must stay on the life map, with no moments.
 - [ ] 13. Remove a real chapter: open its sheet, tap "Remove chapter…". The question says "Removing a chapter never removes a memory. Its moments stay on your timeline." Confirm. Every moment stays on the Timeline, with no tag.
 - [ ] 14. After the removal the notice "Removed “{name}”." shows with "Undo". Tap "Undo" within 6 seconds. The chapter and its tags come back, with its years.
 - [ ] 15. Remove a chapter again and wait. The notice must leave after 6 seconds.
@@ -28,8 +30,8 @@ Use the owner's iPhone with the owner's real archive, on branch `sections-chapte
 - [ ] 24. VoiceOver reads a tag on a Timeline row as the chapter's name and the word "button". The hint is "Opens this chapter".
 - [ ] 25. At the largest text size the life map, the chapter's sheet and the add sheet show nothing clipped. Each name and each year is readable.
 - [ ] 26. The tag's tap area does not take a tap meant for the memory. Tap the right end of a row's text, near the tag, and check which one opens.
-- [ ] 27. Dark appearance: the life map bars and the tags are visible. There is no dark palette yet. Report what you see.
-- [ ] 28. Turn on Reduce Motion. Open and close the life map and a chapter's sheet. Nothing may slide or fade in a way that bothers you.
+- [ ] 27. Turn on Dark appearance. Open the Timeline and the life map. Each tag, each bar and each chapter name must be readable against its background. There is no dark palette yet, so report what you see.
+- [ ] 28. Turn on Reduce Motion. Remove a chapter and wait 6 seconds. The notice must show and go with no fade. Open and close the life map and a chapter's sheet. They must open and close as the other sheets in the app do, with no extra motion.
 
 ## Screenshots
 

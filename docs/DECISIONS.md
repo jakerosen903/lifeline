@@ -10,7 +10,7 @@ One entry per decision. Newest first. Status is Decided, Open, or Superseded.
 
 The ten builder's defaults:
 
-1. The life map opens from the Timeline's "..." menu, item "Chapters", until S6b. The spec opens it from the pinned card, which does not exist yet. S6b can keep or remove the item.
+1. The life map opens from the Timeline's "…" menu, item "Chapters", until S6b. The spec opens it from the pinned card, which does not exist yet. S6b can keep or remove the item.
 2. A chapter with no name and with said members shows no tag on the Timeline. On the life map it shows as "No name yet", so the person can name it or remove it.
 3. A tagged moment's menu has "Take out of "{name}"". The spec gives no other way to undo a wrong tag.
 4. A rename to a name that another chapter has is refused. The sheet says "You already have a chapter with this name." A rename never merges two chapters.
@@ -26,6 +26,9 @@ Rulings made while building:
 - R2. Inside one resolver run, a chapter's member span comes from the ranges in the store at the start of that run. A moment that the run places does not widen the span until the next run. The stored range was refreshed only at the end of a run before this build, so this is not a regression. `run()` stays idempotent.
 - R3. The tag's accessibility label stays the chapter's name, with the hint "Opens this chapter". The plan's "Chapter: {name}" is withdrawn. An existing UI test asserts that the label is the name. The row's own label already says "chapter", and VoiceOver adds "button".
 - R4. A life map row has an `isOpenEnded` field. The view does not repeat the kit's rule for "no stated end". One rule lives in one place.
+- R7. The words "Untitled chapter" show nowhere. For a chapter with no name, the remove question is "Remove this chapter?" and the notice is "Removed a chapter with no name." A named chapter keeps "Remove “{name}”?" and "Removed “{name}”.". The notice sits on the Timeline, and the app must not quote a name that the person did not give.
+- R8. A session delete prunes the empty chapters with no name, in the same write. A merge does not prune: a merge can be undone, and a prune would lose the tag on undo. The launch repair prunes that case. When an undo puts back a memory whose chapter was removed in the meantime, the memory comes back with no chapter.
+- R9. Five minors from the final review are not fixed in this build. The plan lists them under "After S6c".
 - R1, R5 and R6 are process rulings. `ChapterActions` owns the tag write path and `CandidateActions` forwards to it (R1). Two files the plan did not list are accepted, for one responsibility per file (R5). The docs are written before the final run, and the controller records the full run and the screenshots after the final review (R6).
 
 **Supersedes.** "2026-10-26 · The timeline groups moments into computed life periods", for chapter ranges. That entry said that a chapter the person names replaces the period it covers. A chapter now never replaces a period. A chapter's range never comes from its members. The same rule in `docs/specs/2026-11-16-audit-data-fixes.md` (A1, rule 3) also yields to this entry.
@@ -36,12 +39,12 @@ Rulings made while building:
 
 - A chapter that had dates before this build shows "No dates yet" under "Not placed in time yet" on the life map until the owner says when. Its old range stays in the database and is ignored.
 - A said member dated outside the stated years keeps its tag. The app does not correct it.
-- No migration. `memory.chapter_id` is the one tag for a moment. `story.chapter_id` stays in the schema and no code reads it. A later migration can drop it.
+- No migration. `memory.chapter_id` is the one tag for a moment. `story.chapter_id` stays in the schema. The Timeline does not read it. The kit still reads and writes it: `ChapterRepository.remove` and `restore`, the prune, and `StoryRepository`. A later migration can drop it after the kit stops using it.
+- Each tag change is one write: the find-or-insert of a chapter, the tag and the prune.
 
-**Known costs.** These are deferred minors from Task 4. The final review triages them.
+**Known costs.** These stay after the final review.
 
-- A chapter hint that is only punctuation cannot be accepted. The card stays pending and shows "Could not file that" on each tap.
-- "Add to a chapter..." with a new name is three writes: insert, tag and prune. A kill between them leaves an empty named chapter. No comment in the code says so.
+- A chapter hint that is only punctuation cannot be accepted. The card stays pending and shows "Could not file that" on each tap. In "Add to a chapter…" and in the rename alert, a name of punctuation only keeps the button disabled.
 - Undo of a removal can leave two chapters with one name, when a hint made a chapter of the same name inside the 6 seconds.
 
 ## 2026-11-16 · S6a: rulings made while building the spine
