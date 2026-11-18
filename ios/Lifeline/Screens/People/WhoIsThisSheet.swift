@@ -60,7 +60,7 @@ struct WhoIsThisSheet: View {
         choiceRow(.someoneNew, identifier: "who.new", title: "Someone new", line: nil, label: "Someone new") {
             Image(systemName: "plus").foregroundStyle(Theme.secondaryText)
                 .frame(width: 40, height: 40)
-                .overlay(Circle().strokeBorder(Theme.secondaryText.opacity(0.6), style: StrokeStyle(lineWidth: 1.5, dash: [3, 3])))
+                .overlay(Circle().strokeBorder(Theme.secondaryText, style: StrokeStyle(lineWidth: 1.5, dash: [3, 3])))
                 .accessibilityHidden(true)
         }
     }
