@@ -4,7 +4,7 @@ One entry per decision. Newest first. Status is Decided, Open, or Superseded.
 
 ## 2026-11-18 · The photo card has one layout, and the first photo is the key photo
 
-**Status:** Decided. Ten items are open for the owner (see the end of this entry). This entry changes the photo card of the 2026-11-16 photo story entry and the cover of S4. It replaces the ruling “The offer stays for a guessed range outside the photo’s day” of the 2026-11-16 photo story entry.
+**Status:** Decided. Thirteen items are open for the owner. They are at the end of this entry. This entry changes the photo card of the 2026-11-16 photo story entry. It also changes the cover of S4. It replaces one ruling of the 2026-11-16 photo story entry: “The offer stays for a guessed range outside the photo’s day”.
 
 **Source:** `docs/specs/2026-11-18-photo-card-key-photo.md` (approved by the owner on 2026-11-18) and `docs/plans/2026-11-18-photo-card-key-photo.md`, decisions 1 to 16. The screens are `docs/design/PH1_PhotoCard.dc.html`, `PH2_PhotoCardAfter.dc.html` and `KP1_KeyPhoto.dc.html`. The rulings made while building are below. There is no migration. There is no new network call.
 
@@ -48,6 +48,8 @@ One entry per decision. Newest first. Status is Decided, Open, or Superseded.
 - **A removed key photo passes the role to the photo with the lowest `sort_order`.** After the first change of a shelf, that is the next photo shown. The S4 rule “the oldest-added photo” holds only for a shelf that no change has written yet.
 - **The drag is a long press, then a drag, as a simultaneous gesture on the tile’s button.** A high-priority gesture stopped a plain tap from opening the viewer. Why: a tap must still open the viewer, and a drag must not. Cost: no system lift animation (plan decision 12).
 - **A held press ends with a one-shot flag.** The flag is set when the long press succeeds. The button’s action uses the flag up and does nothing. The flag clears one run-loop turn after the hold ends. Why: an earlier half-second window depended on the order of two events and could eat a real tap. Cost: none known. The device check covers a tap right after a drop.
+- **Only moments take the photo’s date.** A fact, feeling or goal is never offered it, because its page shows no date. Why: a date written there could not be seen or changed. Cost: none.
+- **The slot math of the drag is in the kit with a table test** (`PhotoShelfDrag`). The row in the app calls it. Cost: none.
 - **Test changes that the plan named.** `testAKeptMomentHoldsThePhoto` keeps both cards, because the moments row does not open while a moment waits (plan decision 9). The tests of the first spec that asserted one offer for each memory, or the band rule, changed with the spec. No other assertion was made weaker.
 - **Test changes outside the text of the plan, of equal strength.** `aPhotoPutBackOnAPageComesBackLast` links the photo to a second page, so the photo row survives the unlink. The UI helper `openMemory` moves a row above the record bar before it taps. Why: XCUITest calls a row under the bar hittable, and the tap opens the Timeline tab.
 - **Tests that fail under load, not ours.** `drainGivesUpAtItsDeadline` (kit), `testAPlayErrorLeavesAnOpenUndoInPlace` and `testHidingALineFarDownShowsUndoWithoutScrolling` (`YouUITests`) failed while another session ran tests on this Mac. Each passed on a rerun. The whole UI suite must show if they are steady.
@@ -64,6 +66,9 @@ One entry per decision. Newest first. Status is Decided, Open, or Superseded.
 8. **The shelf stays one row that scrolls sideways.** KP1 draws a grid. The row is the shape that the app has. A grid is not in this plan.
 9. **A drag on You can scroll the page to its top.** The S4 ruling “the page scrolls to its top when the cover changes” runs after each change of the key photo. The owner must say if this is wanted after a drag.
 10. **The drag on the device.** A plain sideways swipe, a tile at the drop, the page under a held tile and the “Key photo” pill at a large text size need a device. See the checklist.
+11. **“Choose moments” draws switches.** The spec says checkboxes. A switch is the control that iOS has.
+12. **A memory dated from an age has origin `inferred`.** An example is “when I was 22”. The card counts it under “no date you said”, and a tap replaces its date. Undo covers it. But the sentence “no date you said” may not be true for it.
+13. **A resolver failure after the date write leaves no Undo.** The dates are stored. The card shows the error and gives no Undo for them. Only a store failure causes this.
 
 ## 2026-11-16 · A photo starts a story; the app asks to see Favorites
 

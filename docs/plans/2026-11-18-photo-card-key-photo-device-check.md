@@ -32,27 +32,29 @@ Run this on the iPhone with the photo-card build. Tick each line. Say what looks
 23. [ ] Open a page whose key photo you chose before this build (with “Make this the cover”). The key photo must still be first. Drag one photo. The order must be the one you see, and the key photo must be the first photo.
 24. [ ] After a drag on a person’s page, open People. The person’s tile must show the new key photo.
 
+## Added after the final review
+
+25. [ ] Set the largest text size (Accessibility XXXL). Open the moments sheet. Each “Remove” button must be reachable and at least 44 points high. Nothing must clip.
+26. [ ] Tell a photo story that keeps a fact, a feeling or a goal with the photo, and one moment or more. Open the card. The date block must not count the fact, the feeling or the goal. With no moment left, the date block must not show.
+
 ## Known small items
 
 These were found in the reviews and deferred. None blocks the build. Each is one line.
 
-- The same memory passed twice to `useDate` gives two equal changes. It is harmless.
 - If the resolver throws after the range write, the caller gets no Undo handle.
 - No test pins the order of the changes that `useDate` returns.
 - `StoryDateOffer` and `PhotoDatePart.Offer` have no public init.
 - Some kit tests repeat the same row comparisons.
 - The card is read twice after each action on the session’s page (`onAction` and the inner refresh).
-- `useDate(for:)` puts the card’s current offer in `seen`, not the set that the sheet captured when it opened.
 - `useDate(for:)` returns with no message when the offer went away while the sheet was open.
 - `keepsTallest` resets on a text-size change only, not on a width change.
 - The seed guard now needs “Alder Street”. With the guess flag and no birth date, the seed skips “The picnic” with no message.
 - No test checks the “Remove” buttons of the moments sheet at the largest text size.
-- The swipe loop of the UI helper `openMemory` has no upper bound.
 - The tile can jump back at the drop until the write lands (line 14).
 - The page can scroll under a held tile, because the page keeps its pan (line 15).
-- At a large text size, the “Key photo” pill has no width limit, and the slot math can be one off (line 20).
+- The “Key photo” pill is capped at one line and at the xLarge text size. No test checks the slot math at a larger text size (line 20).
 - Two quick drags can lose the first, because `move` builds on the order as last read.
-- `testOnePhotoHasNoHintAndNoDrag` does not check that the viewer stayed closed.
-- The slot math in `PhotoRowDrag.swift` has no unit test.
 - A drag on You scrolls the page to its top (line 19).
+- The hold flag is cleared when the hold ends. A release at the exact moment that the long press is recognised can leave the flag set. The flag then swallows one tap.
+- No test taps a photo right after a drop (line 18).
 - The “Choose moments” sheet uses switches for the memories. The spec says checkboxes. A switch is the control that iOS has.
