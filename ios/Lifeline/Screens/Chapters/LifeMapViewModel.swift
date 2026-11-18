@@ -6,9 +6,6 @@ import LifelineKit
 @Observable
 final class LifeMapViewModel: Identifiable {
     private(set) var map: LifeMap?
-    /// Chapters whose stated years have no end: their bar has an open right edge, so the shape
-    /// says "still going" as well as the colour.
-    private(set) var openEnded: Set<ChapterID> = []
     private(set) var error: String?
     let birthDate: CivilDate?
 
@@ -28,11 +25,6 @@ final class LifeMapViewModel: Identifiable {
             var counts: [ChapterID: Int] = [:]
             for chapter in chapters { counts[chapter.id] = try store.memories.moments(inChapter: chapter.id).count }
             map = LifeMap(chapters: chapters, momentCounts: counts, birthYear: birthDate?.year, currentYear: CivilDate.today().year)
-            // The same rule `LifeMap` places by: stated years with neither a latest nor a likely end.
-            openEnded = Set(chapters.filter { chapter in
-                guard let years = chapter.statedYears else { return false }
-                return years.latest == nil && years.likelyEnd == nil
-            }.map(\.id))
             error = nil
         } catch {
             self.error = "Could not load your chapters: \(error.localizedDescription)"

@@ -41,7 +41,6 @@ struct LifeMapRowLayout: Equatable {
 /// never the only sign. At accessibility sizes the bar keeps its place and the name has its own line above it.
 struct LifeMapRow: View {
     let row: LifeMap.Row
-    let isOpenEnded: Bool
     /// `LifeMap.summary(of:)`: the name, the years, and the count of moments.
     let label: String
     let onTap: () -> Void
@@ -104,7 +103,7 @@ struct LifeMapRow: View {
     private func bar(width: CGFloat) -> some View {
         let radius = barHeight / 2
         return UnevenRoundedRectangle(topLeadingRadius: radius, bottomLeadingRadius: radius,
-                                      bottomTrailingRadius: isOpenEnded ? 0 : radius, topTrailingRadius: isOpenEnded ? 0 : radius)
+                                      bottomTrailingRadius: row.isOpenEnded ? 0 : radius, topTrailingRadius: row.isOpenEnded ? 0 : radius)
             .fill(Theme.olive)
             .frame(width: width, height: barHeight)
     }

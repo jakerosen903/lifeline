@@ -36,6 +36,13 @@ import Testing
         range.latest = nil
         #expect(map([chapter("A", range)]).rows[0].end == 1)
     }
+    @Test func onlyAChapterWithNoStatedEndIsOpenEnded() {
+        var open = TimeRange.stated(year: 2010)
+        open.latest = nil
+        let rows = map([chapter("Open", open), chapter("Past now", .stated(between: 2020, and: 2030)), chapter("Closed", .stated(between: 2000, and: 2003))]).rows
+        #expect(rows.map(\.title) == ["Closed", "Open", "Past now"])
+        #expect(rows.map(\.isOpenEnded) == [false, true, false], "a chapter that ends after now still has an end")
+    }
     @Test func aChapterThatEndsAfterNowIsCutAtTheRightEdge() {
         #expect(map([chapter("A", .stated(between: 2020, and: 2030))]).rows[0].end == 1)
     }

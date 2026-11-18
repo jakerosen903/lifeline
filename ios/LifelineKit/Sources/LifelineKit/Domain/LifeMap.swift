@@ -10,6 +10,8 @@ public struct LifeMap: Sendable, Equatable {
         public let end: Double
         public let yearsText: String
         public let momentCount: Int
+        /// The chapter has no stated end; one that ends after now still has an end.
+        public let isOpenEnded: Bool
     }
 
     public struct Band: Sendable, Equatable {
@@ -60,7 +62,8 @@ public struct LifeMap: Sendable, Equatable {
                        start: position(years.first),
                        end: years.last.map { position($0 + 1) } ?? 1,
                        yearsText: chapter.range.displayText,
-                       momentCount: momentCounts[chapter.id] ?? 0)
+                       momentCount: momentCounts[chapter.id] ?? 0,
+                       isOpenEnded: years.last == nil)
         }
         unplaced = chapters.filter { Self.years(of: $0) == nil }.map {
             Unplaced(id: $0.id, title: $0.name ?? Self.untitled, momentCount: momentCounts[$0.id] ?? 0)

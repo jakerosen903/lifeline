@@ -69,7 +69,7 @@ struct LifeMapSheet: View {
             LifeMapPeriodNames(map: map)
             VStack(spacing: 0) {
                 ForEach(map.rows) { row in
-                    LifeMapRow(row: row, isOpenEnded: viewModel.openEnded.contains(row.id), label: map.summary(of: row)) {
+                    LifeMapRow(row: row, label: map.summary(of: row)) {
                         openChapter = viewModel.chapterSheet(for: row.id)
                     }
                 }

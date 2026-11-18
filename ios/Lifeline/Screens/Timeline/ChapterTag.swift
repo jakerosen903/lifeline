@@ -21,7 +21,7 @@ struct ChapterTag: View {
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("Chapter: \(title)")
+        .accessibilityHint("Opens this chapter")
         .accessibilityIdentifier("timeline.tag")
     }
 }
