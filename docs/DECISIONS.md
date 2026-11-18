@@ -2,6 +2,69 @@
 
 One entry per decision. Newest first. Status is Decided, Open, or Superseded.
 
+## 2026-11-18 · The photo card has one layout, and the first photo is the key photo
+
+**Status:** Decided. Ten items are open for the owner (see the end of this entry). This entry changes the photo card of the 2026-11-16 photo story entry and the cover of S4. It replaces the ruling “The offer stays for a guessed range outside the photo’s day” of the 2026-11-16 photo story entry.
+
+**Source:** `docs/specs/2026-11-18-photo-card-key-photo.md` (approved by the owner on 2026-11-18) and `docs/plans/2026-11-18-photo-card-key-photo.md`, decisions 1 to 16. The screens are `docs/design/PH1_PhotoCard.dc.html`, `PH2_PhotoCardAfter.dc.html` and `KP1_KeyPhoto.dc.html`. The rulings made while building are below. There is no migration. There is no new network call.
+
+**The four problems.** The owner told a photo story on the phone. The story made five memories. The card showed five memory rows, eight “Add to …’s page” buttons and one date offer for each memory.
+
+1. The date offer showed many times. The owner tapped it three times for one photo.
+2. Every “Add to” button looked the same. A person, a place and a thing were not told apart.
+3. The owner did not find how to choose the photo that stands for a person. The control was inside the photo viewer.
+4. “Use this date” replaced a guessed date and had no Undo. Two review threads on PR #29 asked for a fix.
+
+**Decision.** The card is one view with one layout. A choice changes the state of a control. It does not change the layout.
+
+- **The chosen approach: one card, grouped, with states.** The card has four parts: the photo and its moments row, “Also show this photo on”, “When did this happen?” and “Remove the photo from this story”. The pages are chips in groups (People, Places, Things, Ideas). A tap on a chip adds the photo to the page. A second tap takes it off. The date is one block for the story.
+- **Not chosen: keep the card and remove the duplicates only.** It is the smallest change. It does not fix problem 2.
+- **Not chosen: a step-by-step sheet after the story** (“Who is in it?”, “Where?”, “When?”). It adds taps that the person must do. The landing must stay light (principle 8).
+- **The moments row.** The card does not show a row for each memory. One row reads “On {n} moments from this story”. A tap opens a sheet with each memory’s title and “Remove”. While a moment of the session waits, the row reads “This photo goes on each moment you keep.” and does not open.
+- **A page that holds the photo is a chosen chip.** This includes a page that no kept memory names, unless the page is hidden from browsing. The person must see each page the photo is on.
+- **The new date rule: origin, not band.** A memory can take the photo’s date when its origin is not `stated`, `confirmed` or `photo`. An unplaced memory and a guess (`inferred`, `derived`) can take it, inside or outside the photo’s day. This replaces the rule “outside the band” of the 2026-11-16 entry. That entry left the guessed case open for the owner. This entry closes it with Undo.
+- **One write for several memories.** “Use for those {n}” sets the range of each chosen memory to `TimeRange.fromPhoto(date)` in one write (`MemoryRepository.updateRanges`). Each memory keeps the check of PR #29: the write skips a memory whose stored range is not the one the card showed. Then the resolver runs one time.
+- **Undo is kept in memory.** The card’s view model keeps the old ranges while the screen is open. Undo writes them back in one write and runs the resolver one time. Undo is gone when the screen closes. The memory page then shows “from a photo”, and the person can change the date there.
+- **What the resolver does to a guess with no anchor (plan decision 2).** The resolver computes each `inferred` range again from what the person said. A guess with an anchor comes back the same after Undo. A guess with no anchor does not come back: the memory becomes unplaced. No resolver run keeps such a guess, with or without the card. Only code writes it (the test seed does). This is open for the owner.
+- **“Key photo” replaces “cover” in every text the person reads.** The code keeps its names: `PhotoRole.cover`, `setCover`, `makeCover`, `photo.makeCover`. The viewer reads “Make this the key photo”.
+- **The first photo of a page is the key photo.** This holds for an entity’s page, a memory’s page and You. On the shelf, the person holds a photo and drags it to a new place. A line above the shelf says how. The first tile has the label “Key photo”. With VoiceOver, each tile except the first has the action “Move to front”.
+- **`setCover` is a move to the front.** `PhotoRepository.reorder` and `setCover` write the whole order again as 0, 1, 2, with the cover first. A shelf from before this build agrees after its first change. There is no migration. A write that changes the cover takes the role from the old cover before it gives the role to the new one, because the store allows one cover for each page.
+
+**The seven points agreed with `docs/specs/2026-11-18-people-contacts.md`.** That spec is written on another branch. It ships second and must follow these points.
+
+1. **Words.** The person reads “key photo” and “Make this the key photo”, not “cover”.
+2. **A contact’s picture.** The picture is stored as a photo of the person. It is the key photo only when the person has no photo. After that, it is a photo like any other.
+3. **A changed contact picture.** The app replaces the picture only while it is still the key photo. After the person drags another photo to the front, the app must leave the photos alone.
+4. **Photos do not move with a name.** When the person moves a moment to another person, the photo stays on the first person’s page. The card shows both chips.
+5. **A guessed person.** A chip on the photo card does not carry the “Assumed” mark. The mark is on the memory’s people.
+6. **Merging two people.** The joined photos keep one order. The key photo of the person that stays is first.
+7. **Undo.** That spec shows Undo in the message slot for 6 seconds. The card’s date keeps its Undo in the card while the screen is open.
+
+**Rulings made while building (2026-11-18).** Each ruling has its cost.
+
+- **The date control is a full-width button, with “Choose moments” or “Undo” on a row under it.** PH1 and PH2 draw a pill that fits its text, with the link beside it. Why: the card keeps one layout after a choice. “Use for those 2” and “Used for those 2” differ in width, so a pill changes its frame. A full-width button keeps `photoCard.dateUsed` in the frame of `photoCard.useDate`, and “Undo” in the place of “Choose moments”, at every text size. Cost if wrong: one view file (`PhotoCardDate.swift`) changes, and the kit must give the text of both states. This is open for the owner.
+- **The session’s page reloads its rows after each card action** (`PhotoCardViewModel.onAction`, set by `SessionDetailViewModel`). Why: without it, the memory page opened from the session’s page showed the date from before the tap. The landing does not set it, because its rows show no dates. Cost: the card is read twice after each action on the session’s page.
+- **The moments sheet closes when its last memory is removed.** Why: the sheet stood blank, with no title and no list. Cost: none.
+- **A removed key photo passes the role to the photo with the lowest `sort_order`.** After the first change of a shelf, that is the next photo shown. The S4 rule “the oldest-added photo” holds only for a shelf that no change has written yet.
+- **The drag is a long press, then a drag, as a simultaneous gesture on the tile’s button.** A high-priority gesture stopped a plain tap from opening the viewer. Why: a tap must still open the viewer, and a drag must not. Cost: no system lift animation (plan decision 12).
+- **A held press ends with a one-shot flag.** The flag is set when the long press succeeds. The button’s action uses the flag up and does nothing. The flag clears one run-loop turn after the hold ends. Why: an earlier half-second window depended on the order of two events and could eat a real tap. Cost: none known. The device check covers a tap right after a drop.
+- **Test changes that the plan named.** `testAKeptMomentHoldsThePhoto` keeps both cards, because the moments row does not open while a moment waits (plan decision 9). The tests of the first spec that asserted one offer for each memory, or the band rule, changed with the spec. No other assertion was made weaker.
+- **Test changes outside the text of the plan, of equal strength.** `aPhotoPutBackOnAPageComesBackLast` links the photo to a second page, so the photo row survives the unlink. The UI helper `openMemory` moves a row above the record bar before it taps. Why: XCUITest calls a row under the bar hittable, and the tap opens the Timeline tab.
+- **Tests that fail under load, not ours.** `drainGivesUpAtItsDeadline` (kit), `testAPlayErrorLeavesAnOpenUndoInPlace` and `testHidingALineFarDownShowsUndoWithoutScrolling` (`YouUITests`) failed while another session ran tests on this Mac. Each passed on a rerun. The whole UI suite must show if they are steady.
+
+**Open items for the owner.** Each needs a decision or a look on the device. The device check is `docs/plans/2026-11-18-photo-card-key-photo-device-check.md`. The screenshots are in `docs/screenshots/photo-card/`.
+
+1. **The shape of the date control.** It is a full-width button with “Choose moments” or “Undo” on a row under it. PH1 and PH2 draw a pill with the link beside it. See the ruling above.
+2. **Undo is kept in memory (plan decision 3).** Undo stays while the screen is in the navigation stack, also after the person opens a memory page and comes back. It goes when the screen closes. Undo is not stored. Cost if wrong: one `@State` move ends Undo at the first push. A stored Undo needs a new spec.
+3. **Undo of a guess with no anchor (plan decision 2).** The memory becomes unplaced. Cost if wrong: `undoDate` skips the resolver for that memory, and the next resolver run erases the guess anyway.
+4. **A second tap adds to the first (plan decision 4).** After a new memory is kept and the person taps again, “Undo” puts back the ranges of both taps. The count after the tap is the total.
+5. **An unchecked memory does not bring the offer back (plan decision 5).** Only a memory kept after the tap shows the offer again. The unchecked memory gets no second offer until the screen opens again. The memory page can still set its date.
+6. **While a moment waits, the moments row shows only “This photo goes on each moment you keep.” and does not open (plan decision 9).** The person cannot reach “Remove” for a kept memory until every moment of the session is sorted. Cost if wrong: the row needs a fourth state.
+7. **The VoiceOver action “Move to front” has no UI test (plan decision 14).** XCUITest cannot list custom actions. The device check covers its presence and its name.
+8. **The shelf stays one row that scrolls sideways.** KP1 draws a grid. The row is the shape that the app has. A grid is not in this plan.
+9. **A drag on You can scroll the page to its top.** The S4 ruling “the page scrolls to its top when the cover changes” runs after each change of the key photo. The owner must say if this is wanted after a drag.
+10. **The drag on the device.** A plain sideways swipe, a tile at the drop, the page under a held tile and the “Key photo” pill at a large text size need a device. See the checklist.
+
 ## 2026-11-16 · A photo starts a story; the app asks to see Favorites
 
 **Status:** Decided. Four items are open for the owner (see the end of this entry). This entry reverses one rule of S4.

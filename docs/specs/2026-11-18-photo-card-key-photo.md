@@ -1,6 +1,6 @@
 # Photo card and key photo
 
-**Status:** Draft for the owner's approval. **Date:** 2026-11-18.
+**Status:** Approved by the owner on 2026-11-18. **Date:** 2026-11-18.
 
 **Builds on:** `docs/specs/2026-11-16-photo-story.md` (branch `photo-story`, PR #29). This spec changes the photo card of that spec and the cover of S4. It replaces the section "The photo's date" and the section "The photo card" of that spec where they differ.
 
