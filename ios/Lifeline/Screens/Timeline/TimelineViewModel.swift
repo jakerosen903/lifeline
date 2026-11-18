@@ -97,6 +97,14 @@ final class TimelineViewModel {
     /// Story rows the person opened.
     var expandedStories: Set<StoryID> = []
     private(set) var floatingCount = 0
+    /// The card pinned under the title. A scroll rebuilds it from `cardSource`, never the whole Timeline.
+    private(set) var card = TimelineCard(moments: [], chapters: [], onScreen: [], birthYear: nil, currentYear: CivilDate.today().year)
+    /// Spine rows at least half on screen, by `SpineRow.id`. Not persisted.
+    private(set) var onScreenIDs: Set<String> = []
+    @ObservationIgnored private var cardSource = CardSource()
+    /// The years the frame last covered. With no spine row on screen (the list is at the waiting
+    /// cards or the shelf) the frame stays there.
+    @ObservationIgnored private var lastOnScreenYears: [ClosedRange<Int>] = []
     private(set) var question: RelativeQuestion?
     private(set) var questionRow: MemoryRow?
     private(set) var summary = ""
@@ -218,6 +226,11 @@ final class TimelineViewModel {
                 return story
             }
             floatingCount = try store.memories.visibleMemories().filter { $0.isFloating && !$0.range.isPlaced }.count
+            cardSource = CardSource(spine: spine, chapters: allChapters, birthYear: birth?.year, currentYear: CivilDate.today().year)
+            // A row deleted, hidden or filtered out while on screen no longer holds the frame.
+            let onScreen = onScreenIDs.intersection(cardSource.rowIDs)
+            if onScreen != onScreenIDs { onScreenIDs = onScreen }
+            rebuildCard()
 
             let years = all.flatMap { [$0.range.earliest?.year, $0.range.latest?.year].compactMap { $0 } }
 
@@ -301,6 +314,54 @@ final class TimelineViewModel {
         case (_?, nil): return true
         default: return a.createdAt < b.createdAt
         }
+    }
+
+    // MARK: - The card
+
+    /// What the card is built from that only `refresh()` changes; a scroll reads it as it is.
+    private struct CardSource {
+        /// One range per dated moment on the spine: a story gives one for each dated member.
+        var moments: [TimeRange] = []
+        var chapters: [Chapter] = []
+        var birthYear: Int?
+        var currentYear = CivilDate.today().year
+        var rowIDs: Set<String> = []
+        /// A confirmed relation's stop has no years (`SpineLayout.Stop.yearSpan`): it moves no frame.
+        var yearsByRow: [String: ClosedRange<Int>] = [:]
+
+        init() {}
+
+        init(spine: [SpineRow], chapters: [Chapter], birthYear: Int?, currentYear: Int) {
+            moments = spine.flatMap { row -> [TimeRange] in
+                switch row.content {
+                case .memory(let memory): [memory.memory.range].filter(\.isDated)
+                case .story(let story): story.members.map(\.memory.range).filter(\.isDated)
+                }
+            }
+            self.chapters = chapters
+            self.birthYear = birthYear
+            self.currentYear = currentYear
+            rowIDs = Set(spine.map(\.id))
+            yearsByRow = Dictionary(uniqueKeysWithValues: spine.compactMap { row in row.stop.yearSpan.map { (row.id, $0) } })
+        }
+    }
+
+    /// A spine row came at least half on screen, or left it. An open story's members report
+    /// nothing: they have no stop of their own, so the story's row decides. A repeated report
+    /// changes nothing; a report for a row no longer on the spine (one just deleted) is ignored.
+    func setOnScreen(_ id: String, _ visible: Bool) {
+        guard !visible || cardSource.rowIDs.contains(id) else { return }
+        let changed = visible ? onScreenIDs.insert(id).inserted : onScreenIDs.remove(id) != nil
+        if changed { rebuildCard() }
+    }
+
+    /// Writes `card` only when it differs, so a scroll inside the same years redraws nothing.
+    private func rebuildCard() {
+        let onScreen = onScreenIDs.compactMap { cardSource.yearsByRow[$0] }
+        if !onScreen.isEmpty { lastOnScreenYears = onScreen }
+        let next = TimelineCard(moments: cardSource.moments, chapters: cardSource.chapters, onScreen: lastOnScreenYears,
+                                birthYear: cardSource.birthYear, currentYear: cardSource.currentYear)
+        if next != card { card = next }
     }
 
     /// Every pending card across sessions, newest session first, plus names still open. A kept
