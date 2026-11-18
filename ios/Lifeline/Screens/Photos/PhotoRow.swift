@@ -15,9 +15,12 @@ struct PhotoRow: View {
     let onMove: (PhotoID, Int) -> Void
 
     @GestureState private var drag: PhotoRowDrag?
-    /// When a held press last moved. The button's own tap can still fire on the release of a hold; a tap this close
-    /// to a hold is that release, not a tap, so it must not open the viewer.
-    @State private var lastHeld: Date?
+    /// True from the moment a press is held until it ends or is cancelled: a gesture state resets on both.
+    @GestureState private var isHolding = false
+    /// One shot: set when a press is held, used up by the button's action. The button can fire on the release of a
+    /// hold, and that release is not a tap. It is cleared one run-loop turn after the hold ends, so it never eats a
+    /// later tap, whether the button's action runs before or after the gesture's end on that release.
+    @State private var holdEndsTap = false
 
     private static let side: CGFloat = 88
     private static let spacing: CGFloat = 10
@@ -59,6 +62,9 @@ struct PhotoRow: View {
             // A held tile follows the finger; the row must not scroll under it.
             .scrollDisabled(drag != nil)
         }
+        .onChange(of: isHolding) { _, held in
+            if !held { DispatchQueue.main.async { holdEndsTap = false } }
+        }
     }
 
     private func tile(_ placed: PlacedPhoto, isFirst: Bool, from: Int) -> some View {
@@ -79,7 +85,7 @@ struct PhotoRow: View {
     private func thumb(_ placed: PlacedPhoto, isFirst: Bool) -> some View {
         let shape = RoundedRectangle(cornerRadius: 14)
         return Button {
-            if let lastHeld, Date.now.timeIntervalSince(lastHeld) < 0.5 { return }
+            if holdEndsTap { holdEndsTap = false; return }
             onOpen(placed)
         } label: {
             PhotoImageView(photo: placed.photo, size: .small, cache: cache) { Theme.sand }
@@ -122,11 +128,13 @@ struct PhotoRow: View {
                 if state == nil { state = PhotoRowDrag(photo: photo, from: from, startX: moved.startLocation.x, currentX: moved.location.x) }
                 state?.currentX = moved.location.x
             }
+            .updating($isHolding) { value, state, _ in
+                if case .second(true, _) = value { state = true }
+            }
             .onChanged { value in
-                if case .second(true, _) = value { lastHeld = .now }
+                if case .second(true, _) = value, !holdEndsTap { holdEndsTap = true }
             }
             .onEnded { value in
-                lastHeld = .now
                 guard case .second(true, let moved?) = value else { return }
                 let end = PhotoRowDrag(photo: photo, from: from, startX: moved.startLocation.x, currentX: moved.location.x)
                 onMove(photo, end.target(count: photos.count, stride: Self.stride))

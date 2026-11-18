@@ -111,6 +111,23 @@ final class PhotosUITests: XCTestCase {
     }
 
     @MainActor
+    func testADragThatRestsBeforeTheReleaseDoesNotOpenTheViewer() {
+        let app = openMayasShelf()
+        let all = thumbs(app)
+        all.element(boundBy: 1).press(forDuration: 1.0, thenDragTo: all.element(boundBy: 0), withVelocity: .default, thenHoldForDuration: 1.0)
+        XCTAssertTrue(app.buttons["photo.header"].waitForValue("", timeout: 5), "the move happened")
+        XCTAssertFalse(app.any("photo.viewer").exists, "the release of a drag is not a tap")
+    }
+
+    @MainActor
+    func testAHoldWithNoMoveDoesNotOpenTheViewer() {
+        let app = openMayasShelf()
+        thumbs(app).element(boundBy: 1).press(forDuration: 1.5)
+        XCTAssertFalse(app.any("photo.viewer").waitForExistence(timeout: 2), "the release of a hold is not a tap")
+        XCTAssertEqual(thumbValues(app), ["taken 14 June 2012", ""], "the order is unchanged")
+    }
+
+    @MainActor
     func testATapOnAThumbStillOpensTheViewer() {
         let app = openMayasShelf()
         let all = thumbs(app)
