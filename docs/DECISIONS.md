@@ -2,6 +2,48 @@
 
 One entry per decision. Newest first. Status is Decided, Open, or Superseded.
 
+## 2026-11-18 · S6c: chapters are names with stated years
+
+**Status:** Decided by the builder. The owner can overrule each one. Source: `docs/plans/2026-11-18-timeline-chapters.md`, ledger `.superpowers/sdd/2026-11-18-timeline-chapters/rulings.md`.
+
+**Decision.** A chapter is a name. It has stated years only when the person said them. It has said members: the moments the person put in it. `chapter.range` holds stated years only. The resolver computes the span of the said members on each run and never writes it to the chapter.
+
+The ten builder's defaults:
+
+1. The life map opens from the Timeline's "..." menu, item "Chapters", until S6b. The spec opens it from the pinned card, which does not exist yet. S6b can keep or remove the item.
+2. A chapter with no name and with said members shows no tag on the Timeline. On the life map it shows as "No name yet", so the person can name it or remove it.
+3. A tagged moment's menu has "Take out of "{name}"". The spec gives no other way to undo a wrong tag.
+4. A rename to a name that another chapter has is refused. The sheet says "You already have a chapter with this name." A rename never merges two chapters.
+5. A rename to an empty name is refused. A chapter loses its name only when it is removed.
+6. Existing derived ranges stay in the database. No write clears them. The code ignores them. "Say when it was" replaces one with a stated range.
+7. The prune keeps a chapter that a story points at. The launch repair changes in one way only: it never prunes a chapter with stated years.
+8. Undo of a removal puts a tag back only on a memory that still exists and has no chapter. Undo never takes a moment from a chapter the person chose in the meantime.
+9. Said members in the chapter's sheet are text rows. A tap on one does nothing yet.
+10. The extractor's context packet sends a chapter's stated years, or no years. It no longer sends a member span as the chapter's dates.
+
+Rulings made while building:
+
+- R2. Inside one resolver run, a chapter's member span comes from the ranges in the store at the start of that run. A moment that the run places does not widen the span until the next run. The stored range was refreshed only at the end of a run before this build, so this is not a regression. `run()` stays idempotent.
+- R3. The tag's accessibility label stays the chapter's name, with the hint "Opens this chapter". The plan's "Chapter: {name}" is withdrawn. An existing UI test asserts that the label is the name. The row's own label already says "chapter", and VoiceOver adds "button".
+- R4. A life map row has an `isOpenEnded` field. The view does not repeat the kit's rule for "no stated end". One rule lives in one place.
+- R1, R5 and R6 are process rulings. `ChapterActions` owns the tag write path and `CandidateActions` forwards to it (R1). Two files the plan did not list are accepted, for one responsibility per file (R5). The docs are written before the final run, and the controller records the full run and the screenshots after the final review (R6).
+
+**Supersedes.** "2026-10-26 · The timeline groups moments into computed life periods", for chapter ranges. That entry said that a chapter the person names replaces the period it covers. A chapter now never replaces a period. A chapter's range never comes from its members. The same rule in `docs/specs/2026-11-16-audit-data-fixes.md` (A1, rule 3) also yields to this entry.
+
+**Why.** A span computed from members showed dates the person never said (PRINCIPLES 5). A date overlap says nothing about a moment, so the app tags no moment by its date (PRINCIPLES 1).
+
+**Consequences.**
+
+- A chapter that had dates before this build shows "No dates yet" under "Not placed in time yet" on the life map until the owner says when. Its old range stays in the database and is ignored.
+- A said member dated outside the stated years keeps its tag. The app does not correct it.
+- No migration. `memory.chapter_id` is the one tag for a moment. `story.chapter_id` stays in the schema and no code reads it. A later migration can drop it.
+
+**Known costs.** These are deferred minors from Task 4. The final review triages them.
+
+- A chapter hint that is only punctuation cannot be accepted. The card stays pending and shows "Could not file that" on each tap.
+- "Add to a chapter..." with a new name is three writes: insert, tag and prune. A kill between them leaves an empty named chapter. No comment in the code says so.
+- Undo of a removal can leave two chapters with one name, when a hint made a chapter of the same name inside the 6 seconds.
+
 ## 2026-11-16 · S6a: rulings made while building the spine
 
 **Status:** Decided by the builder. The owner can overrule each one. Source: `docs/plans/2026-11-16-timeline-spine.md`, ledger `.superpowers/sdd/2026-11-16-timeline-spine/rulings.md`.
@@ -194,7 +236,7 @@ Quotes on lists, entity pages and About hide filler words ("um", "uh", "like", "
 
 ## 2026-10-26 · The timeline groups moments into computed life periods
 
-**Status:** Decided by the owner. Source: `docs/specs/2026-10-26-ui-audit.md`, call 2 and findings F2–F3.
+**Status:** Decided by the owner. Superseded in part: for a chapter's range, by "2026-11-18 · S6c: chapters are names with stated years". A named chapter no longer takes the place of a period, and a chapter's range no longer comes from its members. Source: `docs/specs/2026-10-26-ui-audit.md`, call 2 and findings F2–F3.
 
 The timeline reads life periods from the dates and the owner's age, for example "Growing up · 2004–2012". Each computed period shows as a guess (PRINCIPLES 5). A chapter the person names replaces the period it covers. "Outside any chapter" goes away.
 
