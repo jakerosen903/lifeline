@@ -11,10 +11,13 @@ struct TimelineCardView: View {
     /// The height `LifeStripView` gives the axis; it grows with Dynamic Type.
     @ScaledMetric(relativeTo: .footnote) private var axisHeight: CGFloat = 16
     private static let cornerRadius: CGFloat = 14
+    private static let spacing: CGFloat = 4
+    /// The room above the "During" line, which goes with it when there is no chapter.
+    static let duringSpacingAbove: CGFloat = 6
 
     var body: some View {
         Button(action: onOpen) {
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: Self.spacing) {
                 LifeStripAxis(strip: card.strip, frame: card.frame)
                     .frame(height: axisHeight)
                     .accessibilityIdentifier("timeline.cardStrip")
@@ -27,7 +30,7 @@ struct TimelineCardView: View {
                 // At the accessibility sizes a label may wrap once; the card must stay under half the screen.
                 .lineLimit(2)
                 DuringLine(card: card)
-                    .padding(.top, 2)
+                    .padding(.top, Self.duringSpacingAbove - Self.spacing)
                     .accessibilityIdentifier("timeline.during")
             }
             .padding(.vertical, 10)

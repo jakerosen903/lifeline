@@ -17,10 +17,9 @@ struct SpineRowView: View {
     let onToggleStory: () -> Void
     let actions: MemoryRowActions
     let storyActions: StoryRowActions
-    /// The part of the screen the list's rows can be seen in, in global coordinates: below the
-    /// pinned card, above the record bar. Empty until the list has been measured.
-    let visibleArea: CGRect
-    /// True when the stop's row is at least half on screen, false when it leaves; the card's frame follows.
+    /// Where the list's rows can be seen, and the slack the card's own height needs (`OnScreenReport`).
+    let screenArea: ScreenArea
+    /// True when the stop's row comes on screen, false when it leaves; the card's frame follows.
     let onScreenChange: (Bool) -> Void
     @Environment(\.dynamicTypeSize) private var typeSize
     /// Wide enough for "2008–10" at the row's text size.
@@ -30,16 +29,10 @@ struct SpineRowView: View {
         VStack(alignment: .leading, spacing: 0) {
             if let gap = row.stop.gapAbove, gap.units > 0 { SpineGap(gap: gap, geometry: geometry) }
             if let period = row.stop.periodAbove { SpineWaypoint(period: period, geometry: geometry, drawsSpine: !isFirst) }
-            stopRow
+            // Only the stop's own row reports: not the gap or the period above it, and not an open
+            // story's members below, which have no years of their own.
+            stopRow.reportsOnScreen(in: screenArea, onChange: onScreenChange)
         }
-        // Only the stop's own row reports: an open story's members below have no years of their own.
-        // Not `onScrollVisibilityChange`: in this List it never reported a row leaving, and it counts
-        // a row under the pinned card as on screen. A rotation or a size change measures again.
-        .onGeometryChange(for: Bool.self) { [visibleArea] proxy in
-            Self.isHalfVisible(proxy.frame(in: .global), in: visibleArea)
-        } action: { onScreenChange($0) }
-        // A cell the list takes away (scrolled far off, or the row deleted) is off screen.
-        .onDisappear { onScreenChange(false) }
         // List rows of their own, so each member keeps its own long-press menu (Hide, Exclude, Delete):
         // the list lifts a context menu to its cell. The screen's row modifiers apply to each of them.
         ForEach(openMembers) { member in
@@ -49,14 +42,6 @@ struct SpineRowView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background(alignment: .leading) { SpineLine(dashed: false, x: geometry.spineX) }
         }
-    }
-
-    /// At least half of the row, or of the visible area for a row taller than it, can be seen.
-    /// Nothing is visible in an area not yet measured.
-    static func isHalfVisible(_ row: CGRect, in area: CGRect) -> Bool {
-        guard !area.isEmpty, !row.isEmpty else { return false }
-        let seen = row.intersection(area)
-        return !seen.isNull && seen.height >= min(row.height, area.height) / 2
     }
 
     /// An open story's members; none for a moment or a folded story.

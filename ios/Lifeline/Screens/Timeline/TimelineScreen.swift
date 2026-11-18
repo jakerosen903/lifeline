@@ -19,8 +19,8 @@ struct TimelineScreen: View {
     @State private var lifeMap: LifeMapViewModel?
     /// The list row to scroll to the top: a story just opened, so its members show above the record bar.
     @State private var scrollTarget: StoryScrollTarget?
-    /// Where the list's rows can be seen, for the card's frame (see `SpineRowView.visibleArea`).
-    @State private var visibleArea: CGRect = .zero
+    /// Where the list's rows can be seen, for the card's frame (`ScreenArea`).
+    @State private var screenArea = ScreenArea()
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     /// A story's row id in the list it sits in: the spine keys rows by `SpineRow.id`, the shelf by story.
@@ -137,9 +137,9 @@ struct TimelineScreen: View {
                 shelfAndQuestion
                 footer
             }
-            // The list's own frame: below the pinned card and the title, above the record bar. Its rows
-            // scroll under those too, so a row must be inside this frame to count as on screen.
-            .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { visibleArea = $0 }
+            .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { screenArea.frame = $0 }
+            // The card's height changes only by its "During" line and the room above it; a point more for rounding.
+            .background { DuringLineTallest { screenArea.slack = $0 + TimelineCardView.duringSpacingAbove + 1 } }
             // The card stays under the title while the list scrolls; the summary row scrolls away under it.
             .safeAreaInset(edge: .top, spacing: 0) { PinnedTimelineCard(timeline: viewModel) { lifeMap = viewModel.lifeMap() } }
             .onChange(of: scrollTarget) { _, target in
@@ -213,7 +213,7 @@ struct TimelineScreen: View {
                                  expanded: storyID(of: row).map { viewModel.expandedStories.contains($0) } ?? false,
                                  onToggleStory: { if let id = storyID(of: row) { toggleStory(id, rowID: .spine(row.id)) } },
                                  actions: rowActions, storyActions: storyActions,
-                                 visibleArea: visibleArea, onScreenChange: { viewModel.setOnScreen(row.id, $0) })
+                                 screenArea: screenArea, onScreenChange: { viewModel.setOnScreen(row.id, $0) })
                 }
                 .listRowSeparator(.hidden)
                 .listRowBackground(Color.clear)

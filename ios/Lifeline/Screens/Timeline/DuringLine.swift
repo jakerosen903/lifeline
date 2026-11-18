@@ -11,14 +11,14 @@ struct DuringLine: View {
     private static let namesFont = Font.subheadline.weight(.semibold)
 
     /// How many lines the names may take before one fewer name is tried.
-    private var lines: Int { typeSize.isAccessibilitySize ? 2 : 1 }
+    private var lines: Int { Self.lines(at: typeSize) }
+    fileprivate static func lines(at typeSize: DynamicTypeSize) -> Int { typeSize.isAccessibilitySize ? 2 : 1 }
 
     var body: some View {
         if !card.during.isEmpty {
             // A hidden text of `lines` lines in the names' font sets the height every try must fit in.
             // `ViewThatFits(in: .horizontal)` alone cannot allow a second line: it measures one line's width.
-            Text(verbatim: Array(repeating: "A", count: lines).joined(separator: "\n"))
-                .font(Self.namesFont)
+            Self.reference(lines: lines)
                 .hidden()
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .overlay(alignment: .topLeading) {
@@ -29,6 +29,11 @@ struct DuringLine: View {
                     }
                 }
         }
+    }
+
+    /// A text `lines` lines tall in the names' font: the tallest names text at that many lines.
+    fileprivate static func reference(lines: Int) -> Text {
+        Text(verbatim: Array(repeating: "A", count: lines).joined(separator: "\n")).font(namesFont)
     }
 
     /// The first `count` names. Only the last try (one name) has a line limit: an earlier one
@@ -52,5 +57,20 @@ struct DuringLine: View {
                     .fixedSize()
             }
         }
+    }
+}
+
+/// Measures the tallest the "During" line can be at the current text size and reports it. Hidden,
+/// and laid out as a background, so it takes no room. It is measured whether or not the line shows.
+struct DuringLineTallest: View {
+    let onChange: (CGFloat) -> Void
+    @Environment(\.dynamicTypeSize) private var typeSize
+
+    var body: some View {
+        DuringLine.reference(lines: DuringLine.lines(at: typeSize))
+            .fixedSize()
+            .hidden()
+            .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { onChange($0) }
+            .accessibilityHidden(true)
     }
 }

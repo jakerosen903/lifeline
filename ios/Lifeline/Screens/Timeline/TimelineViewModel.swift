@@ -226,10 +226,14 @@ final class TimelineViewModel {
                 return story
             }
             floatingCount = try store.memories.visibleMemories().filter { $0.isFloating && !$0.range.isPlaced }.count
+            let previousRowIDs = cardSource.rowIDs
             cardSource = CardSource(spine: spine, chapters: allChapters, birthYear: birth?.year, currentYear: CivilDate.today().year)
             // A row deleted, hidden or filtered out while on screen no longer holds the frame.
             let onScreen = onScreenIDs.intersection(cardSource.rowIDs)
             if onScreen != onScreenIDs { onScreenIDs = onScreen }
+            // Other rows on the spine (a tag filter, Hidden, a delete) and none on screen: the years last
+            // shown may belong to rows that are gone, so the frame waits for the rows to report.
+            if cardSource.rowIDs != previousRowIDs && onScreenIDs.isEmpty { lastOnScreenYears = [] }
             rebuildCard()
 
             let years = all.flatMap { [$0.range.earliest?.year, $0.range.latest?.year].compactMap { $0 } }
