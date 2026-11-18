@@ -2,6 +2,49 @@
 
 One entry per decision. Newest first. Status is Decided, Open, or Superseded.
 
+## 2026-11-18 · PC-a: rulings made while building people and contacts
+
+**Status:** Decided by the builder, except R13, which the controller made and the owner must confirm. The owner can overrule each one. Source: `docs/plans/2026-11-18-people-contacts.md`, ledger `.superpowers/sdd/2026-11-18-people-contacts/rulings.md` (R1 to R35). Narrows two statements of the entry below and of the spec.
+
+**Decision.**
+
+Matching and origins:
+
+- R7: with a said name, only the name picks candidates. The relation part of "Priya, my mom" never picks a candidate. Rule 2 never fires when a name was said. Rule 3 needs exactly one candidate whose full name equals the said name.
+- R12 and R13: every write that meets an existing link keeps the stronger origin, and no origin is the weakest. An older link with no origin takes `assumed` when a retelling or a merge reaches it. An older link nothing touches has no mark. Keep never settles a guess to `confirmed`. This narrows "Links older than this feature show no mark" below and in the spec. Why: a guess that reaches an old link is still a guess (principle 5).
+- R8: a stored choice applied on Keep saves both halves of the said name as aliases, as settle does. A guess with origin `said` saves only the relation half. A group phrase is never saved.
+- R9: a stored choice matches the whole said ref. "Robin" and "my roommate, Robin" are two keys.
+- R14: a person made by a stored "Someone new" choice is not an empty guess. A later move never removes them.
+- R15: an alias saved before this change that is a group phrase no longer links on Keep. The phrase asks again in each story.
+- R10: until PC-b, a guessed contact cannot occur. A stored `contact` choice makes a new person with origin `confirmed`.
+- R11: after a serious disclosure no person mention counts as carried. The name goes to the People queue.
+
+Moves and Undo:
+
+- R19 and R23: a detail moves only with a whole answer. A fact whose own mention is in the move always takes its detail along.
+- R20 and R24: an empty guess is a person made by a guess, with nothing that refers to them. A move clears the target's guess flag.
+- R21, R26 and R27: Undo is refused as stale when rows it would restore or change moved on since, for example a rename or a deleted memory. The refusal shows its sentence for 6 seconds, with no Undo.
+- R25: a settle that changed nothing records nothing, so its Undo is not refused.
+- R29: "Done" with the choice unchanged settles an `assumed` or `new` link. On `said`, `confirmed` or no origin it writes nothing.
+- R34: when a move removes the person whose page is open, the page stays up with its content disabled and the notice "Changed to {name}." with Undo. It closes when the notice ends. A successful Undo brings the page back.
+
+Cards and chips:
+
+- R30: a card that waits shows a person chip only for each preview. A said name that Keep will not link has no chip there. "Not a person" on a waiting card drops the chip before Keep, with no Undo. A group phrase keeps its own "Who's this?" card.
+- R31: the move notice uses the slot each host already has. A refused Undo shows in the same place.
+- R17: an `assumed` link with no said name still shows the word "Assumed".
+- R18: link reads return hidden memories too. Each view filters them.
+
+Test seeds:
+
+- R35: `-uiTesting-seedGuesses` seeds Priya, made by a guess, for R34's held page. `-uiTesting-guessesLanding` leaves the latest landing open. The follow-ups fixture gained the group phrase "for our parents".
+
+Plan decision 8: a name no memory carries keeps the old "Who's this?" card with its four choices in this PR. The owner decides later whether it goes.
+
+**Why.** Each ruling closes a case the plan left open. A hidden guess breaks principle 5, so each ruling errs toward showing the guess and toward a recoverable change.
+
+**Costs.** R13 puts a mark on an old link a retelling reaches, and the owner may see marks on old stories. R34 keeps a deleted person's page open for a few seconds. Two cards for one name exist until PC-b.
+
 ## 2026-11-18 · People are backed by contacts, and every guess about a name shows
 
 **Status:** Decided. Source: the owner's brainstorm of 2026-11-18, four approved screens (`docs/design/PC1_Assumed.dc.html` to `PC4_NoContact.dc.html`) and the owner's approval of `docs/specs/2026-11-18-people-contacts.md`. Supersedes the line "`contact_identifier` is deferred; no Contacts framework in V1" in the first spec.

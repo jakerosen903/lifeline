@@ -104,7 +104,7 @@ A memory has at most one link to a person, as today: the key of `moment_entity` 
 
 Rules:
 
-1. Keep on a memory card must not change an origin. Keeping a moment does not settle a guess.
+1. Keep on a memory card must not weaken an origin: the stronger origin wins, and no origin is the weakest. Keeping a moment does not settle a guess. (narrowed 2026-11-18, ruling R13)
 2. The app must save an alias only from a link with origin `said` or `confirmed`. A guess teaches no name. A person made by rule 6 or 7 has the said name as their own name.
 5. Aliases saved before this feature count as the owner's. The app cannot tell which of them came from a wrong guess. The owner removes a wrong one on the person's page, as today.
 3. A relation phrase said with a guess ("my roommate Robin") is saved as an alias only when the owner settles the guess.
@@ -356,7 +356,7 @@ New table `candidate_person_choice` (`candidate_id`, `said_name`, `person_id` nu
 Unit tests in LifelineKit (`swift test`):
 
 - `PersonGuess`: one test for each of the seven rules; two persons with one name; a person and a contact with one name; a fuller name that fits only the contact; a known name with a new relation phrase; a group phrase; the owner's name; diacritics and case.
-- Origin: Keep does not change an origin; an alias is saved from `said` and `confirmed` and never from `assumed`; a relation phrase is saved only on settle.
+- Origin: Keep does not weaken an origin (narrowed 2026-11-18, ruling R13); an alias is saved from `said` and `confirmed` and never from `assumed`; a relation phrase is saved only on settle.
 - Settle: one link; the group with the checkbox on; nothing in another recording changes.
 - Move: the link, the details, the first telling, the aliases, the removed empty person, Undo, a refused stale Undo.
 - Merge: links, aliases, the photo order and the key photo; two different contacts refuse; Undo.
@@ -414,7 +414,7 @@ The owner approved the spec with these calls on 2026-11-18. No call was discusse
 
 4. **A person on file wins over a contact with the same name** (rule 4), and the guess is marked. The app does not ask "which one?".
 5. **An answer carries inside one recording only.** Today's copy of one answer to every recording goes.
-6. **Older links get no mark.** The app cannot know which older links were guesses. The other option marks every older link that came from a name, which puts a mark on most of the archive.
+6. **Older links get no mark until a retelling or a merge reaches them, then they take `assumed`.** (narrowed 2026-11-18, ruling R13) The app cannot know which older links were guesses. The other option marks every older link that came from a name, which puts a mark on most of the archive.
 7. **The app creates a person on Keep for a name it does not know.** The "Who's this?" card goes for new recordings. Cost: a misheard name becomes a person until the owner taps "Not a person" or merges it.
 8. **A person the app created for a guess is removed when a move leaves them empty.** Undo restores them.
 9. **A person created from a contact takes the contact's full name. A person on file keeps their name when linked later.**

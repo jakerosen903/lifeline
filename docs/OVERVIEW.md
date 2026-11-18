@@ -100,9 +100,25 @@ The Timeline is one spine of moments. Each moment has a mark on the spine. A rin
 
 Much of a life story is not an event at a time: the house with the blue door, a grandmother who was Portuguese, a belief about hard work. These are kept as details of an entity, one of four kinds: People, Places, Things and Ideas. Each entity has a page. The page shows, from top to bottom: the type, the title, the person’s own words, a span only when the person gave dates, and Play. Then it shows the life strip, “What you’ve said about them”, “Often with”, the moments in date order, and Tags. A section with nothing in it does not show. A page with nothing told shows one line: “Stories you tell about {title} will show here.” An idea keeps its moments in order, so “I used to think X” and “now I think Y” sit together, and the app never judges the change. Statements about the person themself show on You, in the parts described under “You as a portrait”. Nothing is reclassified without a tap.
 
-### People are resolved, not guessed
+### People are matched, and every guess shows
 
-Every name mentioned becomes a pending “who’s this?” card, and places, things and ideas get a matching “Sounds like…” card. The person resolves it once, to an entity already on file, to a new one, or to a different kind, and the link holds across every memory. That keeps two Sams apart and lets “my sister” and “Maya” be one person. In a heavy moment no such card appears.
+Keep matches each said name to a person with seven rules. `PersonGuess` runs them in order, and the first rule that applies decides.
+
+1. The said name and the said relation phrase ("Danielle, my sister") are both held by one person.
+2. A relation phrase alone ("my mom") is held by one person.
+3. A fuller name of two or more words fits one candidate only.
+4. A person on file fits. With several, the most recently linked one wins.
+5. Exactly one contact fits and no person does.
+6. Two or more contacts fit and no person does.
+7. Nothing fits. Keep makes a new person.
+
+Each link between a memory and a person stores an origin: `assumed`, `said`, `confirmed` or `new`. A link made before this change has no origin. Rules 1 and 2 give `said`. Rules 3 to 5 give `assumed`. Rules 6 and 7 give `new`. A choice the person made gives `confirmed`.
+
+An `assumed` link shows a dashed outline and the word "Assumed" until the person settles it with "Done" or changes it. A guess teaches the app no name. The app saves an alias only from the person's own words or choice. An older link shows no mark until a later retelling or a merge reaches it. Then it takes `assumed`. Keep never weakens an origin.
+
+Every person chip opens a sheet. A change can move all the moments of one recording, with the checkbox on, or one moment. A change shows "Changed to {name}." with Undo for 6 seconds. One answer carries inside one recording only. A name no memory carries keeps the old "Who's this?" card with its four choices.
+
+Contacts are not read yet. Rules 3, 5 and 6 find no contact until the next PR (PC-b), which adds the contacts directory, the link between a person and a contact, and suggestions in the sheet.
 
 ### Every session lands
 
