@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>A person linked to a contact</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#5F7046}a:hover{color:#45533A}
+</style>
+</helmet>
+<div style="width: 390px; height: 844px; box-sizing: border-box; background: #F6F0E4; color: #332A23; font-family: Inter, system-ui, sans-serif; display: flex; flex-direction: column; overflow: hidden">
+
+  <div style="padding: 64px 24px 0 24px; display: flex; align-items: center; justify-content: space-between">
+    <a href="#" aria-label="Back to People" style="width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; border-radius: 22px; background: #ECE3D2; text-decoration: none">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#332A23" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>
+    </a>
+    <div style="font-size: 12px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: #6B6053">People</div>
+    <div style="width: 44px"></div>
+  </div>
+
+  <div style="padding: 18px 24px 0 24px; display: flex; flex-direction: column; align-items: center; gap: 10px">
+    <div role="img" aria-label="Robyn Vale's picture, from your contacts" style="width: 112px; height: 112px; border-radius: 56px; background: #C9D2B8; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600; color: #3C4A2B; text-align: center; line-height: 1.25">picture from<br>your contacts</div>
+    <h1 style="margin: 0; font-family: Fraunces, Georgia, serif; font-weight: 500; font-size: 30px; line-height: 1.15; letter-spacing: -0.01em">Robyn Vale</h1>
+    <a href="#" style="min-height: 44px; display: flex; align-items: center; font-size: 14px; font-weight: 500; text-decoration: none">Choose another picture</a>
+  </div>
+
+  <div style="padding: 4px 24px 0 24px">
+    <div style="background: #FFFFFF; border: 1px solid #E3D8C3; border-radius: 16px; padding: 4px 14px; display: flex; align-items: center; gap: 12px; min-height: 56px; box-sizing: border-box">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#5F7046" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg>
+      <div style="flex: 1; display: flex; flex-direction: column; gap: 2px">
+        <div style="font-size: 15px; font-weight: 500">Linked to Robyn Vale in your contacts</div>
+        <div style="font-size: 13px; color: #6B6053">The app reads the name and picture only.</div>
+      </div>
+      <a href="#" style="min-height: 44px; display: flex; align-items: center; font-size: 14px; font-weight: 500; text-decoration: none">Change</a>
+    </div>
+  </div>
+
+  <div style="flex: 1; padding: 22px 24px 0 24px; display: flex; flex-direction: column; gap: 10px; overflow: hidden">
+    <div style="font-size: 12px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: #6B6053">3 moments</div>
+
+    <a href="#" style="background: #FFFFFF; border: 1px solid #E3D8C3; border-radius: 16px; padding: 14px; display: flex; flex-direction: column; gap: 4px; text-decoration: none; color: #332A23">
+      <span style="font-family: Fraunces, Georgia, serif; font-weight: 500; font-size: 18px; line-height: 1.2">The flat on Alder Street</span>
+      <span style="font-size: 13px; color: #6B6053">around 2021 · 2 min in your voice</span>
+    </a>
+
+    <a href="#" style="background: #FFFFFF; border: 1px solid #E3D8C3; border-radius: 16px; padding: 14px; display: flex; flex-direction: column; gap: 4px; text-decoration: none; color: #332A23">
+      <span style="font-family: Fraunces, Georgia, serif; font-weight: 500; font-size: 18px; line-height: 1.2">Dinner on the deposit</span>
+      <span style="font-size: 13px; color: #6B6053">2022 · 1 min in your voice</span>
+    </a>
+
+    <div style="background: #FBF4E6; border: 1.5px dashed #C8893F; border-radius: 16px; padding: 14px; display: flex; flex-direction: column; gap: 8px">
+      <a href="#" style="display: flex; flex-direction: column; gap: 4px; text-decoration: none; color: #332A23">
+        <span style="font-family: Fraunces, Georgia, serif; font-weight: 500; font-size: 18px; line-height: 1.2">The night the boiler went</span>
+        <span style="font-size: 13px; color: #7A4F17">Assumed · you said “Robin”</span>
+      </a>
+      <div style="display: flex; gap: 8px">
+        <button type="button" style="all: unset; cursor: pointer; min-height: 44px; padding: 0 16px; display: flex; align-items: center; border-radius: 22px; background: #5F7046; color: #FFFFFF; font-size: 14px; font-weight: 600">Yes, this Robyn</button>
+        <button type="button" style="all: unset; cursor: pointer; min-height: 44px; padding: 0 16px; display: flex; align-items: center; border-radius: 22px; background: #ECE3D2; color: #332A23; font-size: 14px; font-weight: 500">Someone else…</button>
+      </div>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>
