@@ -1,8 +1,8 @@
 import LifelineKit
 import SwiftUI
 
-/// Your story so far. The Timeline tab's root: waiting cards, chapters with bands, collections,
-/// the shelf and the one open question. Facts, feelings and goals live on You.
+/// Your story so far. The Timeline tab's root: waiting cards, the spine of dated moments,
+/// collections, the shelf and the one open question. Facts, feelings and goals live on You.
 struct TimelineScreen: View {
     let viewModel: TimelineViewModel
     @State private var showSettings = false
@@ -14,10 +14,18 @@ struct TimelineScreen: View {
     @State private var storyTitle = ""
     @State private var splitTarget: StoryRow?
     @State private var moveTarget: MemoryRow?
+    /// The list row to scroll to the top: a story just opened, so its members show above the record bar.
+    @State private var scrollTarget: StoryScrollTarget?
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    /// A story's row id in the list it sits in: the spine keys rows by `SpineRow.id`, the shelf by story.
+    private enum StoryScrollTarget: Equatable {
+        case spine(String)
+        case shelf(StoryID)
+    }
 
     private var rowActions: MemoryRowActions {
         MemoryRowActions(open: { openMemory = $0 },
-                         newChapter: { viewModel.newChapter(for: $0.id, title: nil) },
                          addToCollection: { collectionTarget = $0 },
                          addDate: { dateTarget = $0 },
                          hide: { viewModel.hide($0.id) },
@@ -97,15 +105,38 @@ struct TimelineScreen: View {
     }
 
     private var timelineList: some View {
-        List {
-            summarySection
-            sortingRow
-            waitingSection
-            chapterSections
-            collectionSections
-            shelfAndQuestion
-            footer
+        ScrollViewReader { proxy in
+            List {
+                summarySection
+                sortingRow
+                waitingSection
+                spineSection
+                collectionSections
+                shelfAndQuestion
+                footer
+            }
+            .onChange(of: scrollTarget) { _, target in
+                guard let target else { return }
+                scrollTarget = nil
+                // On the next turn, once this update has put the opened story's member rows in the list.
+                // No animation under Reduce Motion.
+                Task { @MainActor in
+                    withAnimation(reduceMotion ? nil : .default) {
+                        switch target {
+                        case .spine(let id): proxy.scrollTo(id, anchor: .top)
+                        case .shelf(let id): proxy.scrollTo(id, anchor: .top)
+                        }
+                    }
+                }
+            }
         }
+    }
+
+    /// Opens or folds a story. An opened story scrolls to the top: its members appear under it, and
+    /// near the bottom of the list they would otherwise appear under the record bar, out of sight.
+    private func toggleStory(_ id: StoryID, rowID: StoryScrollTarget) {
+        viewModel.toggleStory(id)
+        if viewModel.expandedStories.contains(id) { scrollTarget = rowID }
     }
 
     @ViewBuilder private var sortingRow: some View {
@@ -145,26 +176,33 @@ struct TimelineScreen: View {
         }
     }
 
-    @ViewBuilder private var chapterSections: some View {
-        ForEach(viewModel.chapters) { chapter in
-            ChapterSection(title: chapter.title, rangeText: chapter.chapter.range.isPlaced ? chapter.chapter.range.displayText : nil,
-                           memories: chapter.memories, axis: viewModel.axis, actions: rowActions,
-                           stories: chapter.stories, expanded: viewModel.expandedStories, onToggleStory: { viewModel.toggleStory($0) },
-                           storyActions: storyActions)
+    /// One section of rows with no header, cards or separators: the rows touch, so the spine reads as one line.
+    /// With nothing dated there is no section, and so no spine and no period.
+    @ViewBuilder private var spineSection: some View {
+        if !viewModel.spine.isEmpty {
+            Section {
+                ForEach(viewModel.spine) { row in
+                    SpineRowView(row: row, isFirst: row.id == viewModel.spine.first?.id, isLast: row.id == viewModel.spine.last?.id,
+                                 expanded: storyID(of: row).map { viewModel.expandedStories.contains($0) } ?? false,
+                                 onToggleStory: { if let id = storyID(of: row) { toggleStory(id, rowID: .spine(row.id)) } },
+                                 actions: rowActions, storyActions: storyActions)
+                }
+                .listRowSeparator(.hidden)
+                .listRowBackground(Color.clear)
+                .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 12))
+            }
         }
-        if !viewModel.unchaptered.isEmpty || !viewModel.unchapteredStories.isEmpty {
-            ChapterSection(title: viewModel.chapters.isEmpty ? "On the timeline" : "Outside any chapter", rangeText: nil,
-                           memories: viewModel.unchaptered, axis: viewModel.axis, actions: rowActions,
-                           stories: viewModel.unchapteredStories, expanded: viewModel.expandedStories, onToggleStory: { viewModel.toggleStory($0) },
-                           storyActions: storyActions)
-        }
+    }
+
+    private func storyID(of row: SpineRow) -> StoryID? {
+        if case .story(let story) = row.content { story.id } else { nil }
     }
 
     @ViewBuilder private var collectionSections: some View {
         ForEach(viewModel.collections) { collection in
             Section {
                 ForEach(collection.members) { row in
-                    MemoryRowView(row: row, axis: row.memory.range.isPlaced ? viewModel.axis : nil, actions: rowActions)
+                    MemoryRowView(row: row, actions: rowActions)
                 }
             } header: {
                 VStack(alignment: .leading, spacing: 2) {
@@ -180,7 +218,7 @@ struct TimelineScreen: View {
     @ViewBuilder private var shelfAndQuestion: some View {
         if !viewModel.shelf.isEmpty || !viewModel.shelfStories.isEmpty {
             ShelfSection(title: "Somewhere in your story", memories: viewModel.shelf, actions: rowActions,
-                         stories: viewModel.shelfStories, expanded: viewModel.expandedStories, onToggleStory: { viewModel.toggleStory($0) },
+                         stories: viewModel.shelfStories, expanded: viewModel.expandedStories, onToggleStory: { toggleStory($0, rowID: .shelf($0)) },
                          storyActions: storyActions)
         }
         if let question = viewModel.question, let row = viewModel.questionRow {

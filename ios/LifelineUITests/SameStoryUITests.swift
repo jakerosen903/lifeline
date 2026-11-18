@@ -106,7 +106,7 @@ final class SameStoryUITests: XCTestCase {
         app.navigationBars.buttons.firstMatch.tap()
         let row = memoryRows(app, containing: "1998").firstMatch
         XCTAssertTrue(app.reveal(row), "the dated memory left the shelf")
-        XCTAssertTrue(app.otherElements["timeline.axis"].exists)
+        XCTAssertTrue(app.any("timeline.period").waitForExistence(timeout: 3), "a placed memory brings its period")
     }
 
     @MainActor

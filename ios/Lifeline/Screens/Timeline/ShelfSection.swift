@@ -1,7 +1,8 @@
 import LifelineKit
 import SwiftUI
 
-/// Memories with neither a date nor a collection: "Somewhere in your story".
+/// Memories with no year to show and no collection: "Somewhere in your story". A date with one end
+/// only ("before 2004") sits here too, and its date reads "no date yet", until it has a year the spine can show.
 struct ShelfSection: View {
     let title: String
     let memories: [MemoryRow]
@@ -15,11 +16,16 @@ struct ShelfSection: View {
     var body: some View {
         Section {
             ForEach(memories) { row in
-                MemoryRowView(row: row, axis: nil, actions: actions, inline: true)
+                MemoryRowView(row: row, actions: actions, inline: true)
             }
             ForEach(stories) { story in
-                StoryRowView(row: story, axis: nil, expanded: expanded.contains(story.id), onToggle: { onToggleStory(story.id) },
-                             actions: actions, storyActions: storyActions)
+                StoryRowView(row: story, expanded: expanded.contains(story.id), onToggle: { onToggleStory(story.id) },
+                             storyActions: storyActions)
+                if expanded.contains(story.id) {
+                    ForEach(story.members) { member in
+                        MemoryRowView(row: member, actions: actions).padding(.leading, 16)
+                    }
+                }
             }
         } header: {
             HStack {

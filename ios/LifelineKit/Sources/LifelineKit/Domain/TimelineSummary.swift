@@ -10,11 +10,10 @@ public enum TimelineSummary {
         memories.filter { !$0.isMoment && !$0.hiddenFromTimeline && !$0.isFloating }.count
     }
 
-    /// "2 memories · 1 chapter · 1999 → now · and 3 things about your life". While a tag filter is on, the
+    /// "2 memories · 1999 → now · and 3 things about your life". While a tag filter is on, the
     /// things are left out: the filter applies to moments only, and they are not on this page.
-    public static func text(memories: Int, chapters: Int, firstYear: Int?, things: Int, tagFiltered: Bool) -> String {
+    public static func text(memories: Int, firstYear: Int?, things: Int, tagFiltered: Bool) -> String {
         var parts = ["\(memories) \(memories == 1 ? "memory" : "memories")"]
-        if chapters > 0 { parts.append("\(chapters) \(chapters == 1 ? "chapter" : "chapters")") }
         if let firstYear { parts.append("\(firstYear) → now") }
         if things > 0, !tagFiltered { parts.append("and \(things) \(things == 1 ? "thing" : "things") about your life") }
         return parts.joined(separator: " · ")

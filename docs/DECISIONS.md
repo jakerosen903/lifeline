@@ -2,6 +2,32 @@
 
 One entry per decision. Newest first. Status is Decided, Open, or Superseded.
 
+## 2026-11-16 · S6a: rulings made while building the spine
+
+**Status:** Decided by the builder. The owner can overrule each one. Source: `docs/plans/2026-11-16-timeline-spine.md`, ledger `.superpowers/sdd/2026-11-16-timeline-spine/rulings.md`.
+
+**Decision.**
+
+- A gap is measured from the latest end of all the moments above it, not only from the moment directly above. Example: 2000–10, then 2003, then 2012. The gap above 2012 is 2 years, not 9.
+- The margin leaves out the years only when the moment above shows the same years and the same qualifier. A guess in the same year as a stated date keeps its word "around".
+- Owner, 2026-11-16: for a confirmed relation ("before Graduation (2004)") the margin shows no years. The row shows the full text and the mark stays a dashed capsule. This changes the plan's decision 4.
+- Owner, 2026-11-16: a story of one year has a solid dot only when every dated member reads as said. Otherwise it has a dashed dot and "around". This changes the plan's decision 8.
+- An open story that is the last stop keeps the spine beside its members, and the spine ends at the last member (R7).
+- A spine row keeps the age ("age ~7") on its date line, so the person sees why a guess sits where it does (R8).
+- The "in your voice" length sits on its own line on a spine row, so the title has the full width (R9).
+- Opening a story scrolls it to the top of the list. Opened members landed under the record bar. The owner confirmed this on 2026-11-16 (R13).
+- The Check-this tag wraps. A long tag pushed the "..." menu off the row (R14).
+- A tap on a tag does nothing until S6c makes the tag a button (R15).
+- A story's members are list rows of their own, so each long-press menu belongs to one member (R16).
+- Two UI tests that the plan wrote also pass on the old build, and they stay as written. One is a guard for kept behaviour (R12). The other cannot see where the date sits, so that is checked on the device at the largest text size (R11).
+- Owner, 2026-11-16: "New chapter from here" goes with no replacement until S6c (decision 2), and a moment in a collection stays off the spine (decision 9). Known cost of decision 9: a gap label can cover years that hold collection moments.
+- A guess that crosses two calendar years ("around 1999–2000", an age with a mid-year birthday) keeps "around" in the margin. Without it, the guess read as a stated range (R17).
+- A gap next to a confirmed relation has no label and is not dashed. Its space stays. The edge of the relation's band is the builder's slack, so a number of years there is not what the person said (R18).
+
+**Why.** A label of "9 years" across years that an earlier moment covers states something false about the person's life. A guess whose word is hidden reads as a fact (PRINCIPLES 5).
+
+**Consequences.** Each kit ruling is a small change in `SpineLayout` with its tests. To overrule one, change the code and its tests. The view rulings (R7, R8, R9, R13, R14, R15, R16) have no unit test. The device checklist checks them: `docs/plans/2026-11-16-timeline-spine-device-check.md`.
+
 ## 2026-11-16 · Photos on pages, kept on the phone (S4)
 
 **Status:** Decided. Builds on the five-sections decision of 2026-11-15.

@@ -15,6 +15,8 @@ struct MemoryRow: Identifiable, Equatable, Hashable {
     let checkThis: [CheckThis]
     /// The story this memory belongs to, if any (M5).
     var storyID: StoryID? = nil
+    /// The title of the memory's chapter, trimmed; nil when it has no chapter or the chapter has no title (S6a).
+    var chapterTitle: String? = nil
     var id: MemoryID { memory.id }
 
     func hash(into hasher: inout Hasher) { hasher.combine(memory.id) }
@@ -45,31 +47,39 @@ struct StoryRow: Identifiable, Equatable {
     var isPlaced: Bool { span.isPlaced }
 }
 
-struct ChapterRow: Identifiable, Equatable {
-    let chapter: Chapter
-    let memories: [MemoryRow]
-    var stories: [StoryRow] = []
-    var id: ChapterID { chapter.id }
-    var title: String { chapter.title ?? "Untitled chapter" }
+/// One stop on the spine: a moment or a story, with what `SpineLayout` says about it.
+struct SpineRow: Identifiable, Equatable {
+    enum Content: Equatable { case memory(MemoryRow), story(StoryRow) }
+    let content: Content
+    let stop: SpineLayout.Stop
+    var id: String { stop.id }
+
+    /// The moments this stop stands for: one, or a story's members.
+    var momentCount: Int {
+        switch content {
+        case .memory: 1
+        case .story(let story): story.members.count
+        }
+    }
 }
 
-/// Your story so far: chapters as structure, memories as honest bands, collections, the shelf,
-/// the cards still waiting, and the one question the app can ask. The home screen from M3 on.
+/// Your story so far: one spine of dated moments and stories, collections, the shelf, the cards
+/// still waiting, and the one question the app can ask. The home screen from M3 on.
 @MainActor
 @Observable
 final class TimelineViewModel {
     private(set) var waiting: [Card] = []
     /// "Are these the same?": up to a few open pairs; a pair whose memory is gone is dropped (M5).
     private(set) var pairs: [PairRow] = []
-    private(set) var chapters: [ChapterRow] = []
+    /// Dated loose moments and dated stories, whatever their chapter, in time order (S6a).
+    private(set) var spine: [SpineRow] = []
     private(set) var collections: [CollectionRow] = []
-    private(set) var unchaptered: [MemoryRow] = []
+    /// Loose moments with no year to show: unplaced, or placed by one end only.
     private(set) var shelf: [MemoryRow] = []
     /// Visible facts, feelings and goals: not moments, so never on the shelf or in a chapter, and no rows here. They
     /// live on You and on their own pages; Timeline only counts them for its summary and, with no tag filter, its empty state (S3).
     private(set) var aboutCount = 0
-    /// Stories outside any chapter with a dated member, and stories with none (M5).
-    private(set) var unchapteredStories: [StoryRow] = []
+    /// Stories with no year to lay out: no member is dated (M5, S6a).
     private(set) var shelfStories: [StoryRow] = []
     private(set) var allStories: [Story] = []
     /// Story rows the person opened.
@@ -77,7 +87,6 @@ final class TimelineViewModel {
     private(set) var floatingCount = 0
     private(set) var question: RelativeQuestion?
     private(set) var questionRow: MemoryRow?
-    private(set) var axis: ClosedRange<Int>?
     private(set) var summary = ""
     private(set) var error: String?
     /// The Hidden filter: show memories hidden from the timeline too.
@@ -143,8 +152,8 @@ final class TimelineViewModel {
 
     /// What the page holds; zero shows the empty state. With a tag filter on, only the moments that match count.
     var memoryCount: Int {
-        chapters.reduce(0) { $0 + $1.memories.count + $1.stories.reduce(0) { $0 + $1.members.count } } + collections.reduce(0) { $0 + $1.members.count }
-            + unchaptered.count + shelf.count + (tagFilter == nil ? aboutCount : 0) + (unchapteredStories + shelfStories).reduce(0) { $0 + $1.members.count }
+        spine.reduce(0) { $0 + $1.momentCount } + collections.reduce(0) { $0 + $1.members.count }
+            + shelf.count + shelfStories.reduce(0) { $0 + $1.members.count } + (tagFilter == nil ? aboutCount : 0)
     }
 
     // MARK: - Loading
@@ -164,7 +173,8 @@ final class TimelineViewModel {
             aboutCount = TimelineSummary.thingsAboutYourLife(listed)
             let all = listed.filter { $0.isMoment && (tagged?.contains($0.id.rawValue) ?? true) }
             let birth = try store.profile.ownerBirthDate()
-            let rows = Dictionary(uniqueKeysWithValues: try all.map { ($0.id, try row(for: $0, birth: birth)) })
+            let chapterTitles = try Self.chapterTitles(store.chapters.chapters())
+            let rows = Dictionary(uniqueKeysWithValues: try all.map { ($0.id, try row(for: $0, birth: birth, chapterTitles: chapterTitles)) })
             let allCollections = try store.chapters.collections()
             var inCollection = Set<MemoryID>()
             collections = try allCollections.compactMap { collection in
@@ -172,7 +182,7 @@ final class TimelineViewModel {
                 members.forEach { inCollection.insert($0.id) }
                 return members.isEmpty ? nil : CollectionRow(collection: collection, span: try store.chapters.derivedSpan(of: collection.id), members: members)
             }
-            // A story renders once, in its chapter or on the timeline, members folded under it; a
+            // A story renders once, on the spine or on the shelf, members folded under it; a
             // story with one visible member is not a group and its member stays a plain row. A
             // moment can sit in its story and in a collection (builder call 6).
             allStories = try store.stories.stories()
@@ -184,32 +194,40 @@ final class TimelineViewModel {
                 return StoryRow(story: story, members: members, span: ChapterRepository.span(over: members.map(\.memory.range)))
             }
             let loose = all.filter { !inCollection.contains($0.id) && !inStory.contains($0.id) }.compactMap { rows[$0.id] }
-            chapters = try store.chapters.chapters().map { chapter in
-                ChapterRow(chapter: chapter, memories: loose.filter { $0.memory.chapterID == chapter.id && $0.memory.range.isPlaced }.sorted(by: Self.byTime),
-                           stories: storyRows.filter { $0.story.chapterID == chapter.id && $0.isPlaced })
+            // The spine needs a year to show for every stop. A range that is unplaced, or placed by one
+            // end only ("before 2004" with no start), has none: it goes to the shelf, so nothing disappears.
+            let entries = loose.map(SpineEntry.init(memory:)) + storyRows.map(SpineEntry.init(story:))
+            spine = Self.spine(of: entries.filter(\.range.isDated), birthYear: birth?.year)
+            shelf = loose.filter { !$0.memory.range.isDated }
+            shelfStories = entries.compactMap { entry in
+                guard case .story(let story) = entry.content, !entry.range.isDated else { return nil }
+                return story
             }
-            unchaptered = loose.filter { $0.memory.chapterID == nil && $0.memory.range.isPlaced }.sorted(by: Self.byTime)
-            let chapterIDs = Set(chapters.map(\.id))
-            unchapteredStories = storyRows.filter { row in row.isPlaced && !(row.story.chapterID.map { chapterIDs.contains($0) } ?? false) }
-            shelfStories = storyRows.filter { !$0.isPlaced }
-            shelf = loose.filter { !$0.memory.range.isPlaced }
             floatingCount = try store.memories.visibleMemories().filter { $0.isFloating && !$0.range.isPlaced }.count
 
             let years = all.flatMap { [$0.range.earliest?.year, $0.range.latest?.year].compactMap { $0 } }
-            axis = years.isEmpty ? nil : (years.min()! ... max(years.max()!, Calendar.current.component(.year, from: .now)))
 
             waiting = try waitingCards()
             pairs = try openPairs()
             refreshSorting()
             (question, questionRow) = try firstQuestion(rows: rows, birth: birth)
-            summary = TimelineSummary.text(memories: all.count, chapters: chapters.count, firstYear: years.min(), things: aboutCount, tagFiltered: tagFilter != nil)
+            summary = TimelineSummary.text(memories: all.count, firstYear: years.min(), things: aboutCount, tagFiltered: tagFilter != nil)
             error = nil
         } catch {
             self.error = "Could not load your story: \(error.localizedDescription)"
         }
     }
 
-    private func row(for memory: Memory, birth: CivilDate?) throws -> MemoryRow {
+    /// Chapter titles by chapter, read once a refresh: trimmed, and only those with words in them.
+    private static func chapterTitles(_ chapters: [Chapter]) -> [ChapterID: String] {
+        var titles: [ChapterID: String] = [:]
+        for chapter in chapters {
+            if let title = chapter.title?.trimmingCharacters(in: .whitespacesAndNewlines), !title.isEmpty { titles[chapter.id] = title }
+        }
+        return titles
+    }
+
+    private func row(for memory: Memory, birth: CivilDate?, chapterTitles: [ChapterID: String]) throws -> MemoryRow {
         let store = deps.extractionStore
         let kind = memory.kind
         let span = try store.memories.spans(of: memory.id).first
@@ -225,16 +243,48 @@ final class TimelineViewModel {
                          place: try store.memories.places(of: memory.id).first?.nameText,
                          durationText: span.map { Format.duration(ms: $0.endMs - $0.startMs) } ?? "",
                          checkThis: CheckThisTags.tags(range: memory.isMoment ? memory.range : .unplaced, mentions: try span.map { try store.people.mentions(in: $0.segmentID) } ?? []),
-                         storyID: try store.stories.story(of: memory.id)?.id)
+                         storyID: try store.stories.story(of: memory.id)?.id,
+                         chapterTitle: memory.chapterID.flatMap { chapterTitles[$0] })
     }
 
-    private static func byTime(_ a: MemoryRow, _ b: MemoryRow) -> Bool {
-        let ka = a.memory.range.likelyStart ?? a.memory.range.earliest, kb = b.memory.range.likelyStart ?? b.memory.range.earliest
+    // MARK: - The spine
+
+    /// A moment or a story before it is laid out: the range it sits on the spine by, and its creation time for ties.
+    private struct SpineEntry {
+        let content: SpineRow.Content
+        /// Unique across moments and stories: the stop's id.
+        let id: String
+        let range: TimeRange
+        let createdAt: Date
+
+        init(memory row: MemoryRow) {
+            content = .memory(row); id = "memory-\(row.id.rawValue)"; range = row.memory.range; createdAt = row.memory.createdAt
+        }
+
+        /// A story lays out by `SpineLayout.storyRange`, not by its derived span (decision 8): only that
+        /// range knows whether every member reads as said.
+        init(story row: StoryRow) {
+            content = .story(row); id = "story-\(row.id.rawValue)"
+            range = SpineLayout.storyRange(members: row.members.map(\.memory.range)); createdAt = row.story.createdAt
+        }
+    }
+
+    /// `entries` in time order, each with its stop. Every entry must be dated.
+    private static func spine(of entries: [SpineEntry], birthYear: Int?) -> [SpineRow] {
+        let ordered = entries.sorted(by: byTime)
+        let stops = SpineLayout.stops(for: ordered.map { (id: $0.id, range: $0.range) }, birthYear: birthYear)
+        let contents = Dictionary(uniqueKeysWithValues: ordered.map { ($0.id, $0.content) })
+        return stops.compactMap { stop in contents[stop.id].map { SpineRow(content: $0, stop: stop) } }
+    }
+
+    /// The likely start, else the earliest; ties and undated entries by creation, undated last.
+    private static func byTime(_ a: SpineEntry, _ b: SpineEntry) -> Bool {
+        let ka = a.range.likelyStart ?? a.range.earliest, kb = b.range.likelyStart ?? b.range.earliest
         switch (ka, kb) {
-        case (let x?, let y?): return x != y ? x < y : a.memory.createdAt < b.memory.createdAt
+        case (let x?, let y?): return x != y ? x < y : a.createdAt < b.createdAt
         case (nil, _?): return false
         case (_?, nil): return true
-        default: return a.memory.createdAt < b.memory.createdAt
+        default: return a.createdAt < b.createdAt
         }
     }
 
@@ -406,11 +456,6 @@ final class TimelineViewModel {
         do { try work(); error = nil; refresh() } catch { self.error = "\(message): \(error.localizedDescription)" }
     }
     func resolve(_ card: Card, _ choice: MentionChoice) { if flow.resolve(card, choice) { refresh() } }
-
-    func newChapter(for memory: MemoryID, title: String?) {
-        do { _ = try deps.actions.createChapter(title: title, containing: memory); refresh() }
-        catch { self.error = "Could not make a chapter: \(error.localizedDescription)" }
-    }
 
     func addToCollection(_ memory: MemoryID, title: String) {
         do { _ = try deps.actions.addToCollection(memory, titled: title); refresh() }
