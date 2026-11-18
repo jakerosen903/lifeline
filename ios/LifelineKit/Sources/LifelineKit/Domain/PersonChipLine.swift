@@ -20,6 +20,13 @@ public enum PersonChipLine {
         return "\(name), assumed, you said \(said). Change who this is."
     }
 
+    /// The button on a guessed moment of a person's page: "Yes, this Robyn". The first word of the name;
+    /// a one-word name is used whole, and an empty one reads "Yes, this person".
+    public static func confirmLabel(name: String) -> String {
+        let first = name.split(whereSeparator: \.isWhitespace).first.map(String.init)
+        return "Yes, this \(first ?? "person")"
+    }
+
     /// The sub-line on the landing page. nil when there is no guess to report.
     public static func landingLine(guesses: Int) -> String? {
         switch guesses {

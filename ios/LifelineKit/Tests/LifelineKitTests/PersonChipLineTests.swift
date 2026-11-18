@@ -34,3 +34,11 @@ import Testing
     #expect(PersonChipLine.staleUndo == "That changed since. Open the name to change it again.")
     #expect(PersonChipLine.failedUndo == "Could not undo that.")
 }
+
+@Test func theConfirmButtonUsesTheFirstWordOfTheName() {
+    #expect(PersonChipLine.confirmLabel(name: "Robyn Vale") == "Yes, this Robyn")
+    #expect(PersonChipLine.confirmLabel(name: "Robyn") == "Yes, this Robyn")
+    #expect(PersonChipLine.confirmLabel(name: "  Robyn   Vale ") == "Yes, this Robyn")
+    #expect(PersonChipLine.confirmLabel(name: "") == "Yes, this person")
+    #expect(PersonChipLine.confirmLabel(name: "   ") == "Yes, this person")
+}

@@ -39,13 +39,8 @@ struct PersonChip: View {
             .padding(.horizontal, 14).padding(.vertical, 8)
             .frame(maxWidth: .infinity, minHeight: 52, alignment: .leading)
             .background(outline.fill(Theme.card))
-            .overlay {
-                if isAssumed {
-                    outline.strokeBorder(Theme.ochre, style: StrokeStyle(lineWidth: 1.5, dash: [5, 3]))
-                } else {
-                    outline.strokeBorder(Theme.hairline, lineWidth: 1)
-                }
-            }
+            .overlay { if !isAssumed { outline.strokeBorder(Theme.hairline, lineWidth: 1) } }
+            .overlay { if isAssumed { Color.clear.assumedOutline() } }
             .contentShape(outline)
         }
         .buttonStyle(.plain)

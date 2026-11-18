@@ -33,12 +33,18 @@ final class EntityViewModel {
     private(set) var photoError: String?
     /// The page's photos (S4): the cover heads the page, two or more sit in a row.
     let shelf: PhotoShelf
+    /// A person's moments that are here by a guess, keyed by memory. Empty on any other page and on the owner's.
+    /// A memory with a guessed mention and a guessed detail shows the mention link.
+    private(set) var guessed: [MemoryID: PersonLink] = [:]
+    /// "Changed to {name}." with Undo, after the sheet moved a moment off this page.
+    let personMove: PersonMoveUndo
     let player = SegmentPlayer()
     let deps: Dependencies
 
     init(entity: Entity, deps: Dependencies) {
         self.entity = entity
         self.deps = deps
+        personMove = PersonMoveUndo(store: deps.extractionStore)
         // The shelf reports to this page, which exists only once the shelf is stored: the closure is bound after.
         var report: (String) -> Void = { _ in }
         self.shelf = PhotoShelf(subject: .entity(entity.id), deps: deps, onError: { report($0) })
@@ -85,6 +91,7 @@ final class EntityViewModel {
                 strip = LifeStrip(moments: sections.moments.map(\.range), stated: entity.range,
                                   birthYear: birth?.year, currentYear: CivilDate.today().year)
             }
+            guessed = isOwner || entity.type != .person ? [:] : try Self.guesses(to: PersonID(rawValue: entity.id.rawValue), in: store)
             tags = try store.tags.tags(of: .entity, entity.id.rawValue)
             if let span = try store.entities.spans(of: entity.id).first, let segment = try store.sessions.fetchSegment(span.segmentID),
                let session = try store.sessions.fetch(segment.sessionID) {
@@ -97,6 +104,45 @@ final class EntityViewModel {
             self.error = error.localizedDescription
         }
         shelf.load()
+    }
+
+    // MARK: - Guessed moments
+
+    /// The assumed links to a person, one for each memory. The mention wins over a detail of the same memory.
+    private static func guesses(to person: PersonID, in store: ExtractionStore) throws -> [MemoryID: PersonLink] {
+        var found: [MemoryID: PersonLink] = [:]
+        for link in try store.personLinks.links(to: person) where link.isGuess {
+            if let have = found[link.memoryID], have.relation == .mention { continue }
+            found[link.memoryID] = link
+        }
+        return found
+    }
+
+    /// "Yes, this {name}": settles that one link. The mark goes at once; there is no notice.
+    func confirm(_ memory: MemoryID) {
+        guard let link = guessed[memory] else { return }
+        do {
+            try PersonLinkActions(store: deps.extractionStore).settle(link, wholeGroup: false)
+            refresh()
+        } catch {
+            self.error = "Could not save that: \(error.localizedDescription)"
+        }
+    }
+
+    /// What "Done" in the sheet did. A move shows its notice; the page then reads again, and closes
+    /// when the move removed this person (`isGone`).
+    func personSheetDone(_ outcome: WhoIsThisViewModel.Outcome) {
+        if case .unchanged = outcome { return }
+        if case .failed(let message) = outcome { error = message; return }
+        personMove.note(outcome)
+        refresh()
+    }
+
+    /// Returns true when the move was taken back.
+    func undoPersonMove() -> Bool {
+        let done = personMove.undo()
+        if done { refresh() }
+        return done
     }
 
     // MARK: - Photos
