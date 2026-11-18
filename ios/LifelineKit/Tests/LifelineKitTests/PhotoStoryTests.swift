@@ -258,6 +258,18 @@ private struct StoryFixture {
     #expect(try f.store.chapters.chapter(id: chapter.id)?.range.earliest == day(2019, 7, 14))
 }
 
+/// The card was drawn, then the date changed elsewhere (the person set it, or the resolver placed it). The offer is stale:
+/// the tap must not replace a range the person never saw the offer against.
+@Test func usingTheDateSkipsAMemoryWhoseRangeChangedSinceTheCard() throws {
+    let f = try StoryFixture()
+    let kept = try CandidateActions(store: f.store).acceptMemory(try f.pendingCard()).memory
+    let offer = PhotoStoryCard.DateOffer(memory: kept, date: day(2019, 7, 14))
+    let said = TimeRange.year(2012, origin: .stated, evidence: "in 2012")
+    try f.store.memories.updateRange(kept.id, said)
+    try f.reader.useDate(offer)
+    #expect(try f.store.memories.fetch(kept.id)?.range == said)
+}
+
 private final class WriteCounter: @unchecked Sendable {
     private let lock = NSLock()
     private var value = 0

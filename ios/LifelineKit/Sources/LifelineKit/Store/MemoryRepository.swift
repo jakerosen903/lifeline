@@ -545,12 +545,17 @@ public struct MemoryRepository: Sendable {
     }
 
     /// The memory's range and the range of the chapter it sits in change in one write, so the chapter is never stale.
-    public func updateRange(_ id: MemoryID, _ range: TimeRange, refreshingChapter: Bool) throws {
+    /// With `ifCurrently`, the write happens only while the stored range is still that one: an offer drawn against an older
+    /// range must not replace a newer one. Returns false when the memory is gone or its range has changed.
+    @discardableResult
+    public func updateRange(_ id: MemoryID, _ range: TimeRange, ifCurrently expected: TimeRange? = nil, refreshingChapter: Bool) throws -> Bool {
         try db.writer.write { db in
-            guard var memory = try Memory.fetchOne(db, key: id.rawValue) else { return }
+            guard var memory = try Memory.fetchOne(db, key: id.rawValue) else { return false }
+            if let expected, memory.range != expected { return false }
             memory.range = range
             try memory.update(db)
             if refreshingChapter { try Self.refreshChapterRange(ofMemory: id, in: db) }
+            return true
         }
     }
 

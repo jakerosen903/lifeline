@@ -167,7 +167,9 @@ private let photoDay = CivilDate(iso: "2019-07-14")!
     let memory = try env.accept("The blue door", anchors: [AnchorOut(phrase: "in 1998", relation: .absolute, targetText: nil, value: nil)], ordinal: 0)
     #expect(try env.store.memories.fetch(memory.id)?.range.earliest?.year == 1998, "the anchor would place it in 1998")
     let reader = PhotoStoryReader(store: env.store)
-    try reader.useDate(PhotoStoryCard.DateOffer(memory: memory, date: photoDay))
+    // The card reads the store, so its offer carries the range the resolver set, not the one `accept` returned.
+    let onCard = try #require(try env.store.memories.fetch(memory.id))
+    try reader.useDate(PhotoStoryCard.DateOffer(memory: onCard, date: photoDay))
     #expect(try env.store.memories.fetch(memory.id)?.range == .fromPhoto(photoDay))
     try env.accept("One more thing", anchors: [], ordinal: 1)
     _ = try env.runner.run()
