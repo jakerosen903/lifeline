@@ -39,7 +39,9 @@ public enum PersonGuess {
         let persons: [Known]
         let contactCandidates: [Contact]
         if !nameKey.isEmpty {
-            let wanted = Set(SaidName.keyParts(of: said.raw)).union([nameKey])
+            // The relation part of a comma-form ref never picks a candidate; only name parts do.
+            let wanted = Set(PeopleRepository.parts(of: said.raw).filter { !SaidName.isRelation($0) }.map(SaidName.key)
+                .filter { !$0.isEmpty }).union([nameKey])
             let viaContact = Set(contacts.filter { matches($0, wanted) }.map(\.identifier))
             persons = people.filter { holds($0, wanted) || ($0.contactIdentifier.map(viaContact.contains) ?? false) }
                 .sorted(by: moreRecent)
@@ -55,7 +57,7 @@ public enum PersonGuess {
 
         // 1. Name and relation both held by exactly one person.
         if !nameKey.isEmpty, !relationKey.isEmpty {
-            let both = persons.filter { holds($0, [relationKey]) }
+            let both = persons.filter { holds($0, [nameKey]) && holds($0, [relationKey]) }
             if both.count == 1 { return result(.person(both[0].id), .said, 1) }
         }
         // 2. A relation phrase alone, held by exactly one person.

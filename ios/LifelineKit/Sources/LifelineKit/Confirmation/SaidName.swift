@@ -24,11 +24,6 @@ public struct SaidName: Sendable, Equatable {
         MatchKey.of(text.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: nil))
     }
 
-    /// The key of the whole text and of each comma part. "my mom, Marcel" -> ["my mom, marcel", "my mom", "marcel"].
-    static func keyParts(of text: String) -> [String] {
-        PeopleRepository.parts(of: text).map(key).filter { !$0.isEmpty }
-    }
-
     /// A relation phrase starts with "my " or "our ".
     static func isRelation(_ text: String) -> Bool {
         let lower = text.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()

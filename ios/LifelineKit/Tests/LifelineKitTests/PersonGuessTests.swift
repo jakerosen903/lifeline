@@ -122,4 +122,23 @@ import Testing
         let r = PersonGuess.guess(SaidName(ref: "  "), people: [known("")], contacts: [contact("c1", full: "")])
         #expect(r.rule == 7)
     }
+
+    // The relation part of a comma-form ref never picks a candidate.
+    @Test func commaFormRelationHeldByAnotherPersonIsRule7() {
+        let marcel = known("Marcel", aliases: ["my mom"])
+        let r = PersonGuess.guess(SaidName(ref: "Priya, my mom"), people: [marcel], contacts: [])
+        #expect(r.choice == .newPerson); #expect(r.origin == .new); #expect(r.rule == 7); #expect(r.others.isEmpty)
+    }
+
+    @Test func commaFormNameOnFileIsRule4() {
+        let marcel = known("Marcel", aliases: ["my mom"]), priya = known("Priya")
+        let r = PersonGuess.guess(SaidName(ref: "Priya, my mom"), people: [marcel, priya], contacts: [])
+        #expect(r.choice == .person(priya.id)); #expect(r.origin == .assumed); #expect(r.rule == 4); #expect(r.others.isEmpty)
+    }
+
+    @Test func commaFormNameAndRelationOnOnePersonIsRule1() {
+        let marcel = known("Marcel", aliases: ["my mom"]), priya = known("Priya", aliases: ["my mom"])
+        let r = PersonGuess.guess(SaidName(ref: "Priya, my mom"), people: [marcel, priya], contacts: [])
+        #expect(r.choice == .person(priya.id)); #expect(r.origin == .said); #expect(r.rule == 1)
+    }
 }
