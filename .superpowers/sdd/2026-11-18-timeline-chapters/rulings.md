@@ -11,3 +11,5 @@ R3 (Task 7, implementer concern). The tag's accessibility label stays the chapte
 R4 (Task 7, implementer concern). `LifeMap.Row` gets `isOpenEnded: Bool`, so the view does not repeat the kit's "no stated end" rule. Why: one rule in one place. Cost if wrong: one field and one test.
 
 R5 (Task 7). Two files the plan did not list are accepted: `ChapterRemovedNotice.swift` and `LifeMapAxis.swift`. Why: one responsibility per file (CLAUDE.md). The task reviewer judges their content.
+
+R6 (Task 9). Task 9's docs are written now. The one full UI run and the screenshots are made by the controller after the final review's fix wave, on the final code (as ruling R19 of the spine plan). The screenshots are "after" only, except the Timeline: the sheets and the life map did not exist before, so a "before" of them shows nothing. Cost if wrong: a second screenshot pass.
