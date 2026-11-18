@@ -24,3 +24,10 @@ Spec: docs/specs/2026-11-18-people-contacts.md. Branch claude/people-contacts-16
 ## Tasks
 - Task 1 (migration v14, LinkOrigin): done, full kit suite 1031 passing.
 - Task 1: complete (commits cb141a5..4b6c57c, review clean). Parked for Task 3: the raw-SQL copy sites in MemoryRepository (convert ~379, merge ~446, detail→mention ~584, mention→detail ~614) drop origin and person_handle. See R6.
+- Task 2: fix round 1/5 (1 addressed, 0 open — comma-form relation leak in rule 1; commits d751e2d..b9934f6)
+- Task 2: complete (commits 8815982..b9934f6, review clean)
+- Task 2: minor (deferred): a person linked to a contact whose own name is shorter than the said full name gets rule 4, not rule 3 (same choice, other rule number).
+- Task 2: minor (deferred): `SaidName.name` keeps the first non-relation part and drops later ones ("Marcel, Robin"); no comment says so.
+- Task 2: minor (deferred): `PersonGuess.Result` has no public initializer.
+- Task 2: minor (deferred): a person who matches only through a linked contact and holds the relation alias resolves as assumed, not said.
+- Note: `ExtractionQueueTests.drainGivesUpAtItsDeadline` failed once on timing and passed on rerun; not touched by this plan.
