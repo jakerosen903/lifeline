@@ -26,3 +26,10 @@ import Testing
     #expect(PersonChipLine.accessibilityLabel(name: "Maya Lindqvist", origin: nil, saidName: "Maya") == "Maya Lindqvist. Change who this is.")
     #expect(PersonChipLine.accessibilityLabel(name: "Maya Lindqvist", origin: .said, saidName: "Maya") == "Maya Lindqvist. Change who this is.")
 }
+
+@Test func theMoveNoticeNamesThePersonOrSaysNotAPerson() {
+    #expect(PersonChipLine.movedNotice(newName: "Robyn Hale") == "Changed to Robyn Hale.")
+    #expect(PersonChipLine.movedNotice(newName: "") == "Not a person.")      // the receipt of "Not a person" has no name
+    #expect(PersonChipLine.movedNotice(newName: "  ") == "Not a person.")
+    #expect(PersonChipLine.staleUndo == "That changed since. Open the name to change it again.")
+}

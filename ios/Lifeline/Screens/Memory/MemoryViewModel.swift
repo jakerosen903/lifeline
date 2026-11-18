@@ -7,7 +7,10 @@ import LifelineKit
 @Observable
 final class MemoryViewModel {
     private(set) var memory: Memory
-    private(set) var people: [Person] = []
+    /// Who the memory is with, as links: the owner included when linked (R2), each with its mark.
+    private(set) var personLinks: [PersonLink] = []
+    /// "Changed to {name}." with Undo, after the sheet moved a name.
+    let personMove: PersonMoveUndo
     private(set) var place: Place?
     /// Every person, place, thing and idea it names or is about; a chip opens its page (M7).
     private(set) var entities: [Entity] = []
@@ -40,6 +43,7 @@ final class MemoryViewModel {
     init(memory: Memory, deps: Dependencies) {
         self.memory = memory
         self.deps = deps
+        personMove = PersonMoveUndo(store: deps.extractionStore)
         refresh()
     }
 
@@ -56,7 +60,7 @@ final class MemoryViewModel {
             guard let current = try store.memories.fetch(memory.id) else { isGone = true; return }
             memory = current
             birthDate = try store.profile.ownerBirthDate()
-            people = try store.memories.people(of: memory.id)
+            personLinks = try store.personLinks.links(of: memory.id)
             place = try store.memories.places(of: memory.id).first
             entities = try store.entities.links(of: memory.id).map(\.entity)
             chapterTitle = try memory.chapterID.flatMap { try store.chapters.chapter(id: $0) }?.title
@@ -177,6 +181,20 @@ final class MemoryViewModel {
     func photoFailed(_ message: String) { photoError = message }
 
     func clearPhotoError() { photoError = nil }
+
+    /// What "Done" in the sheet did. Anything but `.unchanged` may change the chips.
+    func personSheetDone(_ outcome: WhoIsThisViewModel.Outcome) {
+        if case .unchanged = outcome { return }
+        personMove.note(outcome)
+        refresh()
+    }
+
+    /// Returns true when the move was taken back.
+    func undoPersonMove() -> Bool {
+        let done = personMove.undo()
+        if done { refresh() }
+        return done
+    }
 
     func mention(for tag: CheckThis) -> Mention? {
         guard case .person(_, let id) = tag else { return nil }

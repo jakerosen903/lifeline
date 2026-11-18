@@ -29,6 +29,15 @@ public enum PersonChipLine {
         }
     }
 
+    /// The notice after a move, offered with Undo. A move to "Not a person" has no name.
+    public static func movedNotice(newName: String) -> String {
+        guard let name = clean(newName) else { return "Not a person." }
+        return "Changed to \(name)."
+    }
+
+    /// The notice when Undo is refused because a row the move left changed since.
+    public static let staleUndo = "That changed since. Open the name to change it again."
+
     private static func clean(_ said: String?) -> String? {
         let trimmed = said?.trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmed?.isEmpty == false ? trimmed : nil

@@ -62,6 +62,10 @@ struct CardStack: View {
             if let pair = handler.pairNotice {
                 UndoNotice(text: pair, identifier: "pair.notice", undoIdentifier: "pair.undo", onUndo: onUndoPair)
             }
+            if let moved = handler.personMove.text {
+                UndoNotice(text: moved, identifier: "person.notice", undoIdentifier: "notice.undo", showsUndo: handler.personMove.canUndo,
+                           onUndo: { _ = handler.undoPersonMove() })
+            }
         }
         .animation(.default, value: cards.map(\.id))
         .animation(.default, value: pairs.map(\.id))
@@ -69,6 +73,7 @@ struct CardStack: View {
         .animation(.default, value: handler.mergedNotice)
         .animation(.default, value: handler.pairNotice)
         .animation(.default, value: handler.keptClosedNotice)
+        .animation(.default, value: handler.personMove.text)
         .sheet(item: $picking) { card in
             let named = handler.suggestions(for: card).filter { $0.source == .extractor }.map(\.memoryID)
             SameAsPicker(matches: handler.pickerMatches(for: card), preselected: named.count > 1 ? Set(named) : nil) { chosen in
@@ -84,13 +89,18 @@ struct CardStack: View {
         case .memory(let candidate, let memory):
             MemoryCard(memory: memory, confidence: candidate.confidence, matches: handler.suggestions(for: card),
                        storyLine: handler.storyLine(for: card, among: cards),
+                       people: PersonChipRow(items: handler.previewChips(for: card).map { .init(chip: $0, on: candidate) },
+                                             deps: handler.deps, onDone: handler.personSheetDone),
                        onKeep: { onAccept(card) }, onChange: { onChange(card) }, onDismiss: { onDismiss(card) },
                        onSameStory: { sameStory(card) }, onNotPartOfIt: { handler.notPartOfStory(card) })
         case .whoIsThis(_, let text):
             WhoIsThisCard(text: text, people: handler.peopleChoices(for: text)) { onResolve(card, $0) }
                 .onAppear { handler.shown(card) }
         case .kept(let kept):
-            KeptCardView(kept: kept, declined: handler.declined, peopleChoices: { handler.peopleChoices(for: $0) },
+            KeptCardView(kept: kept,
+                         people: PersonChipRow(items: handler.personLinks(for: kept).map(PersonChipRow.Item.init(link:)),
+                                               deps: handler.deps, onDone: handler.personSheetDone),
+                         declined: handler.declined, peopleChoices: { handler.peopleChoices(for: $0) },
                          onFollowUp: { onFollowUp(kept, $0, $1) }, onResolve: { onResolveFollowUp(kept, $0, $1) },
                          onNotAny: { onDeclineFollowUp(kept, $0) }, onDone: { onKeptDone(kept) }, onOpenEntity: onOpenEntity, hasPage: hasPage)
         case .hint, .entity:

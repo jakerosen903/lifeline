@@ -32,9 +32,19 @@ final class CardHandler {
     private(set) var pairPlaying: MemoryID?
     private var mentions: [String: Mention] = [:]
     private var rankedChoices: [String: [Person]] = [:]
-    private let deps: Dependencies
+    /// "Changed to {name}." with Undo, after the "Who is this?" sheet moved a name on a card.
+    let personMove: PersonMoveUndo
+    /// Read while a card renders, so they must not be observed. `peopleVersion` is, and a change to who is
+    /// linked bumps it, so the chips are read again.
+    @ObservationIgnored private var previews: [String: [PreviewChip]] = [:]
+    @ObservationIgnored private var keptLinks: [String: [PersonLink]] = [:]
+    private var peopleVersion = 0
+    let deps: Dependencies
 
-    init(deps: Dependencies) { self.deps = deps }
+    init(deps: Dependencies) {
+        self.deps = deps
+        personMove = PersonMoveUndo(store: deps.extractionStore)
+    }
 
     /// Called when a card is first shown. Writes the mention row for a who-is-this card so the
     /// People queue survives a kill before the person answers.
@@ -336,6 +346,58 @@ final class CardHandler {
         return done ? recent.card : nil
     }
 
+    // MARK: - Person chips
+
+    /// What Keep would link for a memory card that waits, from Keep's own code path. Writes nothing.
+    func previewChips(for card: Card) -> [PreviewChip] {
+        _ = peopleVersion
+        guard case .memory(let candidate, let out) = card else { return [] }
+        // A continuation that arrives later grows the card; its names may add a chip.
+        let key = "\(card.id)|\(out.extraSpans.count)"
+        if let cached = previews[key] { return cached }
+        let chips = (try? PersonLinkActions(store: deps.extractionStore).preview(candidate)) ?? []
+        previews[key] = chips
+        return chips
+    }
+
+    /// The people of a kept memory, the owner included when linked (R2).
+    func personLinks(for memory: MemoryID) -> [PersonLink] {
+        (try? deps.extractionStore.personLinks.links(of: memory)) ?? []
+    }
+
+    /// The people of the memory a kept card stands for: the one Keep made, or the one "Same story" joined.
+    func personLinks(for kept: KeptCard) -> [PersonLink] {
+        _ = peopleVersion
+        if let cached = keptLinks[kept.memoryCandidateID] { return cached }
+        let candidate = CandidateID(rawValue: kept.memoryCandidateID)
+        let memories = deps.extractionStore.memories
+        let memory = (try? memories.memory(createdFrom: candidate)) ?? (try? memories.memory(withSpanFrom: candidate))
+        let links = memory.map { personLinks(for: $0.id) } ?? []
+        keptLinks[kept.memoryCandidateID] = links
+        return links
+    }
+
+    /// What "Done" in the sheet did: anything but `.unchanged` may change who a card shows.
+    func personSheetDone(_ outcome: WhoIsThisViewModel.Outcome) {
+        if case .unchanged = outcome { return }
+        personMove.note(outcome)
+        peopleChanged()
+    }
+
+    /// Undo under "Changed to {name}.". Returns true when the move was taken back.
+    func undoPersonMove() -> Bool {
+        let done = personMove.undo()
+        if done { peopleChanged() }
+        return done
+    }
+
+    /// Who is linked may have changed: every chip is read again on the next render.
+    private func peopleChanged() {
+        previews.removeAll()
+        keptLinks.removeAll()
+        peopleVersion += 1
+    }
+
     func resolve(_ card: Card, _ choice: MentionChoice) -> Bool { resolvePerson(card, choice).done }
 
     /// Resolve, and who the name turned out to be: nobody for "Not a person".
@@ -377,6 +439,8 @@ final class CardHandler {
         do {
             try work()
             error = nil
+            // Keep, Same story, an answer or an undo can each change who a card's chips name.
+            peopleChanged()
             return true
         } catch {
             self.error = "\(message): \(error.localizedDescription)"

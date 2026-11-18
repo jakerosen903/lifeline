@@ -82,7 +82,7 @@ final class WhoIsThisViewModel {
                 return .stored
             }
         } catch is PersonLinkActions.Error {
-            return .failed("That changed since. Open the name to change it again.")
+            return .failed(PersonChipLine.staleUndo)
         } catch {
             return .failed("Could not change this.")
         }
