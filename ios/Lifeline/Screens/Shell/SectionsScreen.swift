@@ -30,7 +30,10 @@ struct SectionsScreen: View {
             .onChange(of: home.presented == nil, initial: true) { _, uncovered in if uncovered { model.notice.present() } }
             // Pages name the bar's subject as they appear and clear it as they leave (see `sessionContext`).
             .environment(home)
-            .fullScreenCover(item: Binding(get: { home.presented }, set: { home.presented = $0 })) { presented in
+            .sheet(item: Binding(get: { home.photoStart }, set: { home.photoStart = $0 }), onDismiss: home.photoStartClosed) { start in
+                PhotoStoryStartSheet(viewModel: start, pickPhotoPath: deps.pickPhotoPath)
+            }
+            .fullScreenCover(item: Binding(get: { home.presented }, set: { home.presented = $0 }), onDismiss: home.coverClosed) { presented in
                 switch presented {
                 case .session(let session):
                     SessionScreen(viewModel: session) { home.sessionEnded() }

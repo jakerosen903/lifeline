@@ -45,6 +45,17 @@ private func waitUntil(_ cond: @escaping () async -> Bool, timeoutMs: Int = 2_00
     #expect(row.subjectEntityID == nil && row.startedFrom == .tab)
 }
 
+@Test func aPhotoSessionRowCarriesItsPhotoFromTheStart() async throws {
+    let db = try AppDatabase.inMemory(); let repo = SessionRepository(db); let voice = FakeVoiceSession()
+    let photo = Photo(fileName: "a.jpg", sha256: "hash-a", pixelWidth: 4, pixelHeight: 3, addedAt: Date(timeIntervalSince1970: 1_700_000_000))
+    try PhotoRepository(db).insert(photo)
+    let rec = makeRecorder(voice: voice, repo: repo, db: db)
+    let id = try await rec.start(subjectPhoto: photo.id, startedFrom: .photo)
+    let row = try #require(try repo.fetch(id))   // no segment has closed yet
+    #expect(row.subjectPhotoID == photo.id && row.startedFrom == .photo)
+    #expect(row.kind == .quick && row.subjectEntityID == nil)
+}
+
 @Test func startFailureRemovesTheOrphanRow() async throws {
     let db = try AppDatabase.inMemory(); let repo = SessionRepository(db); let voice = FakeVoiceSession()
     await voice.setFailOnStart()

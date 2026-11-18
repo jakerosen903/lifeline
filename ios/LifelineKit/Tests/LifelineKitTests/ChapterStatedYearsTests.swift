@@ -10,7 +10,7 @@ import Testing
         let c = Chapter(id: .init(), title: "A", range: .year(2003, origin: .confirmed, evidence: nil), order: 0)
         #expect(c.statedYears != nil)
     }
-    @Test(arguments: [RangeOrigin.derived, .inferred]) func aRangeFromBeforeThisChangeIsNotStated(origin: RangeOrigin) {
+    @Test(arguments: [RangeOrigin.derived, .inferred, .photo]) func aRangeFromBeforeThisChangeIsNotStated(origin: RangeOrigin) {
         let c = Chapter(id: .init(), title: "A", range: .year(2003, origin: origin, evidence: nil), order: 0)
         #expect(c.statedYears == nil)
     }

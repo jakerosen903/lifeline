@@ -14,10 +14,11 @@ public struct Chapter: Codable, Sendable, Equatable, Identifiable {
 }
 
 extension Chapter {
-    /// The years the person said for this chapter. A range that is not placed, or whose origin is
-    /// `derived` or `inferred` (written before chapters held stated years only), counts as none.
+    /// The years the person said for this chapter: a placed range whose origin is `stated` or
+    /// `confirmed`. Any other origin (`derived` or `inferred`, written before chapters held stated
+    /// years only, or `photo`) counts as none. The prune's SQL in `ChapterRepository` uses the same rule.
     public var statedYears: TimeRange? {
-        range.isPlaced && range.isSettled ? range : nil
+        range.isPlaced && (range.origin == .stated || range.origin == .confirmed) ? range : nil
     }
 
     /// The range a reader places this chapter by: the stated years when there are any, else the

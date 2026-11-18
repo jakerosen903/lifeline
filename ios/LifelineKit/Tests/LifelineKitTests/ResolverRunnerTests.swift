@@ -193,3 +193,40 @@ private func duringBoston(_ env: Env, members: [(String, Int)]) throws -> (chapt
     let range = try #require(try env.store.memories.fetch(later.id)?.range)
     #expect(range.isPlaced && range.earliest!.iso >= "2008-01-01", "the 1970 fact does not widen the span")
 }
+
+// MARK: - A date from a photo (photo story)
+
+private let photoDay = CivilDate(iso: "2019-07-14")!
+
+@Test func aPhotoOriginSurvivesTheDatabase() throws {
+    let env = try Env()
+    let memory = try env.accept("The blue door", anchors: [], ordinal: 0)
+    try env.store.memories.updateRange(memory.id, .fromPhoto(photoDay))
+    let stored = try #require(try env.store.memories.fetch(memory.id))
+    #expect(stored.range.origin == .photo)
+    #expect(stored.range == .fromPhoto(photoDay))
+}
+
+@Test func theResolverLeavesAPhotoDateAlone() throws {
+    let env = try Env(text: "the blue door was painted in 1998 and one more thing")
+    let memory = try env.accept("The blue door", anchors: [AnchorOut(phrase: "in 1998", relation: .absolute, targetText: nil, value: nil)], ordinal: 0)
+    #expect(try env.store.memories.fetch(memory.id)?.range.earliest?.year == 1998, "the anchor would place it in 1998")
+    let reader = PhotoStoryReader(store: env.store)
+    // The card reads the store, so its offer carries the range the resolver set, not the one `accept` returned.
+    let onCard = try #require(try env.store.memories.fetch(memory.id))
+    try reader.useDate(PhotoStoryCard.DateOffer(memory: onCard, date: photoDay))
+    #expect(try env.store.memories.fetch(memory.id)?.range == .fromPhoto(photoDay))
+    try env.accept("One more thing", anchors: [], ordinal: 1)
+    _ = try env.runner.run()
+    #expect(try env.store.memories.fetch(memory.id)?.range == .fromPhoto(photoDay), "more sorting does not move a tapped date")
+}
+
+@Test func noWhenQuestionTargetsAMemoryDatedFromAPhoto() throws {
+    let env = try Env(text: "after graduation I started work and graduation was in 2004")
+    let job = try env.accept("First job", anchors: [AnchorOut(phrase: "after graduation", relation: .after, targetText: "graduation", value: nil)], ordinal: 0)
+    try env.accept("Graduation", anchors: [AnchorOut(phrase: "in 2004", relation: .absolute, targetText: nil, value: nil)], ordinal: 1)
+    try env.store.memories.updateRange(job.id, .fromPhoto(CivilDate(iso: "2005-03-02")!))
+    _ = try env.runner.run()
+    #expect(try env.store.memories.anchors(of: job.id).allSatisfy(\.resolved), "a photo date does not un-resolve")
+    #expect(try env.store.curiosity.open().isEmpty, "no question about a memory dated from a photo")
+}

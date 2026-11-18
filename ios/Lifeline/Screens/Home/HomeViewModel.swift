@@ -10,6 +10,8 @@ final class HomeViewModel {
         let durationText: String
         /// Segments of this recording still to be sorted (M6).
         var pendingCount = 0
+        /// The session was about a photo; its list name says so.
+        var isPhotoStory: Bool { session.startedFrom == .photo }
         var id: SessionID { session.id }
     }
 
@@ -57,6 +59,16 @@ final class HomeViewModel {
     /// The subject of the session that just ended, for "Tell another". Nil after a kill, where a resumed
     /// landing has no known subject.
     private var lastSubject: SessionSubject?
+    /// The session that just ended was about a photo: "Tell another" then asks for a new photo (plan decision 11).
+    private(set) var lastWasPhoto = false
+    /// "Tell a story about a photo" while its sheet is up.
+    var photoStart: PhotoStoryStartViewModel?
+    /// The photo the sheet stored; its session starts once the sheet has closed.
+    private var chosenPhoto: Photo?
+    /// The sheet last shown, kept past its dismissal so a close with no photo can cancel a copy still on its way.
+    private var shownPhotoStart: PhotoStoryStartViewModel?
+    /// "Tell another" after a photo session: the entry opens again once the landing's cover has closed.
+    private var opensPhotoStartWhenCoverCloses = false
     /// Called after a session ends, so the timeline can refresh.
     var onSessionEnded: (() -> Void)?
     var activeSession: SessionViewModel? {
@@ -90,6 +102,16 @@ final class HomeViewModel {
     /// A second tap while starting or recording does nothing. The subject is fixed by the caller: a page
     /// change while the microphone prompt is up does not change this session.
     func startSession(kind: SessionKind = .quick, subject: SessionSubject?) async {
+        await begin(kind: kind, subject: subject, photo: nil)
+    }
+
+    /// A session about one photo, from the viewer once it has closed. It shares the guards and the
+    /// microphone path of `startSession`; it is a quick story with no subject page.
+    func startPhotoSession(_ photo: Photo) async {
+        await begin(kind: .quick, subject: nil, photo: photo)
+    }
+
+    private func begin(kind: SessionKind, subject: SessionSubject?, photo: Photo?) async {
         guard !isStarting, activeSession == nil else { return }
         isStarting = true
         defer { isStarting = false }
@@ -104,9 +126,45 @@ final class HomeViewModel {
             startError = .audio(error.localizedDescription)
             return
         }
-        let vm = SessionViewModel(deps: deps, kind: kind, subject: subject)
+        let vm = SessionViewModel(deps: deps, kind: kind, subject: subject, photo: photo)
         presented = .session(vm)
         await vm.start()
+    }
+
+    /// "Tell a story about a photo": the sheet that explains, asks, and shows the grid or the picker. A tap while a
+    /// session is starting or recording does nothing, as for every start.
+    func tellAboutAPhoto() {
+        guard !isStarting, activeSession == nil, photoStart == nil else { return }
+        startError = nil
+        let start = PhotoStoryStartViewModel(source: deps.photoPickSource, library: deps.photos) { [weak self] start, photo in
+            // A cancelled sheet stores nothing (`cancel()`); this guard is the backstop for a store already under way.
+            guard let self, self.photoStart === start else { return }
+            self.chosenPhoto = photo
+            self.photoStart = nil
+        }
+        shownPhotoStart = start
+        photoStart = start
+    }
+
+    /// The sheet has gone: now the session can present its cover. The photo was stored with no link while the sheet
+    /// was up, and nothing can sweep it before the session row points at it: the sweep runs at launch and before a
+    /// copy in Settings, a sheet that cannot be open under this one, and from here to the row there is no tap but the
+    /// microphone prompt. If the microphone is refused, no row is made and the next sweep rightly removes the photo.
+    func photoStartClosed() {
+        defer { shownPhotoStart = nil }
+        guard let photo = chosenPhoto else {
+            shownPhotoStart?.cancel()
+            return
+        }
+        chosenPhoto = nil
+        Task { await startPhotoSession(photo) }
+    }
+
+    /// The session or landing cover has gone. Swapping the session for its landing also passes here, with nothing pending.
+    func coverClosed() {
+        guard opensPhotoStartWhenCoverCloses else { return }
+        opensPhotoStartWhenCoverCloses = false
+        tellAboutAPhoto()
     }
 
     /// A start from the bar: about the page on screen.
@@ -134,6 +192,7 @@ final class HomeViewModel {
     func sessionEnded() {
         let ended = activeSession
         lastSubject = ended?.subject
+        lastWasPhoto = ended?.photo != nil
         deps.deactivateAudio()
         if let ended, let id = ended.state.sessionID, let session = try? deps.sessions.fetch(id),
            !((try? deps.sessions.segments(in: id)) ?? []).isEmpty {
@@ -149,6 +208,7 @@ final class HomeViewModel {
     /// A resumed landing (after a kill) has no known subject, so its "Tell another" starts on the tab.
     func present(landing: LandingViewModel) {
         lastSubject = nil
+        lastWasPhoto = false
         presented = .landing(landing)
     }
 
@@ -162,11 +222,13 @@ final class HomeViewModel {
 
     /// "Another" is about the same subject as the session that just ended, and starts from the same page
     /// (a tab-started session stays on the tab). The page under the cover may already have left, so the
-    /// subject comes from `lastSubject`, not `context`.
+    /// subject comes from `lastSubject`, not `context`. After a photo session it asks for a new photo, once the
+    /// cover has gone, so the sheet never presents over a leaving cover.
     func landingClosed(tellAnother: Bool) {
+        opensPhotoStartWhenCoverCloses = tellAnother && lastWasPhoto
         presented = nil
         refresh()
-        if tellAnother { Task { await startSession(kind: .quick, subject: lastSubject) } }
+        if tellAnother, !lastWasPhoto { Task { await startSession(kind: .quick, subject: lastSubject) } }
     }
 
     /// Duration from the last segment's end; falls back to the wall clock for a session with no segments.

@@ -58,14 +58,7 @@ struct AddPhotoFlow: ViewModifier {
     }
 
     private func receive(_ item: PhotosPickerItem) async {
-        do {
-            guard let picked = try await item.loadTransferable(type: PickedPhotoFile.self) else { throw PhotoImport.Error.unreadable }
-            // The copy is ours; it goes once the library has made its own downscaled copy, or refused it.
-            defer { try? FileManager.default.removeItem(at: picked.url) }
-            await onFile(picked.url, item.itemIdentifier)
-        } catch {
-            onError("Could not add this photo: \(error.localizedDescription)")
-        }
+        do { try await PickedPhotoFile.receive(item, onFile: onFile) } catch { onError("Could not add this photo: \(error.localizedDescription)") }
     }
 }
 
@@ -73,6 +66,14 @@ struct AddPhotoFlow: ViewModifier {
 /// into the temporary folder under a fresh name that keeps its extension. Launch removes a copy a kill left behind.
 struct PickedPhotoFile: Transferable {
     let url: URL
+
+    /// The picked item's file to `onFile`, with its asset identifier. "Add a photo" and "All photos" share this path.
+    @MainActor static func receive(_ item: PhotosPickerItem, onFile: (URL, String?) async -> Void) async throws {
+        guard let picked = try await item.loadTransferable(type: PickedPhotoFile.self) else { throw PhotoImport.Error.unreadable }
+        // The copy is ours; it goes once the library has made its own downscaled copy, or refused it.
+        defer { try? FileManager.default.removeItem(at: picked.url) }
+        await onFile(picked.url, item.itemIdentifier)
+    }
 
     static var transferRepresentation: some TransferRepresentation {
         FileRepresentation(importedContentType: .image) { received in

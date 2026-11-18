@@ -1,8 +1,8 @@
 import Foundation
 
-/// Where a session began: from a tab's own record button, or from a person, place or thing's page.
+/// Where a session began: from a tab's own record button, from a person, place or thing's page, or from a photo.
 public enum SessionOrigin: String, Codable, Sendable {
-    case tab, page
+    case tab, page, photo
 }
 
 /// One recording. The row exists from the moment recording starts so a crash
@@ -23,11 +23,13 @@ public struct Session: Codable, Sendable, Equatable, Identifiable {
     public var hiddenFromTimeline: Bool
     /// The person, place or thing a page-started session is about. Nil from a tab, or once the subject is deleted.
     public var subjectEntityID: EntityID?
+    /// The photo a photo-started session is about. A session is a home for the photo; nil when none, or once the photo row is gone.
+    public var subjectPhotoID: PhotoID?
     public var startedFrom: SessionOrigin
 
     public init(id: SessionID, startedAt: Date, endedAt: Date?, audioPath: String, stageLog: String, landingChoiceMade: Bool,
                 kind: SessionKind = .quick, hiddenFromTimeline: Bool = false,
-                subjectEntityID: EntityID? = nil, startedFrom: SessionOrigin = .tab) {
+                subjectEntityID: EntityID? = nil, subjectPhotoID: PhotoID? = nil, startedFrom: SessionOrigin = .tab) {
         self.id = id
         self.startedAt = startedAt
         self.endedAt = endedAt
@@ -37,6 +39,7 @@ public struct Session: Codable, Sendable, Equatable, Identifiable {
         self.kind = kind
         self.hiddenFromTimeline = hiddenFromTimeline
         self.subjectEntityID = subjectEntityID
+        self.subjectPhotoID = subjectPhotoID
         self.startedFrom = startedFrom
     }
 }
