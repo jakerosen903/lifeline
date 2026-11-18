@@ -91,6 +91,7 @@ The card is one view. The landing and the session's page in Sessions both use it
   - Link: "Undo".
 - "Undo" puts back each memory's range from before the tap, in one write. A memory whose range changed after the tap, or that is gone, is left alone. Then the resolver runs one time. The part goes back to the state before the tap.
 - The resolver computes a guessed date again from what the person said. After Undo, a guessed date is the same as before the tap unless the thing it was guessed from changed in between. A memory that was placed relative to a changed memory is placed again by the same run.
+- A guessed date that has nothing the person said behind it does not come back after Undo. The memory is then unplaced. No resolver run keeps such a date, with or without this card.
 - When a new memory that can take the date is kept after the tap, the part shows the state before the tap for that memory, and "Undo" stays for the earlier tap.
 - The card keeps the old ranges in memory. When the person leaves the screen, Undo is gone. The memory page then shows "from a photo", and the person can change the date there.
 - A memory that keeps a date the person said has no line on the card. The count in the text is the only sign.
