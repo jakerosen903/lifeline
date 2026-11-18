@@ -23,3 +23,4 @@ Owner's rules (as for S4 and the photo story): commit after each task; per task 
 Spec addition after the plan was drafted: Undo cannot bring back a guess with no anchor (commit 2a8ddcc). The plan already pins it.
 
 ## Tasks
+- Task 1: complete (commits cd7fa00..1c27358, review clean). Minor, parked: (a) the same memory passed twice to `useDate` gives two equal changes (harmless; note for Task 4's caller); (b) if the resolver throws after the range write, the caller gets no Undo handle — Task 4 note; (c) no test pins the order of the returned changes.
