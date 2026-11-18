@@ -102,11 +102,12 @@ struct WhoIsThisSheet: View {
                 }
                 .padding(.top, 8)
             } label: {
+                // On the label, so it names the toggle: on the DisclosureGroup it passes down and replaces the rows' `who.option`.
                 Text("Someone else").font(.body.weight(.medium)).foregroundStyle(Theme.oliveText)
                     .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                    .accessibilityIdentifier("who.else")
             }
             .tint(Theme.oliveText)
-            .accessibilityIdentifier("who.else")
         }
     }
 

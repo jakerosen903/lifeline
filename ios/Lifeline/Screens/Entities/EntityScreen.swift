@@ -286,6 +286,8 @@ struct EntityScreen: View {
             }
             .padding(14)
             .assumedOutline()
+            // A container element: without it the identifier passes down and replaces the row's and the buttons' own.
+            .accessibilityElement(children: .contain)
             .accessibilityIdentifier("entity.moment.assumed")
         } else {
             NavigationLink { open(memory) } label: { label() }
