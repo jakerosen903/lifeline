@@ -150,6 +150,7 @@ final class PhotosUITests: XCTestCase {
         XCTAssertFalse(app.staticTexts["photo.shelfHint"].exists)
         let start = thumb.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
         start.press(forDuration: 1.0, thenDragTo: start.withOffset(CGVector(dx: 120, dy: 0)))
+        XCTAssertFalse(app.any("photo.viewer").exists)
         XCTAssertEqual(thumbs(app).count, 1)
         XCTAssertEqual(thumbValues(app), ["taken 4 July 1999"])
         XCTAssertFalse(app.any("photo.error").exists)
