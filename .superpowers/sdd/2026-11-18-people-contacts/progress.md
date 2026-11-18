@@ -64,3 +64,6 @@ Spec: docs/specs/2026-11-18-people-contacts.md. Branch claude/people-contacts-16
 - Task 7: minor (deferred): `CardHandler.deps` made internal; a `PersonChipRow?` view stored as a property on MemoryCard/KeptCardView.
 - Task 7: minor (deferred): `PersonChipRow` reads person covers from the store in `.task`, once per row.
 - Task 7: to check in Task 9: run SameStoryUITests, TimelineUITests, SessionDetail and EntityPage classes (not run in Task 7); chips at the largest text size.
+- Task 7: fix round 1/5 (3 addressed, 0 open — kept-card chips read fresh after Change…; sheet model built once at the tap; fixed sentence for a failed undo; commits a16e3d5..3a19ac2)
+- Task 7: complete (commits e6a5b47..3a19ac2, review clean)
+- Task 7: minor (deferred): no automated test covers the kept-card refresh after Change… or the once-built sheet model (UI wiring).
