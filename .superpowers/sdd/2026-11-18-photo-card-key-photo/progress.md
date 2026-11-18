@@ -39,3 +39,13 @@ Spec addition after the plan was drafted: Undo cannot bring back a guess with no
 - Flaky, not ours: `drainGivesUpAtItsDeadline` failed in two kit runs while the simulator was busy.
 - Task 4: fix round 1/5 (1 addressed, 0 open — blank holding sheet; commits 86f1778..7797fb7)
 - Task 4: complete (commits 729eec6..7797fb7, review clean after one fix round; 7 minors deferred above)
+- Task 5: built at 4a7e520 (base 541c356). Review: spec ok, one Important (the tap guard after a hold is time-based and depends on an unchecked event order: hold, pause, release may open the viewer).
+- Task 5: cannot verify from diff, sent to the device check (Task 6): a plain swipe still scrolls the row; VoiceOver "Move to front".
+- Task 5: minor (deferred): the tile jumps back at the drop until the write lands (hold the dropped order until `photos` changes).
+- Task 5: minor (deferred): the page can scroll under a held tile (vertical container keeps its pan).
+- Task 5: minor (deferred): at xLarge text the "Key photo" pill has no width limit and may widen the first tile; slot math then is one off.
+- Task 5: minor (deferred): two quick drags can lose the first (`move` builds on `photos` as last read).
+- Task 5: minor (deferred): `testOnePhotoHasNoHintAndNoDrag` does not assert the viewer stayed closed.
+- Task 5: minor (deferred): the slot math in `PhotoRowDrag.swift` has no unit test (app target).
+- Task 5: minor (deferred): a drag on You scrolls the page to the top (existing `onChange` of the cover); confirm on device.
+- Flaky under load, not ours: `testAPlayErrorLeavesAnOpenUndoInPlace`, `testHidingALineFarDownShowsUndoWithoutScrolling` (YouUITests), `drainGivesUpAtItsDeadline` (kit). Watch in the whole-suite run.
