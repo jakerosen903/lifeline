@@ -284,6 +284,41 @@ private struct Env {
     #expect(try env.store.people.person(id: env.onlyPerson(ines[1])) != nil)
 }
 
+// I2 / R39: a guessed person the owner has edited in any way is never removed by a move.
+@Test func aRenameOnThePersonsPageKeepsThemThroughAMove() throws {
+    let env = try Env()
+    let robyn = try env.store.people.insertPerson(displayName: "Robyn Vale")
+    let m = try env.kept(in: try env.session(["Tomas painted the fence"])[0], people: ["Tomas"])
+    let tomas = try env.onlyPerson(m)
+    try env.store.entities.rename(EntityID(rawValue: tomas.rawValue), to: "Tomás Herrera")   // the page's "Change the name"
+    let renamed = try #require(try env.store.people.person(id: tomas))
+    #expect(!renamed.createdByGuess && renamed.nameOrigin == .typed && renamed.displayName == "Tomás Herrera")
+    #expect(Set(try env.aliases(tomas)) == ["Tomas", "Tomás Herrera"], "the old spelling still links, as in People")
+
+    #expect(try env.actions.move(try env.link(m), to: .person(robyn.id), wholeGroup: false).removedPerson == nil)
+    #expect(try env.store.people.person(id: tomas)?.displayName == "Tomás Herrera", "a name the owner gave stays")
+}
+
+@Test func statedDatesATypedNameOrAHiddenFlagKeepAGuessThroughAMove() throws {
+    let env = try Env()
+    let robyn = try env.store.people.insertPerson(displayName: "Robyn Vale")
+    let stated = TimeRange.year(1994, origin: .stated, evidence: "1994")
+    let edits: [(String, (EntityID) throws -> Void)] = [
+        ("Tomas", { try env.store.entities.setStatedSpan($0, stated) }),
+        ("Kira", { id in try env.db.writer.write { try $0.execute(sql: "update person set name_origin = 'typed' where id = ?", arguments: [id.rawValue]) } }),
+        ("Ines", { try env.store.entities.setHidden($0, true) }),
+        ("Oren", { try env.store.entities.setExcluded($0, true) }),
+    ]
+    for (name, edit) in edits {
+        let m = try env.kept(in: try env.session(["\(name) painted the fence"])[0], people: [name])
+        let person = try env.onlyPerson(m)
+        try edit(EntityID(rawValue: person.rawValue))
+        #expect(try env.store.people.person(id: person)?.createdByGuess == true)
+        #expect(try env.actions.move(try env.link(m), to: .person(robyn.id), wholeGroup: false).removedPerson == nil, "\(name)")
+        #expect(try env.store.people.person(id: person) != nil, "\(name): the owner touched this person")
+    }
+}
+
 @Test func someoneNewMakesAPersonThatIsNotAGuess() throws {
     let env = try Env()
     let robin = try env.store.people.insertPerson(displayName: "Robin")

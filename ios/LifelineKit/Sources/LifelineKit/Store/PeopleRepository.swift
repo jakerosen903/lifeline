@@ -86,14 +86,18 @@ public struct PeopleRepository: Sendable {
     public func rename(_ person: PersonID, to newName: String) throws {
         let name = newName.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !name.isEmpty else { throw Error.emptyName }
-        try db.writer.write { db in
-            guard let old = try String.fetchOne(db, sql: "select title from entity where id = ?", arguments: [person.rawValue]) else { return }
-            try db.execute(sql: "update entity set title = ? where id = ?", arguments: [name, person.rawValue])
-            try db.execute(sql: "update person set created_by_guess = 0, name_origin = ? where id = ?",
-                           arguments: [NameOrigin.typed.rawValue, person.rawValue])
-            try Self.insertAlias(old, person, db)
-            try Self.insertAlias(name, person, db)
-        }
+        try db.writer.write { db in try Self.rename(person, to: name, in: db) }
+    }
+
+    /// The one rename of a person, for People and for the person's page (`EntityRepository.rename`).
+    /// `name` is already trimmed and not empty.
+    static func rename(_ person: PersonID, to name: String, in db: Database) throws {
+        guard let old = try String.fetchOne(db, sql: "select title from entity where id = ?", arguments: [person.rawValue]) else { return }
+        try db.execute(sql: "update entity set title = ? where id = ?", arguments: [name, person.rawValue])
+        try db.execute(sql: "update person set created_by_guess = 0, name_origin = ? where id = ?",
+                       arguments: [NameOrigin.typed.rawValue, person.rawValue])
+        try insertAlias(old, person, db)
+        try insertAlias(name, person, db)
     }
 
     /// Inserts a person and the alias equal to their name.

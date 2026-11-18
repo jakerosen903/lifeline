@@ -139,10 +139,18 @@ public struct EntityRepository: Sendable {
         }
     }
 
+    /// A person goes through the People rename: the name is the owner's now (R39), and the old
+    /// spelling stays an alias.
     public func rename(_ id: EntityID, to title: String) throws {
         let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { throw Error.emptyTitle }
-        try db.writer.write { try $0.execute(sql: "update entity set title = ? where id = ?", arguments: [trimmed, id.rawValue]) }
+        try db.writer.write { db in
+            if try Person.exists(db, key: id.rawValue) {
+                try PeopleRepository.rename(PersonID(rawValue: id.rawValue), to: trimmed, in: db)
+            } else {
+                try db.execute(sql: "update entity set title = ? where id = ?", arguments: [trimmed, id.rawValue])
+            }
+        }
     }
 
     /// The entity and its links go; the memories stay.
