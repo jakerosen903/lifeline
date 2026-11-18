@@ -41,7 +41,8 @@ public struct MemoryRepository: Sendable {
         }
     }
 
-    /// The cards that carried a telling on, marked accepted with it.
+    /// The cards that carried a telling on, marked accepted with it. Keep also passes the pending
+    /// person cards whose name it linked, so they close in the same transaction.
     static func accept(_ continuations: [CandidateID], in db: Database) throws {
         for id in continuations {
             try db.execute(sql: "update candidate set status = ? where id = ?", arguments: [CandidateStatus.accepted.rawValue, id.rawValue])

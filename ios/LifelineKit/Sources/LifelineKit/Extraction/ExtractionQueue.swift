@@ -256,7 +256,7 @@ public actor ExtractionQueue {
             // A person a memory here carries gets no card: the kept card shows the person (plan decision 5).
             // A group phrase keeps its own card ("Who are our parents?"). After a serious disclosure no
             // memory is offered to keep, so the name waits in the People queue instead of being lost.
-            if case .mention(let mention) = candidate, mention.kind == .person, !GroupPhrase.isGroup(mention.text),
+            if case .mention(let mention) = candidate, mention.kind == .person,
                !validated.flags.seriousDisclosure, Self.carried(mention, by: validated.accepted) {
                 c.status = .accepted
                 rows.append(c)
@@ -340,12 +340,8 @@ public actor ExtractionQueue {
     static func carried(_ mention: MentionOut, by accepted: [OutputValidator.ValidatedCandidate]) -> Bool {
         accepted.contains { candidate in
             guard case .memory(let memory) = candidate else { return false }
+            if mention.kind == .person { return CarriedName.carries(memory, mention) }
             if let ref = mention.ref, memory.aboutRef == ref { return true }
-            // A person is carried by a said name: the whole ref, or its name part ("my roommate, Robin").
-            if mention.kind == .person {
-                let key = SaidName.key(mention.text)
-                return memory.peopleRefs.contains { SaidName.key($0) == key || SaidName(ref: $0).name.map(SaidName.key) == key }
-            }
             return memory.allEntityRefs.contains { $0.kind == mention.kind && MatchKey.of($0.text) == MatchKey.of(mention.text) }
         }
     }

@@ -44,7 +44,7 @@ extension CandidateActions {
         let promotion = targetMemory.isFloating ? (title: out.title, summaryQuote: out.quote) : nil
         try store.memories.mergeSpan(span, continuations: try continuationSpans(of: out, for: target), people: edges.people, places: edges.places, links: edges.links, entities: edges.entityWrite,
                                      anchors: edges.anchors, promotingStandIn: promotion, acceptingCandidate: candidate.id,
-                                     acceptingContinuations: continuations.map(\.id))
+                                     acceptingContinuations: continuations.map(\.id) + edges.carriedPersonCards)
         let newMentions = try finishEdges(edges, segment: candidate.segmentID)
         try reindex(target)
         _ = try ResolverRunner(store: store).run()
@@ -95,7 +95,8 @@ extension CandidateActions {
         let promotion = oldest.isFloating && later.isEmpty ? (title: out.title, summaryQuote: out.quote) : nil
         try store.memories.mergeGroup(sources: later, into: oldest, span: span, continuations: try continuationSpans(of: out, for: oldest.id),
                                       people: edges.people, places: edges.places, links: edges.links, entities: edges.entityWrite, anchors: edges.anchors,
-                                      promotingStandIn: promotion, acceptingCandidate: candidate.id, acceptingContinuations: continuations.map(\.id))
+                                      promotingStandIn: promotion, acceptingCandidate: candidate.id,
+                                      acceptingContinuations: continuations.map(\.id) + edges.carriedPersonCards)
         let newMentions = try finishEdges(edges, segment: candidate.segmentID)
         try reindex(oldest.id)
         if let chapter = try store.memories.fetch(oldest.id)?.chapterID { try chapterRangeFromMembers(chapter) }

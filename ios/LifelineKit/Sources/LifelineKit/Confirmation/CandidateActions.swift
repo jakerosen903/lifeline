@@ -136,7 +136,7 @@ public struct CandidateActions: Sendable {
         // The memory, its continuation cards' status and its story line land together (M5).
         let storyRef = joinStory ? out.storyRef.flatMap { $0.isEmpty ? nil : StoryID(rawValue: $0) } : nil
         try store.memories.insert(memory, spans: spans, people: edges.people, places: edges.places, links: edges.links, entities: edges.entityWrite, anchors: edges.anchors,
-                                  acceptingCandidate: candidate.id, acceptingContinuations: continuations.map(\.id),
+                                  acceptingCandidate: candidate.id, acceptingContinuations: continuations.map(\.id) + edges.carriedPersonCards,
                                   joiningStory: storyRef.map { (id: $0, chapterID: memory.chapterID) })
         let newMentions = try finishEdges(edges, segment: candidate.segmentID)
         try reindex(memory.id)
@@ -152,6 +152,9 @@ public struct CandidateActions: Sendable {
         var people: [MemoryPerson] = []
         /// Group phrases ("our parents"): each becomes a mention with its own card.
         var unknown: [String] = []
+        /// Person cards still pending from before Task 3 whose name this card carries. Keep links
+        /// the name, so they are marked accepted in the memory's transaction and ask nothing.
+        var carriedPersonCards: [CandidateID] = []
         var roleAliases: [(PersonID, String)] = []
         var places: [MemoryPlace] = []
         var anchors: [Anchor] = []
@@ -170,6 +173,7 @@ public struct CandidateActions: Sendable {
                 add(person)
             }
             for name in other.unknown where !unknown.contains(where: { CandidateActions.same($0, name) }) { unknown.append(name) }
+            carriedPersonCards += other.carriedPersonCards.filter { !carriedPersonCards.contains($0) }
             roleAliases += other.roleAliases.map { (mapped($0.0), $0.1) }.filter { pair in !roleAliases.contains { $0.0 == pair.0 && $0.1 == pair.1 } }
             for var place in other.places {
                 if let mapped = remap[EntityID(rawValue: place.placeID.rawValue)] { place.placeID = PlaceID(rawValue: mapped.rawValue) }
@@ -227,6 +231,13 @@ public struct CandidateActions: Sendable {
             guard let link = guessedLink(for: inputs.saidName(ref), inputs, plan: &e.entityWrite) else { continue }
             e.add(MemoryPerson(memoryID: memory, personID: link.person, roleText: ref, origin: link.origin))
             e.roleAliases += link.aliases.map { (link.person, $0) }
+        }
+        // Extraction before Task 3 left a carried name as a pending person card under its memory.
+        // Answering it after Keep would add a second link, so Keep closes it (a group phrase stays).
+        if let segment {
+            e.carriedPersonCards = try store.candidates.candidates(for: segment).filter { row in
+                row.kind == .person && row.status == .pending && CandidatePayload.mention(row).map { CarriedName.carries(out, $0) } == true
+            }.map(\.id)
         }
         // Places, things and ideas the card names (its chips) link on Keep without a card of their own (M7).
         // A place with no name ("a restaurant") stays in the quote and makes no place (audit F13).

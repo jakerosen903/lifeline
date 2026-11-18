@@ -317,6 +317,66 @@ private struct Env {
     #expect(try env.personLinks(kept.memory.id).isEmpty)
 }
 
+// MARK: - Person cards left pending before Task 3
+
+/// The waiting queue as the session screen builds it from the store.
+private func waitingQueue(_ env: Env, session: SessionID) throws -> CardQueue {
+    let candidates = env.store.candidates
+    return CardQueue.waiting(pending: try candidates.pending(in: session), segmentMemories: { (try? candidates.candidates(for: $0)) ?? [] },
+                             candidate: { try? candidates.fetch($0) })
+}
+
+@Test func keepClosesAPendingPersonCardItCarries() throws {
+    let env = try Env()
+    let (session, segs) = try StoreFixtures.session(in: env.store.sessions, segments: ["Robin and our parents painted the fence"])
+    // As extraction stored it before Task 3: each name a pending person card under its memory card.
+    let card = try env.card(in: segs[0].id, "Robin and our parents painted the fence", people: ["Robin", "our parents"],
+                            mentions: [("Robin", nil, nil), ("our parents", nil, nil)])
+    let robinCard = try #require(try env.store.candidates.candidates(for: segs[0].id).first { CandidatePayload.mention($0)?.text == "Robin" })
+    let groupCard = try #require(try env.store.candidates.candidates(for: segs[0].id).first { CandidatePayload.mention($0)?.text == "our parents" })
+    var queue = try waitingQueue(env, session: session)
+
+    _ = try env.actions.acceptMemory(card, joinStory: false)
+    #expect(try env.store.candidates.fetch(robinCard.id)?.status == .accepted, "Keep linked Robin, so the card asks nothing")
+    #expect(try env.store.candidates.fetch(groupCard.id)?.status == .pending, "a group phrase keeps its own question")
+
+    // The screen keeps the card open, then rebuilds from the store: only the group's chip is left.
+    queue.memoryAccepted(card.id.rawValue)
+    var rebuilt = try waitingQueue(env, session: session)
+    rebuilt.keepOpen(from: queue)
+    let kept = rebuilt.cards.compactMap { if case .kept(let k) = $0 { k } else { nil } }
+    #expect(kept.flatMap(\.followUps).map(\.id) == [groupCard.id.rawValue])
+}
+
+@Test func sameStoryClosesAPendingPersonCardItCarries() throws {
+    let env = try Env()
+    let kept = try env.actions.acceptMemory(try env.card(people: []), joinStory: false)
+    let (_, segs) = try StoreFixtures.session(in: env.store.sessions, segments: ["Robin painted the fence again"])
+    let retelling = try env.card(in: segs[0].id, "Robin painted the fence again", people: ["Robin"], mentions: [("Robin", nil, nil)])
+    let robinCard = try #require(try env.store.candidates.candidates(for: segs[0].id).first { $0.kind == .person })
+    _ = try env.actions.mergeCandidate(retelling, into: kept.memory.id)
+    #expect(try env.store.candidates.fetch(robinCard.id)?.status == .accepted)
+    #expect(try env.personLinks(kept.memory.id).count == 1)
+}
+
+@Test func aFailedKeepLeavesThePersonCardPending() throws {
+    let env = try Env()
+    let (_, segs) = try StoreFixtures.session(in: env.store.sessions, segments: ["Robin painted the fence"])
+    let card = try env.card(in: segs[0].id, "Robin painted the fence", people: ["Robin"], mentions: [("Robin", nil, nil)])
+    let robinCard = try #require(try env.store.candidates.candidates(for: segs[0].id).first { $0.kind == .person })
+    // A kill at the person card's status write, the last step of Keep's one transaction.
+    try env.db.writer.write { db in
+        try db.execute(sql: """
+            create trigger kill_keep before update of status on candidate when new.id = '\(robinCard.id.rawValue)'
+            begin select raise(abort, 'killed'); end
+            """)
+    }
+    #expect(throws: (any Error).self) { try env.actions.acceptMemory(card) }
+    #expect(try env.store.candidates.fetch(robinCard.id)?.status == .pending, "a kill leaves the old state")
+    #expect(try env.store.candidates.fetch(card.id)?.status == .pending)
+    #expect(try env.store.memories.memory(createdFrom: card.id) == nil, "no kept memory behind a pending person card")
+}
+
 // MARK: - Extraction
 
 private struct QueueEnv {
