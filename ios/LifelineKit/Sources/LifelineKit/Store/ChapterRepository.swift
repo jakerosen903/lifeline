@@ -19,12 +19,15 @@ public struct ChapterRepository: Sendable {
 
     /// Appends a chapter after the existing ones.
     public func insertChapter(title: String?) throws -> Chapter {
-        try db.writer.write { db in
-            let order = try Chapter.fetchCount(db)
-            let chapter = Chapter(id: .init(), title: title?.trimmingCharacters(in: .whitespacesAndNewlines), range: .unplaced, order: order)
-            try chapter.insert(db)
-            return chapter
-        }
+        try db.writer.write { try Self.insertChapter(title: title, in: $0) }
+    }
+
+    /// The order is one past the highest, not the count: after a removal the count would repeat an order.
+    private static func insertChapter(title: String?, in db: Database) throws -> Chapter {
+        let order = try Int.fetchOne(db, sql: "select coalesce(max(\"order\") + 1, 0) from chapter") ?? 0
+        let chapter = Chapter(id: .init(), title: title?.trimmingCharacters(in: .whitespacesAndNewlines), range: .unplaced, order: order)
+        try chapter.insert(db)
+        return chapter
     }
 
     /// Deletes every chapter that has no title, no memory in it and no story filed in it, and
@@ -40,7 +43,8 @@ public struct ChapterRepository: Sendable {
         }
     }
 
-    /// Also run inside the write that deletes a memory, so the last member leaving prunes in the same transaction.
+    /// Also run inside each write that can empty a chapter (a tag change, a memory delete, a
+    /// session delete), so the last member leaving prunes in the same transaction.
     static let deleteEmptyUntitledSQL = """
         delete from chapter where (title is null or trim(title) = '')
         and id not in (select chapter_id from memory where chapter_id is not null)
@@ -56,7 +60,8 @@ public struct ChapterRepository: Sendable {
     }
 
     /// Deletes the chapter and reads, in the same write and before the delete, the moments and
-    /// stories filed in it (the foreign keys clear their tag). Nil when there is no such chapter.
+    /// stories filed in it. The same write sets their chapter to null itself, before the delete.
+    /// Nil when there is no such chapter.
     public func remove(_ id: ChapterID) throws -> ChapterReceipt? {
         try db.writer.write { db in
             guard let chapter = try Chapter.fetchOne(db, key: id.rawValue) else { return nil }
@@ -93,10 +98,49 @@ public struct ChapterRepository: Sendable {
         }
     }
 
+    /// Sets the tag only, with no prune. A person's tag change goes through `file` or `takeOut`.
     public func assign(memory: MemoryID, toChapter chapter: ChapterID?) throws {
+        try db.writer.write { try Self.setTag(memory, chapter, in: $0) }
+    }
+
+    /// Files the moment in the chapter and prunes the untitled chapter it left, in one write.
+    /// Nil, with nothing written, when the chapter or the memory is missing.
+    public func file(_ memory: MemoryID, in chapter: ChapterID) throws -> Chapter? {
         try db.writer.write { db in
-            try db.execute(sql: "update memory set chapter_id = ? where id = ?", arguments: [chapter?.rawValue, memory.rawValue])
+            guard let target = try Chapter.fetchOne(db, key: chapter.rawValue), try Memory.exists(db, key: memory.rawValue) else { return nil }
+            try Self.setTag(memory, target.id, in: db)
+            try db.execute(sql: Self.deleteEmptyUntitledSQL)
+            return target
         }
+    }
+
+    /// Finds the chapter with this name (same `MatchKey`) or appends one, files the moment in it
+    /// and prunes, in one write: a kill midway never leaves a new chapter with nothing in it.
+    /// Nil, with nothing written, when the name has no key or the memory is missing.
+    public func file(_ memory: MemoryID, inChapterNamed name: String) throws -> Chapter? {
+        let clean = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        let key = MatchKey.of(clean)
+        guard !key.isEmpty else { return nil }
+        return try db.writer.write { db in
+            guard try Memory.exists(db, key: memory.rawValue) else { return nil }
+            let existing = try Chapter.order(Column("order")).fetchAll(db).first { MatchKey.of($0.title ?? "") == key }
+            let target = try existing ?? Self.insertChapter(title: clean, in: db)
+            try Self.setTag(memory, target.id, in: db)
+            try db.execute(sql: Self.deleteEmptyUntitledSQL)
+            return target
+        }
+    }
+
+    /// The moment keeps no chapter, and the untitled chapter it left goes, in one write.
+    public func takeOut(_ memory: MemoryID) throws {
+        try db.writer.write { db in
+            try Self.setTag(memory, nil, in: db)
+            try db.execute(sql: Self.deleteEmptyUntitledSQL)
+        }
+    }
+
+    private static func setTag(_ memory: MemoryID, _ chapter: ChapterID?, in db: Database) throws {
+        try db.execute(sql: "update memory set chapter_id = ? where id = ?", arguments: [chapter?.rawValue, memory.rawValue])
     }
 
     // MARK: - Collections

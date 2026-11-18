@@ -13,6 +13,10 @@ public struct ChapterActions: Sendable {
 
     public init(store: ExtractionStore) { self.store = store }
 
+    /// True when the name keeps something after `MatchKey` takes off space and punctuation, so
+    /// "..." or "“”" is not a name. The Add button and the rename Save use it.
+    public static func isUsableName(_ name: String) -> Bool { !MatchKey.of(name).isEmpty }
+
     /// Trims the title. Refused when nothing is left or another chapter already has that name
     /// (compared by `MatchKey`, so "maple street." is "Maple Street"). A chapter may take its own
     /// name again with new capitals. A chapter that no longer exists changes nothing.
@@ -44,30 +48,21 @@ public struct ChapterActions: Sendable {
     }
 
     /// Files a moment in a chapter, and removes the untitled chapter it left if that is now empty.
-    /// Nil when the chapter or the memory is missing.
+    /// One write. Nil when the chapter or the memory is missing.
     @discardableResult
     public func add(_ memory: MemoryID, to chapter: ChapterID) throws -> Chapter? {
-        guard let target = try store.chapters.chapter(id: chapter), try store.memories.fetch(memory) != nil else { return nil }
-        try store.chapters.assign(memory: memory, toChapter: target.id)
-        try store.chapters.deleteEmptyUntitled()
-        return target
+        try store.chapters.file(memory, in: chapter)
     }
 
     /// Files a moment in the chapter with this name (same `MatchKey`), making it when there is none.
-    /// Nil when the name is empty or the memory is missing; nothing is created then.
+    /// One write. Nil when the name is not usable or the memory is missing; nothing is created then.
     @discardableResult
     public func add(_ memory: MemoryID, toChapterNamed name: String) throws -> Chapter? {
-        let clean = name.trimmingCharacters(in: .whitespacesAndNewlines)
-        let key = MatchKey.of(clean)
-        guard !key.isEmpty, try store.memories.fetch(memory) != nil else { return nil }
-        let existing = try store.chapters.chapters().first { MatchKey.of($0.title ?? "") == key }
-        let target = try existing ?? store.chapters.insertChapter(title: clean)
-        return try add(memory, to: target.id)
+        try store.chapters.file(memory, inChapterNamed: name)
     }
 
-    /// The moment keeps no chapter. A named chapter left empty stays; an untitled one goes.
+    /// The moment keeps no chapter. A named chapter left empty stays; an untitled one goes. One write.
     public func takeOut(_ memory: MemoryID) throws {
-        try store.chapters.assign(memory: memory, toChapter: nil)
-        try store.chapters.deleteEmptyUntitled()
+        try store.chapters.takeOut(memory)
     }
 }

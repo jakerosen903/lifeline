@@ -206,3 +206,12 @@ private func filledChapter(_ env: Env) throws -> (chapter: Chapter, a: Memory, b
     _ = try ResolverRunner(store: env.store).run()
     #expect(try env.tag(m) == c.id)
 }
+
+@Test func aNameOfOnlyPunctuationIsNotUsable() {
+    #expect(ChapterActions.isUsableName("Maple Street"))
+    #expect(ChapterActions.isUsableName("C++"))
+    #expect(!ChapterActions.isUsableName(""))
+    #expect(!ChapterActions.isUsableName("   "))
+    #expect(!ChapterActions.isUsableName(" ...!? "))
+    #expect(!ChapterActions.isUsableName("“”"))
+}

@@ -238,7 +238,7 @@ public struct MemoryRepository: Sendable {
                         reopeningPair pair: DuplicatePair? = nil) throws {
         try db.writer.write { db in
             // Every memory row first, so a pair between two restored memories finds both.
-            for snapshot in snapshots { try snapshot.memory.save(db) }
+            for snapshot in snapshots { try Self.restorable(snapshot.memory, in: db).save(db) }
             for snapshot in snapshots { try Self.restore(snapshot, in: db) }
             if let candidate {
                 try db.execute(sql: "update candidate set status = ? where id = ?", arguments: [candidate.status.rawValue, candidate.id.rawValue])
@@ -253,9 +253,18 @@ public struct MemoryRepository: Sendable {
         }
     }
 
+    /// The memory as the snapshot has it, with no chapter when that chapter was removed since:
+    /// its tag cannot point at a row that is gone.
+    private static func restorable(_ memory: Memory, in db: Database) throws -> Memory {
+        guard let chapter = memory.chapterID, try !Chapter.exists(db, key: chapter.rawValue) else { return memory }
+        var freed = memory
+        freed.chapterID = nil
+        return freed
+    }
+
     private static func restore(_ snapshot: Snapshot, in db: Database) throws {
             let id = snapshot.memory.id.rawValue
-            try snapshot.memory.save(db)
+            try restorable(snapshot.memory, in: db).save(db)
             for table in ["memory_span", "moment_entity", "anchor", "collection_memory"] {
                 try db.execute(sql: "delete from \(table) where memory_id = ?", arguments: [id])
             }
