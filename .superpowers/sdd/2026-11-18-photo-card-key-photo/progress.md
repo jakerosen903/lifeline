@@ -24,3 +24,4 @@ Spec addition after the plan was drafted: Undo cannot bring back a guess with no
 
 ## Tasks
 - Task 1: complete (commits cd7fa00..1c27358, review clean). Minor, parked: (a) the same memory passed twice to `useDate` gives two equal changes (harmless; note for Task 4's caller); (b) if the resolver throws after the range write, the caller gets no Undo handle — Task 4 note; (c) no test pins the order of the returned changes.
+- Task 2: complete (commits 7160b19..5152416, review clean). Minor, parked: the date filter runs twice until Task 4 removes `dateOffers`; `StoryDateOffer` and `PhotoDatePart.Offer` have no public init (Task 4 note if the app needs one). Kit suite under load tripped two timing tests besides the known flake; both passed on reruns; not ours.
