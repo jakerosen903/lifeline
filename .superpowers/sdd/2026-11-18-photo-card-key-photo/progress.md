@@ -26,3 +26,14 @@ Spec addition after the plan was drafted: Undo cannot bring back a guess with no
 - Task 1: complete (commits cd7fa00..1c27358, review clean). Minor, parked: (a) the same memory passed twice to `useDate` gives two equal changes (harmless; note for Task 4's caller); (b) if the resolver throws after the range write, the caller gets no Undo handle — Task 4 note; (c) no test pins the order of the returned changes.
 - Task 2: complete (commits 7160b19..5152416, review clean). Minor, parked: the date filter runs twice until Task 4 removes `dateOffers`; `StoryDateOffer` and `PhotoDatePart.Offer` have no public init (Task 4 note if the app needs one). Kit suite under load tripped two timing tests besides the known flake; both passed on reruns; not ours.
 - Task 3: complete (commits b452937..c4bbb9a, review clean). Test setup change accepted: `aPhotoPutBackOnAPageComesBackLast` links the photo to a second page so its row survives the unlink; assertions as briefed. Reviewer's ⚠️ checked by the controller: `removeLink` gives a removed cover to the lowest `sort_order`, which after `writeOrder` is the next photo shown; no gap. Minor, parked: repeated row comparisons in tests.
+- Task 4: built at 05108bb (base 729eec6). Review: spec ok, one Important (holding sheet goes blank after its last Remove).
+- Task 4: Ruling: the date control stays a full-width capsule with "Choose moments" / "Undo" on a row under it; PH1/PH2 draw a hugging pill with the link beside it — the brief pins the frame of `dateUsed` to `useDate` and Undo to Choose moments' place, and the spec's rule is that the card keeps one layout after a choice; a hugging pill changes width with its text — if wrong, one view file changes (`PhotoCardDate.swift`) and the kit gives both state texts. Open for the owner in the final report.
+- Task 4: accepted outside the file list: `SessionDetailViewModel` reloads its rows through `PhotoCardViewModel.onAction` (reviewer confirmed the stale date on the memory page without it); `openMemory` helper swipes the row above `home.start` (no assertion changed).
+- Task 4: minor (deferred): the card is read twice after each action on the session page (`onAction` plus inner refresh).
+- Task 4: minor (deferred): `useDate(for:)` puts the card's current offer in `seen`, not the set the sheet captured when it opened.
+- Task 4: minor (deferred): `useDate(for:)` returns silently when the offer went away while the sheet was open.
+- Task 4: minor (deferred): `keepsTallest` resets on a text-size change only, not on a width change.
+- Task 4: minor (deferred): the seed's function-level guard now needs "Alder Street"; with the guess flag and no birth date the picnic is skipped silently.
+- Task 4: minor (deferred): the sheet's "Remove" buttons are not checked at the largest text.
+- Task 4: minor (deferred): `openMemory`'s swipe loop has no upper bound.
+- Flaky, not ours: `drainGivesUpAtItsDeadline` failed in two kit runs while the simulator was busy.
