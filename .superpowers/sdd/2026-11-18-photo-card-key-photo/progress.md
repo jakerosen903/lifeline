@@ -37,3 +37,5 @@ Spec addition after the plan was drafted: Undo cannot bring back a guess with no
 - Task 4: minor (deferred): the sheet's "Remove" buttons are not checked at the largest text.
 - Task 4: minor (deferred): `openMemory`'s swipe loop has no upper bound.
 - Flaky, not ours: `drainGivesUpAtItsDeadline` failed in two kit runs while the simulator was busy.
+- Task 4: fix round 1/5 (1 addressed, 0 open — blank holding sheet; commits 86f1778..7797fb7)
+- Task 4: complete (commits 729eec6..7797fb7, review clean after one fix round; 7 minors deferred above)
