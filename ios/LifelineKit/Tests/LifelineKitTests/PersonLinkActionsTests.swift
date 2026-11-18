@@ -483,6 +483,30 @@ private struct Env {
     #expect(try env.onlyPerson(event) == robin.id, "the checkbox was off")
 }
 
+// I1 / R38: a fact linked by a packet person id moves with its memory's mention.
+@Test func aFactLinkedByAPacketIDMovesWithItsMention() throws {
+    let env = try Env()
+    _ = try env.store.people.insertPerson(displayName: "Robin")
+    let roommate = try env.store.people.insertPerson(displayName: "Robin")
+    try env.store.people.addAlias("my roommate", to: roommate.id)
+    let robyn = try env.store.people.insertPerson(displayName: "Robyn Vale")
+    let segs = try env.session(["Robin painted the fence", "Robin is allergic to peanuts", "Robin is the kindest person I know"])
+    let event = try env.kept(in: segs[0], people: ["Robin, my roommate"])
+    let alone = try env.kept(in: segs[1], people: ["Robin, my roommate"], kind: .fact, about: roommate.id.rawValue)
+    let grouped = try env.kept(in: segs[2], people: ["Robin, my roommate"], kind: .fact, about: roommate.id.rawValue)
+    #expect(try env.onlyPerson(alone, .detail) == roommate.id)
+
+    try env.actions.move(try env.link(alone), to: .person(robyn.id), wholeGroup: false)
+    #expect(try env.onlyPerson(alone) == robyn.id)
+    #expect(try env.onlyPerson(alone, .detail) == robyn.id, "the fact's mention and its detail never part")
+    #expect(try env.onlyPerson(grouped, .detail) == roommate.id, "the checkbox was off")
+
+    try env.actions.move(try env.link(event), to: .person(robyn.id), wholeGroup: true)
+    #expect(try env.onlyPerson(grouped) == robyn.id)
+    #expect(try env.onlyPerson(grouped, .detail) == robyn.id, "the detail moves with the group")
+    #expect(try env.personRows(grouped, .detail).map(\.origin) == [.confirmed])
+}
+
 @Test func aMoveClearsTheTargetsGuessFlagAndUndoPutsItBack() throws {
     let env = try Env()
     _ = try env.store.people.insertPerson(displayName: "Robin")

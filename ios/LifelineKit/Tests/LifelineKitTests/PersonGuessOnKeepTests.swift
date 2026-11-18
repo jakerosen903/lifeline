@@ -254,6 +254,35 @@ private struct Env {
     #expect(try env.personLinks(kept.memory.id).map(\.origin) == [.assumed])
 }
 
+// I1 / R38: the model may put a person id from the packet in `about_ref`. That pick is still a guess.
+@Test func aFactAboutAPacketPersonIDTakesTheMentionsOriginElseAssumed() throws {
+    let env = try Env()
+    let friend = try env.store.people.insertPerson(displayName: "Robin")
+    let roommate = try env.store.people.insertPerson(displayName: "Robin")
+    try env.store.people.addAlias("my roommate", to: roommate.id)
+
+    let same = try env.actions.acceptMemory(try env.card("Robin is allergic to peanuts", kind: .fact, people: ["Robin, my roommate"],
+                                                         about: roommate.id.rawValue), joinStory: false)
+    #expect(try env.personLinks(same.memory.id).map(\.origin) == [.said])
+    let sameDetail = try env.personLinks(same.memory.id, relation: .detail)
+    #expect(sameDetail.map(\.entityID) == [roommate.entityID])
+    #expect(sameDetail.map(\.origin) == [.said], "the mention reached the same person: the detail takes its origin")
+
+    let other = try env.actions.acceptMemory(try env.card("Robin is allergic to peanuts", kind: .fact, people: ["Robin, my roommate"],
+                                                          about: friend.id.rawValue), joinStory: false)
+    let otherDetail = try env.personLinks(other.memory.id, relation: .detail)
+    #expect(otherDetail.map(\.entityID) == [friend.entityID], "the model's pick stands, and it is marked")
+    #expect(otherDetail.map(\.origin) == [.assumed])
+}
+
+@Test func aFactAboutTheOwnersIDHasNoOrigin() throws {
+    let env = try Env()
+    try env.store.profile.save(Profile(displayName: "Sam Ortega", birthDate: nil, birthPlaceText: nil, freeText: nil, updatedAt: .now))
+    let owner = try #require(try env.store.profile.owner())
+    let kept = try env.actions.acceptMemory(try env.card("I am allergic to peanuts", kind: .fact, people: [], about: owner.id.rawValue), joinStory: false)
+    #expect(try env.personLinks(kept.memory.id, relation: .detail).map(\.origin) == [nil], "the owner is never a guess")
+}
+
 @Test func aFactAboutANewNameMakesOnePerson() throws {
     let env = try Env()
     let card = try env.card("Devon and I had our most formative years together", kind: .feeling, people: ["Devon"], about: "p1",

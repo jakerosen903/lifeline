@@ -289,14 +289,21 @@ public struct CandidateActions: Sendable {
 
     /// `about_ref` resolved: `self` is the owner; an id on file is that entity; a mention's `ref`
     /// in the same segment becomes its entity. Nil when it names nothing the app can find. The
-    /// origin is the person link's, for a person; nil for the owner and anything else.
+    /// origin is the person link's, for a person (`assumed` for a person id no mention reached);
+    /// nil for the owner and anything else.
     /// `refLinks` is what each of the card's people refs became.
     private func aboutEntity(_ ref: String?, segment currentSegment: SegmentID?, inputs: GuessInputs,
                              refLinks: [(ref: String, link: GuessedLink?)],
                              plan: inout EntityRepository.Write) throws -> (id: EntityID, origin: LinkOrigin?)? {
         guard let ref = ref?.trimmingCharacters(in: .whitespacesAndNewlines), !ref.isEmpty else { return nil }
         if ref == "self" { return try store.profile.owner().map { ($0.entityID, nil) } }
-        if let known = try store.entities.entity(id: EntityID(rawValue: ref)) { return (known.id, nil) }
+        if let known = try store.entities.entity(id: EntityID(rawValue: ref)) {
+            guard known.type == .person, try store.profile.owner()?.entityID != known.id else { return (known.id, nil) }
+            // A person id the model picked is still a guess (spec step 2, R38): the origin of the
+            // card's mention that reached the same person, else `assumed`.
+            let reached = refLinks.compactMap(\.link).first { $0.person.rawValue == known.id.rawValue }
+            return (known.id, reached?.origin ?? .assumed)
+        }
         // About a person named in this segment: the same guess as the name in `people_refs`, so
         // the detail and the mention reach one person with one origin. A group phrase waits for
         // its answer ("Who are our parents?"); the owner is never guessed.

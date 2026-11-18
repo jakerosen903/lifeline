@@ -92,7 +92,7 @@ extension PersonLinkRepository {
             // elsewhere in the recording follows a whole answer only (R19).
             let mentioned = Set(scope.map(\.memoryID))
             let whole = wholeGroup || group.count == 1
-            scope += try details(about: current, in: db).filter { whole || mentioned.contains($0.memoryID) }
+            scope += try details(about: current, mentionedIn: mentioned, in: db).filter { whole || mentioned.contains($0.memoryID) }
         }
 
         let person: Person?
@@ -156,16 +156,22 @@ extension PersonLinkRepository {
         return person
     }
 
-    /// The facts, feelings and goals of the link's session that are details of its person and whose
-    /// card's `about_ref` is a person mention with the link's said name. A detail placed by hand
-    /// has no such card ref and stays.
-    private static func details(about link: PersonLink, in db: Database) throws -> [MomentEntity] {
-        guard let said = link.saidName.map({ SaidName(ref: $0) }), !SaidName.key(said.raw).isEmpty,
-              let session = try session(of: link.memoryID, in: db) else { return [] }
-        let keys = Set([SaidName.key(said.raw)] + (said.name.map { [SaidName.key($0)] } ?? []))
+    /// The facts, feelings and goals of the link's session that are details of its person, and either
+    /// sit in a memory of `mentioned` (a detail the model linked by a person id, R38) or have a card
+    /// whose `about_ref` is a person mention with the link's said name. A detail placed by hand in
+    /// another memory has no such card ref and stays.
+    private static func details(about link: PersonLink, mentionedIn mentioned: Set<MemoryID>, in db: Database) throws -> [MomentEntity] {
+        guard let session = try session(of: link.memoryID, in: db) else { return [] }
+        let said = link.saidName.map { SaidName(ref: $0) }
+        // An older link with no said name matches no card ref; only its own memories' details go.
+        let keys = Set(said.map { [SaidName.key($0.raw)] + ($0.name.map { [SaidName.key($0)] } ?? []) } ?? []).subtracting([""])
         let candidates = try fetch(where: "person.id = ? and me.relation = 'detail' and \(sessionSQL) = ?",
                                    arguments: [link.person.id.rawValue, session], order: "memory.created_at, me.memory_id", in: db)
-        return try rows(of: try candidates.filter { try aboutMentionText(of: $0.memoryID, in: db).map { keys.contains(SaidName.key($0)) } == true }, in: db)
+        return try rows(of: try candidates.filter { candidate in
+            if mentioned.contains(candidate.memoryID) { return true }
+            guard !keys.isEmpty else { return false }
+            return try aboutMentionText(of: candidate.memoryID, in: db).map { keys.contains(SaidName.key($0)) } == true
+        }, in: db)
     }
 
     /// The text of the person mention a memory's card is about, when its `about_ref` names one.
