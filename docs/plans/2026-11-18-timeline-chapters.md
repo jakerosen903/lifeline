@@ -347,4 +347,5 @@ The seed `-uiTesting-seedSpine` (`launchWithSpine`) has "The tree house" (1999, 
   - No sheet can state a chapter with no end. Life map rule 4 (an open-ended bar) is built, but the person cannot reach it.
   - `LifeMapAxis.visibleYears` has no test.
   - The memory screen reads a chapter's raw title, not `Chapter.name` as the Timeline does.
+- Seen in the controller's screenshot (`after-life-map-largest-text.png`): at the largest text size the period names above the life map truncate to "Child…", "T…", "Tw…", "T…". The bars, the chapter names and the rows are readable. A later task must give the period names room or hide them at accessibility sizes.
 - Carried from S6a: the place on a row and the tap on a person or place (spec "The spine", rule 5); a softer gap label next to a guessed date.
