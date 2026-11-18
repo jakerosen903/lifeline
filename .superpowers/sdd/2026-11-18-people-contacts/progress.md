@@ -56,3 +56,11 @@ Spec: docs/specs/2026-11-18-people-contacts.md. Branch claude/people-contacts-16
 - Task 6: minor (deferred): `Theme.secondaryText.opacity(0.6)` on the "Someone new" circle is a derived colour value.
 - Task 6: minor (deferred): the sheet's error text is not cleared when the selection changes.
 - Task 6: minor (deferred): `who.else` sits on the DisclosureGroup; confirm in a UI test that it addresses the toggle.
+- Task 7: implemented (commits e6a5b47..931eeef). Kit 1146 pass, app builds, LandingUITests 14/14, PeopleUITests 10/10. Six older UI tests fail on the removed person follow-up (ExtractionUITests.testWhoIsThisResolvesToANewPerson; FollowUpUITests: testKeepShowsChipsOnTheSameCard, testPersonChipOpensWhoIsThis, testDoneClosesTheKeptCard, testUndoAfterDoneBringsTheChipsBack, testCheckedChipStaysOnSession) — reviewer confirmed the attribution; Task 9 moves them.
+- Task 7: review needs fixes — 2 Important (kept-card chips stale after Change…; sheet view model rebuilt on every render) + 1 copy ruling (no raw error text).
+- Task 7: minor (deferred, flag for owner): "Not a person" chosen on a waiting card drops the chip with no notice and no way back on that card before Keep (R30).
+- Task 7: minor (deferred): the memory page has two pinned bottom slots (photo error, move notice); the spec says one message slot.
+- Task 7: minor (deferred): the landing's 1-second poll reruns `preview` for every waiting row and `guessCount` on the main actor.
+- Task 7: minor (deferred): `CardHandler.deps` made internal; a `PersonChipRow?` view stored as a property on MemoryCard/KeptCardView.
+- Task 7: minor (deferred): `PersonChipRow` reads person covers from the store in `.task`, once per row.
+- Task 7: to check in Task 9: run SameStoryUITests, TimelineUITests, SessionDetail and EntityPage classes (not run in Task 7); chips at the largest text size.
