@@ -220,6 +220,8 @@ public struct CandidateActions: Sendable {
         let currentSegment = segment
         var e = Edges()
         let inputs = try guessInputs(card: card, segment: segment)
+        // What each people ref became (nil: "not a person"), so a fact about that name follows it.
+        var refLinks: [(ref: String, link: GuessedLink?)] = []
         // A card stored before the owner filter can still name the owner. The speaker is not
         // someone to ask about, so the name is left out here too (audit F10).
         for ref in out.peopleRefs where !inputs.owner.isOwner(ref) {
@@ -228,7 +230,9 @@ public struct CandidateActions: Sendable {
                 if !e.unknown.contains(where: { Self.same($0, ref) }) { e.unknown.append(ref) }
                 continue
             }
-            guard let link = guessedLink(for: inputs.saidName(ref), inputs, plan: &e.entityWrite) else { continue }
+            let guessed = guessedLink(for: inputs.saidName(ref), inputs, plan: &e.entityWrite)
+            refLinks.append((ref, guessed))
+            guard let link = guessed else { continue }
             e.add(MemoryPerson(memoryID: memory, personID: link.person, roleText: ref, origin: link.origin))
             e.roleAliases += link.aliases.map { (link.person, $0) }
         }
@@ -252,7 +256,8 @@ public struct CandidateActions: Sendable {
             }
         }
         // A fact, feeling or goal is a detail of what it is about; a moment never is (M7).
-        if let kind = out.kind, !kind.isMoment, let about = try aboutEntity(out.aboutRef, segment: currentSegment, inputs: inputs, plan: &e.entityWrite) {
+        if let kind = out.kind, !kind.isMoment, let about = try aboutEntity(out.aboutRef, segment: currentSegment, inputs: inputs,
+                                                                               refLinks: refLinks, plan: &e.entityWrite) {
             e.links.append(MomentEntity(memoryID: memory, entityID: about.id, relation: .detail, origin: about.origin))
         }
         e.anchors = out.anchors.map {
@@ -285,7 +290,9 @@ public struct CandidateActions: Sendable {
     /// `about_ref` resolved: `self` is the owner; an id on file is that entity; a mention's `ref`
     /// in the same segment becomes its entity. Nil when it names nothing the app can find. The
     /// origin is the person link's, for a person; nil for the owner and anything else.
+    /// `refLinks` is what each of the card's people refs became.
     private func aboutEntity(_ ref: String?, segment currentSegment: SegmentID?, inputs: GuessInputs,
+                             refLinks: [(ref: String, link: GuessedLink?)],
                              plan: inout EntityRepository.Write) throws -> (id: EntityID, origin: LinkOrigin?)? {
         guard let ref = ref?.trimmingCharacters(in: .whitespacesAndNewlines), !ref.isEmpty else { return nil }
         if ref == "self" { return try store.profile.owner().map { ($0.entityID, nil) } }
@@ -297,6 +304,12 @@ public struct CandidateActions: Sendable {
            let named = try store.candidates.candidates(for: segment).first(where: { $0.kind == .person && CandidatePayload.mention($0)?.ref == ref }),
            let mention = CandidatePayload.mention(named) {
             guard !GroupPhrase.isGroup(mention.text), !inputs.owner.isOwner(mention.text, relation: mention.relationText) else { return nil }
+            // The card names the person too ("my roommate, Robin"): the detail follows that link, so a
+            // stored choice keyed on the whole ref reaches the mention and the detail alike.
+            let key = SaidName.key(mention.text)
+            if let carried = refLinks.first(where: { SaidName.key($0.ref) == key || SaidName(ref: $0.ref).name.map(SaidName.key) == key }) {
+                return carried.link.map { (EntityID(rawValue: $0.person.rawValue), $0.origin) }
+            }
             let said = SaidName(ref: mention.text, mentionRelation: mention.relationText)
             return guessedLink(for: said, inputs, plan: &plan).map { (EntityID(rawValue: $0.person.rawValue), $0.origin) }
         }

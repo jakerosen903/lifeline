@@ -81,13 +81,16 @@ public struct PeopleRepository: Sendable {
     }
 
     /// Changes the display name and keeps the old spelling as an alias, so a transcript that
-    /// repeats the old spelling still links.
+    /// repeats the old spelling still links. A name the owner typed makes the person theirs: no
+    /// longer a guess a move may remove.
     public func rename(_ person: PersonID, to newName: String) throws {
         let name = newName.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !name.isEmpty else { throw Error.emptyName }
         try db.writer.write { db in
             guard let old = try String.fetchOne(db, sql: "select title from entity where id = ?", arguments: [person.rawValue]) else { return }
             try db.execute(sql: "update entity set title = ? where id = ?", arguments: [name, person.rawValue])
+            try db.execute(sql: "update person set created_by_guess = 0, name_origin = ? where id = ?",
+                           arguments: [NameOrigin.typed.rawValue, person.rawValue])
             try Self.insertAlias(old, person, db)
             try Self.insertAlias(name, person, db)
         }
@@ -133,7 +136,7 @@ public struct PeopleRepository: Sendable {
 
     /// No-op when the person already has this alias (case-insensitive).
     public func addAlias(_ text: String, to person: PersonID) throws {
-        try db.writer.write { db in try Self.insertAlias(text, person, db) }
+        try db.writer.write { db in _ = try Self.insertAlias(text, person, db) }
     }
 
     public func insertMention(_ mention: Mention) throws {
@@ -211,12 +214,15 @@ public struct PeopleRepository: Sendable {
         Place(try EntityRepository(db).insert(type: .place, title: nameText))
     }
 
-    static func insertAlias(_ text: String, _ person: PersonID, _ db: Database) throws {
+    /// True when the alias is new; false when the person already had it or the text is empty.
+    @discardableResult
+    static func insertAlias(_ text: String, _ person: PersonID, _ db: Database) throws -> Bool {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return }
+        guard !trimmed.isEmpty else { return false }
         let exists = try Alias.fetchOne(db, sql: "select * from alias where person_id = ? and lower(trim(text)) = ?",
                                         arguments: [person.rawValue, normalize(trimmed)]) != nil
         if !exists { try Alias(personID: person, text: trimmed).insert(db) }
+        return !exists
     }
 
     public static func normalize(_ text: String) -> String {

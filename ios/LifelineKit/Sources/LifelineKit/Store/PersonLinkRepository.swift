@@ -14,7 +14,7 @@ public struct PersonChoice: Sendable, Equatable {
 
 /// Reads of person links for the guess on Keep: who is on file, and what the owner already chose.
 public struct PersonLinkRepository: Sendable {
-    private let db: AppDatabase
+    let db: AppDatabase
 
     public init(_ db: AppDatabase) { self.db = db }
 
@@ -80,12 +80,16 @@ public struct PersonLinkRepository: Sendable {
     /// said with the same name (`SaidName.key`). A link with no said name is a group of only itself.
     /// Includes `link`.
     public func group(of link: PersonLink) throws -> [PersonLink] {
+        try db.writer.read { try Self.group(of: link, in: $0) }
+    }
+
+    static func group(of link: PersonLink, in db: Database) throws -> [PersonLink] {
         let key = SaidName.key(link.saidName ?? "")
         guard !key.isEmpty else { return [link] }
-        guard let session = try db.writer.read({ try Self.session(of: link.memoryID, in: $0) }) else { return [link] }
-        let sameSession = try fetch(where: "person.id = ? and me.relation = ? and \(Self.sessionSQL) = ?",
+        guard let session = try session(of: link.memoryID, in: db) else { return [link] }
+        let sameSession = try fetch(where: "person.id = ? and me.relation = ? and \(sessionSQL) = ?",
                                     arguments: [link.person.id.rawValue, link.relation.rawValue, session],
-                                    order: "memory.created_at, me.memory_id")
+                                    order: "memory.created_at, me.memory_id", in: db)
         return sameSession.filter { $0.saidName.map(SaidName.key) == key }
     }
 
@@ -100,15 +104,15 @@ public struct PersonLinkRepository: Sendable {
         }
     }
 
-    // MARK: - Private
+    // MARK: - Shared with the writes
 
     /// The session of the segment of a memory's first span (order 0). `me` is the link's table.
-    private static let sessionSQL = """
+    static let sessionSQL = """
         (select segment.session_id from memory_span ms join segment on segment.id = ms.segment_id
          where ms.memory_id = me.memory_id and ms."order" = 0)
         """
 
-    private static func session(of memory: MemoryID, in db: Database) throws -> String? {
+    static func session(of memory: MemoryID, in db: Database) throws -> String? {
         try String.fetchOne(db, sql: """
             select segment.session_id from memory_span ms join segment on segment.id = ms.segment_id
             where ms.memory_id = ? and ms."order" = 0
@@ -117,25 +121,27 @@ public struct PersonLinkRepository: Sendable {
 
     /// Links to people (never to a place or a thing), each with its person read in full.
     private func fetch(where clause: String, arguments: StatementArguments, order: String) throws -> [PersonLink] {
-        try db.writer.read { db in
-            let rows = try Row.fetchAll(db, sql: """
-                select me.memory_id, me.relation, me.role_text, me.origin, person.id as person_id
-                from moment_entity me
-                join person on person.entity_id = me.entity_id
-                join entity on entity.id = person.entity_id
-                join memory on memory.id = me.memory_id
-                where \(clause) order by \(order)
-                """, arguments: arguments)
-            var people: [String: Person] = [:]
-            return try rows.compactMap { row -> PersonLink? in
-                let personID: String = row["person_id"]
-                if people[personID] == nil {
-                    people[personID] = try Person.fetchOne(db, sql: Person.selectSQL + " where person.id = ?", arguments: [personID])
-                }
-                guard let person = people[personID], let relation = EntityRelation(rawValue: row["relation"]) else { return nil }
-                return PersonLink(memoryID: MemoryID(rawValue: row["memory_id"]), person: person, saidName: row["role_text"],
-                                  origin: (row["origin"] as String?).flatMap(LinkOrigin.init(rawValue:)), relation: relation)
+        try db.writer.read { try Self.fetch(where: clause, arguments: arguments, order: order, in: $0) }
+    }
+
+    static func fetch(where clause: String, arguments: StatementArguments, order: String, in db: Database) throws -> [PersonLink] {
+        let rows = try Row.fetchAll(db, sql: """
+            select me.memory_id, me.relation, me.role_text, me.origin, person.id as person_id
+            from moment_entity me
+            join person on person.entity_id = me.entity_id
+            join entity on entity.id = person.entity_id
+            join memory on memory.id = me.memory_id
+            where \(clause) order by \(order)
+            """, arguments: arguments)
+        var people: [String: Person] = [:]
+        return try rows.compactMap { row -> PersonLink? in
+            let personID: String = row["person_id"]
+            if people[personID] == nil {
+                people[personID] = try Person.fetchOne(db, sql: Person.selectSQL + " where person.id = ?", arguments: [personID])
             }
+            guard let person = people[personID], let relation = EntityRelation(rawValue: row["relation"]) else { return nil }
+            return PersonLink(memoryID: MemoryID(rawValue: row["memory_id"]), person: person, saidName: row["role_text"],
+                              origin: (row["origin"] as String?).flatMap(LinkOrigin.init(rawValue:)), relation: relation)
         }
     }
 }
