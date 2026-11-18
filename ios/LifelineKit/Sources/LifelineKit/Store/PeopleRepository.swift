@@ -44,6 +44,7 @@ public struct PeopleRepository: Sendable {
     /// The person whose display name or any alias equals `text`, ignoring case and outer
     /// whitespace. A phrase with a role and a name ("my mom, Marcel") matches on either part.
     /// Never the owner: the owner is the speaker, not someone a story mentions (audit F10).
+    /// Only for a name the owner types; no extraction path may call it (it picks one person with no mark).
     public func findPerson(matching text: String) throws -> Person? {
         for part in Self.parts(of: text) {
             if let person = try findPerson(exactly: part) { return person }
@@ -112,9 +113,9 @@ public struct PeopleRepository: Sendable {
     }
 
     /// For a name the person typed or chose themselves: the person it names, and the owner when
-    /// it is one of the owner's names. A name the extractor found goes through `findPerson`,
-    /// which never returns the owner. Without this, typing your own name would make a second
-    /// person with it.
+    /// it is one of the owner's names. A name the extractor found never comes here or to
+    /// `findPerson`: it goes through `PersonGuess` on Keep. Without this, typing your own name
+    /// would make a second person with it.
     public func findPersonOrOwner(matching text: String) throws -> Person? {
         if let person = try findPerson(matching: text) { return person }
         guard try ownerNames().isOwner(text) else { return nil }
