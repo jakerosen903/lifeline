@@ -15,18 +15,20 @@ Schema:
 Matching and origins:
 
 - R7: with a said name, only the name picks candidates. The relation part of "Priya, my mom" never picks a candidate. Rule 2 never fires when a name was said. Rule 3 needs exactly one candidate whose full name equals the said name.
-- R12 and R13: every write that meets an existing link keeps the stronger origin, and no origin is the weakest. An older link with no origin takes `assumed` when a retelling or a merge reaches it. An older link nothing touches has no mark. Keep never settles a guess to `confirmed`. This narrows "Links older than this feature show no mark" below and in the spec. Why: a guess that reaches an old link is still a guess (principle 5).
+- R12 and R13: every write that meets an existing link keeps the stronger origin, and no origin is the weakest. An older link with no origin takes the guess's origin when a retelling or a merge reaches it, and shows the mark when that is `assumed`. An older link nothing touches has no mark. Keep never settles a guess to `confirmed`. This narrows "Links older than this feature show no mark" below and in the spec. Why: a guess that reaches an old link is still a guess (principle 5).
 - R8: a stored choice applied on Keep saves both halves of the said name as aliases, as settle does. A guess with origin `said` saves only the relation half. A group phrase is never saved.
 - R9: a stored choice matches the whole said ref. "Robin" and "my roommate, Robin" are two keys.
 - R14: a person made by a stored "Someone new" choice is not an empty guess. A later move never removes them.
 - R15: an alias saved before this change that is a group phrase no longer links on Keep. The phrase asks again in each story.
 - R10: until PC-b, a guessed contact cannot occur. A stored `contact` choice makes a new person with origin `confirmed`.
+- R38: a fact linked by a person id that the model picked takes the origin of the mention link that reached the same person in that memory. With no such mention, it takes `assumed`. A move also takes a detail of the old person from each memory whose mention is in the move. Why: spec step 2 says a model-supplied person id is still `assumed`.
 - R11: after a serious disclosure no person mention counts as carried. The name goes to the People queue.
 
 Moves and Undo:
 
 - R19 and R23: a detail moves only with a whole answer. A fact whose own mention is in the move always takes its detail along.
 - R20 and R24: an empty guess is a person made by a guess, with nothing that refers to them. A move clears the target's guess flag.
+- R39: a move removes a guessed person only when the owner has not edited them: the name is still as said, no dates are stated, and the person is not hidden or kept from the AI. A rename on the person's page clears the guess flag, as the rename in People does. Why: spec "Moving a name", point 6, "no name the owner gave".
 - R21, R26 and R27: Undo is refused as stale when rows it would restore or change moved on since, for example a rename or a deleted memory. The refusal shows its sentence for 6 seconds, with no Undo.
 - R25: a settle that changed nothing records nothing, so its Undo is not refused.
 - R29: "Done" with the choice unchanged settles an `assumed` or `new` link. On `said`, `confirmed` or no origin it writes nothing.
@@ -34,7 +36,8 @@ Moves and Undo:
 
 Cards and chips:
 
-- R30: a card that waits shows a person chip only for each preview. A said name that Keep will not link has no chip there. "Not a person" on a waiting card drops the chip before Keep, with no Undo. A group phrase keeps its own "Who's this?" card.
+- R30: a card that waits shows a person chip only for each preview. A said name that Keep will not link has no chip there. A group phrase keeps its own "Who's this?" card.
+- R37 (replaces the dead end in R30): a name marked "Not a person" on a waiting card keeps a quiet chip with the said name. The chip has no line and no mark. A tap opens the sheet with "Not a person" selected. Why: the sheet says "You can change this again at any time", and that must be true.
 - R31: the move notice uses the slot each host already has. A refused Undo shows in the same place.
 - R17: an `assumed` link with no said name still shows the word "Assumed".
 - R18: link reads return hidden memories too. Each view filters them.

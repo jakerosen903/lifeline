@@ -195,7 +195,7 @@ When the owner changes the person, the app must do all of this in one transactio
 3. **Photos do not move.** A photo belongs to a person's page or to a memory. It does not belong to a link.
 4. **The first telling follows.** When the old person's first telling came from a moved moment, the old person takes the first telling of their oldest remaining moment. The new person takes one only when they have none.
 5. **Names.** The said name and its relation phrase become aliases of the new person. The old person keeps their aliases; the owner removes one on that person's page, as today.
-6. **An empty guess goes.** When the old person was created by the app for this said name, and now has no moment, no detail, no photo, no contact and no name the owner gave, the app removes that person. Undo brings them back.
+6. **An empty guess goes.** When the old person was created by the app for this said name, and now has no moment, no detail, no photo, no contact and no name the owner gave, the app removes that person. Undo brings them back. A person the owner edited stays: a typed name, stated dates, hidden, or kept from the AI (R39).
 7. **Undo.** The one message slot shows "Changed to {name}." with Undo for 6 seconds. Undo restores every row as it was. Undo is refused when a moved link changed in the meantime, as `unmerge` does today.
 
 A kill in the middle must leave either the old state or the new state.
@@ -311,7 +311,7 @@ Migration v15 is additive. The phone's database is the only copy, so the migrati
 
 | Column | Holds |
 | --- | --- |
-| `origin` | `assumed`, `said` or `confirmed`. Null for an older link and for a link to a place, thing or idea. |
+| `origin` | `assumed`, `said`, `confirmed` or `new`. Null for an older link and for a link to a place, thing or idea. |
 | `person_handle` | The extractor's handle. Added in v15 and written from step 2. |
 
 New table `contact_declined` (`person_id`, `contact_identifier`, primary key on both, cascade on the person).
@@ -414,7 +414,7 @@ The owner approved the spec with these calls on 2026-11-18. No call was discusse
 
 4. **A person on file wins over a contact with the same name** (rule 4), and the guess is marked. The app does not ask "which one?".
 5. **An answer carries inside one recording only.** Today's copy of one answer to every recording goes.
-6. **Older links get no mark until a retelling or a merge reaches them, then they take `assumed`.** (narrowed 2026-11-18, ruling R13) The app cannot know which older links were guesses. The other option marks every older link that came from a name, which puts a mark on most of the archive.
+6. **Older links get no mark until a retelling or a merge reaches them. Then they take the guess's origin, and show the mark when that is `assumed`.** (narrowed 2026-11-18, ruling R13) The app cannot know which older links were guesses. The other option marks every older link that came from a name, which puts a mark on most of the archive.
 7. **The app creates a person on Keep for a name it does not know.** The "Who's this?" card goes for new recordings. Cost: a misheard name becomes a person until the owner taps "Not a person" or merges it.
 8. **A person the app created for a guess is removed when a move leaves them empty.** Undo restores them.
 9. **A person created from a contact takes the contact's full name. A person on file keeps their name when linked later.**

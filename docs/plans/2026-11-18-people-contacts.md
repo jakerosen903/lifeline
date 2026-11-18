@@ -385,10 +385,10 @@ Behaviour, exact (spec "Moving a name to another person"):
 
 1. `settle`: sets `origin` to `confirmed`; saves the said name and, when the card gave one, its relation phrase as aliases of the person (never a group phrase); clears `created_by_guess`.
 2. `move` to `.person(p)`: for each link in scope, delete the old row and write a row for `p` with the same `role_text` and `relation`, origin `confirmed`. When `p` already has that row, keep it and set its origin to `confirmed`.
-3. Details: a `detail` link of the same session to the old person moves too when its card's `about_ref` points at a mention with the same said key. A detail the owner placed with `moveDetail` has no such card ref and stays.
+3. Details: a `detail` link of the same session to the old person moves too when its card's `about_ref` points at a mention with the same said key. A detail the owner placed with `moveDetail` has no such card ref and stays. A detail of the old person in a memory whose mention is in the move also moves (R38, after the final review).
 4. First telling: when the old person's `entity_span` of order 0 came from a moved memory, replace it with the first span of their oldest remaining moment, or delete it when none remains. Give `p` a first telling only when `p` has none (`EntityRepository.giveFirstTelling` already has that rule).
 5. Aliases: the said name and its relation become aliases of `p`. The old person's aliases do not change.
-6. The empty guess: when the old person has `created_by_guess` true and now has no link, no photo link and no `contact_identifier`, delete the person and their entity. Put them in the receipt.
+6. The empty guess: when the old person has `created_by_guess` true and now has no link, no photo link and no `contact_identifier`, delete the person and their entity. Put them in the receipt. After the final review (R39), the person must also have `name_origin` `said`, no stated range, and default hidden and excluded flags.
 7. `.someoneNew`: create a person named by the said name (`nameOrigin: .said`, `createdByGuess: false`), then as `.person`.
 8. `.notAPerson`: delete the links in scope; rule 6 applies. No alias is saved.
 9. `undo`: refuse with `.stale` unless every row in `receipt.after` is in the database exactly as recorded and every row the move deleted is still absent. Then restore `before`, the removed person, and delete `addedAliases` and `createdPerson`. One transaction.

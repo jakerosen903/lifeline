@@ -106,7 +106,7 @@ Keep matches each said name to a person with seven rules. `PersonGuess` runs the
 
 1. The said name and the said relation phrase ("Danielle, my sister") are both held by one person.
 2. A relation phrase alone ("my mom") is held by one person.
-3. A fuller name of two or more words fits one candidate only.
+3. A fuller name of two or more words equals one candidate's full name.
 4. A person on file fits. With several, the most recently linked one wins.
 5. Exactly one contact fits and no person does.
 6. Two or more contacts fit and no person does.
@@ -114,9 +114,9 @@ Keep matches each said name to a person with seven rules. `PersonGuess` runs the
 
 Each link between a memory and a person stores an origin: `assumed`, `said`, `confirmed` or `new`. A link made before this change has no origin. Rules 1 and 2 give `said`. Rules 3 to 5 give `assumed`. Rules 6 and 7 give `new`. A choice the person made gives `confirmed`.
 
-An `assumed` link shows a dashed outline and the word "Assumed" until the person settles it with "Done" or changes it. A guess teaches the app no name. The app saves an alias only from the person's own words or choice. An older link shows no mark until a later retelling or a merge reaches it. Then it takes `assumed`. Keep never weakens an origin.
+An `assumed` link shows a dashed outline and the word "Assumed" until the person settles it with "Done" or changes it. A guess teaches the app no name. The app saves an alias only from the person's own words or choice. An older link shows no mark until a later retelling or a merge reaches it. Then it takes the guess's origin, and shows the mark when that is `assumed`. Keep never weakens an origin.
 
-Every person chip opens a sheet. A change can move all the moments of one recording, with the checkbox on, or one moment. A change shows "Changed to {name}." with Undo for 6 seconds. One answer carries inside one recording only. A name no memory carries keeps the old "Who's this?" card with its four choices.
+A person chip on a card, on the landing, on the memory page and on the person's page opens the "Who is this?" sheet. A name marked "Not a person" on a card that waits keeps a quiet chip, so the sheet opens again before Keep. A change can move all the moments of one recording, with the checkbox on, or one moment. A change shows "Changed to {name}." with Undo for 6 seconds. One answer carries inside one recording only. A name no memory carries keeps the old "Who's this?" card with its four choices.
 
 Contacts are not read yet. Rules 3, 5 and 6 find no contact until the next PR (PC-b), which adds the contacts directory, the link between a person and a contact, and suggestions in the sheet.
 
