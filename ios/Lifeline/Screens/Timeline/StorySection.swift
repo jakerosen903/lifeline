@@ -7,15 +7,22 @@ struct StoryRowActions {
     let split: (StoryRow) -> Void
 }
 
-/// A story as one row: its title (or "{first} + {n} more"), its span from the dated members,
-/// and the members folded under it until the row is tapped (M5).
+/// A story as one row: its title (or "{first} + {n} more") and its span from the dated members
+/// (M5). A tap opens or folds it.
+///
+/// Its members are laid out by the two places that list a story: `SpineRowView` (beside the spine)
+/// and `ShelfSection`.
 struct StoryRowView: View {
     let row: StoryRow
-    let axis: ClosedRange<Int>?
     let expanded: Bool
     let onToggle: () -> Void
-    let actions: MemoryRowActions
     let storyActions: StoryRowActions
+    /// On the spine at the accessibility sizes the margin closes, so the date goes above the title.
+    var isOnSpine = false
+    @Environment(\.dynamicTypeSize) private var typeSize
+
+    private var dateText: String { row.isPlaced ? row.span.displayText : "no dates yet" }
+    private var datesAboveTitle: Bool { isOnSpine && typeSize.isAccessibilitySize }
 
     var body: some View {
         HStack(alignment: .top, spacing: 8) {
@@ -25,20 +32,22 @@ struct StoryRowView: View {
                         Image(systemName: expanded ? "chevron.down" : "chevron.right").font(.caption).foregroundStyle(Theme.secondaryText)
                         Text("Story").font(.caption).foregroundStyle(Theme.secondaryText)
                     }
+                    if datesAboveTitle { date }
                     Text(row.title)
                         .font(.system(.headline, design: .serif))
                         .foregroundStyle(Theme.ink)
-                    Text(row.isPlaced ? row.span.displayText : "no dates yet")
-                        .font(.subheadline)
-                        .foregroundStyle(Theme.ochreText)
+                        .spineMarkOnFirstLine()
+                    if !datesAboveTitle { date }
                 }
                 .padding(.vertical, 6)
+                // The whole row up to the "…" menu opens or folds the story, not only its words.
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
                 .accessibilityElement(children: .ignore)
-                .accessibilityLabel("\(row.title) · \(row.isPlaced ? row.span.displayText : "no dates yet") · \(row.members.count) moments")
+                .accessibilityLabel("\(row.title) · \(dateText) · \(row.members.count) moments")
             }
             .buttonStyle(.plain)
             .accessibilityIdentifier("timeline.story")
-            Spacer(minLength: 0)
             Menu {
                 Button("Rename…", systemImage: "pencil") { storyActions.rename(row) }
                     .accessibilityIdentifier("story.rename")
@@ -46,16 +55,15 @@ struct StoryRowView: View {
                     .accessibilityIdentifier("story.split")
             } label: {
                 Image(systemName: "ellipsis.circle").font(.title3).foregroundStyle(Theme.secondaryText).padding(.top, 8)
+                    .frame(minWidth: 44, minHeight: 44, alignment: .top)
             }
             .buttonStyle(.borderless)
             .accessibilityIdentifier("story.more")
         }
-        if expanded {
-            ForEach(row.members) { member in
-                MemoryRowView(row: member, axis: member.memory.range.isPlaced ? axis : nil, actions: actions)
-                    .padding(.leading, 16)
-            }
-        }
+    }
+
+    private var date: some View {
+        Text(dateText).font(.subheadline).foregroundStyle(Theme.ochreText)
     }
 }
 

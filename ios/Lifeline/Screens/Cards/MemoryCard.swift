@@ -123,7 +123,9 @@ struct CheckThisTag: View {
         }
         .font(.caption.weight(.semibold))
         .foregroundStyle(Theme.ochreText)
-        .fixedSize()
+        // Its full height, but never wider than the row gives: a long tag ("Check this: sometime between
+        // 1993–98?") wraps instead of pushing the row past the list's edge.
+        .fixedSize(horizontal: false, vertical: true)
             .accessibilityElement(children: .combine)
             .accessibilityLabel(tag.label)
             .accessibilityIdentifier("card.checkThis")

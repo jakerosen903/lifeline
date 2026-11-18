@@ -220,6 +220,34 @@ enum UITestSeed {
         }
         _ = try store.chapters.insertChapter(title: nil)
     }
+
+    /// Under `-uiTesting-seedSpine`: Jordan, born 1990, with six dated moments on the Timeline's spine and one undated.
+    /// Gaps between them are 1, 1, 2, 3 and 2 years, so exactly one gap names itself ("3 years"). "The tree house" is
+    /// inferred (1999) and sits in the chapter "Maple Street"; "The science fair" sits in a chapter with no title.
+    static func writeSpine(store: ExtractionStore, profile: ProfileRepository, sessions: SessionRepository) throws {
+        let birth = Calendar.current.date(from: DateComponents(year: 1990, month: 6, day: 1))
+        try profile.save(Profile(displayName: "Jordan", birthDate: birth, birthPlaceText: nil, freeText: nil, updatedAt: .now))
+        let session = Session(id: .init(), startedAt: .now, endedAt: .now, audioPath: "seed.m4a", stageLog: "[]", landingChoiceMade: true)
+        try sessions.insert(session)
+        var seed = SeedSession(session: session, store: store, sessions: sessions)
+        let treeHouse = try seed.keep("The tree house", kind: .event, links: [])
+        let swim = try seed.keep("Learning to swim", kind: .event, links: [])
+        let fair = try seed.keep("The science fair", kind: .event, links: [])
+        let graduation = try seed.keep("Maya's graduation", kind: .event, links: [])
+        let gig = try seed.keep("The first gig", kind: .event, links: [])
+        let apartment = try seed.keep("The first apartment", kind: .event, links: [])
+        try seed.keep("The blue kite", kind: .event, links: [])
+        try store.memories.updateRange(treeHouse, .year(1999, origin: .inferred, evidence: "when I was nine"))
+        try store.memories.updateRange(swim, .stated(year: 2000))
+        try store.memories.updateRange(fair, .stated(year: 2001))
+        try store.memories.updateRange(graduation, .stated(year: 2003))
+        try store.memories.updateRange(gig, .stated(year: 2006))
+        try store.memories.updateRange(apartment, .stated(between: 2008, and: 2010))
+        let maple = try store.chapters.insertChapter(title: "Maple Street")
+        try store.chapters.assign(memory: treeHouse, toChapter: maple.id)
+        let untitled = try store.chapters.insertChapter(title: nil)
+        try store.chapters.assign(memory: fair, toChapter: untitled.id)
+    }
 }
 
 /// The error a detached seed step threw, read back on the waiting thread.
