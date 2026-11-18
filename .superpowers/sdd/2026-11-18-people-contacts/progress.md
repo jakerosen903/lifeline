@@ -23,3 +23,4 @@ Spec: docs/specs/2026-11-18-people-contacts.md. Branch claude/people-contacts-16
 
 ## Tasks
 - Task 1 (migration v14, LinkOrigin): done, full kit suite 1031 passing.
+- Task 1: complete (commits cb141a5..4b6c57c, review clean). Parked for Task 3: the raw-SQL copy sites in MemoryRepository (convert ~379, merge ~446, detail→mention ~584, mention→detail ~614) drop origin and person_handle. See R6.
