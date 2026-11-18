@@ -264,6 +264,25 @@ final class PhotoCardUITests: XCTestCase {
     }
 
     @MainActor
+    func testRemovingTheLastMomentClosesTheSheet() {
+        let app = XCUIApplication.launchWithPhotoStory()
+        openFirstStory(app)
+        let row = app.buttons["photoCard.moments"]
+        XCTAssertTrue(app.waitHittable(row, timeout: 5))
+        row.tap()
+        let sheet = app.any("photoCard.momentsSheet")
+        XCTAssertTrue(sheet.waitForExistence(timeout: 5), "the moments sheet is up")
+        for title in ["The drive home", "The beach"] {
+            let remove = app.buttons.matching(identifier: "photoCard.removeFromMemory").matching(NSPredicate(format: "label == %@", "Remove from \(title)")).firstMatch
+            XCTAssertTrue(app.waitHittable(remove, timeout: 5), "Remove from \(title) is in the sheet")
+            remove.tap()
+            XCTAssertTrue(remove.waitForNonExistence(timeout: 5), "\(title) leaves the list")
+        }
+        XCTAssertTrue(sheet.waitForNonExistence(timeout: 5), "with no moment left, the sheet closes")
+        XCTAssertFalse(app.buttons["photoCard.moments"].exists, "and the row has nothing to say")
+    }
+
+    @MainActor
     func testRemoveThePhotoFromThisStory() {
         let app = XCUIApplication.launchWithPhotoStory()
         openFirstStory(app)

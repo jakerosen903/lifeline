@@ -48,6 +48,10 @@ struct PhotoCard: View {
             .accessibilityElement(children: .contain)
             .accessibilityIdentifier("photoCard")
             .sheet(item: $sheet) { route in momentsSheet(route) }
+            // The last "Remove" leaves the moments list empty, with no title: the sheet closes instead of standing blank.
+            .onChange(of: card.memories.isEmpty) { _, isEmpty in
+                if isEmpty, case .moments = sheet { sheet = nil }
+            }
         }
     }
 
