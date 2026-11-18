@@ -2,6 +2,45 @@
 
 One entry per decision. Newest first. Status is Decided, Open, or Superseded.
 
+## 2026-11-18 · S6b: a pinned card with the life strip, a frame and a During line
+
+**Status:** Decided by the builder. The owner can overrule each one. Source: `docs/plans/2026-11-18-timeline-card.md`, ledger `.superpowers/sdd/2026-11-18-timeline-card/rulings.md`.
+
+**Decision.** The Timeline pins a card under its title. The card shows the whole life as a strip, from the birth year to now. Each dated moment is one tick. A frame covers the years of the spine rows on screen and moves as the list scrolls. One "During" line names the chapters whose stated years overlap the frame's years. A tap on the card opens the life map. The card asks for nothing and shows no count of what is missing (PRINCIPLES 9). It shows a chapter's years only when the person stated them (PRINCIPLES 5).
+
+The eight builder's defaults:
+
+1. The "Chapters" item stays in the Timeline's "…" menu. With no dated moment there is no card, and the life map must stay reachable.
+2. The frame keeps its last years when no spine row is on screen (the waiting cards at the top, the shelf at the end). Before any spine row was on screen, the card shows no frame.
+3. A row counts as on screen when half of it is visible. Ruling R3 says how the app measures this.
+4. The visible "During" text is the word "During", the names joined by " · ", then "+N". VoiceOver uses the spec's sentence with at most two names and "and N more".
+5. `LifeStrip` gains a choice of where a mark sits. The entity page keeps the middle of the band. The Timeline card uses the start of the range, as the spec says. The entity page does not change.
+6. When two chapters are equally long, the earlier start comes first, then the name in alphabetical order. A chapter with no stated end counts as running to now.
+7. The card is in the Timeline tab only.
+8. One year on screen reads "On screen: 1999." Two or more years read "On screen: 1998 to 2003."
+
+Rulings made while building:
+
+- R3. A spine row is on screen when at least half of its frame is inside the list's own frame, measured with `onGeometryChange`. `onDisappear` clears it. The plan named two techniques and both were dropped. `onScrollVisibilityChange` reported "visible" and never "not visible" in this list. `onAppear` and `onDisappear` count a row hidden under the pinned card as visible, so the frame never moved. The list's own frame is the area below the card and above the record bar. That is what "on screen" means to the person.
+- R4. The "During" line decides how many names fit with `ViewThatFits(in: .vertical)` against a box one line tall. At accessibility sizes the box is two lines tall. The plan's horizontal form cannot allow a second line, because a horizontal fit measures the width of one line.
+- Hysteresis. A row comes on screen at half visible. It goes off screen only when it is clearly out: less than half minus a slack. The slack is larger than the tallest the "During" line can be. Without it, the card froze the app. The card's height depends on the "During" line. The card's height sets the list's frame. Each row tests itself against the list's frame. A row at the edge, whose years bring a chapter into the "During" line, could turn visible, grow the card, turn not visible, shrink the card, and repeat without end. The rule is one pure function in the kit, `RowVisibility.isOnScreen`, with its own tests.
+- R1, R2, R5 and R6 are process and test rulings. The spine seed is not changed, so no UI test opens a dated story (R1). The docs are written in Task 6, and the controller records the full run and the screenshots after the final review (R2). The test for a pinned card does not compare the card's top with its launch value, because the large title collapses and the card moves up with it. It asserts that the card is hittable, that its top is not lower than at launch, and that the middle of the first hittable spine row is below the card's bottom (R5, R6).
+
+**Differs from the mock-up.** The mock-up `docs/design/TL_SpineStrip.dc.html` draws every tick the same. The card draws a guessed date as a hollow tick, so the shape, and not colour alone, shows that the date is a guess. The look is otherwise the mock-up's: an olive rounded frame, names in olive semibold, "+N" at the trailing edge.
+
+**Why.** The card gives the person one look at the whole life and where the list is in it. A date overlap puts a chapter in the "During" line only. It never tags a moment (PRINCIPLES 1).
+
+**Consequences.**
+
+- No migration and no change under `Store/`. The card only reads.
+- `SpineLayout.Stop` gains `yearSpan`, so the app does not repeat the rule for the years of a row.
+
+**Known costs.** These stay after the final review.
+
+- The slack also applies at the bottom edge. The frame lags by one short row at each edge of the list.
+- At the largest text size, the period label above an opened story is cut by a few points at the card's edge.
+- No UI test opens a story to move the frame, because no seed has a dated story (R1). The kit tests guard the rule. The device check covers the case.
+
 ## 2026-11-18 · S6c: chapters are names with stated years
 
 **Status:** Decided by the builder. The owner can overrule each one. Source: `docs/plans/2026-11-18-timeline-chapters.md`, ledger `.superpowers/sdd/2026-11-18-timeline-chapters/rulings.md`.
