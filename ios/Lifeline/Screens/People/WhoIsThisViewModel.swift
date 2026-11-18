@@ -25,6 +25,9 @@ final class WhoIsThisViewModel {
 
     private let source: Source
     private let actions: PersonLinkActions
+    /// The origins of the tapped link's group (itself included), read when the sheet opens. "Done" with the
+    /// same person settles when any link in the chosen scope is still open (M6); the write re-reads them.
+    private let groupOrigins: [LinkOrigin?]
 
     init(source: Source, deps: Dependencies) {
         self.source = source
@@ -40,12 +43,15 @@ final class WhoIsThisViewModel {
             quote = (try? store.memories.fetch(link.memoryID))?.summaryQuote
             current = link.person.id
             isGuess = link.isGuess
-            others = max(0, ((try? store.personLinks.group(of: link))?.count ?? 1) - 1)
+            let group = (try? store.personLinks.group(of: link)) ?? [link]
+            groupOrigins = group.map(\.origin)
+            others = max(0, group.count - 1)
         case .waiting(let candidate, let chip):
             saidName = chip.saidName
             quote = CandidatePayload.memory(candidate)?.quote
             current = chip.person
             isGuess = chip.origin == .assumed
+            groupOrigins = []
             others = 0
         }
         let people = ((try? store.people.people()) ?? []).map { person in
@@ -74,13 +80,14 @@ final class WhoIsThisViewModel {
         do {
             switch source {
             case .link(let link):
-                if selected == .person(link.person.id) {
-                    // Settling a link that is already the owner's own word writes nothing.
-                    guard link.origin == .assumed || link.origin == .new else { return .unchanged }
+                let scope = whole ? groupOrigins : [link.origin]
+                switch WhoIsThisDone.decide(keepsPerson: selected == .person(link.person.id), scope: scope) {
+                case .nothing: return .unchanged
+                case .settle:
                     try actions.settle(link, wholeGroup: whole)
                     return .settled
+                case .move: return .moved(try actions.move(link, to: selected, wholeGroup: whole))
                 }
-                return .moved(try actions.move(link, to: selected, wholeGroup: whole))
             case .waiting(let candidate, let chip):
                 try actions.choose(selected, for: chip.saidName, on: candidate.id)
                 return .stored
