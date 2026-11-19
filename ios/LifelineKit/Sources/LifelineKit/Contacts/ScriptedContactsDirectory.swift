@@ -11,6 +11,8 @@ public final class ScriptedContactsDirectory: ContactsDirectory {
         var access: ContactsAccess
         var accessAfterRequest: ContactsAccess
         var failsOnRead = false
+        var merged: [String: String] = [:]
+        var allReads = 0
     }
     private let box: Mutex<State>
 
@@ -42,6 +44,15 @@ public final class ScriptedContactsDirectory: ContactsDirectory {
         set { box.withLock { $0.failsOnRead = newValue } }
     }
 
+    /// A card the system merged into another: the old identifier → the identifier of the card that holds it now.
+    /// `cards(identifiers:)` and `picture(identifier:)` answer an old identifier with that card, as the system does.
+    public var merged: [String: String] {
+        get { box.withLock { $0.merged } }
+        set { box.withLock { $0.merged = newValue } }
+    }
+    /// How many times `all()` has been called.
+    public var allReads: Int { box.withLock { $0.allReads } }
+
     public func access() -> ContactsAccess { currentAccess }
 
     public func requestAccess() async -> ContactsAccess {
@@ -52,7 +63,10 @@ public final class ScriptedContactsDirectory: ContactsDirectory {
     }
 
     public func all() async throws -> [ContactCard] {
-        let snapshot = box.withLock { $0 }
+        let snapshot = box.withLock { state in
+            state.allReads += 1
+            return state
+        }
         if snapshot.failsOnRead { throw ReadFailure() }
         switch snapshot.access {
         case .full, .limited: return snapshot.cards
@@ -60,16 +74,27 @@ public final class ScriptedContactsDirectory: ContactsDirectory {
         }
     }
 
+    /// Under `notAsked` or `denied` the system answers nothing, so neither does this.
     public func cards(identifiers: [String]) async throws -> [ContactCard] {
         let snapshot = box.withLock { $0 }
         if snapshot.failsOnRead { throw ReadFailure() }
-        let wanted = Set(identifiers)
-        return snapshot.cards.filter { wanted.contains($0.identifier) }
+        guard snapshot.access.canRead else { return [] }
+        var found: [ContactCard] = []
+        for identifier in identifiers {
+            let current = snapshot.merged[identifier] ?? identifier
+            if let card = snapshot.cards.first(where: { $0.identifier == current }), !found.contains(card) { found.append(card) }
+        }
+        return found
     }
 
     public func picture(identifier: String) async throws -> Data? {
         let snapshot = box.withLock { $0 }
         if snapshot.failsOnRead { throw ReadFailure() }
-        return snapshot.pictures[identifier]
+        guard snapshot.access.canRead else { return nil }
+        return snapshot.pictures[snapshot.merged[identifier] ?? identifier]
     }
+}
+
+private extension ContactsAccess {
+    var canRead: Bool { self == .full || self == .limited }
 }

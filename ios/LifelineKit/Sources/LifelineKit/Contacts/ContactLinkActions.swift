@@ -10,11 +10,12 @@ public struct ContactLinkActions: Sendable {
         case notFound
     }
 
-    private let store: ExtractionStore
-    private let photos: PhotoLibrary
-    private let directory: any ContactsDirectory
-    /// Where `copyPicture` makes its fresh folder for the picture's bytes. A test passes its own.
-    private let scratch: URL
+    // Internal, not private: the check (`ContactCheck.swift`) is an extension in its own file.
+    let store: ExtractionStore
+    let photos: PhotoLibrary
+    let directory: any ContactsDirectory
+    /// Where a picture's bytes are written, each in a fresh folder, before the store reads them. A test passes its own.
+    let scratch: URL
     /// Runs in the copy's transaction after the photo row and link, before the record. A test throws here.
     private let beforeRecord: @Sendable () throws -> Void
 
@@ -57,11 +58,8 @@ public struct ContactLinkActions: Sendable {
     public func copyPicture(for id: PersonID) async throws {
         guard let person = try store.people.person(id: id), let identifier = person.contactIdentifier, person.contactPhotoID == nil,
               let data = try await directory.picture(identifier: identifier), !data.isEmpty else { return }
-        let folder = scratch.appending(path: "contact-picture-\(UUID().uuidString)", directoryHint: .isDirectory)
-        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
-        defer { try? FileManager.default.removeItem(at: folder) }
-        let file = folder.appending(path: "picture")
-        try data.write(to: file)
+        let file = try pictureFile(data)
+        defer { try? FileManager.default.removeItem(at: file.deletingLastPathComponent()) }
         // The row, its link and `contact_photo_id` are one transaction, so a kill never leaves the copy looking like
         // the owner's photo. A contact that changed during the copy rolls the photo back: the app keeps only what it records.
         let beforeRecord = self.beforeRecord
@@ -73,5 +71,17 @@ public struct ContactLinkActions: Sendable {
         } catch is PeopleRepository.ContactChangedDuringCopy {
             return
         }
+    }
+
+    /// Writes a picture's bytes to a fresh folder under `scratch`, for the store to read. The caller removes the folder.
+    func pictureFile(_ data: Data) throws -> URL {
+        let folder = scratch.appending(path: "contact-picture-\(UUID().uuidString)", directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        let file = folder.appending(path: "picture")
+        do { try data.write(to: file) } catch {
+            try? FileManager.default.removeItem(at: folder)
+            throw error
+        }
+        return file
     }
 }

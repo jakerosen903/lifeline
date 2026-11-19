@@ -44,6 +44,8 @@ public struct Person: Codable, Sendable, Equatable, Identifiable {
 
     /// `contact_state` of a person linked to a contact that resolves.
     public static let contactLinked = "linked"
+    /// `contact_state` of a person whose identifier no longer resolves and whom no single contact's name fits.
+    public static let contactMissing = "missing"
 
     /// Made by Keep from a contact (rules 3 and 5), and still the app's guess: the owner's own action
     /// clears `createdByGuess` (PB3).

@@ -100,16 +100,27 @@ public struct PhotoRepository: Sendable {
     }
 
     public func setCover(_ photo: PhotoID, of subject: PhotoSubject) throws {
-        try db.writer.write { db in
-            let (column, value) = subject.key
-            let linked = try Int.fetchOne(db, sql: "select count(*) from photo_link where \(column) = ? and photo_id = ?",
-                                          arguments: [value, photo.rawValue]) ?? 0
-            guard linked == 1 else { return }
-            // The unique index allows one cover, so the old one steps down first.
-            try db.execute(sql: "update photo_link set role = 'attached' where \(column) = ? and role = 'cover' and photo_id <> ?",
-                           arguments: [value, photo.rawValue])
-            try db.execute(sql: "update photo_link set role = 'cover' where \(column) = ? and photo_id = ?", arguments: [value, photo.rawValue])
-        }
+        try db.writer.write { try Self.setCover(photo, of: subject, in: $0) }
+    }
+
+    /// `setCover` inside a caller's transaction. A photo the subject does not hold: nothing changes.
+    static func setCover(_ photo: PhotoID, of subject: PhotoSubject, in db: Database) throws {
+        let (column, value) = subject.key
+        let linked = try Int.fetchOne(db, sql: "select count(*) from photo_link where \(column) = ? and photo_id = ?",
+                                      arguments: [value, photo.rawValue]) ?? 0
+        guard linked == 1 else { return }
+        // The unique index allows one cover, so the old one steps down first.
+        try db.execute(sql: "update photo_link set role = 'attached' where \(column) = ? and role = 'cover' and photo_id <> ?",
+                       arguments: [value, photo.rawValue])
+        try db.execute(sql: "update photo_link set role = 'cover' where \(column) = ? and photo_id = ?", arguments: [value, photo.rawValue])
+    }
+
+    /// The subject's first photo in the order `photos(of:)` gives: the cover, then the order added.
+    static func firstPhoto(of subject: PhotoSubject, in db: Database) throws -> PhotoID? {
+        let (column, value) = subject.key
+        return try String.fetchOne(db, sql: """
+            select photo_id from photo_link where \(column) = ? order by role = 'cover' desc, sort_order, rowid limit 1
+            """, arguments: [value]).map(PhotoID.init(rawValue:))
     }
 
     /// One transaction. Removes the link; a removed cover passes to the oldest-added photo left. Returns
