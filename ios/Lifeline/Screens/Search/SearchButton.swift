@@ -30,7 +30,7 @@ private struct SearchButtonModifier: ViewModifier {
     }
 }
 
-/// The bar's own style draws a 36-point glass button; this keeps the 44-point label, the app's olive and a pressed look.
+/// Draws the label in the app's olive at its own 44-point frame, and dims it while pressed.
 private struct ToolbarGlyphStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label.foregroundStyle(Theme.oliveText).opacity(configuration.isPressed ? 0.4 : 1)

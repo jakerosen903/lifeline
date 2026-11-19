@@ -13,9 +13,9 @@ public enum Search {
         )
     }
 
-    /// The folded query words that start no word of the title: the words the text under a heading must show.
-    static func unshown(_ queryWords: [String], by titleWords: [String]) -> [String] {
-        queryWords.filter { word in !titleWords.contains { $0.hasPrefix(word) } }
+    /// The folded query words that start no word of the heading: the words the text under a heading must show.
+    static func unshown(_ queryWords: [String], by headingWords: [String]) -> [String] {
+        queryWords.filter { word in !headingWords.contains { $0.hasPrefix(word) } }
     }
 }
 
@@ -83,14 +83,14 @@ private extension Search {
     }
 
     /// The text that shows why the memory was found: the quote when it holds every query word, else the first
-    /// telling that does, else the first telling, then the quote, that holds a query word the title does not show.
+    /// telling that does, else the first telling, then the quote, that holds a query word the heading does not show.
     /// A text hit always has such a word in some text, so the nil is not reached for a hit.
     static func matchedText(_ entry: SearchIndex.MemoryEntry, _ query: WordQuery) -> String? {
         let texts = entry.texts, words = entry.textWords
         if query.isCoveredBy(words[0]) { return texts[0] }
         let tellings = Array(texts.indices.dropFirst())
         if let i = tellings.first(where: { query.isCoveredBy(words[$0]) }) { return texts[i] }
-        let unshown = Search.unshown(query.words, by: entry.titleWords)
+        let unshown = Search.unshown(query.words, by: entry.headingWords)
         let touchesUnshown: (Int) -> Bool = { i in unshown.contains { word in words[i].contains { $0.hasPrefix(word) } } }
         if let i = tellings.first(where: touchesUnshown) { return texts[i] }
         return touchesUnshown(0) ? texts[0] : nil

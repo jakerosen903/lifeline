@@ -32,11 +32,20 @@ public struct SearchIndex: Sendable, Equatable {
         public let titleWords: [String]
         /// `SearchFold.words` of each of `texts`, in the same order.
         public let textWords: [[String]]
+        /// The words the row's heading shows: the title for a moment, the cleaned quote for the rest
+        /// (`MemoryLabel.heading`). The line under the heading must show a query word these lack.
+        public let headingWords: [String]
 
         public init(memory: Memory, tellings: [String] = [], toldAt: Date? = nil) {
             self.memory = memory; self.tellings = tellings; self.toldAt = toldAt
             titleWords = memory.isMoment ? SearchFold.words(memory.title) : []
             textWords = ([memory.summaryQuote] + tellings).map(SearchFold.words)
+            headingWords = Self.headingWords(of: memory)
+        }
+
+        /// As `headingWords`. A pure read of the memory, shared with `SearchSnippet.line(for:query:)`.
+        static func headingWords(of memory: Memory) -> [String] {
+            memory.isMoment ? SearchFold.words(memory.title) : SearchFold.words(ReadableQuote.text(memory.summaryQuote))
         }
 
         /// The person's words that search reads: the quote first, then each telling.

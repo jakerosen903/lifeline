@@ -246,14 +246,36 @@ struct SearchTests {
         let found = try #require(Search.run("dad", in: index))
         #expect(found.people.count == 1 && found.things.count == 1, "Dad and Dad's Volvo, each in its group")
     }
-    @Test func everyMomentFoundByItsWordsHasALineOfThem() {
+    @Test func everyMemoryFoundByItsWordsHasALineOfThem() {
         // A fact whose quote holds every word shows none: its heading is the quote (decision 13).
-        let queries = ["harmonica", "harmonica glove", "drive harmonica", "long harmonica", "tune", "float", "father", "rope", "cake", "night", "wind", "learned float"]
+        let withAFact = SearchIndex(memories: index.memories + [Self.backRow])
+        let queries = ["harmonica", "harmonica glove", "drive harmonica", "long harmonica", "tune", "float", "father", "rope", "cake", "night", "wind",
+                       "learned float", "sit classroom", "classroom", "back chalk"]
         for query in queries {
-            for hit in Search.run(query, in: index)?.memories ?? [] where hit.match == .text && hit.memory.isMoment {
-                #expect(SearchSnippet.line(for: hit, query: query) != nil, "\(query): \(hit.memory.title)")
+            for hit in Search.run(query, in: withAFact)?.memories ?? [] where hit.match == .text && !Self.headingHoldsEveryWord(hit, query) {
+                let line = SearchSnippet.line(for: hit, query: query)
+                #expect(line != nil, "\(query): \(hit.heading)")
+                let unshown = Search.unshown(SearchFold.queryWords(query), by: SearchFold.words(hit.heading))
+                #expect(line?.parts.contains { part in part.isMatch && SearchFold.words(part.text).contains { w in unshown.contains { w.hasPrefix($0) } } } == true,
+                        "\(query): the line shows a word the heading does not")
             }
         }
+    }
+
+    /// A fact whose heading, the cleaned quote, holds "sit" but not "classroom".
+    private static let backRow = memory("Sat at the back", kind: .fact, quote: "I would sit at the back",
+                                        tellings: ["we had to sit in rows", "the classroom smelled of chalk"])
+
+    private static func headingHoldsEveryWord(_ hit: SearchResults.MemoryHit, _ query: String) -> Bool {
+        let headingWords = SearchFold.words(hit.heading)
+        return SearchFold.queryWords(query).allSatisfy { word in headingWords.contains { $0.hasPrefix(word) } }
+    }
+
+    @Test func aFactsLineShowsTheWordItsQuoteDoesNot() throws {
+        let hit = try #require(Search.run("sit classroom", in: SearchIndex(memories: [Self.backRow]))?.memories.first)
+        #expect(hit.matchedText == "the classroom smelled of chalk", "the quote already shows \"sit\"")
+        let line = try #require(SearchSnippet.line(for: hit, query: "sit classroom"))
+        #expect(line.parts.filter(\.isMatch).map(\.text) == ["classroom"])
     }
     @Test func anIdeaIsFoundInItsGroup() {
         #expect(Search.run("saying yes", in: index)?.ideas.map(\.summary.entity.title) == ["Saying yes to things"])

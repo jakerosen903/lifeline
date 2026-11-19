@@ -57,7 +57,7 @@ struct SearchScreen: View {
         }
         .onDisappear { isVisible = false; isClosing = false }
         // "Close" ends the search, and the search is the whole screen: one tap leads back to the tab (ruling R5).
-        .onChange(of: isActive) { wasActive, active in isClosing = wasActive && !active }
+        .onChange(of: isActive) { wasActive, active in isClosing = isVisible && wasActive && !active }
         // A pop asked for while the bar redraws is dropped (iOS 26.3 simulator, after Return: 50 ms too soon, 500 ms works).
         // SwiftUI cancels this wait when the field is tapped again (isClosing changes) or the screen leaves.
         .task(id: isClosing) {

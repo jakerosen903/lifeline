@@ -55,24 +55,16 @@ public struct SearchSnippet: Sendable, Equatable {
     }
 
     /// Nil for a title match, and for a fact, feeling or goal whose quote holds every query word (decision 13).
-    /// It centres on a query word the heading's title does not show, so the line shows why the memory was found.
+    /// It centres on a query word the heading does not show, so the line shows why the memory was found.
     public static func line(for hit: SearchResults.MemoryHit, query: String) -> SearchSnippet? {
         guard hit.match == .text, let matchedText = hit.matchedText else { return nil }
-        if !hit.memory.isMoment, quoteHoldsEveryWord(of: hit.memory, query: query) { return nil }
-        // As in `Search`: a fact's, a feeling's or a goal's stored title is not searched, so it shows no query word.
-        let titleWords = hit.memory.isMoment ? SearchFold.words(hit.memory.title) : []
-        return around(matchedText, query: query, centredOn: Search.unshown(SearchFold.queryWords(query), by: titleWords))
+        // As in `Search`: the heading is the title for a moment and the cleaned quote for the rest.
+        let unshown = Search.unshown(SearchFold.queryWords(query), by: SearchIndex.MemoryEntry.headingWords(of: hit.memory))
+        if !hit.memory.isMoment, unshown.isEmpty { return nil }
+        return around(matchedText, query: query, centredOn: unshown)
     }
 
     // MARK: - Private
-
-    /// The heading shows the cleaned quote, so that is the text that must hold the words.
-    private static func quoteHoldsEveryWord(of memory: Memory, query: String) -> Bool {
-        let queryWords = SearchFold.queryWords(query)
-        guard !queryWords.isEmpty else { return false }
-        let quoteWords = SearchFold.words(ReadableQuote.text(memory.summaryQuote))
-        return queryWords.allSatisfy { word in quoteWords.contains { $0.hasPrefix(word) } }
-    }
 
     private struct Token {
         /// The token as stored, from one white space to the next.
