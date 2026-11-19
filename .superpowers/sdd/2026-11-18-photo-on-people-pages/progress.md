@@ -51,3 +51,4 @@ Pre-flight: Task 6 needs a column that Task 1 owns: Task 1 text now carries it (
 - Task 7: minor (deferred): the failure line is lost when the owner leaves the page during a pick (the adds still finish). Known small item.
 - Task 7: minor (deferred): device check has no line for the app going to the background during a pick.
 - Task 7: minor (deferred): with no shelf, failures use the one-photo text; no UI test for "{k} photos could not be added."; `-uiTesting-pickPhotos` splits on a comma.
+- Task 6: built at 7880143 (base 3530a38). DONE_WITH_CONCERNS: the card is about 90 pt taller, so three existing UI tests gained a scroll step or a weaker precondition (listed in the report); `showsNoOtherPageSentence` is a function `(keeping:)`; a page that holds the photo with no kept memory naming it still leaves the list when emptied; the Undo notice after a name move can sit below the screen. Sent to review as built.
