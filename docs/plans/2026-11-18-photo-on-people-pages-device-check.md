@@ -1,6 +1,6 @@
 # A photo story's photo on its people's pages: device check
 
-Run this on the iPhone with the build of parts 1 and 2. Tick each line. Say what looks wrong. Each line says what to do and what must be true. Part 3 (“Done” and “Edit”) gets its own lines when it is built. Part 4 (several photos at one time) has its lines under “Several photos at one time”.
+Run this on the iPhone with the build of parts 1 and 2. Tick each line. Say what looks wrong. Each line says what to do and what must be true. Part 3 has its lines under “Done and Edit”. Part 4 (several photos at one time) has its lines under “Several photos at one time”.
 
 ## Part 1: a kept moment puts the photo on its people's pages
 
@@ -33,6 +33,18 @@ Run this on the iPhone with the build of parts 1 and 2. Tick each line. Say what
 18. [ ] Pick ten photos. While the line reads “Adding photo 4 of 10…”, kill the app. Open the app and the page. The photos added before the kill must be there, in order. The others must not be there. Add them again.
 19. [ ] On a memory page and on You, pick two photos. Both must be added, in order.
 20. [ ] Start “Tell a story about a photo” and open “All photos”. The picker must take one photo only.
+
+## Done and Edit
+
+21. [ ] Open a photo story whose card shows a filled chip and an empty chip. Tap “Done” under the chips. Only the filled chips must show. The empty chips and their group heading must be gone. The line under “Also show this photo on” must be gone. The button must read “Edit”.
+22. [ ] Tap “Edit”. Every chip must show again, filled or empty, with the line. The button must read “Done”.
+23. [ ] Tap “Done”. Close the app from the app switcher. Open the app and the same story. The part must still be done.
+24. [ ] Tap “Done” on the landing. Leave the landing. Open the session's page of the same story. The part must be done there too.
+25. [ ] With the part done, tap a filled chip. The chip must go to an outline and stay on screen, under your finger. Tap it again. It must fill. Tap it a third time. Tap “Edit”, then “Done”. The empty chip must be gone.
+26. [ ] Take the photo off every page with the chips, then tap “Done”. The part must read “This photo is on no other page.” and show “Edit”.
+27. [ ] With the part open, take the last chip the story chose off. The line changes to “Tap to add. Tap again to take it off.” No chip must move.
+28. [ ] Turn on VoiceOver. “Done” and “Edit” must each read as a button. After a tap on “Done”, swipe to “Edit” and tap it. Each chip must read as before: “added by this story”, “added” or “not added”.
+29. [ ] Set the largest text size (Accessibility, Larger Text, the largest step). Open the card. “Done” and “Edit” must each be reachable by scrolling, and must not be cut off.
 
 ## Known small items
 

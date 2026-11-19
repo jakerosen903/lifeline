@@ -1,7 +1,7 @@
 import XCTest
 
-/// Photo story: the photo card on the landing and on a session's page, in one layout: the photo with its moments row (a sheet
-/// lists the memories that hold it), the pages as chips in groups, one date block with Undo, and removals.
+/// Photo story: the photo card on the landing and on a session's page: the photo with its moments row (a sheet lists the
+/// memories that hold it), the pages as chips in groups with Done and Edit, one date block with Undo, and removals.
 /// The seed `-uiTesting-seedPhotoStory` holds two photo sessions: the first (two moments) has "The beach" (unplaced; Maya, Dad)
 /// and "The drive home" (stated 2012; Dad), both holding a photo dated 14 June 2012. They are kept through the real Keep write,
 /// so the photo is on Maya's and Dad's pages by a story link (decision 13).
@@ -152,6 +152,8 @@ final class PhotoCardUITests: XCTestCase {
         XCTAssertTrue(app.scrollIntoView(review), "Review these moments is still on the landing")
         review.tap()
         let next = app.staticTexts["card.title"].firstMatch
+        // The card with its chips and "Done" is taller than the screen's top: the waiting card is below it, out of the lazy list.
+        _ = app.reveal(next)
         XCTAssertTrue(next.waitForExistence(timeout: 20), "the second card is waiting")
         let keptSecond = next.label
         app.buttons["card.add"].firstMatch.tap()
@@ -473,6 +475,11 @@ final class PhotoCardUITests: XCTestCase {
         // second move is read after. A card that misses either refresh shows the wrong count.
         moveMayaToSomeoneNew(app, on: kept)
         let undo = app.buttons["notice.undo"]
+        // The taller card ("Done") leaves the notice below the screen. The notice lasts six seconds, so one quick drag with
+        // no momentum brings it up at once, rather than a swipe that waits for the list to settle.
+        let from = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.8))
+        from.press(forDuration: 0.05, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.3)),
+                   withVelocity: .fast, thenHoldForDuration: 0.1)
         XCTAssertTrue(app.waitHittable(undo, timeout: 5), "the move offers Undo")
         undo.tap()
         XCTAssertTrue(undo.waitForNonExistence(timeout: 5), "the move is undone")
@@ -496,6 +503,144 @@ final class PhotoCardUITests: XCTestCase {
         for _ in 0..<8 where !(done.exists && done.isHittable) { app.any("who.sheet").swipeUp() }
         done.tap()
         XCTAssertTrue(app.any("who.sheet").waitForNonExistence(timeout: 5), "Done closes the sheet")
+    }
+
+    // MARK: - Done and Edit
+
+    /// "Done" under the chips, revealed and tapped; waits for "Edit".
+    @MainActor
+    private func tapDone(_ app: XCUIApplication) {
+        let done = app.buttons["photoCard.pagesDone"]
+        XCTAssertTrue(app.scrollIntoView(done), "Done is under the chips")
+        XCTAssertEqual(done.label, "Done")
+        done.tap()
+        XCTAssertTrue(app.buttons["photoCard.pagesEdit"].waitForExistence(timeout: 5), "Done turns into Edit")
+    }
+
+    @MainActor
+    private func tapEdit(_ app: XCUIApplication) {
+        let edit = app.buttons["photoCard.pagesEdit"]
+        XCTAssertTrue(app.scrollIntoView(edit), "Edit is under the chips")
+        XCTAssertEqual(edit.label, "Edit")
+        edit.tap()
+        XCTAssertTrue(app.buttons["photoCard.pagesDone"].waitForExistence(timeout: 5), "Edit turns into Done")
+    }
+
+    @MainActor
+    func testDoneHidesTheEmptyChips() {
+        let app = XCUIApplication.launchWithPhotoStory(["-uiTesting-photoStoryGuess"])
+        openFirstStory(app)
+        XCTAssertEqual(chip("Alder Street", in: app).value as? String, "not added")
+        tapDone(app)
+        XCTAssertTrue(chip("Alder Street", in: app).waitForNonExistence(timeout: 5), "the empty place chip is hidden")
+        XCTAssertTrue(chip("Maya", in: app).exists, "Maya's filled chip stays")
+        XCTAssertTrue(chip("Dad", in: app).exists, "Dad's filled chip stays")
+        XCTAssertEqual(labels("photoCard.group", in: app), ["People"], "a group with no filled chip goes")
+        XCTAssertTrue(app.buttons["photoCard.pagesEdit"].exists, "Edit is there")
+        XCTAssertFalse(app.buttons["photoCard.pagesDone"].exists, "Done is not")
+        XCTAssertFalse(app.staticTexts["photoCard.pagesLine"].exists, "the line is gone")
+        XCTAssertFalse(app.staticTexts["photoCard.noOtherPage"].exists, "a page is chosen, so no sentence")
+    }
+
+    @MainActor
+    func testEditShowsThemAgain() {
+        let app = XCUIApplication.launchWithPhotoStory(["-uiTesting-photoStoryGuess"])
+        openFirstStory(app)
+        tapDone(app)
+        XCTAssertTrue(chip("Alder Street", in: app).waitForNonExistence(timeout: 5))
+        tapEdit(app)
+        XCTAssertTrue(chip("Alder Street", in: app).waitForExistence(timeout: 5), "the empty chip is back")
+        XCTAssertEqual(app.buttons.matching(identifier: "photoCard.page").allElementsBoundByIndex.map(\.label), ["Dad", "Maya", "Alder Street"])
+        XCTAssertEqual(chip("Alder Street", in: app).value as? String, "not added", "Edit changes no page")
+        XCTAssertEqual(app.staticTexts["photoCard.pagesLine"].label, Self.storyLine, "the line is back")
+    }
+
+    /// Done on the landing, then the session's page: the state is stored for the story, not for the screen.
+    @MainActor
+    func testDoneIsRememberedOnTheSessionsPage() {
+        let app = XCUIApplication.launchWithPhotoStory(opening: "first", ["-uiTesting-photoStoryGuess"])
+        XCTAssertTrue(app.any("photoCard").waitForExistence(timeout: 10))
+        tapDone(app)
+        XCTAssertTrue(chip("Alder Street", in: app).waitForNonExistence(timeout: 5))
+        let leave = app.buttons["landing.done"]
+        XCTAssertTrue(app.scrollIntoView(leave), "Done for now is on the landing")
+        leave.tap()
+        XCTAssertTrue(app.waitHittable(app.buttons["home.start"], timeout: 10), "the landing is closed")
+        openFirstStory(app)
+        XCTAssertTrue(app.buttons["photoCard.pagesEdit"].waitForExistence(timeout: 5), "the session's page shows the part done")
+        XCTAssertFalse(chip("Alder Street", in: app).exists, "with the empty chip hidden")
+        XCTAssertTrue(chip("Maya", in: app).exists)
+    }
+
+    @MainActor
+    func testAChipEmptiedWhileDoneStaysUntilTheNextDone() {
+        let app = XCUIApplication.launchWithPhotoStory()
+        openFirstStory(app)
+        tapDone(app)
+        let maya = chip("Maya", in: app)
+        XCTAssertTrue(app.waitHittable(maya, timeout: 5))
+        maya.tap()
+        XCTAssertTrue(waitValue(maya, "not added"), "the tap takes the photo off Maya's page")
+        XCTAssertTrue(maya.exists, "the chip stays under the finger")
+        maya.tap()
+        XCTAssertTrue(waitValue(maya, "added"), "a second tap puts it back")
+        maya.tap()
+        XCTAssertTrue(waitValue(maya, "not added"))
+        tapEdit(app)
+        tapDone(app)
+        XCTAssertTrue(maya.waitForNonExistence(timeout: 5), "the next Done hides the empty chip")
+        XCTAssertTrue(chip("Dad", in: app).exists, "Dad's filled chip stays")
+    }
+
+    @MainActor
+    func testDoneWithNothingChosenSaysSo() {
+        let app = XCUIApplication.launchWithPhotoStory()
+        openFirstStory(app)
+        for name in ["Maya", "Dad"] {
+            let person = chip(name, in: app)
+            XCTAssertTrue(app.waitHittable(person, timeout: 5))
+            person.tap()
+            XCTAssertTrue(waitValue(person, "not added"))
+        }
+        tapDone(app)
+        let sentence = app.staticTexts["photoCard.noOtherPage"]
+        XCTAssertTrue(sentence.waitForExistence(timeout: 5), "the part says the photo is on no other page")
+        XCTAssertEqual(sentence.label, "This photo is on no other page.")
+        XCTAssertEqual(app.buttons.matching(identifier: "photoCard.page").count, 0, "no chip")
+        XCTAssertTrue(app.buttons["photoCard.pagesEdit"].exists, "Edit is there")
+        XCTAssertTrue(app.staticTexts["Also show this photo on"].exists, "the heading stays")
+        tapEdit(app)
+        XCTAssertFalse(sentence.exists, "open shows the chips instead")
+        XCTAssertEqual(app.buttons.matching(identifier: "photoCard.page").count, 2)
+    }
+
+    /// Task 5's open item: the line goes from two lines to one when the last story chip is taken off. The open part keeps
+    /// the taller line's height, so the chips do not shift under the finger.
+    @MainActor
+    func testAChipDoesNotMoveWhenTheLastStoryChipIsTakenOff() {
+        let app = XCUIApplication.launchWithPhotoStory()
+        openFirstStory(app)
+        let maya = chip("Maya", in: app), dad = chip("Dad", in: app)
+        XCTAssertTrue(app.waitHittable(maya, timeout: 5))
+        maya.tap()
+        XCTAssertTrue(waitValue(maya, "not added"))
+        let line = app.staticTexts["photoCard.pagesLine"]
+        XCTAssertEqual(line.label, Self.storyLine, "Dad is still the story's")
+        let before = [dad.frame, maya.frame]
+        let doneTop = app.buttons["photoCard.pagesDone"].frame.minY
+        dad.tap()
+        XCTAssertTrue(line.wait(for: \.label, toEqual: Self.tapLine, timeout: 5), "no story chip is left")
+        XCTAssertEqual([dad.frame, maya.frame], before, "the chips do not move")
+        XCTAssertEqual(app.buttons["photoCard.pagesDone"].frame.minY, doneTop, "nor does Done")
+    }
+
+    @MainActor
+    func testDoneAndEditHoldAtTheLargestText() {
+        let app = XCUIApplication.launchWithPhotoStory(Self.largestText)
+        openFirstStory(app)
+        assertControlsReachable(app, ids: ["photoCard.pagesDone"])
+        tapDone(app)
+        assertControlsReachable(app, ids: ["photoCard.pagesEdit", "photoCard.page"])
     }
 
     // MARK: - The date
@@ -571,7 +716,8 @@ final class PhotoCardUITests: XCTestCase {
         dad.tap()
         XCTAssertTrue(waitValue(dad, "not added"), "the story's photo is off Dad's page")
         let remove = app.buttons["photoCard.removeFromStory"]
-        XCTAssertTrue(app.waitHittable(remove, timeout: 5), "the whole card is on screen")
+        // With "Done" the card is taller than the screen, so its last control is in the tree, not on screen; frames still compare.
+        XCTAssertTrue(remove.waitForExistence(timeout: 5), "the whole card is in the tree")
         let pages = app.buttons.matching(identifier: "photoCard.page")
         let pageFrames = pages.allElementsBoundByIndex.map(\.frame)
         let date = app.any("photoCard.date").frame

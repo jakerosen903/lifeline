@@ -74,9 +74,9 @@ private func entity(_ title: String, type: EntityType = .person, hidden: Bool = 
     Entity(type: type, title: title, hiddenFromTimeline: hidden, excludedFromAI: excluded)
 }
 private func card(_ photo: Photo = photo(), memories: [Memory], holding: Set<MemoryID>? = nil, linked: [MemoryID: [Entity]] = [:],
-                  pagesWithPhoto: [Entity] = [], owner: EntityID? = nil) -> PhotoStoryCard {
+                  pagesWithPhoto: [Entity] = [], owner: EntityID? = nil, pagesDone: Bool = false) -> PhotoStoryCard {
     PhotoStory.card(photo: photo, sessionMemories: memories, holding: holding ?? Set(memories.map(\.id)), linked: linked,
-                    pagesWithPhoto: pagesWithPhoto, ownerEntity: owner, hasPendingMoments: false, hasOtherHome: false)
+                    pagesWithPhoto: pagesWithPhoto, ownerEntity: owner, hasPendingMoments: false, hasOtherHome: false, pagesDone: pagesDone)
 }
 
 @Test func theCardListsWhatHoldsThePhoto() {
@@ -998,4 +998,96 @@ private func personID(_ entity: EntityID) -> PersonID { PersonID(rawValue: entit
     try f.actions.undo(receipt)
     #expect(try f.page(maya) == [f.subject.id], "the other kept moment still names Maya")
     #expect(try f.page(dad) == [f.subject.id])
+}
+
+// MARK: - Done and Edit (spec part 3)
+
+private func shown(_ card: PhotoStoryCard, keeping kept: Set<EntityID> = []) -> [String] {
+    card.shownPageGroups(keeping: kept).flatMap(\.pages).map(\.title)
+}
+
+@Test func aNewStoryStartsOpen() throws {
+    let f = try StoryFixture()
+    let maya = try f.person("Maya"), dad = try f.person("Dad")
+    _ = try f.keep(try f.pendingCard(people: ["Maya", "Dad"]))
+    _ = try f.store.photos.unlink(f.subject.id, from: .entity(dad))
+    let card = try #require(try f.reader.card(for: f.sessionID))
+    #expect(!card.pagesDone)
+    #expect(card.shownPageGroups(keeping: []) == card.pageGroups, "open shows every chip, filled or empty")
+    #expect(shown(card) == ["Dad", "Maya"])
+    #expect(!card.showsNoOtherPageSentence(keeping: []))
+    #expect(card.shownPagesLine == card.pagesLine, "open shows the line")
+    #expect(pages(card).first { $0.id == maya }?.isChosen == true)
+}
+
+@Test func doneShowsOnlyTheChosenPages() {
+    let m = memory("The picnic"), maya = entity("Maya"), dad = entity("Dad"), beach = entity("The beach", type: .place)
+    let result = card(memories: [m], linked: [m.id: [maya, dad, beach]], pagesWithPhoto: [maya], pagesDone: true)
+    #expect(result.pagesDone)
+    #expect(shown(result) == ["Maya"])
+    #expect(result.shownPageGroups(keeping: []).map(\.type) == [.person], "a group with no chosen page is left out")
+    #expect(!result.showsNoOtherPageSentence(keeping: []))
+    #expect(result.shownPagesLine == nil, "done shows no line")
+}
+
+@Test func doneKeepsAPageTheOwnerJustEmptied() {
+    let m = memory("The picnic"), maya = entity("Maya"), dad = entity("Dad")
+    let result = card(memories: [m], linked: [m.id: [maya, dad]], pagesWithPhoto: [maya], pagesDone: true)
+    #expect(shown(result, keeping: [dad.id]) == ["Dad", "Maya"], "the emptied chip stays, in its place")
+    #expect(result.shownPageGroups(keeping: [dad.id]).flatMap(\.pages).map(\.isChosen) == [false, true], "and shows it is empty")
+    #expect(!result.showsNoOtherPageSentence(keeping: [dad.id]))
+}
+
+@Test func doneWithNoChosenPageShowsTheSentence() {
+    let m = memory("The picnic"), maya = entity("Maya")
+    let done = card(memories: [m], linked: [m.id: [maya]], pagesDone: true)
+    #expect(done.shownPageGroups(keeping: []).isEmpty)
+    #expect(done.showsNoOtherPageSentence(keeping: []))
+    #expect(!done.showsNoOtherPageSentence(keeping: [maya.id]), "a kept chip is still on screen")
+    #expect(!card(memories: [m], linked: [m.id: [maya]]).showsNoOtherPageSentence(keeping: []), "open shows the chips instead")
+    #expect(PhotoStoryCard.noOtherPageSentence == "This photo is on no other page.")
+    #expect(PhotoStoryCard.doneTitle == "Done")
+    #expect(PhotoStoryCard.editTitle == "Edit")
+}
+
+@Test func editShowsEveryPageAgain() throws {
+    let f = try StoryFixture()
+    _ = try f.person("Maya"); let dad = try f.person("Dad")
+    _ = try f.keep(try f.pendingCard(people: ["Maya", "Dad"]))
+    _ = try f.store.photos.unlink(f.subject.id, from: .entity(dad))
+    try f.reader.setPagesDone(true, for: f.sessionID)
+    #expect(shown(try #require(try f.reader.card(for: f.sessionID))) == ["Maya"])
+    try f.reader.setPagesDone(false, for: f.sessionID)
+    let card = try #require(try f.reader.card(for: f.sessionID))
+    #expect(!card.pagesDone)
+    #expect(shown(card) == ["Dad", "Maya"])
+}
+
+@Test func theStateIsStoredForTheStory() throws {
+    let f = try StoryFixture()
+    let (other, _) = try StoreFixtures.session(in: f.store.sessions, segments: ["the beach"])
+    try f.reader.setPagesDone(true, for: f.sessionID)
+    let fresh = PhotoStoryReader(store: ExtractionStore(f.db))
+    #expect(try #require(try fresh.card(for: f.sessionID)).pagesDone)
+    #expect(try f.store.sessions.fetch(f.sessionID)?.photoPagesDone == true)
+    #expect(try f.store.sessions.fetch(other)?.photoPagesDone == false, "another story stays open")
+}
+
+@Test func aPageTheStoryChoosesAfterDoneShows() throws {
+    let f = try StoryFixture()
+    let dad = try f.person("Dad")
+    try f.reader.setPagesDone(true, for: f.sessionID)
+    _ = try f.keep(try f.pendingCard(people: ["Dad"]))
+    let card = try #require(try f.reader.card(for: f.sessionID))
+    #expect(card.pagesDone)
+    #expect(card.shownPageGroups(keeping: []).flatMap(\.pages).map(\.id) == [dad], "its chip is filled, so it shows")
+    #expect(card.shownPageGroups(keeping: []).flatMap(\.pages).map(\.byStory) == [true])
+}
+
+@Test func everyPagesLineIsReserved() {
+    let m = memory("The picnic"), maya = entity("Maya")
+    let byStory = PhotoStory.card(photo: photo(), sessionMemories: [m], holding: [m.id], linked: [m.id: [maya]], pagesWithPhoto: [maya],
+                                  ownerEntity: nil, storyPages: [maya.id], hasPendingMoments: false, hasOtherHome: false)
+    let tap = card(memories: [m], linked: [m.id: [maya]])
+    #expect(Set(PhotoStoryCard.allPagesLines) == [byStory.pagesLine, tap.pagesLine])
 }

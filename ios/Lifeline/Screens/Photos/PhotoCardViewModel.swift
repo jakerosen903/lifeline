@@ -2,7 +2,8 @@ import Foundation
 import LifelineKit
 
 /// The photo card of one photo session: what `PhotoStoryReader` says, and what a person can do with it: take the photo off a
-/// memory, add it to a page or take it off, use its date for some memories and undo that, and let the story go of it.
+/// memory, add it to a page or take it off, close and open the pages part, use its date for some memories and undo that,
+/// and let the story go of it.
 /// It holds no rule. Every action writes through the kit, then reads the card again, so the card always shows the store.
 @MainActor
 @Observable
@@ -28,6 +29,9 @@ final class PhotoCardViewModel {
     private var seen: Set<MemoryID> = []
     /// Pages whose tap is still being written: a second tap on the same chip waits for the first to land.
     private var toggling: Set<EntityID> = []
+    /// Pages the owner emptied while the pages part is done: they stay on screen, empty, so a chip never disappears under the
+    /// finger (plan decision 16). Not stored: "Edit" or "Done" clears it, and leaving the screen drops it with the view model.
+    private(set) var keptPages: Set<EntityID> = []
     /// Called after each action, once the card has read the store again: the screen around the card reads its own rows
     /// again, so a memory opened from them shows the date the card just wrote.
     @ObservationIgnored var onAction: () -> Void = {}
@@ -62,9 +66,25 @@ final class PhotoCardViewModel {
         guard let photo = card?.photo.id, toggling.insert(page.id).inserted else { return }
         defer { toggling.remove(page.id) }
         if page.isChosen {
+            // Kept before the write: the card read after it must already show the empty chip.
+            if card?.pagesDone == true { keptPages.insert(page.id) }
             await perform("Could not take the photo off this page") { try await deps.photos.remove(photo, from: .entity(page.id)) }
         } else {
             run("Could not add the photo to this page") { try reader.addToPage(photo, page.id) }
+        }
+    }
+
+    /// "Done" under the chips: the part shows only the chosen pages, on this screen and on the story's other screen.
+    func donePages() { setPagesDone(true) }
+
+    /// "Edit": the part shows every page again.
+    func editPages() { setPagesDone(false) }
+
+    private func setPagesDone(_ done: Bool) {
+        run(done ? "Could not hide the other pages" : "Could not show every page") {
+            try reader.setPagesDone(done, for: session)
+            // After the write: a failed "Edit" leaves the part done, with its emptied chips still on screen.
+            keptPages = []
         }
     }
 

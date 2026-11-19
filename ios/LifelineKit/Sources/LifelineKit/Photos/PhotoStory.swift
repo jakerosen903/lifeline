@@ -42,11 +42,13 @@ public struct PhotoStoryCard: Sendable, Equatable {
     public var pageGroups: [PageGroup]
     /// Nil when the photo has no date or no moment that holds it can take the date. A fact, a feeling or a goal never takes it.
     public var dateOffer: StoryDateOffer?
+    /// The owner tapped "Done" on the pages part of this story: it shows only the chosen pages. A new story starts open.
+    public var pagesDone: Bool
 
     public init(photo: Photo, hasPendingMoments: Bool, memories: [Memory], hasOtherHome: Bool, pageGroups: [PageGroup] = [],
-                dateOffer: StoryDateOffer? = nil) {
+                dateOffer: StoryDateOffer? = nil, pagesDone: Bool = false) {
         self.photo = photo; self.hasPendingMoments = hasPendingMoments; self.memories = memories; self.hasOtherHome = hasOtherHome
-        self.pageGroups = pageGroups; self.dateOffer = dateOffer
+        self.pageGroups = pageGroups; self.dateOffer = dateOffer; self.pagesDone = pagesDone
     }
 
     /// "This photo goes on each moment you keep." while a moment waits; "On 1 moment from this story"; "On {n} moments from this
@@ -62,10 +64,14 @@ public struct PhotoStoryCard: Sendable, Equatable {
 
     /// The line under "Also show this photo on": it names the story's choice while a page holds the photo through a story link.
     public var pagesLine: String {
-        pageGroups.contains { $0.pages.contains(where: \.byStory) }
-            ? "The people in this story have this photo on their pages. Tap to take it off, or to add it to another page."
-            : "Tap to add. Tap again to take it off."
+        pageGroups.contains { $0.pages.contains(where: \.byStory) } ? Self.storyPagesLine : Self.tapPagesLine
     }
+
+    static let storyPagesLine = "The people in this story have this photo on their pages. Tap to take it off, or to add it to another page."
+    static let tapPagesLine = "Tap to add. Tap again to take it off."
+    /// Every line `pagesLine` can be. The open part reserves the height of the tallest, so a chip does not move under the
+    /// finger when the line changes.
+    public static let allPagesLines = [storyPagesLine, tapPagesLine]
 
     /// False while a moment waits, and with no line.
     public var momentsLineOpens: Bool { !hasPendingMoments && !memories.isEmpty }
@@ -93,9 +99,10 @@ public enum PhotoStory {
     ///   - linked: the entities each memory names, of every type.
     ///   - pagesWithPhoto: the entities that already hold the photo, named by a memory or not.
     ///   - storyPages: the entities whose link to the photo a story made. An id that is not in `pagesWithPhoto` is ignored.
+    ///   - pagesDone: the owner tapped "Done" on the pages part of this story.
     public static func card(photo: Photo, sessionMemories: [Memory], holding: Set<MemoryID>, linked: [MemoryID: [Entity]],
                             pagesWithPhoto: [Entity], ownerEntity: EntityID?, storyPages: Set<EntityID> = [], hasPendingMoments: Bool,
-                            hasOtherHome: Bool) -> PhotoStoryCard {
+                            hasOtherHome: Bool, pagesDone: Bool = false) -> PhotoStoryCard {
         let memories = sessionMemories.filter { holding.contains($0.id) }
         let holders = Set(pagesWithPhoto.map(\.id))
         let named = memories.flatMap { linked[$0.id] ?? [] }
@@ -118,7 +125,7 @@ public enum PhotoStory {
             takers.isEmpty ? nil : PhotoStoryCard.StoryDateOffer(date: day, memories: takers)
         }
         return PhotoStoryCard(photo: photo, hasPendingMoments: hasPendingMoments, memories: memories, hasOtherHome: hasOtherHome,
-                              pageGroups: groups, dateOffer: storyOffer)
+                              pageGroups: groups, dateOffer: storyOffer, pagesDone: pagesDone)
     }
 
     /// The owner first, then by title, then by id.
@@ -126,5 +133,34 @@ public enum PhotoStory {
         if (a.id == owner) != (b.id == owner) { return a.id == owner }
         let byTitle = a.title.localizedCaseInsensitiveCompare(b.title)
         return byTitle == .orderedSame ? a.id.rawValue < b.id.rawValue : byTitle == .orderedAscending
+    }
+}
+
+// MARK: - Done and Edit (spec part 3)
+
+extension PhotoStoryCard {
+    /// The button under the chips while the part is open.
+    public static let doneTitle = "Done"
+    /// The button under the chips while the part is done.
+    public static let editTitle = "Edit"
+    /// Done with no page to show.
+    public static let noOtherPageSentence = "This photo is on no other page."
+
+    /// The line under the heading: `pagesLine` while the part is open, nil while it is done.
+    public var shownPagesLine: String? { pagesDone ? nil : pagesLine }
+
+    /// What the pages part shows. `kept`: pages the owner emptied while the part is done; they stay on screen.
+    /// Open: every group. Done: the chosen pages and the kept ones, in their places; a group left with no page goes.
+    public func shownPageGroups(keeping kept: Set<EntityID>) -> [PageGroup] {
+        guard pagesDone else { return pageGroups }
+        return pageGroups.compactMap { group in
+            let shown = group.pages.filter { $0.isChosen || kept.contains($0.id) }
+            return shown.isEmpty ? nil : PageGroup(type: group.type, pages: shown)
+        }
+    }
+
+    /// Done, and no page is chosen or kept. A function, not a property: the kept pages live in the view model.
+    public func showsNoOtherPageSentence(keeping kept: Set<EntityID>) -> Bool {
+        pagesDone && shownPageGroups(keeping: kept).isEmpty
     }
 }

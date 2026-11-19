@@ -4,7 +4,8 @@ import SwiftUI
 /// The photo card of a photo session, on the landing and on the session's page, in the spec's four parts: the photo with its
 /// caption and the moments row; the pages as chips (`PhotoCardPages`); the date (`PhotoCardDate`); and, on the session's
 /// page, "Remove the photo from this story". A choice changes the state of its control and nothing else, so the card keeps
-/// one layout. An offer has no "No". The view holds no rule; what it draws comes from `PhotoStory.card` and `PhotoDatePart`.
+/// its layout; the one exception is the pages part, which has two layouts, open and done, by the owner's request (spec
+/// part 3). An offer has no "No". The view holds no rule; what it draws comes from `PhotoStory.card` and `PhotoDatePart`.
 /// Nothing here says what the photo shows.
 struct PhotoCard: View {
     let viewModel: PhotoCardViewModel
@@ -32,7 +33,8 @@ struct PhotoCard: View {
             VStack(alignment: .leading, spacing: 16) {
                 photoAndMoments(card)
                 if !card.pageGroups.isEmpty {
-                    PhotoCardPages(groups: card.pageGroups, line: card.pagesLine) { page in Task { await viewModel.toggle(page) } }
+                    PhotoCardPages(card: card, kept: viewModel.keptPages, onToggle: { page in Task { await viewModel.toggle(page) } },
+                                   onDone: { viewModel.donePages() }, onEdit: { viewModel.editPages() })
                 }
                 let part = viewModel.datePart
                 if part != .hidden {
