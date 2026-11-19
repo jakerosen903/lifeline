@@ -65,3 +65,10 @@ Pre-flight: Task 6 needs a column that Task 1 owns: Task 1 text now carries it (
 - Task 7: minor (deferred): `-uiTesting-slowPhotoFile` now has two meanings (slow file, and a 3 s wait in the test pick path).
 - Task 7: minor (deferred): the disabled state has a UI test on the entity page only; Memory and You share `AddPhotoButton`.
 - Task 7: complete (commits 5041ae9..6e050fd, review clean after one fix round; minors deferred above)
+- Task 6: fix round 1/5 (1 addressed, 0 open — a chip that only held the photo disappeared in the done state; commit 68278f9)
+- Task 6: minor (deferred): `testMovingANameOnTheSessionsPageShowsOnTheCard` still races the 6-second Undo notice (about 3 s left after the drag on a loaded machine).
+- Task 6: minor (deferred): a kept chip shows the page's title as it was at the tap until the next Done or Edit.
+- Task 6: complete (commits 3530a38..68278f9, review clean after one fix round; minors deferred above)
+
+## Final review
+- Whole-branch package 00f14c2..HEAD dispatched.
