@@ -24,3 +24,6 @@ The owner said "Yes, build both" (PC-d, then PC-c) on 2026-11-19, without a revi
 - Task 1: complete (the branch `people-contacts-c` exists at cef70ed; no merge of `main` was needed).
 - Task 2: complete (commits 1b31d68..c565e19, review clean). Rulings C3 to C5. Carried to Task 3 by ruling C4: three small rules of the merge (the stayer's stale decline rows, and the role text of a dropped link).
 - Task 2: minor (deferred): the `tableExists` guard for `photo_page_declined` is never false in a test on this base; no full kit run has been clean of the two timing flakes (`CascadeVoiceSessionTests.hungFinalizeDoesNotBlockSegmentCloseOrStop`, `ExtractionQueueTests.drainGivesUpAtItsDeadline`).
+- Task 3: implemented (568dc0f..730f52a). Review: needs fixes, two Important (C4 (b) in one direction only; the legacy `memory_person` rows are not restored by Undo). Fix round 1 dispatched.
+- Task 4: complete (commit 04263f3, review clean, subject to `PeopleGuessUITests` and `PeopleContactsUITests`, which are built and not run). Ruling C6.
+- Task 4: minor (deferred): no test of `PersonMoveUndo.offer` with a stale-throwing closure. Carried to Task 5: the confirm blanks for a frame while the sheet closes; a picker row with no leaving person does nothing.
