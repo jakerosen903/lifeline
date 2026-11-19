@@ -349,11 +349,12 @@ extension UITestSeed {
     /// The scripted phone's contacts, invented. Tests that need more cards add them here.
     /// - "Robyn Okafor" goes by "Robin", so she fits the guessed "Robin" of `-uiTesting-seedGuesses` (a contact row in its sheet).
     /// - "Dara Quinn" is the one contact that fits "Dara" of `-uiTesting-followUps`, so Keep makes her from the contact.
+    ///   She has a picture, so a test sees it copied after Keep (I-2).
     static let contactCards: [ContactCard] = [
         ContactCard(identifier: "ui-contact-vale", fullName: "Robyn Vale", givenName: "Robyn", familyName: "Vale", nickname: "", hasPicture: true),
         ContactCard(identifier: "ui-contact-reyes", fullName: "Tomas Reyes", givenName: "Tomas", familyName: "Reyes", nickname: "", hasPicture: false),
         ContactCard(identifier: "ui-contact-okafor", fullName: "Robyn Okafor", givenName: "Robyn", familyName: "Okafor", nickname: "Robin", hasPicture: false),
-        ContactCard(identifier: "ui-contact-quinn", fullName: "Dara Quinn", givenName: "Dara", familyName: "Quinn", nickname: "", hasPicture: false),
+        ContactCard(identifier: "ui-contact-quinn", fullName: "Dara Quinn", givenName: "Dara", familyName: "Quinn", nickname: "", hasPicture: true),
     ]
 
     /// Under `-uiTesting-seedContactLink`, after `-uiTesting-seedPeople`: Lena is linked to "Robyn Okafor", as a restore to
@@ -365,7 +366,7 @@ extension UITestSeed {
     }
 
     /// The colour of each card's generated picture, for the cards with `hasPicture`.
-    private static let contactPictureColours: [String: Int] = ["ui-contact-vale": 0x5A7D9A]
+    private static let contactPictureColours: [String: Int] = ["ui-contact-vale": 0x5A7D9A, "ui-contact-quinn": 0x9A7D5A]
 
     /// `-uiTesting-contacts <full|limited|notAsked|denied>` picks the access. Without it (or with an unknown value) the
     /// app has not asked and a request is refused, so a test that does not name contacts sees none. `notAsked` named

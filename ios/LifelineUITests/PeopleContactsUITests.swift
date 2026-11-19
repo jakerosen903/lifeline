@@ -251,6 +251,43 @@ final class PeopleContactsUITests: XCTestCase {
         let dara = chip(app, daraFromContacts, in: kept)
         XCTAssertTrue(dara.waitForExistence(timeout: 5), "the chip reads \"Assumed \u{00B7} new, from your contacts\"")
         XCTAssertEqual(dara.identifier, "person.chip.assumed", "a person made from a contact is a guess")
+        // I-2: the contact's picture is copied after Keep, not at the next launch.
+        app.buttons["session.finish"].tap()
+        let done = app.buttons["landing.done"]
+        XCTAssertTrue(done.waitForExistence(timeout: 15), "the landing appears")
+        done.tap()
+        openPage(app, "Dara Quinn")
+        XCTAssertTrue(app.buttons["photo.header"].waitForExistence(timeout: 10), "the page shows the contact's picture")
+        XCTAssertTrue(app.staticTexts["picture from your contacts"].waitForExistence(timeout: 5), "the copy is captioned")
+    }
+
+    /// I-1: the sheet opened on a waiting card's "new, from your contacts" chip opens on that contact. "Done" with
+    /// nothing changed keeps it: Keep makes the person from the contact, now the owner's answer, with no mark.
+    func testTheSheetOnAContactGuessOpensOnThatContact() {
+        let app = XCUIApplication.launchWithPeople(["-uiTesting-followUps", "-uiTesting-contacts", "full"])
+        app.startSession()
+        let card = app.any("card.memory")
+        XCTAssertTrue(card.waitForExistence(timeout: 20), "the memory card arrives")
+        let dara = chip(app, daraFromContacts, in: card)
+        XCTAssertTrue(dara.waitForExistence(timeout: 5), "the waiting card shows the person Keep would make from the contact")
+        openSheet(app, from: dara)
+        let contact = app.buttons.matching(identifier: "who.contact")
+        XCTAssertTrue(waitCount(contact, 1), "the contact is listed once")
+        XCTAssertEqual(contact.firstMatch.label, "Dara Quinn. In your contacts \u{00B7} my guess")
+        XCTAssertTrue(contact.firstMatch.isSelected, "the app's guess is the selected choice")
+        XCTAssertFalse(app.buttons["who.new"].isSelected, "not Someone new")
+        tapDone(app)
+        let chosen = chip(app, "Dara Quinn. Change who this is.", in: card)
+        XCTAssertTrue(chosen.waitForExistence(timeout: 5), "the card still shows Dara Quinn, now with no mark")
+        XCTAssertEqual(chosen.identifier, "person.chip")
+
+        card.buttons["card.add"].firstMatch.tap()
+        let kept = app.any("card.kept")
+        XCTAssertTrue(kept.waitForExistence(timeout: 5))
+        let keptDara = chip(app, "Dara Quinn. Change who this is.", in: kept)
+        XCTAssertTrue(keptDara.waitForExistence(timeout: 5), "Keep made the person from the contact, not a plain \"Dara\"")
+        XCTAssertEqual(keptDara.identifier, "person.chip")
+        XCTAssertFalse(chip(app, "Dara. Change who this is.", in: kept).exists)
     }
 
     // MARK: - The prompt on the landing

@@ -432,3 +432,45 @@ private struct InjectedFailure: Error {}
     #expect(throws: PersonLinkActions.Error.stale) { try f.moves.undo(receipt) }
     #expect(try f.store.people.person(id: made) != nil, "a photo the owner added keeps the person")
 }
+
+// MARK: - The picture after Keep and "Same story" (I-2, fix wave)
+
+@Test func aPersonKeepMakesFromAContactGetsThePictureAfterKeep() async throws {
+    let f = try Fixture()
+    f.directory.pictures = ["c-vale": try f.picture("vale", rgb: 0x3366AA)]
+    let memory = try f.kept("Robyn painted the fence", people: ["Robyn"])
+    let robyn = try f.onlyPerson(memory)
+    #expect(try f.person(robyn).contactPhotoID == nil, "Keep's transaction copies no picture")
+
+    #expect(await f.actions.copyMissingPictures(of: memory.id) == [robyn])
+    let placed = try f.photos(of: robyn)
+    #expect(placed.count == 1 && placed[0].isCover)
+    #expect(try f.person(robyn).contactPhotoID == placed[0].id)
+    let before = try f.dump()
+    #expect(await f.actions.copyMissingPictures(of: memory.id).isEmpty, "a second call copies nothing")
+    #expect(try f.dump() == before)
+}
+
+@Test func aSameStoryMergeThatNamesAContactGetsThePicture() async throws {
+    let f = try Fixture()
+    f.directory.pictures = ["c-reyes": try f.picture("reyes", rgb: 0x996633)]
+    let target = try f.kept("We drove to the coast", people: [])
+    let segment = try StoreFixtures.session(in: f.store.sessions, segments: ["Tomas drove us to the coast"]).1[0].id
+    let out = MemoryOut(ref: "m0", kind: .event, title: "A title", quote: "Tomas drove us to the coast", segmentSpan: WordSpan(startWord: 0, endWord: 5),
+                        peopleRefs: ["Tomas"], placeText: nil, anchors: [], collectionHint: nil, chapterHint: nil, confidence: 0.9, aboutRef: nil)
+    let card = StoreFixtures.candidate(segment, ordinal: 0, payload: try CandidatePayload.encode(out))
+    try f.store.candidates.insert(card)
+    let merged = try f.keep.mergeCandidate(card, into: target.id)
+    let tomas = try f.onlyPerson(target)
+
+    #expect(await f.actions.copyMissingPictures(of: merged.receipt.target) == [tomas])
+    #expect(try f.person(tomas).contactPhotoID != nil)
+}
+
+@Test func copyMissingPicturesLeavesAPersonWithNoContact() async throws {
+    let f = try Fixture(cards: [])
+    let memory = try f.kept("Robyn painted the fence", people: ["Robyn"])
+    let before = try f.dump()
+    #expect(await f.actions.copyMissingPictures(of: memory.id).isEmpty)
+    #expect(try f.dump() == before)
+}

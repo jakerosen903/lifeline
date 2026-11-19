@@ -65,8 +65,25 @@ final class CardHandler {
         var memory: Memory?
         let join = storyLineShown.contains(card.id) && !optedOutOfStory.contains(card.id)
         _ = attempt("Could not keep that") { memory = try deps.actions.acceptMemory(candidate, joinStory: join).memory }
-        if memory != nil { Task { await deps.duplicates.requestRun() } }
+        if let memory {
+            Task { await deps.duplicates.requestRun() }
+            copyContactPictures(of: [memory.id])
+        }
         return memory
+    }
+
+    /// Keep and "Same story" can make a person from a contact; the picture is copied after the write, off the main
+    /// actor (I-2). The chips read again when a copy lands, so a face shows the picture.
+    private func copyContactPictures(of memories: [MemoryID]) {
+        let links = deps.contactLinks
+        Task { [weak self] in
+            var copied = false
+            for memory in memories {
+                let people = await Task.detached(priority: .utility) { await links.copyMissingPictures(of: memory) }.value
+                copied = copied || !people.isEmpty
+            }
+            if copied { self?.peopleChanged() }
+        }
     }
 
     // MARK: - Stories on a card (M5)
@@ -254,6 +271,7 @@ final class CardHandler {
             merged = targets.count > 1 ? try deps.actions.mergeGroup(candidate, into: targets) : try deps.actions.mergeCandidate(candidate, into: first)
         }
         guard done, let merged else { return false }
+        copyContactPictures(of: [merged.receipt.target])
         recentMerge = (card, merged.receipt)
         mergedNotice = "Added to \(merged.receipt.targetTitle)."
         suggestionCache[card.id] = nil

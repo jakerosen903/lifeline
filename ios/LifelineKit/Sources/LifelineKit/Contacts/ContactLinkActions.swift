@@ -73,6 +73,20 @@ public struct ContactLinkActions: Sendable {
         }
     }
 
+    /// After Keep or "Same story": the contact's picture for each person `memory` names who has a contact and no copy
+    /// yet, such as a person Keep just made from a contact (I-2). Returns the people who got a copy. A picture that
+    /// cannot be read or stored is skipped; the next check copies it (PB16).
+    @discardableResult
+    public func copyMissingPictures(of memory: MemoryID) async -> [PersonID] {
+        let people = ((try? store.personLinks.links(of: memory)) ?? []).map(\.person)
+        var copied: [PersonID] = []
+        for person in people where person.contactIdentifier != nil && person.contactPhotoID == nil && !copied.contains(person.id) {
+            try? await copyPicture(for: person.id)
+            if (try? store.people.person(id: person.id))?.contactPhotoID != nil { copied.append(person.id) }
+        }
+        return copied
+    }
+
     /// Writes a picture's bytes to a fresh folder under `scratch`, for the store to read. The caller removes the folder.
     func pictureFile(_ data: Data) throws -> URL {
         let folder = scratch.appending(path: "contact-picture-\(UUID().uuidString)", directoryHint: .isDirectory)
