@@ -29,3 +29,6 @@ The owner said "Yes, build both" (PC-d, then PC-c) on 2026-11-19, without a revi
 - Task 4: open for Task 5 or the final review: `separateTelling` finds a telling's people by said name, not by handle.
 - Task 4: fix round 1/5 (1 addressed, 0 open — a stored choice for one handle is taken from the other handles of that name, in either order; commits 2b82afd..702a408)
 - Task 4: complete (commits 2f83fca..702a408, review clean after one fix round). Rulings D9 to D16.
+- Task 5: complete (commits 017742a..e658e00, review clean). Rulings D18 to D21.
+- Task 5: minor (deferred): separating a telling can drop a person that a staying telling also named under another handle (owner-settled across tellings); `about.ref == handle` compares the ref untrimmed in a move; the doc comment of `group(of:)` does not name the mixed case (R-5a).
+- Task 5 review, out of its diff, Important: a later segment that means a person of the recording without saying a name (a handle with no `people` entry) is rejected by the validator, or its fact gets no detail on Keep. Ruling D17: Task 4b, brief `task-4b-brief.md`.
