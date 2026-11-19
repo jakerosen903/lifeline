@@ -30,7 +30,7 @@ struct SpineRowView: View {
             if let gap = row.stop.gapAbove, gap.units > 0 { SpineGap(gap: gap, geometry: geometry) }
             if let period = row.stop.periodAbove { SpineWaypoint(period: period, geometry: geometry, drawsSpine: !isFirst) }
             // Only the stop's own row reports: not the gap or the period above it, and not an open
-            // story's members below, which have no years of their own.
+            // story's members below. Members can have dates; they do not report in this PR (ruling R7).
             stopRow.reportsOnScreen(in: screenArea, onChange: onScreenChange)
         }
         // List rows of their own, so each member keeps its own long-press menu (Hide, Exclude, Delete):

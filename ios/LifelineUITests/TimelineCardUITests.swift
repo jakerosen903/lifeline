@@ -106,6 +106,63 @@ final class TimelineCardUITests: XCTestCase {
         closeSheet(app, done: "lifemap.done")
     }
 
+    /// Gives Maple Street the years 1999 to 2000, then closes both sheets. The card at the top then names it.
+    /// At the accessibility sizes the sheet's years can be out of sight, so the card's label is the check.
+    private func sayWhenMapleStreetWas1999To2000(_ app: XCUIApplication) {
+        openLifeMapFromTheMenu(app)
+        openUnplacedChapter(app, "Maple Street, no dates yet")
+        sayWhen(app, from: "1999", to: "2000")
+        closeSheet(app, done: "chapter.done")
+        closeSheet(app, done: "lifemap.done")
+    }
+
+    /// Reads the card's label and fails if the read took 5 seconds or more: a main thread caught in a render loop cannot answer.
+    @discardableResult
+    private func labelWithin5Seconds(_ app: XCUIApplication, after step: String) -> String {
+        let started = Date()
+        XCTAssertTrue(card(app).waitForExistence(timeout: 5), "the card exists after \(step)")
+        let label = card(app).label
+        XCTAssertLessThan(Date().timeIntervalSince(started), 5, "the label reads within 5 seconds after \(step)")
+        XCTAssertTrue(label.hasPrefix("Your life from 1990 to now. On screen: "), "the label is a sentence after \(step): \(label)")
+        return label
+    }
+
+    /// Drags the list by `points` (positive: the rows move up), slowly and with a hold at the end, so the list does not fling.
+    /// The drag starts low on the screen, on the rows, never on the card.
+    private func dragList(_ app: XCUIApplication, by points: CGFloat) {
+        let from = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.7))
+        let to = from.withOffset(CGVector(dx: 0, dy: -points))
+        from.press(forDuration: 0.05, thenDragTo: to, withVelocity: .slow, thenHoldForDuration: 0.3)
+    }
+
+    /// Moves the list with `move` until the label gains or loses "During", reading the label after each move.
+    private func moveUntilDuring(_ app: XCUIApplication, shows: Bool, _ what: String, by move: () -> Void) {
+        for i in 1...60 {
+            move()
+            let label = labelWithin5Seconds(app, after: "\(what), move \(i)")
+            print("Card after \(what), move \(i): \(label)")
+            if label.contains("During") == shows { return }
+        }
+        XCTFail("the During line never \(shows ? "came back" : "went") (\(what)): \(card(app).label)")
+    }
+
+    /// The whole edge test: the chapter is named. The list moves up until the During line goes, then it is dragged across
+    /// the edge in steps of `step` points, twice each way. The list moves less than the finger: it takes the first points
+    /// of each drag to start the scroll. With `swipeToTheEdge`, slow swipes take the list to the edge: at the accessibility
+    /// sizes a short drag near the top springs back to where it began, as the large title settles.
+    private func crossTheEdgeOfADuringChapter(_ app: XCUIApplication, step: CGFloat, swipeToTheEdge: Bool = false) {
+        XCTAssertTrue(waitForLabel(app, "label ENDSWITH %@", "During Maple Street."), "the card names Maple Street: \(card(app).label)")
+        moveUntilDuring(app, shows: false, "up to the edge") {
+            if swipeToTheEdge { app.swipeUp(velocity: .slow) } else { dragList(app, by: step) }
+        }
+        for round in 1...2 {
+            moveUntilDuring(app, shows: true, "down across the edge, round \(round)") { dragList(app, by: -step) }
+            moveUntilDuring(app, shows: false, "up across the edge, round \(round)") { dragList(app, by: step) }
+        }
+        let label = labelWithin5Seconds(app, after: "the last drag")
+        XCTAssertTrue(label.hasSuffix("."), "the sentence ends with a full stop: \(label)")
+    }
+
     // MARK: - Tests
 
     @MainActor
@@ -165,36 +222,47 @@ final class TimelineCardUITests: XCTestCase {
         XCTAssertFalse(label.contains("On screen: 1999"), "the years on screen no longer start at 1999: \(label)")
     }
 
-    // The standing guard for the render loop: Maple Street's year 1999 sits at the edge of the frame, and "The tree house"
-    // crosses the card's bottom edge slowly. A frozen main thread cannot answer the label query within five seconds.
+    // The standing guard for the render loop (C1). Maple Street is stated as 1999, so "The tree house" (1999) is the one row
+    // whose years bring it into the During line. The list is dragged until that row leaves the top edge and the During
+    // line goes, then back and forth across that edge: the line must come and go each way, and a frozen main thread
+    // cannot answer the label query within five seconds. At this size the list is too short for "Learning to swim", the
+    // second row, to leave the top edge, so the tree house is the row at the edge. That row is taller than twice the card's
+    // change, so this test catches a slack that is too small; the next test catches C1 itself.
     @MainActor
     func testADuringChapterAtTheEdgeDoesNotFreezeTheList() {
         let app = XCUIApplication.launchWithSpine()
         sayWhenMapleStreetWas1999(app)
-        XCTAssertTrue(waitForLabel(app, "label ENDSWITH %@", "During Maple Street."), "the card names Maple Street: \(card(app).label)")
-        let row = memoryRow(app, "The tree house")
-        XCTAssertTrue(app.waitHittable(row, timeout: 10), "The tree house is on screen")
-        // A drag of about a quarter of a row (a row is about 55 points).
-        let start = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.6))
-        let end = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.6 - 14 / app.frame.height))
-        func readsWithin5Seconds(_ step: String) {
-            XCTAssertTrue(card(app).waitForExistence(timeout: 5), "the card exists after \(step)")
-            let started = Date()
-            let label = card(app).label
-            XCTAssertLessThan(Date().timeIntervalSince(started), 5, "the label reads within 5 seconds after \(step)")
-            XCTAssertTrue(label.hasPrefix("Your life from 1990 to now."), "the label is a sentence after \(step): \(label)")
-        }
-        for i in 1...5 {
-            start.press(forDuration: 0.1, thenDragTo: end)
-            readsWithin5Seconds("small swipe up \(i)")
-        }
-        for i in 1...5 {
-            end.press(forDuration: 0.1, thenDragTo: start)
-            readsWithin5Seconds("small swipe down \(i)")
-        }
+        crossTheEdgeOfADuringChapter(app, step: 16)
+    }
+
+    // The same at an accessibility size: the During line takes two lines, so the card changes height by about 68 points.
+    // Maple Street is stated as 1999 to 2000, so the row at the edge is "Learning to swim" (2000): short, with no tag.
+    @MainActor
+    func testADuringChapterAtTheEdgeDoesNotFreezeTheListAtAnAccessibilitySize() {
+        let app = XCUIApplication.launchWithSpine(["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityL"])
+        sayWhenMapleStreetWas1999To2000(app)
+        crossTheEdgeOfADuringChapter(app, step: 32, swipeToTheEdge: true)
+    }
+
+    // Review Focus 1: a hidden row leaves the frame. "The first apartment" (2008-10) is the last stop of the spine.
+    @MainActor
+    func testHidingTheLastRowTakesItsYearsOutOfTheFrame() {
+        let app = XCUIApplication.launchWithSpine()
+        XCTAssertTrue(waitForLabel(app, "label BEGINSWITH %@", Self.lifePrefix), "the frame starts at 1999: \(card(app).label)")
+        scrollToTheEndOfTheSpine(app)
+        let apartment = memoryRow(app, "The first apartment")
+        XCTAssertTrue(app.waitHittable(apartment, timeout: 5), "The first apartment is on screen")
+        let more = app.buttons.matching(identifier: "row.more").allElementsBoundByIndex
+            .first { $0.exists && abs($0.frame.midY - apartment.frame.midY) < apartment.frame.height / 2 }
+        guard let more else { return XCTFail("The first apartment has its own menu: \(apartment.frame)") }
+        more.tap()
+        let hide = app.buttons["row.hide"]
+        XCTAssertTrue(app.waitHittable(hide, timeout: 5), "Hide from timeline is in the menu")
+        hide.tap()
+        XCTAssertTrue(waitUntilGone(apartment, timeout: 5), "The first apartment left the Timeline")
+        XCTAssertTrue(waitForLabel(app, "NOT (label CONTAINS %@)", "to 2010."), "the frame no longer reaches 2010: \(card(app).label)")
         let label = card(app).label
-        XCTAssertTrue(label.hasPrefix("Your life from 1990 to now. On screen: "), "the label ends as a well-formed sentence: \(label)")
-        XCTAssertTrue(label.hasSuffix("."), "the sentence ends with a full stop: \(label)")
+        XCTAssertTrue(label.hasPrefix("Your life from 1990 to now. On screen: "), "the card still names the years on screen: \(label)")
     }
 
     // Maple Street is stated as the year 1999. The frame at the top (1999 to 2006) touches it; the frame at the end (2000 to 2010) does not.
