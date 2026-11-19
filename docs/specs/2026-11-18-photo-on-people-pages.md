@@ -1,6 +1,6 @@
 # A photo story's photo goes on the pages of its people
 
-Status: approved by the owner on 2026-11-18, with approach A (the stored fact, one migration) and the calls in "Calls made without the owner" as written. The owner can still overrule each call. Plan: `docs/plans/2026-11-18-photo-on-people-pages.md`.
+Status: approved by the owner on 2026-11-18, with approach A (the stored fact, one migration) and the calls in "Calls made without the owner" as written. The owner can still overrule each call. Plan: `docs/plans/2026-11-18-photo-on-people-pages.md`. Built on the branch `photo-people` (parts 1 to 4). The branch is not merged. The device check (`docs/plans/2026-11-18-photo-on-people-pages-device-check.md`) has not been run.
 
 Parts 3 and 4 were added on 2026-11-18 after the approval, from the owner's next notes from the phone. The owner approved them on 2026-11-18.
 
