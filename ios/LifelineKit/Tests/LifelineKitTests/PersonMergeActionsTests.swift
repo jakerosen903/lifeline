@@ -6,7 +6,7 @@ import Testing
 // PC-c Task 2: two people become one, in one transaction. The person picked stays; the other joins them.
 // Sample names are invented.
 
-private struct Env {
+struct MergeEnv {
     let db: AppDatabase, store: ExtractionStore, keep: CandidateActions, actions: PersonMergeActions
     /// `contacts` are what Keep's guess sees, as the contacts cache gives them.
     init(contacts: [PersonGuess.Contact] = []) throws {
@@ -85,7 +85,7 @@ private let valeContact = PersonGuess.Contact(identifier: "c-vale", fullName: "R
 // MARK: - Links
 
 @Test func everyLinkJoinsTheStayingPersonWithItsOriginAndRole() throws {
-    let env = try Env()
+    let env = try MergeEnv()
     let robin = try env.store.people.insertPerson(displayName: "Robin")
     let robyn = try env.store.people.insertPerson(displayName: "Robyn Vale")
     let (a, b, fact, c) = (try env.memory("Robin painted the fence"), try env.memory("Robin fixed the gate"),
@@ -107,7 +107,7 @@ private let valeContact = PersonGuess.Contact(identifier: "c-vale", fullName: "R
 
 // Review Focus 2: a memory linked to both keeps one link, with the stronger origin.
 @Test func aMemoryLinkedToBothKeepsOneLinkWithTheStrongerOrigin() throws {
-    let env = try Env()
+    let env = try MergeEnv()
     let robin = try env.store.people.insertPerson(displayName: "Robin")
     let robyn = try env.store.people.insertPerson(displayName: "Robyn Vale")
     let m = try env.memory("Robin and Robyn painted the fence")
@@ -125,7 +125,7 @@ private let valeContact = PersonGuess.Contact(identifier: "c-vale", fullName: "R
 // MARK: - Names
 
 @Test func theLeavingPersonsAliasesAndNameJoinTheStayingPerson() throws {
-    let env = try Env()
+    let env = try MergeEnv()
     let robin = try env.store.people.insertPerson(displayName: "Robin")
     try env.store.people.addAlias("Rob", to: robin.id)
     try env.store.people.addAlias("my roommate", to: robin.id)
@@ -138,7 +138,7 @@ private let valeContact = PersonGuess.Contact(identifier: "c-vale", fullName: "R
 }
 
 @Test func aNameEqualToTheStayingNameIsNotAddedTwice() throws {
-    let env = try Env()
+    let env = try MergeEnv()
     let leaving = try env.store.people.insertPerson(displayName: "robin ")
     let staying = try env.store.people.insertPerson(displayName: "Robin")
     try env.sql("delete from alias where person_id = ?", [leaving.id.rawValue])
@@ -148,14 +148,14 @@ private let valeContact = PersonGuess.Contact(identifier: "c-vale", fullName: "R
 
 // Review Focus 3: nothing from a contact goes to the model, after a merge too.
 @Test func theContactOfTheLeavingPersonMovesAndItsNameNeverBecomesAnAlias() throws {
-    let env = try Env(contacts: [valeContact])
+    let env = try MergeEnv(contacts: [valeContact])
     let segment = try env.session(["Robyn painted the fence"])[0]
     let moment = try env.keep.acceptMemory(try env.card(in: segment, people: ["Robyn"]), joinStory: false).memory
     let made = try #require(try env.store.entities.links(of: moment.id).first { $0.entity.type == .person }.map { PersonID(rawValue: $0.entity.id.rawValue) })
     let leaving = try #require(try env.person(made))
     #expect(leaving.nameOrigin == .contact && leaving.contactIdentifier == "c-vale")
     // The picture the app copies from the contact, as `ContactLinkActions.copyPicture` records it.
-    let picture = Env.photo("vale")
+    let picture = MergeEnv.photo("vale")
     try env.store.photos.insert(picture, linkingTo: .entity(leaving.entityID)) { db in
         try PeopleRepository.recordContactPhoto(picture.id, for: leaving.id, identifier: "c-vale", in: db)
     }
@@ -181,7 +181,7 @@ private let valeContact = PersonGuess.Contact(identifier: "c-vale", fullName: "R
 // MARK: - Refusals
 
 @Test func twoPeopleWhoBothHoldAContactAreRefusedAndNothingChanges() throws {
-    let env = try Env()
+    let env = try MergeEnv()
     let robin = try env.store.people.insertPerson(displayName: "Robin")
     let robyn = try env.store.people.insertPerson(displayName: "Robyn Vale")
     try env.sql("update person set contact_identifier = 'c-hale', contact_name = 'Robin Hale', contact_state = 'linked' where id = ?", [robin.id.rawValue])
@@ -194,7 +194,7 @@ private let valeContact = PersonGuess.Contact(identifier: "c-vale", fullName: "R
 }
 
 @Test func theOwnerSamePersonAndAGonePersonAreRefused() throws {
-    let env = try Env()
+    let env = try MergeEnv()
     try env.store.profile.save(Profile(displayName: "Sam", birthDate: nil, birthPlaceText: nil, freeText: nil, updatedAt: .now))
     let owner = try #require(try env.store.profile.owner())
     let robin = try env.store.people.insertPerson(displayName: "Robin")
@@ -213,7 +213,7 @@ private let valeContact = PersonGuess.Contact(identifier: "c-vale", fullName: "R
 // MARK: - Values
 
 @Test func theStayingPersonKeepsTheirValuesAndTakesTheOthersWhereTheyHaveNone() throws {
-    let env = try Env()
+    let env = try MergeEnv()
     let robin = try env.store.people.insertPerson(displayName: "Robin")
     let robyn = try env.store.people.insertPerson(displayName: "Robyn Vale")
     let born = Date(timeIntervalSince1970: 500_000_000)
@@ -235,7 +235,7 @@ private let valeContact = PersonGuess.Contact(identifier: "c-vale", fullName: "R
 }
 
 @Test func theStayingPersonsOwnDatesAndBirthDateWin() throws {
-    let env = try Env()
+    let env = try MergeEnv()
     let robin = try env.store.people.insertPerson(displayName: "Robin")
     let robyn = try env.store.people.insertPerson(displayName: "Robyn Vale")
     let (mine, theirs) = (Date(timeIntervalSince1970: 400_000_000), Date(timeIntervalSince1970: 500_000_000))
@@ -257,7 +257,7 @@ private let valeContact = PersonGuess.Contact(identifier: "c-vale", fullName: "R
 
 // Plan decision 1: either side on means on, and the preview says so when the two differed.
 @Test func hiddenAndKeptFromTheAIStayOnAndThePreviewSaysSo() throws {
-    let env = try Env()
+    let env = try MergeEnv()
     let robin = try env.store.people.insertPerson(displayName: "Robin")
     let robyn = try env.store.people.insertPerson(displayName: "Robyn Vale")
     try env.store.entities.setExcluded(robin.entityID, true)
@@ -273,7 +273,7 @@ private let valeContact = PersonGuess.Contact(identifier: "c-vale", fullName: "R
 }
 
 @Test func equalFlagsGiveNoFlagLine() throws {
-    let env = try Env()
+    let env = try MergeEnv()
     let robin = try env.store.people.insertPerson(displayName: "Robin")
     let robyn = try env.store.people.insertPerson(displayName: "Robyn Vale")
     #expect(try env.actions.check(robin.id, into: robyn.id) == PersonMergePreview(leaving: robin, staying: robyn, staysHidden: false, staysOutOfAI: false))
@@ -287,7 +287,7 @@ private let valeContact = PersonGuess.Contact(identifier: "c-vale", fullName: "R
 
 // Plan decision 6: a merge is the owner's act.
 @Test func theStayingPersonIsNoLongerAGuess() throws {
-    let env = try Env()
+    let env = try MergeEnv()
     let robin = try env.store.people.insertPerson(displayName: "Robin")
     let robyn = try env.store.people.insertPerson(displayName: "Robyn Vale")
     try env.sql("update person set created_by_guess = 1 where id = ?", [robyn.id.rawValue])
@@ -299,7 +299,7 @@ private let valeContact = PersonGuess.Contact(identifier: "c-vale", fullName: "R
 
 // Review Focus 5: one order, the stayer's key photo first, one link to a shared photo, one cover.
 @Test func photosKeepOneOrderWithTheStayersKeyPhotoFirst() throws {
-    let env = try Env()
+    let env = try MergeEnv()
     let robin = try env.store.people.insertPerson(displayName: "Robin")
     let robyn = try env.store.people.insertPerson(displayName: "Robyn Vale")
     let s1 = try env.photo("s1", on: robyn), s2 = try env.photo("s2", on: robyn), shared = try env.photo("shared", on: robyn)
@@ -317,7 +317,7 @@ private let valeContact = PersonGuess.Contact(identifier: "c-vale", fullName: "R
 }
 
 @Test func theLeavingKeyPhotoBecomesTheKeyPhotoOfAStayerWithNone() throws {
-    let env = try Env()
+    let env = try MergeEnv()
     let robin = try env.store.people.insertPerson(displayName: "Robin")
     let robyn = try env.store.people.insertPerson(displayName: "Robyn Vale")
     let l1 = try env.photo("l1", on: robin), l2 = try env.photo("l2", on: robin)
@@ -330,7 +330,7 @@ private let valeContact = PersonGuess.Contact(identifier: "c-vale", fullName: "R
 }
 
 @Test func anOwnersLinkToASharedPhotoOutlivesAStoryLink() throws {
-    let env = try Env()
+    let env = try MergeEnv()
     let robin = try env.store.people.insertPerson(displayName: "Robin")
     let robyn = try env.store.people.insertPerson(displayName: "Robyn Vale")
     let shared = try env.photo("shared", on: robyn)
@@ -343,10 +343,10 @@ private let valeContact = PersonGuess.Contact(identifier: "c-vale", fullName: "R
 }
 
 @Test func aPhotoTheOwnerTookOffTheLeavingPageStaysOffTheStayingPage() throws {
-    let env = try Env()
+    let env = try MergeEnv()
     let robin = try env.store.people.insertPerson(displayName: "Robin")
     let robyn = try env.store.people.insertPerson(displayName: "Robyn Vale")
-    let photo = Env.photo("p")
+    let photo = MergeEnv.photo("p")
     try env.store.photos.insert(photo)
     try env.sql("insert into photo_page_declined (photo_id, entity_id) values (?, ?)", [photo.id.rawValue, robin.id.rawValue])
 
@@ -357,7 +357,7 @@ private let valeContact = PersonGuess.Contact(identifier: "c-vale", fullName: "R
 
 // Ruling C4 (a): a photo the merged person holds is not also "taken off" their page, in either direction.
 @Test func aPhotoTheStayerHoldsAfterTheMergeIsNotAlsoTakenOffTheirPage() throws {
-    let env = try Env()
+    let env = try MergeEnv()
     let robin = try env.store.people.insertPerson(displayName: "Robin")
     let robyn = try env.store.people.insertPerson(displayName: "Robyn Vale")
     let onStayer = try env.photo("s1", on: robyn)    // the owner took it off the leaving page
@@ -374,7 +374,7 @@ private let valeContact = PersonGuess.Contact(identifier: "c-vale", fullName: "R
 
 // Ruling C4 (b): the stayer no longer declines the contact they now hold. A picture-removal marker stays.
 @Test func theStayerNoLongerDeclinesTheContactTheyTake() throws {
-    let env = try Env()
+    let env = try MergeEnv()
     let robin = try env.store.people.insertPerson(displayName: "Robin")
     let robyn = try env.store.people.insertPerson(displayName: "Robyn Vale")
     try env.sql("update person set contact_identifier = 'c-vale', contact_name = 'Robyn Vale', contact_state = 'linked' where id = ?", [robin.id.rawValue])
@@ -390,7 +390,7 @@ private let valeContact = PersonGuess.Contact(identifier: "c-vale", fullName: "R
 
 // Ruling C4 (c): the owner's words are kept. A stayer's link with no role text takes the leaving link's.
 @Test func aStayersLinkWithNoRoleTextTakesTheLeavingLinksRoleText() throws {
-    let env = try Env()
+    let env = try MergeEnv()
     let robin = try env.store.people.insertPerson(displayName: "Robin")
     let robyn = try env.store.people.insertPerson(displayName: "Robyn Vale")
     let (m, n) = (try env.memory("Robin and Robyn painted the fence"), try env.memory("Robin and Robyn fixed the gate"))
@@ -409,7 +409,7 @@ private let valeContact = PersonGuess.Contact(identifier: "c-vale", fullName: "R
 
 // Review Focus 1: a stored choice cascades on its person, so it moves before the delete.
 @Test func aChoiceOnAWaitingCardFollowsTheMergedPerson() throws {
-    let env = try Env()
+    let env = try MergeEnv()
     let robin = try env.store.people.insertPerson(displayName: "Robin")
     let robyn = try env.store.people.insertPerson(displayName: "Robyn Vale")
     // "Theo" matches no one, so only the stored choice can link the memory to the merged person.
@@ -425,7 +425,7 @@ private let valeContact = PersonGuess.Contact(identifier: "c-vale", fullName: "R
 }
 
 @Test func mentionsCuriosityTheSubjectTagsAndDeclinesFollowTheMergedPerson() throws {
-    let env = try Env()
+    let env = try MergeEnv()
     let robin = try env.store.people.insertPerson(displayName: "Robin")
     let robyn = try env.store.people.insertPerson(displayName: "Robyn Vale")
     let (session, segments) = try StoreFixtures.session(in: env.store.sessions, segments: ["Robin painted the fence"])
@@ -453,7 +453,7 @@ private let valeContact = PersonGuess.Contact(identifier: "c-vale", fullName: "R
 }
 
 @Test func theLeavingFirstTellingFollowsTheStayersOwn() throws {
-    let env = try Env()
+    let env = try MergeEnv()
     let robin = try env.store.people.insertPerson(displayName: "Robin")
     let robyn = try env.store.people.insertPerson(displayName: "Robyn Vale")
     let segments = try env.session(["Robyn cut the grass", "Robin painted the fence"])
@@ -471,7 +471,7 @@ private let valeContact = PersonGuess.Contact(identifier: "c-vale", fullName: "R
 // MARK: - The picker's list
 
 @Test func othersLeavesOutThePersonAndTheOwner() throws {
-    let env = try Env()
+    let env = try MergeEnv()
     try env.store.profile.save(Profile(displayName: "Sam", birthDate: nil, birthPlaceText: nil, freeText: nil, updatedAt: .now))
     let robin = try env.store.people.insertPerson(displayName: "Robin")
     let robyn = try env.store.people.insertPerson(displayName: "Robyn Vale")
@@ -485,7 +485,7 @@ private let valeContact = PersonGuess.Contact(identifier: "c-vale", fullName: "R
 // MARK: - One transaction
 
 @Test func aFailureInsideTheMergeLeavesBothPeopleAsTheyWere() throws {
-    let env = try Env()
+    let env = try MergeEnv()
     let robin = try env.store.people.insertPerson(displayName: "Robin")
     let robyn = try env.store.people.insertPerson(displayName: "Robyn Vale")
     let m = try env.memory("Robin painted the fence")

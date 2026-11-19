@@ -14,12 +14,24 @@ public struct PersonMergePreview: Sendable, Equatable {
     }
 }
 
-/// What a merge did. Task 3 adds the rows before and after, so Undo can put them back.
+/// What a merge did, with the rows before and after, so Undo can put them back. It lives in memory only (plan decision 7).
 public struct PersonMergeReceipt: Sendable, Equatable {
     public var staying: PersonID
     public var leaving: PersonID
     /// The staying person's name, for the notice "Merged into {name}.".
     public var stayingName: String
+
+    /// The rows of both persons in the owned tables, read before any change.
+    var before: [RowCopy]
+    /// The rows of the staying person in the same tables, as the merge left them. Undo compares them first.
+    var after: [RowCopy]
+    /// The staying person's person and entity rows, before and after the merge.
+    var personBefore: RowCopy, personAfter: RowCopy
+    var entityBefore: RowCopy, entityAfter: RowCopy
+    /// The leaving person's person and entity rows, which the merge deleted.
+    var leavingPerson: RowCopy, leavingEntity: RowCopy
+    /// Table name to the keys of the rows the merge pointed at the staying person.
+    var repointed: [String: [String]]
 }
 
 /// Two people who are one real person (spec "Merging two people"): the person the owner picks stays, and the other
@@ -44,5 +56,11 @@ public struct PersonMergeActions: Sendable {
     /// One transaction: `leaving` joins `staying` and is deleted. A kill leaves the old state or the new one.
     @discardableResult public func merge(_ leaving: PersonID, into staying: PersonID) throws -> PersonMergeReceipt {
         try store.personLinks.merge(leaving, into: staying)
+    }
+
+    /// One transaction: both people are back, every row as it was before the merge. Throws `.stale`, and changes
+    /// nothing, when a row the merge left has changed since.
+    public func undo(_ receipt: PersonMergeReceipt) throws {
+        try store.personLinks.undoMerge(receipt)
     }
 }
