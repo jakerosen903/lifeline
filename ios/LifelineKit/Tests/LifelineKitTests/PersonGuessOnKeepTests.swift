@@ -1240,3 +1240,19 @@ extension Env {
     #expect(Set(links.map(\.roleText)) == ["Maya", "Dara"], "Maya by said name, Dara by handle")
     #expect(links.first { $0.roleText == "Dara" }?.personHandle == "p1" && links.first { $0.roleText == "Maya" }?.personHandle == nil)
 }
+
+// MARK: - Final review M5: a stand-in target becomes the card's telling, so it is the card's recording
+
+@Test func sameStoryIntoAStandInKeepsTheHandles() throws {
+    let env = try Env()
+    let namer = try env.actions.acceptMemory(try env.card("We talked about the graduation", people: []), joinStory: false)
+    let namerSpan = try #require(try env.store.memories.spans(of: namer.memory.id).first)
+    let standIn = try env.store.memories.insertFloating(title: "graduation", segment: namerSpan.segmentID, startMs: namerSpan.startMs, endMs: namerSpan.endMs)
+    let (_, segs) = try StoreFixtures.session(in: env.store.sessions, segments: ["Robyn came to the graduation", "Robyn drove us home"])
+    _ = try env.actions.mergeCandidate(try env.handleCard(in: segs[0].id, "Robyn came to the graduation", people: [handled("p1", "Robyn")]),
+                                       into: standIn.id)
+    let link = try #require(try env.personLinks(standIn.id).first)
+    #expect(link.personHandle == "p1", "the borrowed span goes: the card's telling is the first, in the card's recording")
+    let later = try env.actions.acceptMemory(try env.handleCard(in: segs[1].id, "Robyn drove us home", people: [handled("p1", "Robyn")]), joinStory: false)
+    #expect(try env.personLinks(later.memory.id).map(\.entityID) == [link.entityID], "a later card follows p1")
+}

@@ -41,7 +41,7 @@ extension CandidateActions {
         // The card's edges and its continuations', as one telling (M5).
         let continuations = try store.candidates.continuations(of: candidate.id)
         let edges = try keepingTargetOrigins(try handlesKept(try tellingEdges(of: out, card: candidate, continuations: continuations, for: target),
-                                                             joining: target, from: candidate), of: [target])
+                                                             joining: targetMemory, from: candidate), of: [target])
         // The owner named this moment before telling it; now they have told it.
         let promotion = targetMemory.isFloating ? (title: out.title, summaryQuote: out.quote) : nil
         let addedPhoto = try store.memories.mergeSpan(span, continuations: try continuationSpans(of: out, for: target), people: edges.people, places: edges.places, links: edges.links, entities: edges.entityWrite,
@@ -93,7 +93,7 @@ extension CandidateActions {
                               order: 0, titleText: out.title, candidateID: candidate.id)
         let continuations = try store.candidates.continuations(of: candidate.id)
         let edges = try keepingTargetOrigins(try handlesKept(try tellingEdges(of: out, card: candidate, continuations: continuations, for: oldest.id),
-                                                             joining: oldest.id, from: candidate), of: [oldest.id] + later.map(\.id))
+                                                             joining: oldest, folding: later, from: candidate), of: [oldest.id] + later.map(\.id))
         let promotion = oldest.isFloating && later.isEmpty ? (title: out.title, summaryQuote: out.quote) : nil
         // The write says what it linked, after the folds: a photo a folded memory held is moved, not added.
         let addedPhoto = try store.memories.mergeGroup(sources: later, into: oldest, span: span, continuations: try continuationSpans(of: out, for: oldest.id),
@@ -110,12 +110,15 @@ extension CandidateActions {
     }
 
     /// The edges with their handles only when `target` belongs to the card's recording (the session of its order-0
-    /// span). A handle means one person inside one recording: on a memory of another recording it would be read
-    /// as that recording's handle (`handleLinks`), so it is left off.
-    private func handlesKept(_ edges: Edges, joining target: MemoryID, from card: Candidate) throws -> Edges {
+    /// span after the write). A handle means one person inside one recording: on a memory of another recording it
+    /// would be read as that recording's handle (`handleLinks`), so it is left off. A stand-in gives up its borrowed
+    /// span: its first telling becomes the first memory folded into it, else the card's own (M5). A target with no
+    /// first span to read counts as the card's recording.
+    private func handlesKept(_ edges: Edges, joining target: Memory, folding later: [Memory] = [], from card: Candidate) throws -> Edges {
         let session = { (segment: SegmentID) in try self.store.sessions.fetchSegment(segment)?.sessionID }
-        let targetSpan = try store.memories.spans(of: target).first { $0.order == 0 }
-        let same = try targetSpan.map { try session($0.segmentID) } == (try session(card.segmentID))
+        guard let first = target.isFloating ? later.first?.id : target.id,
+              let targetSpan = try store.memories.spans(of: first).first(where: { $0.order == 0 }) else { return edges }
+        let same = try session(targetSpan.segmentID) == (try session(card.segmentID))
         guard !same else { return edges }
         var out = edges
         out.people = edges.people.map { var person = $0; person.handle = nil; return person }
