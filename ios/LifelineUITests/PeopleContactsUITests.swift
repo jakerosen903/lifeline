@@ -350,6 +350,19 @@ final class PeopleContactsUITests: XCTestCase {
         XCTAssertFalse(app.buttons["entity.contact.settings"].exists)
     }
 
+    /// Review Focus 4 (fix wave): a linked person under denied access keeps the contact's name on the row, and the
+    /// button sends the owner to Settings. Nothing about the link changes.
+    func testALinkedPersonUnderDeniedAccessKeepsTheContactAndOffersSettings() {
+        let app = XCUIApplication.launchWithPeople(["-uiTesting-seedContactLink", "-uiTesting-contacts", "denied"])
+        openPage(app, "Lena")
+        XCTAssertTrue(rowText(app, "Robyn Okafor").exists, "the row names the contact the app cannot see")
+        XCTAssertTrue(text(app, containing: "If the app cannot see your contacts").exists)
+        let settings = app.buttons["entity.contact.settings"]
+        XCTAssertTrue(app.waitHittable(settings, timeout: 5))
+        XCTAssertEqual(settings.label, "Allow contacts in Settings")
+        XCTAssertFalse(app.buttons["entity.contact.link"].exists)
+    }
+
     /// 9: limited access: the search offers the system's button to share another contact.
     func testLimitedAccessOffersTheAccessButton() {
         let app = XCUIApplication.launchWithPeople(["-uiTesting-contacts", "limited"])
