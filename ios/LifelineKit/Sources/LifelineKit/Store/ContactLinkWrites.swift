@@ -25,6 +25,8 @@ extension PeopleRepository {
                 _ = try PhotoRepository.removeLink(copy, from: .entity(person.entityID), in: db)
                 gone = try PhotoRepository.deleteIfHomeless(copy, in: db)
             }
+            // Another contact is another picture: a removal of the old copy is forgotten (I-3).
+            if person.contactIdentifier != card.identifier { try Self.forgetPictureRemovals(id, in: db) }
             // The name and `name_origin` stay: a person on file keeps their name (spec, "The person's name").
             try db.execute(sql: "update person set contact_identifier = ?, contact_name = ?, contact_state = ? where id = ?",
                            arguments: [card.identifier, card.keptName, Person.contactLinked, id.rawValue])
@@ -46,6 +48,7 @@ extension PeopleRepository {
                     created_by_guess = 0
                 where id = ? and (contact_identifier is not null or contact_photo_id is not null)
                 """, arguments: [id.rawValue])
+            try Self.forgetPictureRemovals(id, in: db)   // a fresh link later copies the picture again (I-3)
         }
     }
 
@@ -95,6 +98,7 @@ extension PeopleRepository {
                 try db.execute(sql: "update person set contact_identifier = ?, contact_name = ?, contact_state = ? where id = ?",
                                arguments: [card.identifier, name, Person.contactLinked, id.rawValue])
             }
+            if card.identifier != stored { try Self.movePictureRemoval(id, from: stored, to: card.identifier, in: db) }
             // A contact with no name keeps the person's name: a page never loses its title.
             if person.nameOrigin == .contact, !name.isEmpty, name != person.displayName {
                 try db.execute(sql: "update entity set title = ? where id = ?", arguments: [name, person.entityID.rawValue])
@@ -141,7 +145,8 @@ extension PeopleRepository {
 
     func declinedContacts(of id: PersonID) throws -> Set<String> {
         try db.writer.read { db in
-            Set(try String.fetchAll(db, sql: "select contact_identifier from contact_declined where person_id = ?", arguments: [id.rawValue]))
+            Set(try String.fetchAll(db, sql: "select contact_identifier from contact_declined where person_id = ? and \(Self.notAPictureRemoval)",
+                                    arguments: [id.rawValue]))
         }
     }
 

@@ -572,3 +572,81 @@ func withoutAccessTheCheckChangesNothing(access: ContactsAccess) async throws {
     let (session, _) = try f.keptSession([("Robyn painted the fence", ["Robyn"])])
     #expect(try await f.actions.reguess(session: session, contacts: [vale.forGuess]).changedLinks == 0)
 }
+
+// MARK: - A picture the owner removed (I-3, fix wave)
+
+extension Fixture {
+    /// Robin linked to Robyn Vale, with the app's copy of her picture. Returns the copy.
+    func robinWithTheCopy() async throws -> (PersonID, PhotoID) {
+        directory.pictures = ["c-vale": try picture("vale", rgb: 0x3366AA), "c-reyes": try picture("reyes", rgb: 0x996633)]
+        let robin = try store.people.insertPerson(displayName: "Robin")
+        try await actions.link(robin.id, to: vale)
+        return (robin.id, try #require(try person(robin.id).contactPhotoID))
+    }
+
+    /// The owner removes the copy from the page, as the page does it.
+    func ownerRemoves(_ photo: PhotoID, from robin: PersonID) async throws {
+        try actions.pictureRemoved(photo, from: robin)
+        try await library.remove(photo, from: .entity(EntityID(rawValue: robin.rawValue)))
+    }
+}
+
+@Test func aPictureTheOwnerRemovedStaysRemovedAcrossACheck() async throws {
+    let f = try Fixture()
+    let (robin, copy) = try await f.robinWithTheCopy()
+    try await f.ownerRemoves(copy, from: robin)
+    #expect(try f.person(robin).contactPhotoID == nil)
+
+    try await f.actions.check()
+    try await f.actions.copyPicture(for: robin)
+    #expect(try f.photos(of: robin).isEmpty, "the owner's removal is kept")
+    #expect(try f.photoRows() == 0)
+    #expect(try f.store.people.declinedContacts(of: robin).isEmpty, "the marker is not a declined contact")
+    #expect(try f.person(robin).contactIdentifier == "c-vale", "the link stays")
+}
+
+@Test func aFreshLinkAfterUnlinkCopiesThePictureAgain() async throws {
+    let f = try Fixture()
+    let (robin, copy) = try await f.robinWithTheCopy()
+    try await f.ownerRemoves(copy, from: robin)
+    try f.actions.unlink(robin)
+    try await f.actions.link(robin, to: vale)
+    #expect(try f.photos(of: robin).count == 1, "unlink forgets the removal")
+    #expect(try f.person(robin).contactPhotoID != nil)
+}
+
+@Test func aLinkToAnotherContactCopiesThatPictureAndForgetsTheRemoval() async throws {
+    let f = try Fixture()
+    let (robin, copy) = try await f.robinWithTheCopy()
+    try await f.ownerRemoves(copy, from: robin)
+    try await f.actions.link(robin, to: reyes)
+    #expect(try f.photos(of: robin).count == 1, "the other contact's picture is copied")
+    #expect(try f.person(robin).contactPhotoID != nil)
+    // Back to the first contact: a link to another contact cleared the removal, so its picture comes too.
+    try await f.actions.link(robin, to: vale)
+    #expect(try f.person(robin).contactPhotoID != nil)
+}
+
+@Test func aRemovalFollowsAContactTheSystemMerged() async throws {
+    let f = try Fixture()
+    let (robin, copy) = try await f.robinWithTheCopy()
+    try await f.ownerRemoves(copy, from: robin)
+    let merged = card("c-merged", "Robyn", "Vale")
+    f.directory.cards = [merged, reyes]
+    f.directory.merged = ["c-vale": "c-merged"]
+    f.directory.pictures["c-merged"] = try f.picture("merged", rgb: 0x33AA66)
+
+    try await f.actions.check()
+    #expect(try f.person(robin).contactIdentifier == "c-merged")
+    #expect(try f.photos(of: robin).isEmpty, "the same contact under its new identifier: the removal is kept")
+}
+
+@Test func removingAPhotoThatIsNotTheCopyMarksNothing() async throws {
+    let f = try Fixture()
+    let (robin, _) = try await f.robinWithTheCopy()
+    let own = try await f.library.add(fileAt: try f.source("own", rgb: 0xAA3366), assetLocalID: nil, to: .entity(EntityID(rawValue: robin.rawValue)))
+    let before = try f.dump()
+    try f.actions.pictureRemoved(own.id, from: robin)
+    #expect(try f.dump() == before, "only the app's copy is remembered")
+}
+

@@ -186,6 +186,9 @@ final class EntityViewModel {
 
     func removePhoto(_ photo: PhotoID) async {
         photoError = nil
+        // The app's copy of a contact's picture, removed by the owner, stays removed (I-3). The kit writes nothing
+        // for any other photo. A failed write is dropped: the photo is still removed, and only the copy can come back.
+        if entity.type == .person { try? deps.contactLinks.pictureRemoved(photo, from: PersonID(rawValue: entity.id.rawValue)) }
         await shelf.remove(photo)
     }
 

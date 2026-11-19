@@ -51,12 +51,20 @@ public struct ContactLinkActions: Sendable {
         try store.people.unlinkContact(person)
     }
 
+    /// The owner is removing `photo` from the person's page. When it is the app's copy of the contact's picture, the
+    /// removal is kept, so no later check or copy puts it back (I-3). Call it before the photo is removed: once the
+    /// row is gone, `contact_photo_id` is null and the copy can no longer be told from the owner's photo.
+    public func pictureRemoved(_ photo: PhotoID, from person: PersonID) throws {
+        try store.people.markPictureRemoved(photo, from: person)
+    }
+
     /// Copies the contact's picture onto the person's page, after their other photos. Safe to call twice
-    /// and after a kill: nothing happens when the person has a copy already, has no contact, or the contact
-    /// has no picture. A picture with the bytes of a stored photo links that photo and is not recorded as
+    /// and after a kill: nothing happens when the person has a copy already, has no contact, the owner removed
+    /// the copy of this contact's picture (I-3), or the contact has no picture. A picture with the bytes of a stored photo links that photo and is not recorded as
     /// the copy, so the app never later replaces or removes the owner's photo.
     public func copyPicture(for id: PersonID) async throws {
         guard let person = try store.people.person(id: id), let identifier = person.contactIdentifier, person.contactPhotoID == nil,
+              try !store.people.pictureWasRemoved(id, identifier: identifier),
               let data = try await directory.picture(identifier: identifier), !data.isEmpty else { return }
         let file = try pictureFile(data)
         defer { try? FileManager.default.removeItem(at: file.deletingLastPathComponent()) }
