@@ -2,6 +2,8 @@
 
 Status: approved by the owner on 2026-11-18, with approach A (the stored fact, one migration) and the calls in "Calls made without the owner" as written. The owner can still overrule each call. Plan: `docs/plans/2026-11-18-photo-on-people-pages.md`.
 
+Parts 3 and 4 were added on 2026-11-18 after the approval, from the owner's next notes from the phone. They are a draft until the owner approves them.
+
 Changes: `docs/specs/2026-11-18-photo-card-key-photo.md` (the photo card). It reverses one rule of that spec: "a page link is always the person's tap".
 
 Depends on: PR #31 (photo card and key photo) for part 1. Part 2 also needs PC-a of `docs/specs/2026-11-18-people-contacts.md` (the "Who is this?" sheet and the move).
@@ -71,6 +73,34 @@ This part applies when the owner changes who a name means in a photo story ("Who
 3. The move's Undo puts the photo links back with the name links, in the same write.
 4. "Not a person" removes the story's link from the first person's page by the same test. It adds no link.
 
+### Part 3: Done hides the pages the owner did not choose
+
+The owner's words: "there should be a time to say 'Save' or something that hides the unselected tiles. You should be able to edit and those should show again."
+
+1. The part "Also show this photo on" has two states: open and done.
+2. Open is the part as it is today: every chip, filled or empty. A button "Done" is under the chips.
+3. A tap on "Done" changes the part to done. Done shows only the filled chips, and a button "Edit". The line of text under the heading is not shown.
+4. With no filled chip, done shows the sentence "This photo is on no other page." and the button "Edit".
+5. A tap on "Edit" changes the part to open.
+6. A tap on a filled chip in the done state still takes the photo off. The chip stays on screen, empty, until the part is opened and closed again or the screen is left. A chip must not disappear under the finger.
+7. The state is stored for the story. It is the same on the screen after the story and on the session's page, and after the app is closed.
+8. A new story starts open.
+9. A page the story chooses after "Done" (the owner keeps another moment) shows, because its chip is filled.
+10. The button reads "Done", not "Save". Each tap on a chip is saved at once, so nothing waits for a save.
+11. This is a second layout of the part. It changes the rule of the photo card spec that the card has one layout. The owner asked for it.
+
+### Part 4: several photos at one time
+
+The owner's words: "We should also be able to select multiple images at once to add to a page if we want to."
+
+1. "Add a photo" on the photo row of a page (a person, a place, a thing, an idea, a memory, and You) opens the system picker with more than one photo allowed. The limit is 20 photos for one visit to the picker.
+2. The photos are added one at a time, in the order the owner picked them. Each goes last in the page's order. On a page with no photo, the first picked photo is the key photo.
+3. While they are added, the row shows "Adding photo {i} of {n}…". With one photo it shows the line it shows today.
+4. A photo that fails does not stop the others. At the end the page shows one line: "{k} photos could not be added." With one failure it shows the line it shows today.
+5. A photo the page holds already is not added a second time, as today.
+6. The start of a photo story does not change. One photo starts one story.
+7. A kill while the photos are added keeps each photo that was added and loses the others. The owner adds them again.
+
 ## The stored fact
 
 The app must know two things that it does not store today: which link a story made, and which page the owner took a photo off.
@@ -80,6 +110,7 @@ The app must know two things that it does not store today: which link a story ma
 **A. Store both (recommended).** A new migration adds one column and one table:
 - `photo_link.origin`: `story` for a link a photo story made. Empty for every other link, old and new.
 - `photo_page_declined (photo_id, entity_id)`: the owner took this photo off this page.
+- `session.photo_pages_done`: the owner tapped "Done" on this story's card (part 3). False for every existing story.
 
 Cost: one migration. It is additive. No existing row changes. It must be numbered after the last migration on `main` when it merges; PC-b can add one too, so the two builds must agree on the numbers.
 Gain: every rule above is exact. The card can say "added by this story". The move never removes a link the owner made.
@@ -123,6 +154,11 @@ The spec takes approach A. The owner's rule needs the app to show its assumption
 5. Removing a moment from the photo does not take the photo off the people's pages.
 6. Moments kept before this build get no link.
 7. Approach A, with one additive migration.
+
+8. Part 3: the button reads "Done". The state is stored for the story, in the same migration.
+9. Part 3: a filled chip tapped in the done state stays on screen, empty, until the part is closed again.
+10. Part 4: the limit is 20 photos. The picker is the system picker; the app asks for no photo permission.
+11. Part 4: not for the start of a photo story.
 
 ## Left to the builder
 

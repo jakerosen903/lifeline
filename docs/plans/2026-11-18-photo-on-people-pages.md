@@ -28,6 +28,10 @@
 12. The chip's accessibility value is "added by this story" for a `story` link, "added" for the owner's, "not added" for none.
 13. The seeded photo story for UI tests is kept through the real Keep write, so its person chips now start filled. Existing UI tests that start from an empty person chip change their first step; each changed line is listed in the task report. No test is deleted and no assertion is weakened.
 14. Moments kept before this build get no link. There is no backfill.
+15. Part 3: `v16` also adds `session.photo_pages_done`, boolean, not null, default 0.
+16. Part 3: in the done state the card keeps a chip the owner emptied on screen until the part is closed again or the card is built again by leaving the screen. The view model holds the set of such pages; it is not stored.
+17. Part 4: the picker's selection is `[PhotosPickerItem]` with `maxSelectionCount: 20` and `selectionBehavior: .ordered`. Photos are received and added one after the other, never at the same time, so memory holds one image.
+18. Part 4: UI tests cannot drive the picker. The launch argument `-uiTesting-pickPhoto <path>` keeps its meaning; a new `-uiTesting-pickPhotos <path>,<path>` gives several files to the same flow.
 
 ## Global Constraints
 
@@ -39,6 +43,8 @@
   - The line while a story chose a page: "The people in this story have this photo on their pages. Tap to take it off, or to add it to another page."
   - The line with no such page: "Tap to add. Tap again to take it off."
   - Chip values: "added by this story", "added", "not added".
+  - Part 3: buttons "Done" and "Edit"; the sentence "This photo is on no other page."
+  - Part 4: "Adding photo {i} of {n}…"; "{k} photos could not be added."
 - Kit tests: `cd ios/LifelineKit && swift test` in full before each commit.
 - UI tests: `cd ios && xcodegen generate && xcodebuild test -project Lifeline.xcodeproj -scheme Lifeline -destination 'platform=iOS Simulator,id=88EC5B09-3A30-4544-8145-F5246BB99AEE' -only-testing:LifelineUITests/<Class>`. Only the classes a task names.
 - Guards: `python3 .github/scripts/pr_guards.py origin/main` passes before each commit.
@@ -213,6 +219,54 @@ The view reads `card.pagesLine` and `page.stateValue`. It holds no rule.
 - [ ] **Step 3:** Implement the view change; write the docs. The device check lists: a first story about a new person, then the person's page; a photo taken off, then another moment kept; a name moved to "Someone new" and Undo; a person whose page held the photo before the story; VoiceOver on a chip the story chose; the phone's database after the update (old photo links unchanged).
 - [ ] **Step 4:** `swift test`; `PhotoCardUITests`, `PeopleGuessUITests`, `PhotoStoryUITests`, `LandingUITests`, `PhotosUITests`; guards. Expected: all pass.
 - [ ] **Step 5:** Commit "The photo card shows the pages the story chose".
+
+### Task 6: Done hides the pages not chosen (kit and app)
+
+**Files:**
+- Modify: `Store/Migrations.swift` is NOT touched here: Task 1 adds the column. Modify `Domain/Session.swift` and its record, `Store/SessionRepository.swift`, `Photos/PhotoStory.swift`, `Photos/PhotoStoryReader.swift`, `ios/Lifeline/Screens/Photos/PhotoCardPages.swift`, `PhotoCardViewModel.swift`
+- Test: `PhotoStoryTests.swift`, `MigrationsTests.swift` (the column, in Task 1), `PhotoCardUITests.swift`
+
+Task 1 must add to its `v16` block and its tests: `session.photo_pages_done` (decision 15), false on every existing row.
+
+**Interfaces — Produces:**
+```swift
+extension PhotoStoryCard {
+    public var pagesDone: Bool
+    /// What the pages part shows. `kept`: pages the owner emptied while the part is done; they stay on screen.
+    public func shownPageGroups(keeping kept: Set<EntityID>) -> [PageGroup]   // open: all; done: chosen or kept
+    public var showsNoOtherPageSentence: Bool                                   // done, and no page is chosen or kept
+}
+extension PhotoStoryReader { public func setPagesDone(_ done: Bool, for session: SessionID) throws }
+// PhotoCardViewModel: func donePages(), func editPages()
+```
+
+- [ ] **Step 1: Failing tests.** Kit: `aNewStoryStartsOpen`; `doneShowsOnlyTheChosenPages`; `doneKeepsAPageTheOwnerJustEmptied`; `doneWithNoChosenPageShowsTheSentence`; `editShowsEveryPageAgain`; `theStateIsStoredForTheStory` (set, build a new reader, read); `aPageTheStoryChoosesAfterDoneShows`. UI (`PhotoCardUITests`): `testDoneHidesTheEmptyChips` (tap "Done": the place chip does not exist, Maya's chip exists, "Edit" exists, the line is gone); `testEditShowsThemAgain`; `testDoneIsRememberedOnTheSessionsPage` (leave, open the session's page: still done); `testAChipEmptiedWhileDoneStaysUntilTheNextDone` (tap Maya while done: value "not added" and the chip exists; "Edit" then "Done": the chip is gone); `testDoneWithNothingChosenSaysSo`; the largest text: "Done" and "Edit" are reachable and at least 44 points high.
+- [ ] **Step 2:** Run; expected FAIL.
+- [ ] **Step 3:** Implement.
+- [ ] **Step 4:** `swift test`; `PhotoCardUITests`, `LandingUITests`, `PhotoStoryUITests`; guards.
+- [ ] **Step 5:** Commit "Done hides the pages the owner did not choose; Edit shows them again".
+
+### Task 7: Several photos at one time (app)
+
+**Files:**
+- Modify: `ios/Lifeline/Screens/Photos/AddPhotoFlow.swift`, `PhotoShelf.swift`, `ios/Lifeline/Dependencies.swift` (the launch argument)
+- Create: `ios/LifelineKit/Sources/LifelineKit/Photos/PhotoAddProgress.swift` (the two lines, as a pure function)
+- Test: `ios/LifelineKit/Tests/LifelineKitTests/PhotoAddProgressTests.swift`, `ios/LifelineUITests/PhotosUITests.swift`
+
+**Interfaces — Produces:**
+```swift
+public enum PhotoAddProgress {
+    public static func line(adding index: Int, of count: Int) -> String      // count 1: today's "Adding the photo…"
+    public static func failureLine(failed: Int, lastError: String) -> String? // 0: nil; 1: today's line; more: "{k} photos could not be added."
+}
+// PhotoShelf: func add(files: [(URL, String?)]) async   — one after the other, in order; a failure does not stop the rest
+```
+
+- [ ] **Step 1: Failing tests.** Kit: the table for both functions (1 of 1, 2 of 5, 0 failures, 1 failure, 3 failures). UI (`PhotosUITests`, with `-uiTesting-pickPhotos` and three generated files, one of them not an image): `testSeveralPhotosAreAddedInTheOrderPicked` (two good files on Maya's page: the row gains two thumbs, in order, after the ones it had); `testOneBadPhotoDoesNotStopTheOthers` (the two good ones are added; one error line shows); `testTheFirstPickedPhotoIsTheKeyPhotoOnAnEmptyPage`; `testTheSamePhotoPickedTwiceIsAddedOnce`; every existing test with `-uiTesting-pickPhoto` passes unchanged.
+- [ ] **Step 2:** Run; expected FAIL.
+- [ ] **Step 3:** Implement (decision 17).
+- [ ] **Step 4:** `swift test`; `PhotosUITests`, `EntityPageUITests`, `YouUITests`, `PhotoStoryStartUITests` (its picker must still take one photo); guards. The device check gains: pick five photos, one in iCloud; pick 21 (the picker stops at 20); kill the app while photos are added.
+- [ ] **Step 5:** Commit "Add several photos to a page at one time".
 
 ## After this plan
 
