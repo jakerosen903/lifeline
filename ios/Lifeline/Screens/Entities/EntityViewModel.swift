@@ -46,6 +46,8 @@ final class EntityViewModel {
     let personMove: PersonMoveUndo
     /// The contact row (PC3, PC4); it shows nothing on the owner's page or a page that is not a person's.
     let contact: PersonContactViewModel
+    /// "Same as another person…": the picker and the confirm. The page's person is the one that goes (plan decision 2).
+    let merge: PersonMergeViewModel
     let player = SegmentPlayer()
     let deps: Dependencies
 
@@ -54,6 +56,7 @@ final class EntityViewModel {
         self.deps = deps
         personMove = PersonMoveUndo(actions: deps.personLinkActions())
         contact = PersonContactViewModel(entity: entity, deps: deps)
+        merge = PersonMergeViewModel(deps: deps)
         // The shelf reports to this page, which exists only once the shelf is stored: the closure is bound after.
         var report: (String) -> Void = { _ in }
         self.shelf = PhotoShelf(subject: .entity(entity.id), deps: deps, onError: { report($0) })
@@ -154,7 +157,20 @@ final class EntityViewModel {
         refresh()
     }
 
-    /// Returns true when the move was taken back.
+    /// "Merge" on the confirm: the page's person joined another. The notice offers Undo; the page then reads again,
+    /// finds its person gone, and stays up, read-only, until the notice ends (`shouldClose`).
+    func merged(_ receipt: PersonMergeReceipt) {
+        let actions = deps.personMergeActions()
+        personMove.offer("Merged into \(receipt.stayingName).") { try actions.undo(receipt) }
+        refresh()
+    }
+
+    /// A refusal from the picker or the confirm, in the page's message slot. Nothing opens.
+    func mergeRefused() {
+        if let sentence = merge.takeRefusal() { personMove.say(sentence) }
+    }
+
+    /// Returns true when the move or the merge was taken back; the page then reads again and is live.
     func undoPersonMove() -> Bool {
         let done = personMove.undo()
         if done { refresh() }

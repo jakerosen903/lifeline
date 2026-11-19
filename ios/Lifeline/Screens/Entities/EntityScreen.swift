@@ -28,6 +28,12 @@ struct EntityScreen: View {
         let id: String
         let model: WhoIsThisViewModel
     }
+    /// The open "Same as another person…" sheet, with the person that goes, read at the tap.
+    @State private var merging: Merging?
+    private struct Merging: Identifiable {
+        let id = UUID()
+        let leaving: Person?
+    }
     /// The photo open in the viewer.
     @State private var viewing: PlacedPhoto?
     @Environment(\.dismiss) private var dismiss
@@ -78,6 +84,8 @@ struct EntityScreen: View {
                 if viewModel.contact.state != nil {
                     Section {
                         PersonContactRow(viewModel: viewModel.contact, onChange: onChange)
+                            .listRowBackground(Color.clear)
+                        mergeRow
                             .listRowBackground(Color.clear)
                     }
                 }
@@ -208,6 +216,13 @@ struct EntityScreen: View {
                 onChange()
             }
         }
+        .sheet(item: $merging, onDismiss: { viewModel.mergeRefused() }) { merging in
+            PersonMergeSheet(viewModel: viewModel.merge, leaving: merging.leaving, picker: true) { receipt in
+                self.merging = nil
+                viewModel.merged(receipt)
+                onChange()
+            }
+        }
         .onAppear { isVisible = true; viewModel.refresh() }
         // The check can follow a rename and copy or replace the picture: the whole page reads again, not only the row.
         .onReceive(NotificationCenter.default.publisher(for: ContactsCheck.finished)) { _ in if isVisible { viewModel.refresh() } }
@@ -222,6 +237,23 @@ struct EntityScreen: View {
 
     /// The header row's id, for the scroll back to the cover.
     private static let top = "entity.top"
+
+    /// "Same as another person…" under the contact row: a plain button. The person picked in the sheet stays.
+    private var mergeRow: some View {
+        Button {
+            viewModel.personMove.clearMessage()
+            let person = PersonID(rawValue: viewModel.entity.id.rawValue)
+            viewModel.merge.openPicker(for: person)
+            merging = Merging(leaving: try? viewModel.deps.extractionStore.people.person(id: person))
+        } label: {
+            Label("Same as another person\u{2026}", systemImage: "person.2")
+                .font(.body.weight(.medium)).foregroundStyle(Theme.oliveText)
+                .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("entity.merge")
+    }
 
     /// Photos hang on a person, place or thing. An idea keeps its layout.
     private var hasPhotos: Bool { viewModel.entity.type != .idea }
