@@ -47,7 +47,7 @@ What we expect before the run:
 
 - We expect `v6` to fail the two-Robyns story. It has no handles, so two people with one name read as one person. This failure is the reason for `v8`.
 - We expect `v6` to fail the two-names story for the same reason: two names read as two people.
-- In the name-alone story, a person with no memory card in the second segment does not reach `recordingPeople`. The queue builds `recordingPeople` from stored memory cards only. A miss there for `v8` points at the app, not only at the prompt.
+- In the name-alone story, the second segment can give only a person mention with a handle. The queue puts that handle into `recordingPeople` too (D25), so "she" in the third segment can follow it.
 - The new-relation story checks that `v8` does not give a new handle for a new relation phrase. `v6` can pass it, because the said name does not change.
 
 ## The command
@@ -58,8 +58,8 @@ Run this one line from `ios/LifelineKit`. Replace the placeholder with your key.
 ANTHROPIC_API_KEY=your-key-here swift test --filter v6AgainstV8OnPeopleHandles
 ```
 
-- The test prints the table at the end of the run.
-- The test also writes the table as Markdown to `extractor-v8-handles.md` in the system temporary directory. The last line of the output gives the full path. Paste that table into "Results" below.
+- The test writes the table as Markdown to `extractor-v8-handles.md` in the system temporary directory. It writes the header first. Then it adds each row to the file, and prints it, when the row is made. If a later run fails, the file keeps the earlier rows.
+- The output gives the full path of the file at the start and at the end. Paste the table into "Results" below.
 - The log lines that start with `[integration]` show each card the model gave. Use them to explain each miss.
 
 Cost and time:

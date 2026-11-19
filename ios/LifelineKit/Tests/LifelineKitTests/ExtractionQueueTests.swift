@@ -579,6 +579,91 @@ private let threeSegments = ["Robyn moved in that fall", "my roommate cooked eve
     #expect(packet.recordingPeople.isEmpty)
 }
 
+// MARK: - PC-d Task 7b: a person mention with a handle also gives the recording a handle
+
+private func handleMention(_ segment: SegmentID, ordinal: Int = 0, _ text: String, handle: String?, relation: String? = nil,
+                           status: CandidateStatus = .pending, in store: ExtractionStore) throws {
+    let out = MentionOut(text: text, kind: .person, confidence: 0.8, relationText: relation, handle: handle)
+    let row = StoreFixtures.candidate(segment, ordinal: ordinal, kind: .person, payload: try CandidatePayload.encode(out))
+    try store.candidates.insert(row)
+    if status != .pending { try store.candidates.setStatus(row.id, status) }
+}
+
+private let nameAlone = ["we baked bread at the shop", "Ottilie.", "she taught me to play cards"]
+
+@Test func aWaitingPersonMentionWithAHandleGivesTheNextSegmentThatHandle() async throws {
+    let env = try Env(texts: Array(nameAlone.prefix(2)))
+    try handleMention(env.segments[0].id, "Ottilie", handle: "p1", in: env.store)
+    let packet = try #require(try await packetOfLastSegment(env))
+    #expect(packet.recordingPeople == [.init(handle: "p1", saidNames: ["Ottilie"], relation: nil, personID: nil)])
+}
+
+@Test func aKeptPersonMentionGivesItsHandleAndItsRelation() async throws {
+    let env = try Env(texts: Array(nameAlone.prefix(2)))
+    try handleMention(env.segments[0].id, "Ottilie", handle: "p1", relation: "my aunt", status: .accepted, in: env.store)
+    let packet = try #require(try await packetOfLastSegment(env))
+    #expect(packet.recordingPeople == [.init(handle: "p1", saidNames: ["Ottilie"], relation: "my aunt", personID: nil)])
+}
+
+@Test func aDismissedMentionOrAMentionWithNoHandleAddsNothing() async throws {
+    let env = try Env(texts: Array(nameAlone.prefix(2)))
+    try handleMention(env.segments[0].id, ordinal: 0, "Ottilie", handle: "p1", status: .dismissed, in: env.store)
+    try handleMention(env.segments[0].id, ordinal: 1, "Ottilie", handle: nil, in: env.store)
+    try handleMention(env.segments[0].id, ordinal: 2, "Ottilie", handle: "", in: env.store)
+    let packet = try #require(try await packetOfLastSegment(env))
+    #expect(packet.recordingPeople.isEmpty)
+}
+
+@Test func aMentionOfTheCurrentSegmentOrAnotherSessionAddsNothing() async throws {
+    let env = try Env(texts: Array(nameAlone.prefix(2)))
+    try handleMention(env.segments[1].id, "Ottilie", handle: "p1", in: env.store)
+    let (_, other) = try StoreFixtures.session(in: env.store.sessions, segments: ["Theo came by", "Theo left"])
+    try handleMention(other[0].id, "Theo", handle: "p2", in: env.store)
+    let packet = try #require(try await packetOfLastSegment(env))
+    #expect(packet.recordingPeople.isEmpty)
+}
+
+@Test func aCardAndALaterMentionOfOneHandleFoldInTheOrderSaid() async throws {
+    let env = try Env(texts: ["Robyn moved in that fall", "Rob.", "we painted the kitchen"])
+    try handleCard(env.segments[0].id, [PersonOut(handle: "p1", saidName: "Robyn", relationText: nil, personID: nil)], in: env.store)
+    try handleMention(env.segments[1].id, "Rob", handle: "p1", relation: "my roommate", in: env.store)
+    let packet = try #require(try await packetOfLastSegment(env))
+    #expect(packet.recordingPeople == [.init(handle: "p1", saidNames: ["Robyn", "Rob"], relation: "my roommate", personID: nil)])
+}
+
+// Rule 1: the cards' handles come first, then the handles only a mention gives. Said names keep the order said.
+@Test func theCardsHandlesComeBeforeAHandleOnlyAMentionGives() async throws {
+    let env = try Env(texts: ["Ottilie.", "Robyn moved in and Ottilie came too", "we painted the kitchen"])
+    try handleMention(env.segments[0].id, "Ottilie", handle: "p2", in: env.store)
+    try handleMention(env.segments[0].id, ordinal: 1, "Ines", handle: "p3", in: env.store)
+    try handleCard(env.segments[1].id, [PersonOut(handle: "p1", saidName: "Robyn", relationText: nil, personID: nil),
+                                        PersonOut(handle: "p2", saidName: "Ottie", relationText: nil, personID: nil)], in: env.store)
+    let packet = try #require(try await packetOfLastSegment(env))
+    #expect(packet.recordingPeople.map(\.handle) == ["p1", "p2", "p3"])
+    #expect(packet.recordingPeople[1].saidNames == ["Ottilie", "Ottie"])
+}
+
+// End to end: a segment that is a name alone gives only a mention; "she" in the next segment follows its handle.
+@Test func aCardThatFollowsAHandleOnlyAMentionGaveStoresThatPerson() async throws {
+    let first = ExtractorOutput(people: [PersonOut(handle: "p1", saidName: "Ottilie", relationText: nil, personID: nil)], memories: [],
+                                mentions: [MentionOut(text: "Ottilie", kind: .person, confidence: 0.8, handle: "p1")], flags: .none)
+    let second = ExtractorOutput(memories: [MemoryOut(ref: "m1", kind: .event, title: "Cards", quote: "she taught me to play cards",
+                                                      segmentSpan: WordSpan(startWord: 0, endWord: 5), peopleRefs: [], placeText: nil,
+                                                      anchors: [], collectionHint: nil, chapterHint: nil, confidence: 0.9, personHandles: ["p1"])],
+                                 mentions: [], flags: .none)
+    let env = try Env(texts: ["Ottilie.", "she taught me to play cards"], script: [.success(first), .success(second)])
+    let queue = env.queue()
+    let events = await queue.events
+    await queue.enqueue(env.segments[0].id)
+    _ = await collect(events, count: 1)
+    await queue.enqueue(env.segments[1].id)
+    let card = try #require(firstCard(await collect(events, count: 1)))
+    #expect(env.service.requests.last?.packet.recordingPeople.map(\.handle) == ["p1"])
+    let payload = try #require(CandidatePayload.memory(card))
+    #expect(payload.handlePeople.map(\.handle) == ["p1"])
+    #expect(payload.handlePeople.first?.saidName == "Ottilie")
+}
+
 // MARK: - PC-d Task 3: the card stores its people
 
 private let robynP1 = PersonOut(handle: "p1", saidName: "Robyn", relationText: "my roommate", personID: nil)

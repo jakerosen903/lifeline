@@ -23,9 +23,13 @@ struct ExtractorIntegrationTests {
 
     /// PC-d Task 7: every story and older fixture through `v6` and `v8`, three runs each. The expected answer
     /// is reported in the table, not asserted: `v6` gives no handles and is expected to miss two Robyns.
-    /// The table is printed and written to `tableFile`.
+    /// The table goes to `tableFile` row by row, and each row is printed as it is made: a failure in a
+    /// later run keeps the earlier rows.
     @Test func v6AgainstV8OnPeopleHandles() async throws {
-        var rows: [String] = []
+        let header = Self.tableHeader.joined(separator: "\n") + "\n"
+        try header.write(to: Self.tableFile, atomically: true, encoding: .utf8)
+        print(header, terminator: "")
+        print("[comparison] table goes to \(Self.tableFile.path)")
         for fixture in Self.handleStories + Self.olderFixtures {
             for version in Self.comparedVersions {
                 for index in 1...Self.runsPerVersion {
@@ -33,14 +37,20 @@ struct ExtractorIntegrationTests {
                     let label = "\(fixture) \(version) run \(index)"
                     _ = try Self.expectShownFieldsAreTheOwnersWords(run, label: label)
                     try Self.expectEveryMemoryHandleNamesAKnownPerson(run, label: label)
-                    rows.append(try Self.tableRow(run, run: index))
+                    let row = try Self.tableRow(run, run: index)
+                    try Self.appendToTable(row + "\n")
+                    print(row)
                 }
             }
         }
-        let table = (Self.tableHeader + rows).joined(separator: "\n") + "\n"
-        try table.write(to: Self.tableFile, atomically: true, encoding: .utf8)
-        print(table)
         print("[comparison] table written to \(Self.tableFile.path)")
+    }
+
+    static func appendToTable(_ text: String) throws {
+        let handle = try FileHandle(forWritingTo: tableFile)
+        defer { try? handle.close() }
+        try handle.seekToEnd()
+        try handle.write(contentsOf: Data(text.utf8))
     }
 
     // MARK: - One run of one fixture
