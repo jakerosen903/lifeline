@@ -4,7 +4,7 @@ One entry per decision. Newest first. Status is Decided, Open, or Superseded.
 
 ## 2026-11-19 · PC-b: a person can be linked to a contact — decisions and rulings made while building
 
-**Status:** Decided by the builder and the controller. The owner must confirm plan decisions 4, 5, 6 and 8, and the new copy and identifier listed at the end. The owner can overrule each one. Source: `docs/plans/2026-11-18-people-contacts-b.md`, ledger `.superpowers/sdd/2026-11-18-people-contacts-b/rulings.md` (PB1 to PB66). Narrows `docs/specs/2026-11-18-people-contacts.md` in five places, each marked in the spec.
+**Status:** Decided by the builder and the controller. The owner must confirm plan decisions 4, 5, 6 and 8, and the new copy and identifier listed at the end. The owner can overrule each one. Source: `docs/plans/2026-11-18-people-contacts-b.md`, ledger `.superpowers/sdd/2026-11-18-people-contacts-b/rulings.md` (PB1 to PB67). Narrows `docs/specs/2026-11-18-people-contacts.md` in five places, each marked in the spec.
 
 **Decision.** The plan's ten decisions:
 
@@ -70,6 +70,7 @@ The fix wave (final review):
 
 - PB58: after Keep and after "Same story", the app copies the contact's picture for each person of that memory who has a contact and no copy. Before, the picture came at the next launch.
 - PB59 and PB60: a contact's picture that the owner removed from a person's page stays removed. The app keeps the removal as a row of `contact_declined`, with `picture:` and the contact's identifier. There is no new table and no migration. Only `ContactPictureRemoval.swift` reads and writes this row. The copy of the picture respects it. Unlink and a link to another contact clear it. A contact that the system merges keeps it under the new identifier. The page writes the row before the photo goes, and only when the photo is the app's copy.
+- PB67: three small limits are known and not fixed. A re-link by name under full access keeps the picture removal for the card that now fits the name. A card screen keeps two waiting tasks until the next contacts notice. The sentence "That person is not here any more." is not exact when a link with no said name moved to "Someone new".
 - PB61: when the owner's stored choice and a guess on one card reach one planned person, the person is the owner's choice and not a guess. Two plans that join a person keep the guess only when both guessed.
 - PB63: a waiting card's chips read again when a check ends and when the owner gives access.
 - PB64: the look again after access marks the recording's `new` detail links as guesses too. It links nothing when no `new` mention link is left.
