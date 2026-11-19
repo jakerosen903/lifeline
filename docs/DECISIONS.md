@@ -4,7 +4,7 @@ One entry per decision. Newest first. Status is Decided, Open, or Superseded.
 
 ## 2026-11-19 · PC-d: the extractor tells people apart — decisions and rulings made while building
 
-**Status:** Decided by the builder and the controller. The owner approved the plan on 2026-11-19 ("Yes, build both") without a review of each decision. The owner can overrule each one. The prompt `v8` is built and is not the default. Source: `docs/plans/2026-11-19-people-contacts-d.md`, ledger `.superpowers/sdd/2026-11-19-people-contacts-d/rulings.md` (D1 to D31). Narrows `docs/specs/2026-11-18-people-contacts.md`, section "Step 2", and the lines on the group and on details, each marked in the spec.
+**Status:** Decided by the builder and the controller. The owner approved the plan on 2026-11-19 ("Yes, build both") without a review of each decision. The owner can overrule each one. The prompt `v8` is built and is not the default. Source: `docs/plans/2026-11-19-people-contacts-d.md`, ledger `.superpowers/sdd/2026-11-19-people-contacts-d/rulings.md` (D1 to D33). Narrows `docs/specs/2026-11-18-people-contacts.md`, section "Step 2", and the lines on the group and on details, each marked in the spec.
 
 **Decision.** The plan's ten decisions, as built:
 

@@ -304,7 +304,7 @@ The four stories are the spec's: two people with one name in one recording; one 
 
 ## What changed while building
 
-The full record is the ledger: `.superpowers/sdd/2026-11-19-people-contacts-d/rulings.md` (D1 to D31) and `progress.md`.
+The full record is the ledger: `.superpowers/sdd/2026-11-19-people-contacts-d/rulings.md` (D1 to D33) and `progress.md`.
 
 - **Task 4b was added (ruling D17).** The validator rule of Task 1 rejected a memory that names a handle of an earlier segment with no `people` entry in its own output. That is the case a handle exists for ("She was always late"). Now a handle of the recording so far is valid in `person_handles` and `about_ref`. The card stores the recording's entry, with its first said name.
 - **Task 7b was added (ruling D25).** A person named in a segment that gives no memory card did not reach the next segment's `recordingPeople`. Now `recordingPeople` also reads the person mentions of earlier segments that carry a handle. The comparison also writes each table row as it is made, so a failed run keeps the rows.
