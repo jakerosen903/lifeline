@@ -179,13 +179,8 @@ final class PeopleContactsUITests: XCTestCase {
         app.navigationBars.buttons.element(boundBy: 0).tap()
         openPage(app, "Danielle")
         searchFromThePage(app, "tom")
-        let held = app.buttons.matching(identifier: "contacts.result").matching(NSPredicate(format: "label BEGINSWITH %@", "Tomas Reyes")).firstMatch
-        XCTAssertTrue(held.waitForExistence(timeout: 5), "the search finds the held contact")
-        // Known gap (task 8 report): the page's search sheet reads its `heldBy` state before the state set just before
-        // it opened reaches it, so the "In a story as" line is missing there. The sheet's own search shows it.
-        XCTExpectFailure("the page's search does not say who holds the contact yet", strict: false) {
-            XCTAssertEqual(held.label, "Tomas Reyes. In a story as Tomas", "the search says who holds the contact")
-        }
+        let held = result(app, "Tomas Reyes. In a story as Tomas")
+        XCTAssertTrue(held.waitForExistence(timeout: 5), "the search says who holds the contact")
         held.tap()
         XCTAssertTrue(text(app, containing: "Tomas is already linked to this contact.").waitForExistence(timeout: 10), "the refusal sentence shows")
         XCTAssertTrue(rowText(app, "Not linked to a contact").exists, "Danielle is still not linked")
@@ -300,6 +295,22 @@ final class PeopleContactsUITests: XCTestCase {
         XCTAssertTrue(app.buttons["entity.contact.settings"].exists)
         XCTAssertEqual(app.buttons["entity.contact.settings"].label, "Allow contacts in Settings")
         XCTAssertFalse(app.buttons["entity.contact.link"].exists)
+    }
+
+    /// PB51: a person who has a contact while access was never asked (after a restore to a new phone). The button
+    /// reads "Allow contacts" and asks; the script answers yes, and the row shows the link. No landing is opened (PB53).
+    func testNotAskedWithAContactOffersAllowContacts() {
+        let app = XCUIApplication.launchWithPeople(["-uiTesting-seedContactLink", "-uiTesting-contacts", "notAsked"])
+        openPage(app, "Lena")
+        XCTAssertTrue(rowText(app, "Robyn Okafor").exists, "the row names the contact it cannot see yet")
+        XCTAssertTrue(text(app, containing: "If the app cannot see your contacts").exists)
+        let allow = app.buttons["entity.contact.settings"]
+        XCTAssertTrue(app.waitHittable(allow, timeout: 5))
+        XCTAssertEqual(allow.label, "Allow contacts", "not \"in Settings\": the app has not asked yet")
+        allow.tap()
+        XCTAssertTrue(rowText(app, "Linked to Robyn Okafor in your contacts").waitForExistence(timeout: 10),
+                      "after the yes, the row shows the link")
+        XCTAssertFalse(app.buttons["entity.contact.settings"].exists)
     }
 
     /// 9: limited access: the search offers the system's button to share another contact.

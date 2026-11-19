@@ -345,6 +345,7 @@ struct Dependencies {
         if args.contains("-uiTesting-seed") { try UITestSeed.write(sessions: deps.sessions, store: store) }
         if args.contains("-uiTesting-seedPerson") { try UITestSeed.writePersonOnly(store: store) }
         if args.contains("-uiTesting-seedPeople") { try UITestSeed.writePeople(store: store, profile: deps.profile, sessions: deps.sessions) }
+        if args.contains("-uiTesting-seedContactLink") { try UITestSeed.linkLenaToAContact(store: store, links: deps.contactLinks) }
         if args.contains("-uiTesting-seedPhotos") {
             try UITestSeed.writePhotos(store: store, profile: deps.profile, sessions: deps.sessions, library: deps.photos)
         }

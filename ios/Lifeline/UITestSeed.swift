@@ -356,6 +356,14 @@ extension UITestSeed {
         ContactCard(identifier: "ui-contact-quinn", fullName: "Dara Quinn", givenName: "Dara", familyName: "Quinn", nickname: "", hasPicture: false),
     ]
 
+    /// Under `-uiTesting-seedContactLink`, after `-uiTesting-seedPeople`: Lena is linked to "Robyn Okafor", as a restore to
+    /// a new phone leaves a person whose contact the app has not been allowed to see yet. The card has no picture.
+    static func linkLenaToAContact(store: ExtractionStore, links: ContactLinkActions) throws {
+        guard let lena = try store.entities.entities(type: .person).first(where: { $0.title == "Lena" })?.id,
+              let card = contactCards.first(where: { $0.identifier == "ui-contact-okafor" }) else { return }
+        try waitFor { try await links.link(PersonID(rawValue: lena.rawValue), to: card) }
+    }
+
     /// The colour of each card's generated picture, for the cards with `hasPicture`.
     private static let contactPictureColours: [String: Int] = ["ui-contact-vale": 0x5A7D9A]
 

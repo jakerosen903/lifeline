@@ -9,9 +9,15 @@ struct PersonContactRow: View {
     let viewModel: PersonContactViewModel
     /// The page's parent reads again after a change (the people grid shows the copied picture).
     let onChange: () -> Void
-    @State private var searching = false
-    /// Who holds each linked contact, read once when the search opens, not on each render.
-    @State private var heldBy: [String: String] = [:]
+    /// The open search, with who holds each linked contact, read once when it opens, not on each render. The map
+    /// rides in the item: a sheet's content reads `@State` as of the row's last render, and the row's body never reads
+    /// a separate `heldBy`, so a value set just before `isPresented` reached the sheet empty.
+    @State private var searching: Search?
+
+    private struct Search: Identifiable {
+        let id = UUID()
+        let heldBy: [String: String]
+    }
 
     var body: some View {
         if let state = viewModel.state {
@@ -20,7 +26,7 @@ struct PersonContactRow: View {
                 if case .notLinked(let suggestion?) = state { suggestionCard(suggestion) }
             }
             .disabled(viewModel.isWorking)
-            .sheet(isPresented: $searching) { search }
+            .sheet(item: $searching) { search($0.heldBy) }
         }
     }
 
@@ -140,8 +146,7 @@ struct PersonContactRow: View {
     /// Asks first when access was never asked; opens the search only with access.
     private func openSearch() async {
         guard await viewModel.prepareSearch() else { return }
-        heldBy = viewModel.heldByOthers()
-        searching = true
+        searching = Search(heldBy: viewModel.heldByOthers())
     }
 
     /// The 44-point frame sits in the label, so it is the area a tap reaches. The text wraps at large sizes.
@@ -155,11 +160,11 @@ struct PersonContactRow: View {
 
     /// The search sheet: a pick links the person to that contact. A contact another person holds is refused by the
     /// link, and the row says who holds it.
-    private var search: some View {
+    private func search(_ heldBy: [String: String]) -> some View {
         NavigationStack {
             ScrollView {
                 ContactSearchList(deps: viewModel.deps, heldBy: heldBy) { card in
-                    searching = false
+                    searching = nil
                     Task { await viewModel.link(card); onChange() }
                 }
                 .padding(.horizontal, 24).padding(.vertical, 16)
@@ -168,7 +173,7 @@ struct PersonContactRow: View {
             .navigationTitle("Search your contacts")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { searching = false } }
+                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { searching = nil } }
             }
         }
     }
