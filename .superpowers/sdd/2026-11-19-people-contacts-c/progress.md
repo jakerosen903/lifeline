@@ -22,3 +22,5 @@ The owner said "Yes, build both" (PC-d, then PC-c) on 2026-11-19, without a revi
 ## Progress
 
 - Task 1: complete (the branch `people-contacts-c` exists at cef70ed; no merge of `main` was needed).
+- Task 2: complete (commits 1b31d68..c565e19, review clean). Rulings C3 to C5. Carried to Task 3 by ruling C4: three small rules of the merge (the stayer's stale decline rows, and the role text of a dropped link).
+- Task 2: minor (deferred): the `tableExists` guard for `photo_page_declined` is never false in a test on this base; no full kit run has been clean of the two timing flakes (`CascadeVoiceSessionTests.hungFinalizeDoesNotBlockSegmentCloseOrStop`, `ExtractionQueueTests.drainGivesUpAtItsDeadline`).
