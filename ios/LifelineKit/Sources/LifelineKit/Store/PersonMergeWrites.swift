@@ -158,16 +158,20 @@ extension PersonLinkRepository {
     }
 
     /// When only the leaving person holds a contact, the stayer takes it: identifier, kept name, state and the copied
-    /// picture. The leaving row lets go first, because the unique contact index is checked per statement. The stayer's
-    /// decline of that contact goes (ruling C4); a picture-removal marker is not a decline and stays.
+    /// picture. The leaving row lets go first, because the unique contact index is checked per statement. Then the stayer
+    /// no longer declines the contact they hold, whichever side it came from (ruling C4): a decline the leaving person made
+    /// was copied over before this step. A picture-removal marker is not a decline and never matches.
     private static func moveContact(of l: Person, to s: Person, in db: Database) throws {
-        guard let identifier = l.contactIdentifier, s.contactIdentifier == nil else { return }
+        if let identifier = l.contactIdentifier, s.contactIdentifier == nil {
+            try db.execute(sql: """
+                update person set contact_identifier = null, contact_name = null, contact_state = null, contact_photo_id = null where id = ?
+                """, arguments: [l.id.rawValue])
+            try db.execute(sql: "update person set contact_identifier = ?, contact_name = ?, contact_state = ?, contact_photo_id = ? where id = ?",
+                           arguments: [identifier, l.contactName, l.contactState, l.contactPhotoID?.rawValue, s.id.rawValue])
+        }
         try db.execute(sql: """
-            update person set contact_identifier = null, contact_name = null, contact_state = null, contact_photo_id = null where id = ?
-            """, arguments: [l.id.rawValue])
-        try db.execute(sql: "update person set contact_identifier = ?, contact_name = ?, contact_state = ?, contact_photo_id = ? where id = ?",
-                       arguments: [identifier, l.contactName, l.contactState, l.contactPhotoID?.rawValue, s.id.rawValue])
-        try db.execute(sql: "delete from contact_declined where person_id = ? and contact_identifier = ?", arguments: [s.id.rawValue, identifier])
+            delete from contact_declined where person_id = ? and contact_identifier = (select contact_identifier from person where id = ?)
+            """, arguments: [s.id.rawValue, s.id.rawValue])
     }
 
     /// The stayer keeps their name, name origin and every value they have; where they have none, they take the other's:
@@ -225,6 +229,8 @@ extension PersonLinkRepository {
                 guard points else { throw MergeError.stale }
             }
         }
+        // Defence in depth: while the stayer matches `personAfter` it holds this contact, and the unique index keeps it
+        // from anyone else, so the checks above refuse first.
         if let contact = receipt.leavingPerson.rows.first?["contact_identifier"], !contact.isNull {
             let held = try Bool.fetchOne(db, sql: "select exists (select 1 from person where contact_identifier = ? and id != ?)",
                                          arguments: [contact, s.rawValue]) ?? false
@@ -245,13 +251,16 @@ extension PersonLinkRepository {
         }
     }
 
-    /// The tables keyed by the person's id. `photo_page_declined` exists from `v16` on.
+    /// The tables keyed by the person's id. `photo_page_declined` exists from `v16` on; `memory_person` may be dropped later.
     private static func ownedTables(in db: Database) throws -> [OwnedTable] {
         var tables = [OwnedTable(table: "moment_entity", column: "entity_id"), OwnedTable(table: "entity_span", column: "entity_id"),
                       OwnedTable(table: "alias", column: "person_id"), OwnedTable(table: "photo_link", column: "entity_id"),
                       OwnedTable(table: "domain_tag", column: "element_id", extra: "element_kind = '\(ElementKind.entity.rawValue)'"),
                       OwnedTable(table: "contact_declined", column: "person_id")]
         if try db.tableExists("photo_page_declined") { tables.append(OwnedTable(table: "photo_page_declined", column: "entity_id")) }
+        // Kept from v10 and read nowhere, so the merge does not move its rows; the delete of the leaving person cascades
+        // to them, and Undo must give them back.
+        if try db.tableExists("memory_person") { tables.append(OwnedTable(table: "memory_person", column: "person_id")) }
         return tables
     }
 

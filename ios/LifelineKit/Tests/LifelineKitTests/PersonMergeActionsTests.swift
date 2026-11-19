@@ -72,6 +72,7 @@ struct MergeEnv {
             var tables = ["person", "entity", "moment_entity", "alias", "entity_span", "photo_link", "photo_page_declined", "mention",
                           "candidate_person_choice", "curiosity_item", "session", "contact_declined"]
             if try db.tableExists("domain_tag") { tables.append("domain_tag") }
+            if try db.tableExists("memory_person") { tables.append("memory_person") }
             for table in tables {
                 out += try Row.fetchAll(db, sql: "select * from \(table)").map { "\(table): \($0.description)" }.sorted()
             }
@@ -386,6 +387,22 @@ private let valeContact = PersonGuess.Contact(identifier: "c-vale", fullName: "R
     #expect(try env.person(robyn.id)?.contactIdentifier == "c-vale")
     #expect(try env.store.people.declinedContacts(of: robyn.id) == ["c-other"])
     #expect(try env.store.people.pictureWasRemoved(robyn.id, identifier: "c-vale"), "the marker is not a decline")
+}
+
+// Ruling C4 (b), the other direction: the stayer keeps their own contact, which the leaving person had declined.
+@Test func theStayerDoesNotTakeADeclineOfTheirOwnContact() throws {
+    let env = try MergeEnv()
+    let robin = try env.store.people.insertPerson(displayName: "Robin")
+    let robyn = try env.store.people.insertPerson(displayName: "Robyn Vale")
+    try env.sql("update person set contact_identifier = 'c-s', contact_name = 'Robyn Vale', contact_state = 'linked' where id = ?", [robyn.id.rawValue])
+    try env.sql("insert into contact_declined (person_id, contact_identifier) values (?, 'c-s'), (?, 'picture:c-s'), (?, 'c-other')",
+                [robin.id.rawValue, robin.id.rawValue, robin.id.rawValue])
+
+    try env.actions.merge(robin.id, into: robyn.id)
+
+    #expect(try env.person(robyn.id)?.contactIdentifier == "c-s")
+    #expect(try env.store.people.declinedContacts(of: robyn.id) == ["c-other"])
+    #expect(try env.store.people.pictureWasRemoved(robyn.id, identifier: "c-s"), "the marker is not a decline")
 }
 
 // Ruling C4 (c): the owner's words are kept. A stayer's link with no role text takes the leaving link's.

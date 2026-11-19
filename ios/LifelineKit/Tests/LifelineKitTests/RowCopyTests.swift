@@ -72,3 +72,11 @@ private func copy(of db: AppDatabase) throws -> RowCopy {
     try db.writer.write { try empty.insert(in: $0) }
     #expect(try db.writer.read { try Int.fetchOne($0, sql: "select count(*) from thing") } == 3)
 }
+
+@Test func anUpdateThatWritesNothingThrows() throws {
+    let db = try thingTable()
+    let before = try copy(of: db)
+    try db.writer.write { try $0.execute(sql: "delete from part; delete from thing where id = 'a'") }
+    #expect(throws: RowCopy.UpdateFailed(table: "thing", key: "id")) { try db.writer.write { try before.update(in: $0, key: "id") } }
+    #expect(throws: RowCopy.UpdateFailed(table: "thing", key: "missing")) { try db.writer.write { try before.update(in: $0, key: "missing") } }
+}

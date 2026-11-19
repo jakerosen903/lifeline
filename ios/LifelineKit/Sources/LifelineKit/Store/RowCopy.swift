@@ -27,14 +27,20 @@ struct RowCopy: Sendable, Equatable {
     }
 
     /// Writes each row over the row with the same value in `key`, with an UPDATE. No delete runs, so no cascade does.
+    /// Throws `UpdateFailed` when a row has no `key` column or no row has its key: a write-back that writes nothing
+    /// must not pass for one that worked.
     func update(in db: Database, key: String) throws {
         for row in rows {
-            guard let id = row[key] else { continue }
+            guard let id = row[key] else { throw UpdateFailed(table: table, key: key) }
             let columns = row.keys.filter { $0 != key }.sorted()
-            guard !columns.isEmpty else { continue }
-            let assignments = columns.map { "\($0.quotedDatabaseIdentifier) = ?" }.joined(separator: ", ")
+            let assignments = (columns.isEmpty ? [key] : columns).map { "\($0.quotedDatabaseIdentifier) = ?" }.joined(separator: ", ")
+            let values = columns.isEmpty ? [id] : columns.map { row[$0] ?? .null }
             try db.execute(sql: "update \(table.quotedDatabaseIdentifier) set \(assignments) where \(key.quotedDatabaseIdentifier) = ?",
-                           arguments: StatementArguments(columns.map { row[$0] } + [id]))
+                           arguments: StatementArguments(values + [id]))
+            guard db.changesCount > 0 else { throw UpdateFailed(table: table, key: key) }
         }
     }
+
+    /// `update(in:key:)` found no row to write over.
+    struct UpdateFailed: Swift.Error, Equatable { var table: String, key: String }
 }

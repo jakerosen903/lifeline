@@ -26,6 +26,7 @@ extension MergeEnv {
                 try RowCopy.read("domain_tag", where: "element_kind = 'entity' and element_id in (?, ?)", arguments: ids, in: db),
                 try RowCopy.read("contact_declined", where: "person_id in (?, ?)", arguments: ids, in: db),
                 try RowCopy.read("photo_page_declined", where: byEntity, arguments: ids, in: db),
+                try RowCopy.read("memory_person", where: "person_id in (?, ?)", arguments: ids, in: db),
                 try RowCopy.read("mention", where: "1", arguments: [], in: db),
                 try RowCopy.read("candidate_person_choice", where: "1", arguments: [], in: db),
                 try RowCopy.read("curiosity_item", where: "1", arguments: [], in: db),
@@ -162,6 +163,43 @@ func undoPutsEveryRowOfBothPeopleBack(_ mergeCase: MergeCase) throws {
 
     #expect(try env.store.photos.isDeclined(photo.id, on: robin.entityID))
     #expect(try !env.store.photos.isDeclined(photo.id, on: robyn.entityID))
+}
+
+// The legacy `memory_person` rows (kept from v10, read nowhere) go with the leaving person by cascade; Undo gives them
+// back, and the stayer's own rows come through unchanged.
+@Test func undoGivesBackTheLegacyMemoryPersonRows() throws {
+    let env = try MergeEnv()
+    let robin = try env.store.people.insertPerson(displayName: "Robin")
+    let robyn = try env.store.people.insertPerson(displayName: "Robyn Vale")
+    let (m, n) = (try env.memory("Robin painted the fence"), try env.memory("Robyn cut the grass"))
+    try env.sql("insert into memory_person (memory_id, person_id, role_text) values (?, ?, 'my roommate'), (?, ?, null), (?, ?, 'Robyn')",
+                [m.id.rawValue, robin.id.rawValue, n.id.rawValue, robin.id.rawValue, n.id.rawValue, robyn.id.rawValue])
+    let count = { (person: Person) in
+        try env.db.writer.read { try Int.fetchOne($0, sql: "select count(*) from memory_person where person_id = ?", arguments: [person.id.rawValue]) ?? 0 }
+    }
+    let rows = try env.rows(of: robin, robyn), dump = try env.dump()
+
+    let receipt = try env.actions.merge(robin.id, into: robyn.id)
+    #expect(try count(robin) == 0 && count(robyn) == 1, "the merge does not move them; the cascade takes the leaving rows")
+    try env.actions.undo(receipt)
+
+    #expect(try env.rows(of: robin, robyn) == rows)
+    #expect(try env.dump() == dump)
+}
+
+// A failure Undo cannot see in advance rolls back: the candidate the leaving entity came from is deleted after the merge,
+// so putting the entity back breaks its foreign key. Nothing changes.
+@Test func aFailureInsideUndoChangesNothing() throws {
+    let env = try MergeEnv()
+    let (robin, robyn) = try MergeCase.links.build(env)
+    let card = try env.card(in: try env.session(["Robin waved"])[0], people: ["Robin"])
+    try env.sql("update entity set created_from_candidate_id = ? where id = ?", [card.id.rawValue, robin.id.rawValue])
+    let receipt = try env.actions.merge(robin.id, into: robyn.id)
+    try env.sql("delete from candidate where id = ?", [card.id.rawValue])
+    let dump = try env.dump()
+
+    #expect(throws: DatabaseError.self) { try env.actions.undo(receipt) }
+    #expect(try env.dump() == dump)
 }
 
 // MARK: - Stale: Undo refuses and changes nothing
