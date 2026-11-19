@@ -64,3 +64,6 @@ Baseline: kit 1295 pass on b55c02f (one timing flake passed alone); app builds; 
 - Task 8: review needs fixes — 2 Important (no test for "Allow contacts" under not-asked, PB51; the held-contact line gap above, recorded only in a non-strict expected failure). Fix round 1/5 dispatched.
 - Task 8: minor (deferred): the one-tap retry in `testAnOlderLinkHasNoMark` works around a swallowed tap (PB54); test 3 reopens in the same app instance, not after a relaunch; test 9 checks only the stand-in access button (PB45).
 - Note: `PhotoCardUITests.testRemoveTakesThePhotoOffOneMemory` and `.testUseThisDateDatesTheMemory` fail from main's photo work (a memory page built before the remove is not refreshed). Not this branch's to fix; a note is in the shared notes folder for the photos session.
+- Task 8: fix round 1/5 (2 addressed — a test for "Allow contacts" under not-asked with a seeded link (PB56); the page's search carries the held-contact map in the sheet's item, and test 7 asserts "In a story as" strictly (PB55); commit 9c406eb). PeopleContactsUITests 13/13, PeopleGuessUITests 14/14, PeopleUITests 10/10.
+- Task 8: complete (commits ef334d0..9c406eb, review clean after fix round 1).
+- Final whole-branch review dispatched (base 6e469ca, head 9c406eb).
