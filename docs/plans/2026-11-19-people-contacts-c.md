@@ -70,7 +70,7 @@ The spec leaves these open, or this plan differs from the spec. The owner can ov
   - Picker title: "Who is {name} the same as?"; empty state: "No other people yet."
   - Confirm title: "Same person?"; body: "{leaving name} joins {staying name}. Every story, name and photo moves to {staying name}."; second line: "You can undo this for a few seconds only."; flag line, when decision 1 applies: "{staying name} stays hidden, because one of them is." or "{staying name} stays out of the AI's view, because one of them is."; buttons: "Merge", "Cancel".
   - Notice: "Merged into {name}." with "Undo".
-  - Refusals: "They are linked to two different contacts."; "That person is not here any more." (existing); a stale or failed Undo uses the existing lines `PersonChipLine.staleUndo` and `PersonChipLine.failedUndo`.
+  - Refusals: "They are linked to two different contacts."; "That person is not here any more." (existing); a stale Undo of a merge shows "That changed since. The merge stays." (`PersonChipLine.staleMergeUndo`, added by the final review, ruling C12); a failed Undo uses the existing line `PersonChipLine.failedUndo`.
   - VoiceOver label on the confirm's pictures: "{name}".
 - Accessibility identifiers, new: `entity.merge`, `merge.picker`, `merge.picker.person`, `merge.confirm`, `merge.confirm.text`, `merge.confirm.merge`, `merge.confirm.cancel`. The notice keeps `person.notice` and `notice.undo`. Keep every existing identifier.
 - Sample names in tests and seeds are invented.

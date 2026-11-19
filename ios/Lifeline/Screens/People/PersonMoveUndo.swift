@@ -54,12 +54,8 @@ final class PersonMoveUndo {
             timer?.cancel()
             text = nil
             return true
-        } catch is PersonLinkActions.Error {
-            show(PersonChipLine.staleUndo)
-        } catch PersonMergeActions.Error.stale {
-            show(PersonChipLine.staleUndo)
         } catch {
-            show(PersonChipLine.failedUndo)
+            show(PersonChipLine.undoRefused(error))
         }
         return false
     }

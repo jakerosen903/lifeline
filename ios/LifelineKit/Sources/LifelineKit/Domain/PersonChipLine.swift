@@ -75,6 +75,19 @@ public enum PersonChipLine {
     /// The notice when Undo failed for any other reason. The error's own text never reaches the person.
     public static let failedUndo = "Could not undo that."
 
+    /// The notice when Undo of a merge is refused because a row the merge left changed since (ruling C12, draft copy).
+    /// A merge has no name to open and no way back after its Undo.
+    public static let staleMergeUndo = "That changed since. The merge stays."
+
+    /// The notice for a refused Undo: a move's refusal, a merge's stale refusal, or any other failure.
+    public static func undoRefused(_ error: any Error) -> String {
+        switch error {
+        case is PersonLinkActions.Error: staleUndo
+        case PersonMergeActions.Error.stale: staleMergeUndo
+        default: failedUndo
+        }
+    }
+
     private static func clean(_ said: String?) -> String? {
         let trimmed = said?.trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmed?.isEmpty == false ? trimmed : nil
