@@ -569,6 +569,33 @@ public struct MemoryRepository: Sendable {
         }
     }
 
+    /// One range to write, checked against the range the caller saw.
+    public struct RangeChange: Sendable, Equatable {
+        public var memory: MemoryID
+        public var range: TimeRange
+        public var ifCurrently: TimeRange
+        public init(memory: MemoryID, range: TimeRange, ifCurrently: TimeRange) {
+            self.memory = memory; self.range = range; self.ifCurrently = ifCurrently
+        }
+    }
+
+    /// One write. Each change happens only while the stored range equals `ifCurrently`. The memory's chapter does not change (S6c).
+    /// Returns the memories it changed, in the order given. A memory that is gone is skipped.
+    @discardableResult
+    public func updateRanges(_ changes: [RangeChange]) throws -> [MemoryID] {
+        guard !changes.isEmpty else { return [] }  // no transaction for no work
+        return try db.writer.write { db in
+            var changed: [MemoryID] = []
+            for change in changes {
+                guard var memory = try Memory.fetchOne(db, key: change.memory.rawValue), memory.range == change.ifCurrently else { continue }
+                memory.range = change.range
+                try memory.update(db)
+                changed.append(change.memory)
+            }
+            return changed
+        }
+    }
+
     public func allMemories() throws -> [Memory] {
         try db.writer.read { try Memory.order(Column("created_at")).fetchAll($0) }
     }

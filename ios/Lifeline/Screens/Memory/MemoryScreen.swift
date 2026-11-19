@@ -110,7 +110,9 @@ struct MemoryScreen: View {
                 // Decision 13: a memory has no header, so one photo is already a row. No photo, no frame.
                 if viewModel.shelf.isAdding { PhotoAddingLine() }
                 if !viewModel.shelf.photos.isEmpty {
-                    PhotoRow(photos: viewModel.shelf.photos, label: viewModel.photoLabel, cache: deps.photoImages) { viewing = $0 }
+                    PhotoRow(photos: viewModel.shelf.photos, label: viewModel.photoLabel, cache: deps.photoImages,
+                             onOpen: { viewing = $0 },
+                             onMove: { id, index in Task { await viewModel.movePhoto(id, to: index); onChange() } })
                 }
 
                 if !viewModel.entities.isEmpty {

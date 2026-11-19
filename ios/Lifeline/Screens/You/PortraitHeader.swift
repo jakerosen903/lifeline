@@ -1,7 +1,7 @@
 import LifelineKit
 import SwiftUI
 
-/// The top of You (S3): the owner's cover (S4), the person's name, the birth line they typed, and their life
+/// The top of You (S3): the owner's key photo (S4), the person's name, the birth line they typed, and their life
 /// strip, which is the way to their own page; then their photos in a row when there are two or more. Each shows
 /// only when there is something to show; nothing asks to be filled in.
 struct PortraitHeader: View {
@@ -15,6 +15,8 @@ struct PortraitHeader: View {
     let cache: PhotoImageCache
     let deps: Dependencies
     let onOpen: (PlacedPhoto) -> Void
+    /// A photo of the row moved: the photo and the index where it landed.
+    let onMove: (PhotoID, Int) -> Void
     let onChange: () -> Void
 
     var body: some View {
@@ -58,7 +60,7 @@ struct PortraitHeader: View {
             }
             // Decision 13: one photo is already the cover; two or more sit in a row.
             if photos.count >= 2 {
-                PhotoRow(photos: photos, label: label, cache: cache, onOpen: onOpen)
+                PhotoRow(photos: photos, label: label, cache: cache, onOpen: onOpen, onMove: onMove)
                     .padding(.top, 16)
             }
         }

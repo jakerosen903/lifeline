@@ -1,8 +1,8 @@
 import LifelineKit
 import SwiftUI
 
-/// One photo in a sheet (decision 14): the photo fitted to the screen, its caption, "Make this the cover" when
-/// it is not the cover, "Tell its story" where a session can start, "Remove photo…" (asks first) and "Done". Each action finishes, then the sheet closes,
+/// One photo in a sheet (decision 14): the photo fitted to the screen, its caption, "Make this the key photo" when
+/// it is not the key photo (it moves to the front), "Tell its story" where a session can start, "Remove photo…" (asks first) and "Done". Each action finishes, then the sheet closes,
 /// so the page under it already shows the change. No zoom in S4.
 struct PhotoViewer: View {
     let photo: PlacedPhoto
@@ -41,7 +41,7 @@ struct PhotoViewer: View {
                             .accessibilityIdentifier("photo.tellStory")
                     }
                     if canMakeCover {
-                        Button { Task { await onMakeCover(); dismiss() } } label: { fullWidth("Make this the cover") }
+                        Button { Task { await onMakeCover(); dismiss() } } label: { fullWidth("Make this the key photo") }
                             .buttonStyle(.bordered).tint(Theme.oliveOnFill)
                             .accessibilityIdentifier("photo.makeCover")
                     }
