@@ -46,6 +46,8 @@ final class EntityViewModel {
     private(set) var contactsSeen: [MemoryID: PersonChipLine.ContactsSeen] = [:]
     /// "Changed to {name}." with Undo, after the sheet moved a moment off this page.
     let personMove: PersonMoveUndo
+    /// The contact row (PC3, PC4); it shows nothing on the owner's page or a page that is not a person's.
+    let contact: PersonContactViewModel
     let player = SegmentPlayer()
     let deps: Dependencies
 
@@ -53,10 +55,18 @@ final class EntityViewModel {
         self.entity = entity
         self.deps = deps
         personMove = PersonMoveUndo(actions: deps.personLinkActions())
+        contact = PersonContactViewModel(entity: entity, deps: deps)
         // The shelf reports to this page, which exists only once the shelf is stored: the closure is bound after.
         var report: (String) -> Void = { _ in }
         self.shelf = PhotoShelf(subject: .entity(entity.id), deps: deps, onError: { report($0) })
         report = { [weak self] in self?.photoError = $0 }
+        contact.onChanged = { [weak self] in self?.refresh() }
+    }
+
+    /// True while the first picture is the copy the app took from the contact: it says "picture from your contacts".
+    var coverIsFromContacts: Bool {
+        guard let copy = contact.contactPhotoID else { return false }
+        return shelf.cover?.id == copy
     }
 
     /// "Photo of Maya", or "Photo of you" on the owner's page (decision 19).
@@ -119,6 +129,7 @@ final class EntityViewModel {
         } catch {
             self.error = error.localizedDescription
         }
+        contact.refresh()
         shelf.load()
     }
 

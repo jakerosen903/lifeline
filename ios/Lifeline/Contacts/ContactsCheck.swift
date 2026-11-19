@@ -6,6 +6,9 @@ import LifelineKit
 /// One check runs at a time; a request while one runs makes one more run after it, so a burst of notices is one
 /// more check, not many. A failure is logged and never shown; it never stops launch, and the next request tries again.
 actor ContactsCheck {
+    /// Posted on the main thread after each check, so an open person's page reads its contact row again.
+    static let finished = Notification.Name("ContactsCheck.finished")
+
     private let deps: Dependencies
     private var running = false
     private var again = false
@@ -26,5 +29,6 @@ actor ContactsCheck {
             }
         } while again
         running = false
+        await MainActor.run { NotificationCenter.default.post(name: Self.finished, object: nil) }
     }
 }

@@ -31,6 +31,7 @@ struct EntityScreen: View {
     /// The photo open in the viewer.
     @State private var viewing: PlacedPhoto?
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.scenePhase) private var scenePhase
     /// Absent outside the shell (a preview): then nothing watches the session cover.
     @Environment(HomeViewModel.self) private var home: HomeViewModel?
     /// The top page of its stack. A page under a cover stays visible: the cover sends no onDisappear.
@@ -71,6 +72,14 @@ struct EntityScreen: View {
                     }
                     .listRowBackground(Color.clear)
                     .id(Self.top)
+                }
+
+                // The contact row (PC3, PC4) under the name: a person's page only, never the owner's.
+                if viewModel.contact.state != nil {
+                    Section {
+                        PersonContactRow(viewModel: viewModel.contact, onChange: onChange)
+                            .listRowBackground(Color.clear)
+                    }
                 }
 
                 if viewModel.entity.type == .idea {
@@ -197,6 +206,9 @@ struct EntityScreen: View {
             }
         }
         .onAppear { isVisible = true; viewModel.refresh() }
+        // The contacts check finished, or the app came back (access may have changed in Settings): the row reads again.
+        .onReceive(NotificationCenter.default.publisher(for: ContactsCheck.finished)) { _ in if isVisible { viewModel.contact.refresh() } }
+        .onChange(of: scenePhase) { if scenePhase == .active, isVisible { viewModel.contact.refresh() } }
         .onDisappear { isVisible = false; viewModel.stop(); viewModel.clearPhotoError() }
         // A session started here lands under a cover; when it closes, read what it added.
         .onChange(of: home?.coverClosings) { if isVisible { viewModel.refresh() } }
@@ -216,6 +228,10 @@ struct EntityScreen: View {
         if let cover = viewModel.shelf.cover {
             PhotoHeader(cover: cover, label: viewModel.photoLabel, cache: viewModel.deps.photoImages) {
                 viewing = viewModel.shelf.photos.first(where: \.isCover)
+            }
+            if viewModel.coverIsFromContacts {
+                Text("picture from your contacts").font(.footnote).foregroundStyle(Theme.secondaryText)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
     }
