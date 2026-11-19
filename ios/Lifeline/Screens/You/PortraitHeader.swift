@@ -8,8 +8,8 @@ struct PortraitHeader: View {
     let portrait: Portrait
     let cover: Photo?
     let photos: [PlacedPhoto]
-    /// True while a photo is being added: "Adding the photo…" shows where the photo will go.
-    let isAdding: Bool
+    /// While photos are added: the line that shows where the photo will go ("Adding photo {i} of {n}…").
+    let addingLine: String?
     /// "Photo of you" (decision 19).
     let label: String
     let cache: PhotoImageCache
@@ -22,7 +22,7 @@ struct PortraitHeader: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             // No photo, no frame: You looks complete without one.
-            if isAdding { PhotoAddingLine() }
+            if let addingLine { PhotoAddingLine(text: addingLine) }
             if let cover {
                 PhotoHeader(cover: cover, label: label, cache: cache) {
                     if let placed = photos.first(where: \.isCover) { onOpen(placed) }

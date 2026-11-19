@@ -212,9 +212,9 @@ struct EntityScreen: View {
     /// Photos hang on a person, place or thing. An idea keeps its layout.
     private var hasPhotos: Bool { viewModel.entity.type != .idea }
 
-    /// The cover, or "Adding the photo…" where a first photo will go. Neither shows on a page without a photo.
+    /// The cover, or the adding line where a first photo will go. Neither shows on a page without a photo.
     @ViewBuilder private var photoHeader: some View {
-        if viewModel.shelf.isAdding { PhotoAddingLine() }
+        if let line = viewModel.shelf.addingLine { PhotoAddingLine(text: line) }
         if let cover = viewModel.shelf.cover {
             PhotoHeader(cover: cover, label: viewModel.photoLabel, cache: viewModel.deps.photoImages) {
                 viewing = viewModel.shelf.photos.first(where: \.isCover)

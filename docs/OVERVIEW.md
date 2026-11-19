@@ -292,7 +292,9 @@ The app excludes every `.lifeline` file and the audio folder and the photos fold
 
 ### Photos
 
-The person adds a photo one at a time with the system picker, from “Add a photo” in the “…” menu of a person, place or thing page, a memory page, or You. “Add a photo” asks for no photo-library permission and makes no network call for a photo. Only “Tell a story about a photo” asks for access (see “A photo starts a story”).
+The person adds photos with the system picker, from “Add a photo” in the “…” menu of a person, place or thing page, a memory page, or You. “Add a photo” asks for no photo-library permission and makes no network call for a photo. Only “Tell a story about a photo” asks for access (see “A photo starts a story”).
+
+One visit to the picker gives up to 20 photos. The app adds them one after the other, in the order the person picked them. It holds one photo in memory at a time. Each photo goes last on the page. On a page with no photo, the first picked photo is the key photo. While the photos are added, the page shows “Adding photo 2 of 5…”. A photo that fails does not stop the others. At the end the page shows one line: “3 photos could not be added.” With one photo, the page shows “Adding the photo…” and, on a failure, “Could not add this photo:” and the reason. A kill keeps each photo already added. The start of a photo story takes one photo.
 
 The app keeps one copy of the photo, as a JPEG of quality 0.85 and at most 2048 pixels on the long edge, in `photos/` next to the audio. The copy has no metadata: no GPS, no EXIF and no orientation flag. The app reads two things from the picked file: the date taken (`DateTimeOriginal`) and the GPS position. It keeps both only in the database, with the origin `exif`. The app shows the date as “taken 14 June 2012”. It does nothing with the position. Neither value changes a memory, a range or a place.
 

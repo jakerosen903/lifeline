@@ -30,7 +30,7 @@ struct YouScreen: View {
                 VStack(alignment: .leading, spacing: 28) {
                     if let portrait = viewModel.portrait {
                         PortraitHeader(portrait: portrait, cover: viewModel.shelf?.cover, photos: viewModel.shelf?.photos ?? [],
-                                       isAdding: viewModel.shelf?.isAdding ?? false, label: viewModel.photoLabel,
+                                       addingLine: viewModel.shelf?.addingLine, label: viewModel.photoLabel,
                                        cache: viewModel.deps.photoImages, deps: viewModel.deps, onOpen: { viewing = $0 },
                                        onMove: { id, index in Task { await viewModel.movePhoto(id, to: index) } }, onChange: changed)
                             .id(Self.top)

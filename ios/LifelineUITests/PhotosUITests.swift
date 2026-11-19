@@ -274,6 +274,81 @@ final class PhotosUITests: XCTestCase {
         XCTAssertTrue(app.any("you.error").waitForExistence(timeout: 10))
         XCTAssertEqual(app.any("you.error").label, "Could not add this photo: Lifeline cannot read this file as a photo.")
     }
+
+    // MARK: - Several photos at one time (part 4)
+
+    @MainActor
+    func testSeveralPhotosAreAddedInTheOrderPicked() throws {
+        let app = XCUIApplication.launchWithPhotos(try pickPhotos(["photo-orange", "photo-green"]))
+        app.openEntityPage("Maya")
+        XCTAssertTrue(app.reveal(app.staticTexts["Photos"]))
+        XCTAssertEqual(thumbValues(app), ["taken 14 June 2012", ""])
+        app.addPhotoFromMenu("entity.more", "entity.addPhoto")
+        XCTAssertTrue(waitForCount(thumbs(app), 4, timeout: 20), "the row gains two thumbs")
+        XCTAssertEqual(thumbValues(app), ["taken 14 June 2012", "", "taken 14 June 2012", "taken 2 March 2005"],
+                       "the picked photos follow the ones the page had, in the order picked; the key photo stays first")
+        XCTAssertFalse(app.any("photo.error").exists)
+    }
+
+    @MainActor
+    func testOneBadPhotoDoesNotStopTheOthers() throws {
+        let app = XCUIApplication.launchWithPhotos(try pickPhotos(["photo-orange", "not-a-photo", "photo-green"]))
+        app.openEntityPage("Maya")
+        app.addPhotoFromMenu("entity.more", "entity.addPhoto")
+        let error = app.any("photo.error")
+        XCTAssertTrue(error.waitForExistence(timeout: 20))
+        XCTAssertEqual(error.label, "Could not add this photo: Lifeline cannot read this file as a photo.", "one failure keeps today's line")
+        XCTAssertEqual(app.descendants(matching: .any).matching(identifier: "photo.error").count, 1, "one error line")
+        XCTAssertTrue(app.reveal(app.staticTexts["Photos"]))
+        XCTAssertTrue(waitForCount(thumbs(app), 4, timeout: 10), "the two good photos are added")
+        XCTAssertEqual(thumbValues(app), ["taken 14 June 2012", "", "taken 14 June 2012", "taken 2 March 2005"])
+    }
+
+    @MainActor
+    func testTheFirstPickedPhotoIsTheKeyPhotoOnAnEmptyPage() throws {
+        let app = XCUIApplication.launchWithPeople(try pickPhotos(["photo-green", "photo-orange"]))
+        app.openEntityPage("Lena")
+        XCTAssertFalse(app.buttons["photo.header"].exists, "no photo, no frame")
+        app.addPhotoFromMenu("entity.more", "entity.addPhoto")
+        // The header is read before the scroll to the row: a scrolled page can drop it from the tree.
+        XCTAssertTrue(app.staticTexts["Photos"].waitForExistence(timeout: 20), "two photos make a row")
+        XCTAssertEqual(app.buttons["photo.header"].value as? String, "taken 2 March 2005", "the first picked photo is the key photo")
+        XCTAssertTrue(app.reveal(app.staticTexts["Photos"]))
+        XCTAssertTrue(waitForCount(thumbs(app), 2, timeout: 20))
+        XCTAssertEqual(thumbValues(app), ["taken 2 March 2005", "taken 14 June 2012"])
+    }
+
+    @MainActor
+    func testTheSamePhotoPickedTwiceIsAddedOnce() throws {
+        // Two copies of one image: the library finds the stored photo by its hash.
+        let app = XCUIApplication.launchWithPeople(try pickPhotos(["photo-orange", "photo-orange"]))
+        app.openEntityPage("Lena")
+        app.addPhotoFromMenu("entity.more", "entity.addPhoto")
+        XCTAssertTrue(app.buttons["photo.header"].waitForExistence(timeout: 20))
+        XCTAssertTrue(waitForAbsence(app.any("photo.adding"), timeout: 20), "both photos are done")
+        XCTAssertEqual(app.buttons["photo.header"].value as? String, "taken 14 June 2012")
+        XCTAssertFalse(app.staticTexts["Photos"].exists, "one photo is the header, not a row")
+        XCTAssertFalse(thumbs(app).firstMatch.exists)
+        XCTAssertFalse(app.any("photo.error").exists, "the second is no failure")
+    }
+
+    /// `-uiTesting-pickPhotos` with a fresh copy of each fixture, in this order.
+    @MainActor
+    private func pickPhotos(_ names: [String]) throws -> [String] {
+        ["-uiTesting-pickPhotos", try names.map { try XCUIApplication.fixturePath($0, ext: "jpg") }.joined(separator: ",")]
+    }
+
+    @MainActor
+    private func waitForCount(_ query: XCUIElementQuery, _ count: Int, timeout: TimeInterval) -> Bool {
+        let expectation = XCTNSPredicateExpectation(predicate: NSPredicate(format: "count == %d", count), object: query)
+        return XCTWaiter().wait(for: [expectation], timeout: timeout) == .completed
+    }
+
+    @MainActor
+    private func waitForAbsence(_ element: XCUIElement, timeout: TimeInterval) -> Bool {
+        let expectation = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: element)
+        return XCTWaiter().wait(for: [expectation], timeout: timeout) == .completed
+    }
 }
 
 private extension XCUIElement {

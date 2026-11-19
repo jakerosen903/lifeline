@@ -1,6 +1,6 @@
 # A photo story's photo on its people's pages: device check
 
-Run this on the iPhone with the build of parts 1 and 2. Tick each line. Say what looks wrong. Each line says what to do and what must be true. Parts 3 (“Done” and “Edit”) and 4 (several photos at one time) get their own lines when they are built.
+Run this on the iPhone with the build of parts 1 and 2. Tick each line. Say what looks wrong. Each line says what to do and what must be true. Part 3 (“Done” and “Edit”) gets its own lines when it is built. Part 4 (several photos at one time) has its lines under “Several photos at one time”.
 
 ## Part 1: a kept moment puts the photo on its people's pages
 
@@ -23,6 +23,16 @@ Run this on the iPhone with the build of parts 1 and 2. Tick each line. Say what
 ## After the update
 
 13. [ ] Before you install this build, note two people's pages that show photos from older photo stories. Install the build. Each page must show the same photos in the same order. Each chip on the older cards must read “added”, not “added by this story”. No older story must put a photo on a new page.
+
+## Several photos at one time
+
+14. [ ] On a person's page, tap “Add a photo”. Pick five photos, one of them only in iCloud (not on the phone). The line must read “Adding photo 1 of 5…”, then count up to 5. The five photos must go last on the page, in the order you picked them. No error line must show.
+15. [ ] Open the picker again and try to pick 21 photos. The picker must stop at 20.
+16. [ ] On a page with no photo, pick three photos. The first photo you picked must be the key photo.
+17. [ ] Pick photos that the page holds already, with one new photo. The page must gain the new photo only.
+18. [ ] Pick ten photos. While the line reads “Adding photo 4 of 10…”, kill the app. Open the app and the page. The photos added before the kill must be there, in order. The others must not be there. Add them again.
+19. [ ] On a memory page and on You, pick two photos. Both must be added, in order.
+20. [ ] Start “Tell a story about a photo” and open “All photos”. The picker must take one photo only.
 
 ## Known small items
 

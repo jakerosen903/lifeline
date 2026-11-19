@@ -110,7 +110,7 @@ struct MemoryScreen: View {
                 .background(RoundedRectangle(cornerRadius: 18).fill(Theme.sand))
 
                 // Decision 13: a memory has no header, so one photo is already a row. No photo, no frame.
-                if viewModel.shelf.isAdding { PhotoAddingLine() }
+                if let line = viewModel.shelf.addingLine { PhotoAddingLine(text: line) }
                 if !viewModel.shelf.photos.isEmpty {
                     PhotoRow(photos: viewModel.shelf.photos, label: viewModel.photoLabel, cache: deps.photoImages,
                              onOpen: { viewing = $0 },
