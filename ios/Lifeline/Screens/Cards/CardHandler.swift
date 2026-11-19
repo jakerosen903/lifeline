@@ -40,6 +40,9 @@ final class CardHandler {
     /// The memory each kept card stands for. Its links are read on every render (one query).
     @ObservationIgnored private var keptMemories: [String: MemoryID] = [:]
     private var peopleVersion = 0
+    /// Called after the sheet moved a name on a card, and after that move's Undo: a move can also move the story's
+    /// photo, so a host that shows the photo card reads it again.
+    @ObservationIgnored var onPeopleMoved: () -> Void = {}
     let deps: Dependencies
 
     init(deps: Dependencies) {
@@ -388,12 +391,16 @@ final class CardHandler {
         if case .unchanged = outcome { return }
         personMove.note(outcome)
         peopleChanged()
+        onPeopleMoved()
     }
 
     /// Undo under "Changed to {name}.". Returns true when the move was taken back.
     func undoPersonMove() -> Bool {
         let done = personMove.undo()
-        if done { peopleChanged() }
+        if done {
+            peopleChanged()
+            onPeopleMoved()
+        }
         return done
     }
 

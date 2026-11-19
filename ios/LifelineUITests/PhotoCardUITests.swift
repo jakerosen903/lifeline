@@ -3,11 +3,14 @@ import XCTest
 /// Photo story: the photo card on the landing and on a session's page, in one layout: the photo with its moments row (a sheet
 /// lists the memories that hold it), the pages as chips in groups, one date block with Undo, and removals.
 /// The seed `-uiTesting-seedPhotoStory` holds two photo sessions: the first (two moments) has "The beach" (unplaced; Maya, Dad)
-/// and "The drive home" (stated 2012; Dad), both holding a photo dated 14 June 2012, which Maya's page holds and Dad's does not.
+/// and "The drive home" (stated 2012; Dad), both holding a photo dated 14 June 2012. They are kept through the real Keep write,
+/// so the photo is on Maya's and Dad's pages by a story link (decision 13).
 /// The second has no kept memory and a photo nothing else holds. `-uiTesting-photoStoryGuess` adds "The picnic" to the first
 /// (a guess from "when I was 22"; Maya, Alder Street), which holds the photo too.
 final class PhotoCardUITests: XCTestCase {
     private static let largestText = ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"]
+    private static let storyLine = "The people in this story have this photo on their pages. Tap to take it off, or to add it to another page."
+    private static let tapLine = "Tap to add. Tap again to take it off."
 
     // MARK: - Routes
 
@@ -187,7 +190,7 @@ final class PhotoCardUITests: XCTestCase {
         XCTAssertEqual(labels("photoCard.group", in: app), ["People"])
         let pages = app.buttons.matching(identifier: "photoCard.page").allElementsBoundByIndex
         XCTAssertEqual(pages.map(\.label), ["Dad", "Maya"])
-        XCTAssertEqual(pages.map { $0.value as? String }, ["not added", "added"], "Maya's page holds the photo already")
+        XCTAssertEqual(pages.map { $0.value as? String }, ["added by this story", "added by this story"], "Keep put the photo on both pages")
     }
 
     @MainActor
@@ -196,6 +199,9 @@ final class PhotoCardUITests: XCTestCase {
         openFirstStory(app)
         let dad = chip("Dad", in: app)
         XCTAssertTrue(app.waitHittable(dad, timeout: 5))
+        // Decision 13: Keep put the photo on Dad's page. Take it off first, so the next tap adds it.
+        dad.tap()
+        XCTAssertTrue(waitValue(dad, "not added"), "the story's photo is off Dad's page")
         dad.tap()
         XCTAssertTrue(waitValue(dad, "added"), "the chip is chosen")
         XCTAssertTrue(dad.exists, "and stays")
@@ -254,7 +260,7 @@ final class PhotoCardUITests: XCTestCase {
         XCTAssertTrue(row.wait(for: \.label, toEqual: "On 1 moment from this story", timeout: 5), "the row counts one moment")
         let dad = chip("Dad", in: app)
         XCTAssertTrue(dad.exists, "Dad is still listed through The beach")
-        XCTAssertEqual(dad.value as? String, "not added")
+        XCTAssertEqual(dad.value as? String, "added by this story", "a removed moment leaves the photo on the people's pages")
         XCTAssertEqual(app.staticTexts["photoCard.dateText"].label, "The photo is dated 14 June 2012. One moment has no date you said.")
         openMemory("The drive home", in: app)
         XCTAssertFalse(app.buttons["photo.thumb"].waitForExistence(timeout: 2), "The drive home has no photo")
@@ -329,7 +335,7 @@ final class PhotoCardUITests: XCTestCase {
         XCTAssertEqual(labels("photoCard.group", in: app), ["People", "Places"])
         XCTAssertEqual(app.buttons.matching(identifier: "photoCard.page").allElementsBoundByIndex.map(\.label), ["Dad", "Maya", "Alder Street"])
         XCTAssertTrue(app.staticTexts["Also show this photo on"].exists)
-        XCTAssertTrue(app.staticTexts["Tap to add. Tap again to take it off."].exists)
+        XCTAssertEqual(app.staticTexts["photoCard.pagesLine"].label, Self.storyLine, "Keep put the photo on Maya's and Dad's pages")
         let groups = app.staticTexts.matching(identifier: "photoCard.group")
         XCTAssertLessThanOrEqual(groups.element(boundBy: 0).frame.maxY, chip("Dad", in: app).frame.minY, "People is above its first chip")
         XCTAssertLessThanOrEqual(groups.element(boundBy: 1).frame.maxY, chip("Alder Street", in: app).frame.minY, "Places is above its first chip")
@@ -341,6 +347,9 @@ final class PhotoCardUITests: XCTestCase {
         openFirstStory(app)
         let dad = chip("Dad", in: app)
         XCTAssertTrue(app.waitHittable(dad, timeout: 5))
+        // Decision 13: Keep put the photo on Dad's page. Take it off first, so the chip starts empty.
+        dad.tap()
+        XCTAssertTrue(waitValue(dad, "not added"), "the story's photo is off Dad's page")
         XCTAssertEqual(dad.value as? String, "not added")
         dad.tap()
         XCTAssertTrue(waitValue(dad, "added"), "the tap adds the photo")
@@ -361,6 +370,11 @@ final class PhotoCardUITests: XCTestCase {
         openFirstStory(app)
         let maya = chip("Maya", in: app)
         XCTAssertTrue(app.waitHittable(maya, timeout: 5))
+        // Decision 13: Keep put the photo on Maya's page. Off and on again makes the link the owner's, as the seed's was.
+        maya.tap()
+        XCTAssertTrue(waitValue(maya, "not added"), "the story's photo is off Maya's page")
+        maya.tap()
+        XCTAssertTrue(waitValue(maya, "added"), "the owner put it back")
         XCTAssertEqual(maya.value as? String, "added")
         maya.tap()
         XCTAssertTrue(waitValue(maya, "not added"), "the tap takes the photo off Maya's page")
@@ -372,6 +386,116 @@ final class PhotoCardUITests: XCTestCase {
         XCTAssertTrue(app.waitHittable(maya, timeout: 5))
         maya.tap()
         XCTAssertTrue(waitValue(maya, "added"), "a second tap puts it back")
+    }
+
+    // MARK: - The pages the story chose
+
+    @MainActor
+    func testThePeopleOfTheStoryStartAdded() {
+        let app = XCUIApplication.launchWithPhotoStory(["-uiTesting-photoStoryGuess"])
+        openFirstStory(app)
+        XCTAssertEqual(chip("Maya", in: app).value as? String, "added by this story")
+        XCTAssertEqual(chip("Dad", in: app).value as? String, "added by this story")
+        XCTAssertEqual(chip("Alder Street", in: app).value as? String, "not added", "a place is never chosen by the story")
+        XCTAssertEqual(app.staticTexts["photoCard.pagesLine"].label, Self.storyLine)
+        app.openEntityPage("Maya")
+        XCTAssertTrue(app.buttons["photo.header"].waitForExistence(timeout: 10), "Maya's page shows the photo")
+    }
+
+    @MainActor
+    func testAPersonTakenOffStaysOff() {
+        let app = XCUIApplication.launchWithPhotoStory()
+        openFirstStory(app)
+        let maya = chip("Maya", in: app)
+        XCTAssertTrue(app.waitHittable(maya, timeout: 5))
+        XCTAssertEqual(maya.value as? String, "added by this story", "the story put the photo on Maya's page")
+        maya.tap()
+        XCTAssertTrue(waitValue(maya, "not added"), "the tap takes the story's photo off Maya's page")
+        app.openEntityPage("Maya")
+        XCTAssertFalse(app.buttons["photo.header"].waitForExistence(timeout: 3), "Maya's page does not show the photo")
+        app.openTab("Timeline")
+        XCTAssertTrue(app.waitHittable(maya, timeout: 5), "back on the card")
+        XCTAssertEqual(maya.value as? String, "not added", "the photo stays off")
+    }
+
+    @MainActor
+    func testAPersonPutBackIsTheOwners() {
+        let app = XCUIApplication.launchWithPhotoStory()
+        openFirstStory(app)
+        let maya = chip("Maya", in: app)
+        XCTAssertTrue(app.waitHittable(maya, timeout: 5))
+        XCTAssertEqual(maya.value as? String, "added by this story", "the story put the photo on Maya's page")
+        maya.tap()
+        XCTAssertTrue(waitValue(maya, "not added"))
+        maya.tap()
+        XCTAssertTrue(waitValue(maya, "added"), "the owner put it back, so the link is the owner's")
+    }
+
+    @MainActor
+    func testTheLineChangesWhenNoStoryPageIsLeft() {
+        let app = XCUIApplication.launchWithPhotoStory()
+        openFirstStory(app)
+        let line = app.staticTexts["photoCard.pagesLine"]
+        XCTAssertEqual(line.label, Self.storyLine)
+        for name in ["Maya", "Dad"] {
+            let person = chip(name, in: app)
+            XCTAssertTrue(app.waitHittable(person, timeout: 5))
+            person.tap()
+            XCTAssertTrue(waitValue(person, "not added"), "\(name)'s page no longer shows the photo")
+        }
+        XCTAssertTrue(line.wait(for: \.label, toEqual: Self.tapLine, timeout: 5), "no page the story chose is left")
+    }
+
+    /// The session's page: a name moved on a kept card there moves the story's photo, and the card above shows it at once.
+    /// Maya's page held the photo already (her cover), so the story put it on no page until the move.
+    @MainActor
+    func testMovingANameOnTheSessionsPageShowsOnTheCard() {
+        let app = XCUIApplication.launchWithPhotos()
+        app.tellMayasCoversStory()
+        XCTAssertTrue(app.staticTexts["session.count"].wait(for: \.label, toEqual: "2 possible memories", timeout: 15), "the scripted segments arrived")
+        app.buttons["session.finish"].tap()
+        let review = app.buttons["landing.review"]
+        XCTAssertTrue(app.scrollIntoView(review), "Review these moments is on the landing")
+        review.tap()
+        let mayaCard = app.descendants(matching: .any).matching(identifier: "card.memory")
+            .containing(NSPredicate(format: "identifier == 'card.title' AND label == %@", "Maya climbed it")).firstMatch
+        XCTAssertTrue(mayaCard.waitForExistence(timeout: 20), "the card about Maya is waiting")
+        let keep = mayaCard.buttons["card.add"]
+        XCTAssertTrue(app.scrollIntoView(keep), "its Keep is on screen")
+        keep.tap()
+        let kept = app.any("card.kept")
+        XCTAssertTrue(kept.waitForExistence(timeout: 10), "Keep turns the card into a kept card")
+        let byStory = app.buttons.matching(identifier: "photoCard.page").matching(NSPredicate(format: "value == %@", "added by this story"))
+        toTop(app)
+        XCTAssertEqual(byStory.count, 0, "Maya's page held the photo, so the story chose no page")
+
+        // The notice's Undo lasts six seconds, so the first move is undone at once and the card is read after; the
+        // second move is read after. A card that misses either refresh shows the wrong count.
+        moveMayaToSomeoneNew(app, on: kept)
+        let undo = app.buttons["notice.undo"]
+        XCTAssertTrue(app.waitHittable(undo, timeout: 5), "the move offers Undo")
+        undo.tap()
+        XCTAssertTrue(undo.waitForNonExistence(timeout: 5), "the move is undone")
+        toTop(app)
+        XCTAssertEqual(byStory.count, 0, "Undo took the new person's link back")
+
+        moveMayaToSomeoneNew(app, on: kept)
+        toTop(app)
+        XCTAssertEqual(byStory.count, 1, "the new person's page has the photo, chosen by the story")
+    }
+
+    /// The kept card's Maya chip, then "Someone new" and Done in the sheet.
+    @MainActor
+    private func moveMayaToSomeoneNew(_ app: XCUIApplication, on kept: XCUIElement) {
+        let maya = kept.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'person.chip' AND label BEGINSWITH %@", "Maya")).firstMatch
+        XCTAssertTrue(app.scrollIntoView(maya), "the kept card shows Maya")
+        maya.tap()
+        XCTAssertTrue(app.any("who.sheet").waitForExistence(timeout: 5), "the Who is this? sheet opens")
+        app.buttons["who.new"].tap()
+        let done = app.buttons["who.done"]
+        for _ in 0..<8 where !(done.exists && done.isHittable) { app.any("who.sheet").swipeUp() }
+        done.tap()
+        XCTAssertTrue(app.any("who.sheet").waitForNonExistence(timeout: 5), "Done closes the sheet")
     }
 
     // MARK: - The date
@@ -441,6 +565,11 @@ final class PhotoCardUITests: XCTestCase {
     func testTheCardKeepsItsLayoutAfterEachChoice() {
         let app = XCUIApplication.launchWithPhotoStory(["-uiTesting-photoStoryGuess"])
         openFirstStory(app)
+        // Decision 13: Keep put the photo on Dad's page. Take it off first, so the tap below adds it.
+        let dad = chip("Dad", in: app)
+        XCTAssertTrue(app.waitHittable(dad, timeout: 5))
+        dad.tap()
+        XCTAssertTrue(waitValue(dad, "not added"), "the story's photo is off Dad's page")
         let remove = app.buttons["photoCard.removeFromStory"]
         XCTAssertTrue(app.waitHittable(remove, timeout: 5), "the whole card is on screen")
         let pages = app.buttons.matching(identifier: "photoCard.page")
@@ -449,7 +578,6 @@ final class PhotoCardUITests: XCTestCase {
         let use = app.buttons["photoCard.useDate"].frame
         let choose = app.buttons["photoCard.chooseMoments"].frame
         let removeTop = remove.frame.minY
-        let dad = chip("Dad", in: app)
         dad.tap()
         XCTAssertTrue(waitValue(dad, "added"))
         app.buttons["photoCard.useDate"].tap()

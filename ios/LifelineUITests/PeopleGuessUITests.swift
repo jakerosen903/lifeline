@@ -178,6 +178,43 @@ final class PeopleGuessUITests: XCTestCase {
         XCTAssertTrue(waitGone(app.any("who.sheet"), timeout: 5))
     }
 
+    // MARK: - The story's photo follows the name
+
+    /// The first photo story's landing, with "The ferry" kept from it: Sam, assumed, said "Sammy". Keep put the photo on
+    /// Sam's page. "Someone new" moves the name and the photo with it; Undo puts both back. The notice's Undo lasts six
+    /// seconds, so the first move is undone at once and the card is read after; the second move is read after. A card
+    /// that misses the refresh after a move or after its Undo shows the wrong chips.
+    @MainActor
+    func testMovingANameMovesThePhoto() {
+        let app = XCUIApplication.launchWithPhotoStory(opening: "first", ["-uiTesting-photoStoryAssumedName"])
+        let page = { (title: String) in
+            app.buttons.matching(identifier: "photoCard.page").matching(NSPredicate(format: "label == %@", title)).firstMatch
+        }
+        XCTAssertTrue(page("Sam").waitForExistence(timeout: 10), "the card lists Sam")
+        XCTAssertEqual(page("Sam").value as? String, "added by this story", "Keep followed the guess")
+        let sam = chip(app, "Sam, assumed, you said Sammy. Change who this is.")
+
+        openSheet(app, from: sam)
+        app.buttons["who.new"].tap()
+        tapDone(app)
+        XCTAssertTrue(notice(app).waitForExistence(timeout: 5))
+        XCTAssertEqual(notice(app).label, "Changed to Sammy.")
+        let undo = app.buttons["notice.undo"]
+        XCTAssertTrue(app.waitHittable(undo, timeout: 3), "Undo is on screen")
+        undo.tap()
+        XCTAssertTrue(waitGone(notice(app), timeout: 3), "the notice leaves with Undo")
+        XCTAssertTrue(waitGone(page("Sammy"), timeout: 5), "the new person is gone from the card")
+        XCTAssertTrue(page("Sam").waitForExistence(timeout: 5))
+        XCTAssertEqual(page("Sam").value as? String, "added by this story", "Undo put the photo back on Sam's page")
+
+        openSheet(app, from: sam)
+        app.buttons["who.new"].tap()
+        tapDone(app)
+        XCTAssertTrue(page("Sammy").waitForExistence(timeout: 5), "the card lists the new person")
+        XCTAssertEqual(page("Sammy").value as? String, "added by this story", "the photo moved with the name")
+        XCTAssertTrue(!page("Sam").exists || page("Sam").value as? String == "not added", "the photo left Sam's page")
+    }
+
     // MARK: - A person's page
 
     @MainActor

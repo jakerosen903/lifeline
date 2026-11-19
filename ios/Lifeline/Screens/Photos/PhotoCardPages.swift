@@ -3,9 +3,12 @@ import SwiftUI
 
 /// Part 2 of the photo card, "Also show this photo on": the pages as chips, in groups by kind. A tap on a chip that is not
 /// chosen adds the photo to that page; a tap on a chosen chip takes it off. A chip keeps its frame in both states (plan
-/// decision 10): the tick's space is there when it is not chosen, and the type does not change weight.
+/// decision 10): the tick's space is there when it is not chosen, and the type does not change weight. A chip the story
+/// chose looks the same as one the person tapped; the line and VoiceOver carry the difference. The words come from the kit.
 struct PhotoCardPages: View {
     let groups: [PhotoStoryCard.PageGroup]
+    /// `PhotoStoryCard.pagesLine`.
+    let line: String
     let onToggle: (PhotoStoryCard.Page) -> Void
 
     var body: some View {
@@ -13,7 +16,8 @@ struct PhotoCardPages: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text("Also show this photo on").font(.system(.title3, design: .serif).weight(.medium)).foregroundStyle(Theme.ink)
                     .accessibilityAddTraits(.isHeader)
-                Text("Tap to add. Tap again to take it off.").font(.footnote).foregroundStyle(Theme.secondaryText)
+                Text(line).font(.footnote).foregroundStyle(Theme.secondaryText)
+                    .accessibilityIdentifier("photoCard.pagesLine")
             }
             .fixedSize(horizontal: false, vertical: true)
             ForEach(groups) { group in

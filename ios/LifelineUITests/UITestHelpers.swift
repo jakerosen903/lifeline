@@ -127,7 +127,7 @@ extension XCUIApplication {
 
     /// Launches with `-uiTesting-seedPhotoStory`: the family, then two landed photo sessions. The first has the kept memories
     /// "The beach" (unplaced; Maya and Dad) and "The drive home" (stated 2012; Dad), both holding a photo dated 14 June 2012, which
-    /// Maya's page holds too and Dad's does not. The second has no kept memory, and its photo has no other home.
+    /// Keep put on Maya's and Dad's pages by a story link. The second has no kept memory, and its photo has no other home.
     /// `opening` leaves that session unlanded, so the app opens on its landing. First open is done.
     static func launchWithPhotoStory(opening: String? = nil, _ extra: [String] = []) -> XCUIApplication {
         let app = XCUIApplication()

@@ -1,0 +1,51 @@
+# A photo story's photo on its people's pages: device check
+
+Run this on the iPhone with the build of parts 1 and 2. Tick each line. Say what looks wrong. Each line says what to do and what must be true. Parts 3 (“Done” and “Edit”) and 4 (several photos at one time) get their own lines when they are built.
+
+## Part 1: a kept moment puts the photo on its people's pages
+
+1. [ ] Tell the first photo story about a person who is new to the app. Keep the moment. Look at the card. The person's chip must be filled, with a tick. The line under “Also show this photo on” must read “The people in this story have this photo on their pages. Tap to take it off, or to add it to another page.” Open the person's page. The photo must be there. On a page with no other photo, it must be the key photo.
+2. [ ] On the same card, tap the person's chip. It must go back to an outline. Keep another moment of the same story that names the same person. The chip must stay an outline. Open the person's page. The photo must not be there.
+3. [ ] Tap the chip again. It must fill. VoiceOver must read “{name}, added”, not “added by this story”.
+4. [ ] Take each person the story chose off with the chip. The line must read “Tap to add. Tap again to take it off.”
+5. [ ] Use a photo that a person's page held before the story. Tell a story that names that person and keep the moment. The chip must be filled. VoiceOver must read “{name}, added”. The photo must stay where it was in the page's order.
+6. [ ] Tell a story that names you and a place. Keep the moment. The “You” chip and the place's chip must be outlines.
+7. [ ] Turn on VoiceOver on the card. A chip the story chose must read “{name}, added by this story”. A chip you tapped must read “{name}, added”. An empty chip must read “{name}, not added”.
+
+## Part 2: the photo follows a moved name
+
+8. [ ] Tell a photo story that names a person by a guess (the chip on the moment shows “Assumed”). Keep the moment. Tap the person chip on the moment. In “Who is this?”, choose “Someone new”, then “Done”. The card must show the new person's chip filled, at once. The first person's chip must be gone or an outline. Open the new person's page. The photo must be there.
+9. [ ] Within 6 seconds, tap “Undo”. The card must show the first person's chip filled, at once, and the new person's chip must be gone. Do this on the landing and on the session's page.
+10. [ ] Repeat line 8 on a person whose page held the photo before the story. After the move, the first person's page must still show the photo.
+11. [ ] Move a name to another person on file. On the card, tap that person's chip to take the photo off. Tap “Undo” within 6 seconds. That person's page must not show the photo.
+12. [ ] Move a name. On the card, tap the first person's chip to put the photo back by hand. Tap “Undo” within 6 seconds. The chip must read “{name}, added” with VoiceOver, and the photo must stay on that page.
+
+## After the update
+
+13. [ ] Before you install this build, note two people's pages that show photos from older photo stories. Install the build. Each page must show the same photos in the same order. Each chip on the older cards must read “added”, not “added by this story”. No older story must put a photo on a new page.
+
+## Known small items
+
+These were found in the reviews and deferred, or are open for the owner. None blocks the build. Each is one line.
+
+- Open for the owner: “Same story” (a telling merged into an older memory) writes no page link. Its people show as empty chips.
+- Open for the owner: the chip has no “Assumed” mark. A photo that follows a guessed name looks like one you chose.
+- Open for the owner: moments kept before this build get no link. Tap the chip for an older story.
+- Open for the owner: a kept fact about a person also places the photo.
+- Open for the owner: after a kept memory is deleted, the chip still reads “added by this story”, although no kept memory names the person.
+- Open for the owner: a restored link goes last. After a move and its Undo, a photo that was the key photo is not the key photo when the page gained another photo meanwhile.
+- Ruling: every name link counts, `detail` as well as `mention`.
+- Ruling: there is no undo of a Keep. A deleted memory leaves the photo on the people's pages.
+- Ruling: there is no `PhotoStoryReader.removeFromPage`. The chip removes through `PhotoLibrary.remove`.
+- Ruling: a move removes the first person's story link only when no memory that holds the photo names that person now, in any session.
+- Ruling: a move adds the photo to the new person only (`only:`).
+- `v16FromV13` does not assert `photo_pages_done = 0` or that `photo_page_declined` exists.
+- No comment says that unlinking from the owner's own page records a harmless decline.
+- No test covers `letGo` making the photo homeless after it removed story links.
+- The returned order of `linkToPeoplePages` is promised in its doc and not asserted.
+- `aFailedKeepWritesNothing` has no control assertion that the same card without the trigger writes the page link.
+- `undoingAKeepLeavesNoLinkAndKeepsThePhoto` (`PhotoRepositoryTests`) is misnamed. It is a plain delete.
+- `stateValue` trusts `byStory` without `isChosen`. Only `PhotoStory.card` builds pages.
+- Undo of a move restores a story link to a page the owner hid after the move.
+- `PersonMoveReceipt.photoPages` is `public var`. It must be `public internal(set)`.
+- No test pins what `only:` is for (the moved moment also names a person who lacks the photo).
