@@ -42,3 +42,5 @@ The owner said "Yes, build both" (PC-d, then PC-c) on 2026-11-19, without a revi
 - Task 7 review, out of its diff, Important: a person named in a segment that gives no memory card does not reach the next segment's `recordingPeople`. Ruling D25: Task 7b, with the comparison's table written row by row.
 - Task 7b: complete (commits e87ea6d..a5e22b6, review clean). Ruling D28.
 - Task 7b: minor (deferred): a carried mention can add a relation phrase ("my roommate") as a second said name of a handle; a force unwrap in the rank sort.
+- Task 8 (docs): complete (commit 98fb00f).
+- Final whole-branch review (8c882a9..98fb00f): with fixes. No Critical. Important I1 to I6, Minor M1 to M10. One fix wave dispatched (`fix-wave-brief.md`): I1, I2, I3, I4, M1, M2, M3, M5, M7, M8, M9. Parked by ruling: I5 (D31), I6 (needs the owner's key), M10.
