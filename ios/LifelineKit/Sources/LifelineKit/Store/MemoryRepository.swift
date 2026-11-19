@@ -605,6 +605,39 @@ public struct MemoryRepository: Sendable {
         try db.writer.read { try Memory.filter(Column("hidden_from_timeline") == false).order(Column("created_at")).fetchAll($0) }
     }
 
+    /// The words of each telling of each told, visible memory, as said, joined with one space, first telling first, in one statement.
+    /// Only words inside a span count: the segment's other words are not the memory's. A span with no word rows adds nothing,
+    /// and a continuation span is a telling of its own.
+    public func tellingWords() throws -> [MemoryID: [String]] {
+        try db.writer.read { db in
+            let rows = try Row.fetchAll(db, sql: """
+                select ms.memory_id, ms."order", w.text
+                from memory_span ms
+                join memory m on m.id = ms.memory_id
+                join word w on w.segment_id = ms.segment_id and w.start_ms >= ms.start_ms and w.end_ms <= ms.end_ms
+                where m.hidden_from_timeline = 0 and m.created_from_candidate_id is not null
+                order by ms.memory_id, ms."order", w."index"
+                """)
+            var out: [MemoryID: [String]] = [:]
+            var current: (memory: String, order: Int, words: [String])?
+            func flush() {
+                guard let current else { return }
+                out[MemoryID(rawValue: current.memory), default: []].append(current.words.joined(separator: " "))
+            }
+            for row in rows {
+                let memory: String = row["memory_id"], order: Int = row["order"], text: String = row["text"]
+                if let held = current, held.memory == memory, held.order == order {
+                    current?.words.append(text)
+                } else {
+                    flush()
+                    current = (memory, order, [text])
+                }
+            }
+            flush()
+            return out
+        }
+    }
+
     public func excludedIDs() throws -> Set<MemoryID> {
         try db.writer.read { Set(try Memory.filter(Column("excluded_from_ai") == true).fetchAll($0).map(\.id)) }
     }
