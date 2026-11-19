@@ -15,7 +15,7 @@ final class PersonMoveUndo {
     @ObservationIgnored private var timer: Task<Void, Never>?
     @ObservationIgnored private let actions: PersonLinkActions
 
-    init(store: ExtractionStore) { actions = PersonLinkActions(store: store) }
+    init(actions: PersonLinkActions) { self.actions = actions }
 
     /// What the sheet returned. Only a move offers Undo; a settle or a stored choice has nothing to take back.
     func note(_ outcome: WhoIsThisViewModel.Outcome) {

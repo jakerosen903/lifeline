@@ -104,6 +104,18 @@ public struct PersonLinkRepository: Sendable {
         }
     }
 
+    /// How many links of the session's memories name a person other than the owner: mentions, any origin. The landing
+    /// asks for contacts once this is one or more (`ContactsPromptRule`).
+    public func keptPeopleCount(in session: SessionID) throws -> Int {
+        try db.writer.read { db in
+            try Int.fetchOne(db, sql: """
+                select count(*) from moment_entity me
+                join person on person.entity_id = me.entity_id
+                where me.relation = 'mention' and person.is_owner = 0 and \(Self.sessionSQL) = ?
+                """, arguments: [session.rawValue]) ?? 0
+        }
+    }
+
     // MARK: - Shared with the writes
 
     /// The session of the segment of a memory's first span (order 0). `me` is the link's table.

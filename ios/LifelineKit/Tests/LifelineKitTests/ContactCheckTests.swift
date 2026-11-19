@@ -423,7 +423,7 @@ func withoutAccessTheCheckChangesNothing(access: ContactsAccess) async throws {
         try db.execute(sql: "update moment_entity set origin = 'new' where memory_id = ?", arguments: [memories[1].id.rawValue])
     }
 
-    let changed = try await f.actions.reguess(session: session, contacts: [vale.forGuess, reyes.forGuess])
+    let result = try await f.actions.reguess(session: session, contacts: [vale.forGuess, reyes.forGuess])
 
     let linked = try f.person(robyn)
     #expect(linked.contactIdentifier == "c-vale" && linked.contactName == "Robyn Vale" && linked.contactState == "linked")
@@ -432,15 +432,16 @@ func withoutAccessTheCheckChangesNothing(access: ContactsAccess) async throws {
     #expect(try f.store.people.aliases(of: robyn).map(\.text) == ["Robyn"], "the said name stays; the contact's name is not an alias")
     #expect(try f.store.people.nameForModel(of: robyn) == "Robyn")
     #expect(try f.origins(of: memories[0]) == [.assumed] && f.origins(of: memories[1]) == [.assumed])
-    #expect(changed == 2)
+    #expect(result.changedLinks == 2)
+    #expect(result.linkedPeople == [robyn], "the caller copies the pictures of these people")
     #expect(linked.contactPhotoID == nil, "the caller copies the picture")
 }
 
 @Test func reguessCountsEachLinkItChanged() async throws {
     let f = try Fixture()
     let (session, _) = try f.keptSession([("Robyn painted the fence", ["Robyn"]), ("Tomas fixed the gate", ["Tomas"])])
-    #expect(try await f.actions.reguess(session: session, contacts: [vale.forGuess, reyes.forGuess]) == 2)
-    #expect(try await f.actions.reguess(session: session, contacts: [vale.forGuess, reyes.forGuess]) == 0, "a second run finds nothing")
+    #expect(try await f.actions.reguess(session: session, contacts: [vale.forGuess, reyes.forGuess]).changedLinks == 2)
+    #expect(try await f.actions.reguess(session: session, contacts: [vale.forGuess, reyes.forGuess]).changedLinks == 0, "a second run finds nothing")
 }
 
 @Test func reguessLeavesAPersonTheOwnerRenamed() async throws {
@@ -449,7 +450,7 @@ func withoutAccessTheCheckChangesNothing(access: ContactsAccess) async throws {
     let robyn = try f.onlyPerson(memories[0])
     try f.store.people.rename(robyn, to: "Robyn from next door")
     let before = try f.dump()
-    #expect(try await f.actions.reguess(session: session, contacts: [vale.forGuess]) == 0)
+    #expect(try await f.actions.reguess(session: session, contacts: [vale.forGuess]).changedLinks == 0)
     #expect(try f.dump() == before)
 }
 
@@ -458,7 +459,7 @@ func withoutAccessTheCheckChangesNothing(access: ContactsAccess) async throws {
     let (first, _) = try f.keptSession([("Robyn painted the fence", ["Robyn"])])
     let (_, later) = try f.keptSession([("Tomas fixed the gate", ["Tomas"])])
     let tomas = try f.onlyPerson(later[0])
-    #expect(try await f.actions.reguess(session: first, contacts: [vale.forGuess, reyes.forGuess]) == 1)
+    #expect(try await f.actions.reguess(session: first, contacts: [vale.forGuess, reyes.forGuess]).changedLinks == 1)
     #expect(try f.person(tomas).contactIdentifier == nil && f.person(tomas).displayName == "Tomas")
     #expect(try f.origins(of: later[0]) == [.new])
 }
@@ -469,7 +470,7 @@ func withoutAccessTheCheckChangesNothing(access: ContactsAccess) async throws {
     let (later, memories) = try f.keptSession([("Robyn fixed the gate", ["Robyn"])])
     #expect(try f.origins(of: memories[0]) == [.assumed], "rule 4")
     let before = try f.dump()
-    #expect(try await f.actions.reguess(session: later, contacts: [vale.forGuess]) == 0)
+    #expect(try await f.actions.reguess(session: later, contacts: [vale.forGuess]).changedLinks == 0)
     #expect(try f.dump() == before)
 }
 
@@ -478,7 +479,7 @@ func withoutAccessTheCheckChangesNothing(access: ContactsAccess) async throws {
     let (session, _) = try f.keptSession([("Robyn painted the fence", ["Robyn"])])
     let before = try f.dump()
     let twin = card("c-twin", "Robyn", "Okafor")
-    #expect(try await f.actions.reguess(session: session, contacts: [vale.forGuess, twin.forGuess]) == 0)
+    #expect(try await f.actions.reguess(session: session, contacts: [vale.forGuess, twin.forGuess]).changedLinks == 0)
     #expect(try f.dump() == before)
 }
 
@@ -487,5 +488,5 @@ func withoutAccessTheCheckChangesNothing(access: ContactsAccess) async throws {
     let holder = try f.store.people.insertPerson(displayName: "Bobbie")
     try await f.actions.link(holder.id, to: vale)
     let (session, _) = try f.keptSession([("Robyn painted the fence", ["Robyn"])])
-    #expect(try await f.actions.reguess(session: session, contacts: [vale.forGuess]) == 0)
+    #expect(try await f.actions.reguess(session: session, contacts: [vale.forGuess]).changedLinks == 0)
 }

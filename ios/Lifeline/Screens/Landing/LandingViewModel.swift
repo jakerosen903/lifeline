@@ -22,6 +22,9 @@ final class LandingViewModel: Identifiable {
     private(set) var guesses: String?
     /// Each row's people: a kept memory's links, or what Keep will link for a card that waits.
     private(set) var people: [LandingRow.ID: [PersonChipRow.Item]] = [:]
+    /// Links of this recording's memories that name someone other than the owner. The screen asks for contacts
+    /// when this becomes one or more (`ContactsPromptRule`).
+    private(set) var keptPeople = 0
     /// "Changed to {name}." with Undo, after the sheet moved a name.
     let personMove: PersonMoveUndo
     private(set) var error: String?
@@ -33,13 +36,15 @@ final class LandingViewModel: Identifiable {
     /// The photo card of a photo session; it has no card for any other. Refreshed with the rows, on the same tick.
     let photoCard: PhotoCardViewModel
     private var poll: Task<Void, Never>?
+    /// Set when the contacts prompt is asked for, so a second read of the rows cannot ask twice.
+    private var askingForContacts = false
 
     init(session: Session, heavy: Bool, presentDanger: Bool, deps: Dependencies) {
         self.session = session
         liveWeight = SessionWeight(heavy: heavy, presentDanger: presentDanger)
         weight = liveWeight
         self.deps = deps
-        personMove = PersonMoveUndo(store: deps.extractionStore)
+        personMove = PersonMoveUndo(actions: deps.personLinkActions())
         photoCard = PhotoCardViewModel(session: session.id, deps: deps, showsRemoveFromStory: false)
         refresh()
     }
@@ -73,6 +78,7 @@ final class LandingViewModel: Identifiable {
             (rows, more) = Landing.rows(kept: kept, possible: possible, segments: segments)
             people = try chips(for: rows, possible: possible.map(\.0))
             guesses = PersonChipLine.landingLine(guesses: try store.personLinks.guessCount(in: session.id))
+            keptPeople = try store.personLinks.keptPeopleCount(in: session.id)
             weight = liveWeight
                 || SessionWeight.of(candidates: try store.candidates.candidates(in: session.id))
                 || SessionWeight.of(log: (try? SessionArc.decode(session.stageLog)) ?? [])
@@ -90,7 +96,7 @@ final class LandingViewModel: Identifiable {
 
     private func chips(for rows: [LandingRow], possible: [Candidate]) throws -> [LandingRow.ID: [PersonChipRow.Item]] {
         let store = deps.extractionStore
-        let preview = PersonLinkActions(store: store)
+        let preview = deps.personLinkActions()
         let waiting = Dictionary(possible.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
         var chips: [LandingRow.ID: [PersonChipRow.Item]] = [:]
         for row in rows {
@@ -114,6 +120,17 @@ final class LandingViewModel: Identifiable {
 
     func undoPersonMove() {
         if personMove.undo() { refresh() }
+    }
+
+    // MARK: - Contacts (spec, "Access")
+
+    /// The one system prompt, on the landing of the recording whose kept moments first name a person. On a yes the
+    /// app looks at this recording's new people again (plan decision 7), then the chips and the guess line read again.
+    func askForContactsIfDue() async {
+        let prompt = ContactsAccessPrompt(deps: deps)
+        guard !askingForContacts, prompt.shouldAsk(keptPeopleInSession: keptPeople) else { return }
+        askingForContacts = true
+        if await prompt.askOnLanding(session: session.id) { refresh() }
     }
 
     private func startPolling() {

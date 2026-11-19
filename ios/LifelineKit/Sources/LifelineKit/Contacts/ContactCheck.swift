@@ -106,10 +106,13 @@ extension ContactLinkActions {
     /// person the app made there from a said name (`created_by_guess`, `name_origin` said, no contact) with a `new`
     /// link: the guess runs again for that link's said name, against the other people on file and `contacts`. When it
     /// picks one contact (rule 5, or rule 3's contact), the app links the person to it and the person's `new` links in
-    /// the session become `assumed`. Returns the links changed. Pictures are not read here: the caller copies them.
-    public func reguess(session: SessionID, contacts: [PersonGuess.Contact]) async throws -> Int {
+    /// the session become `assumed`. Returns the links changed and the people linked. Pictures are not read here: the
+    /// caller copies them for `linkedPeople`.
+    @discardableResult
+    public func reguess(session: SessionID, contacts: [PersonGuess.Contact]) async throws -> Reguess {
         var seen = Set<PersonID>()
         var changed = 0
+        var linked: [PersonID] = []
         for link in try store.personLinks.newMentionLinks(in: session) {
             let person = link.person
             guard !seen.contains(person.id), !person.isOwner, person.createdByGuess, person.nameOrigin == .said,
@@ -122,8 +125,16 @@ extension ContactLinkActions {
             let result = PersonGuess.guess(said, people: others, contacts: contacts)
             guard case .contact(let identifier) = result.choice, result.rule == 3 || result.rule == 5,
                   let contact = contacts.first(where: { $0.identifier == identifier }) else { continue }
-            changed += try store.people.linkFromReguess(person.id, to: contact, saidName: saidName, in: session)
+            let links = try store.people.linkFromReguess(person.id, to: contact, saidName: saidName, in: session)
+            changed += links
+            if links > 0 { linked.append(person.id) }
         }
-        return changed
+        return Reguess(changedLinks: changed, linkedPeople: linked)
+    }
+
+    /// What `reguess` did: the `new` links that became `assumed`, and the people it linked to a contact, in link order.
+    public struct Reguess: Sendable, Equatable {
+        public var changedLinks: Int
+        public var linkedPeople: [PersonID]
     }
 }

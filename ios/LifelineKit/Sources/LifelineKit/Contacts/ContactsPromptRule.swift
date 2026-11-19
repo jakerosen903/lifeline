@@ -1,0 +1,10 @@
+import Foundation
+
+/// When the landing may show the one system prompt for contacts (spec, "Access"). Pure.
+public enum ContactsPromptRule {
+    /// The app asks once, and only when the system has no answer yet. It asks on the landing of the recording
+    /// whose first kept moment names a person: before that, the prompt has no reason the owner can see.
+    public static func shouldAsk(access: ContactsAccess, askedBefore: Bool, keptPeopleInSession: Int) -> Bool {
+        access == .notAsked && !askedBefore && keptPeopleInSession > 0
+    }
+}

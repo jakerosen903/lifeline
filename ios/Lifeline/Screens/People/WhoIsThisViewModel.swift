@@ -31,7 +31,7 @@ final class WhoIsThisViewModel {
 
     init(source: Source, deps: Dependencies) {
         self.source = source
-        self.actions = PersonLinkActions(store: deps.extractionStore)
+        self.actions = deps.personLinkActions()
         self.photoImages = deps.photoImages
         let store = deps.extractionStore
         covers = (try? store.photos.covers(type: .person)) ?? [:]

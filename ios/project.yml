@@ -36,6 +36,7 @@ targets:
         NSMicrophoneUsageDescription: "Lifeline records your sessions so you can hear them again."
         NSSpeechRecognitionUsageDescription: "Lifeline transcribes your sessions on this device."
         NSPhotoLibraryUsageDescription: "Lifeline shows your photos so you can pick one and tell its story. They stay on this phone."
+        NSContactsUsageDescription: "Lifeline matches the names in your stories to your contacts. It reads names and pictures only, and they stay on this phone."
         # With limited access the app offers "All photos"; the system must not ask to select more photos on its own.
         PHPhotoLibraryPreventAutomaticLimitedAccessAlert: true
         UILaunchScreen: {}

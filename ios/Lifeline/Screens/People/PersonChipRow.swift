@@ -18,9 +18,9 @@ struct PersonChipRow: View {
         /// The person is one Keep made, or will make, from a contact.
         let fromContact: Bool
 
-        // PB1: `contacts: .none` until Task 5 passes what the contacts cache saw.
-        var line: String? {
-            isNotAPerson ? nil : PersonChipLine.text(origin: origin, saidName: saidName, fromContact: fromContact, contacts: .none)
+        /// `contacts` is what the app saw of the contacts for this chip's said name (PB1).
+        func line(contacts: PersonChipLine.ContactsSeen) -> String? {
+            isNotAPerson ? nil : PersonChipLine.text(origin: origin, saidName: saidName, fromContact: fromContact, contacts: contacts)
         }
         var accessibilityLabel: String {
             isNotAPerson ? PersonChipLine.notAPersonLabel(saidName: saidName ?? name)
@@ -61,6 +61,13 @@ struct PersonChipRow: View {
         let model: WhoIsThisViewModel
     }
     @State private var covers: [EntityID: Photo] = [:]
+    /// The contacts people hold, read with the covers: a held contact is not free for a new name.
+    @State private var heldContacts: Set<String> = []
+
+    /// Only a "New" chip's line names the contacts; the others skip the scan (the landing re-reads every second).
+    private func contactsSeen(_ item: Item) -> PersonChipLine.ContactsSeen {
+        item.origin == .new ? deps.contactsSeen(saidName: item.saidName, held: heldContacts) : .none
+    }
 
     var body: some View {
         if !items.isEmpty {
@@ -68,7 +75,7 @@ struct PersonChipRow: View {
                 Text("With").font(.caption.weight(.semibold)).foregroundStyle(Theme.oliveText)
                     .accessibilityAddTraits(.isHeader)
                 ForEach(items) { item in
-                    PersonChip(name: item.name, line: item.line, isAssumed: item.origin == .assumed && !item.isNotAPerson,
+                    PersonChip(name: item.name, line: item.line(contacts: contactsSeen(item)), isAssumed: item.origin == .assumed && !item.isNotAPerson,
                                accessibilityLabel: item.accessibilityLabel, identifier: item.identifier,
                                personID: item.person, cover: item.person.flatMap { covers[EntityID(rawValue: $0.rawValue)] },
                                cache: deps.photoImages) {
@@ -76,7 +83,11 @@ struct PersonChipRow: View {
                     }
                 }
             }
-            .task { covers = (try? deps.extractionStore.photos.covers(type: .person)) ?? [:] }
+            // Read again when a chip's person or origin changes: a look again after access links people to contacts.
+            .task(id: items.map { "\($0.id)|\($0.person?.rawValue ?? "")|\($0.origin?.rawValue ?? "")" }) {
+                covers = (try? deps.extractionStore.photos.covers(type: .person)) ?? [:]
+                heldContacts = deps.heldContactIdentifiers()
+            }
             .sheet(item: $asking) { asking in
                 WhoIsThisSheet(viewModel: asking.model) { outcome in
                     self.asking = nil

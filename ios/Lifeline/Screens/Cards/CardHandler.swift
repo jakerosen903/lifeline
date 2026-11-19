@@ -44,7 +44,7 @@ final class CardHandler {
 
     init(deps: Dependencies) {
         self.deps = deps
-        personMove = PersonMoveUndo(store: deps.extractionStore)
+        personMove = PersonMoveUndo(actions: deps.personLinkActions())
     }
 
     /// Called when a card is first shown. Writes the mention row for a who-is-this card so the
@@ -356,7 +356,7 @@ final class CardHandler {
         // A continuation that arrives later grows the card; its names may add a chip.
         let key = "\(card.id)|\(out.extraSpans.count)"
         if let cached = previews[key] { return cached }
-        let chips = (try? PersonLinkActions(store: deps.extractionStore).preview(candidate)) ?? []
+        let chips = (try? deps.personLinkActions().preview(candidate)) ?? []
         previews[key] = chips
         return chips
     }

@@ -342,3 +342,35 @@ private struct SeedSession {
         return memory.id
     }
 }
+
+// MARK: - Contacts (PC-b)
+
+extension UITestSeed {
+    /// The scripted phone's contacts, invented. Tests that need more cards add them here.
+    static let contactCards: [ContactCard] = [
+        ContactCard(identifier: "ui-contact-vale", fullName: "Robyn Vale", givenName: "Robyn", familyName: "Vale", nickname: "", hasPicture: true),
+        ContactCard(identifier: "ui-contact-reyes", fullName: "Tomas Reyes", givenName: "Tomas", familyName: "Reyes", nickname: "", hasPicture: false),
+        ContactCard(identifier: "ui-contact-okafor", fullName: "Robyn Okafor", givenName: "Robyn", familyName: "Okafor", nickname: "", hasPicture: false),
+    ]
+
+    /// The colour of each card's generated picture, for the cards with `hasPicture`.
+    private static let contactPictureColours: [String: Int] = ["ui-contact-vale": 0x5A7D9A]
+
+    /// `-uiTesting-contacts <full|limited|notAsked|denied>` picks the access. Without it (or with an unknown value) the
+    /// app has not asked and a request is refused, so a test that does not name contacts sees none. `notAsked` named
+    /// on purpose answers a request with `full`. The pictures are small generated JPEGs written under `folder`.
+    static func contactsDirectory(arguments: [String], folder: URL) throws -> ScriptedContactsDirectory {
+        let named = arguments.firstIndex(of: "-uiTesting-contacts").flatMap { $0 + 1 < arguments.count ? arguments[$0 + 1] : nil }
+            .flatMap(ContactsAccess.init(rawValue:))
+        let access = named ?? .notAsked
+        let afterRequest: ContactsAccess = named == nil ? .denied : (access == .notAsked ? .full : access)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        var pictures: [String: Data] = [:]
+        for (identifier, rgb) in contactPictureColours {
+            let url = folder.appending(path: "\(identifier).jpg")
+            try GeneratedPhoto.write(to: url, width: 96, height: 96, rgb: rgb)
+            pictures[identifier] = try Data(contentsOf: url)
+        }
+        return ScriptedContactsDirectory(cards: contactCards, pictures: pictures, access: access, accessAfterRequest: afterRequest)
+    }
+}

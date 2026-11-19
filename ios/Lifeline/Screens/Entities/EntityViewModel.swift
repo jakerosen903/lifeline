@@ -42,6 +42,8 @@ final class EntityViewModel {
     /// A person's moments that are here by a guess, keyed by memory. Empty on any other page and on the owner's.
     /// A memory with a guessed mention and a guessed detail shows the mention link.
     private(set) var guessed: [MemoryID: PersonLink] = [:]
+    /// The contacts people hold, read with `guessed`: a held contact is not free for a new name (PB1).
+    private var heldContacts: Set<String> = []
     /// "Changed to {name}." with Undo, after the sheet moved a moment off this page.
     let personMove: PersonMoveUndo
     let player = SegmentPlayer()
@@ -50,7 +52,7 @@ final class EntityViewModel {
     init(entity: Entity, deps: Dependencies) {
         self.entity = entity
         self.deps = deps
-        personMove = PersonMoveUndo(store: deps.extractionStore)
+        personMove = PersonMoveUndo(actions: deps.personLinkActions())
         // The shelf reports to this page, which exists only once the shelf is stored: the closure is bound after.
         var report: (String) -> Void = { _ in }
         self.shelf = PhotoShelf(subject: .entity(entity.id), deps: deps, onError: { report($0) })
@@ -105,6 +107,7 @@ final class EntityViewModel {
                                   birthYear: birth?.year, currentYear: CivilDate.today().year)
             }
             guessed = isOwner || entity.type != .person ? [:] : PersonLink.guesses(among: try store.personLinks.links(to: PersonID(rawValue: entity.id.rawValue)))
+            heldContacts = guessed.isEmpty ? [] : deps.heldContactIdentifiers()
             tags = try store.tags.tags(of: .entity, entity.id.rawValue)
             if let span = try store.entities.spans(of: entity.id).first, let segment = try store.sessions.fetchSegment(span.segmentID),
                let session = try store.sessions.fetch(segment.sessionID) {
@@ -121,11 +124,16 @@ final class EntityViewModel {
 
     // MARK: - Guessed moments
 
+    /// What a guessed moment's line says about the contacts for its said name.
+    func contactsSeen(saidName: String?) -> PersonChipLine.ContactsSeen {
+        deps.contactsSeen(saidName: saidName, held: heldContacts)
+    }
+
     /// "Yes, this {name}": settles that one link. The mark goes at once; there is no notice.
     func confirm(_ memory: MemoryID) {
         guard let link = guessed[memory] else { return }
         do {
-            try PersonLinkActions(store: deps.extractionStore).settle(link, wholeGroup: false)
+            try deps.personLinkActions().settle(link, wholeGroup: false)
             refresh()
         } catch {
             self.error = "Could not save that: \(error.localizedDescription)"
