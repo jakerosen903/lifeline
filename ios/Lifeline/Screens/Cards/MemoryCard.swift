@@ -2,7 +2,7 @@ import LifelineKit
 import SwiftUI
 
 /// "Sounds like a memory": the title in the owner's words, the quote, time phrases in ochre,
-/// people chips, and three choices: Keep, Change…, Dismiss. Low confidence is a word, never a
+/// a person chip for each person Keep will link, the place, and three choices: Keep, Change…, Dismiss. Low confidence is a word, never a
 /// fade. Swipe left also dismisses; the button is the visible way.
 struct MemoryCard: View {
     let memory: MemoryOut
@@ -11,6 +11,8 @@ struct MemoryCard: View {
     var matches: [MemoryMatch] = []
     /// "Part of: X" (M5), or nil.
     var storyLine: String? = nil
+    /// "With" and the people Keep will link, each marked as Keep will mark it.
+    var people: PersonChipRow? = nil
     let onKeep: () -> Void
     let onChange: () -> Void
     let onDismiss: () -> Void
@@ -50,8 +52,9 @@ struct MemoryCard: View {
                     .font(.subheadline)
                     .foregroundStyle(Theme.ochreText)
             }
-            if !memory.peopleRefs.isEmpty || memory.placeText != nil {
-                FlowChips(items: memory.peopleRefs + (memory.placeText.map { [$0] } ?? []))
+            if let people { people }
+            if let place = memory.placeText {
+                FlowChips(items: [place])
             }
             if !memory.extraSpans.isEmpty {
                 // Told across a pause: the card stands for every segment, the quote is the first's.
@@ -132,7 +135,7 @@ struct CheckThisTag: View {
     }
 }
 
-/// People and place chips, wrapping.
+/// Plain chips, wrapping: a card's place.
 struct FlowChips: View {
     let items: [String]
 
@@ -157,6 +160,8 @@ struct UndoNotice: View {
     var undoIdentifier = "card.undo"
     var textColor = Theme.secondaryText
     var buttonSize = ControlSize.regular
+    /// False once the action can no longer be taken back: the text stays, saying why.
+    var showsUndo = true
     let onUndo: () -> Void
 
     var body: some View {
@@ -166,11 +171,13 @@ struct UndoNotice: View {
                 .foregroundStyle(textColor)
                 .accessibilityIdentifier(identifier)
             Spacer(minLength: 0)
-            Button("Undo", action: onUndo)
-                .buttonStyle(.bordered)
-                .controlSize(buttonSize)
-                .tint(Theme.oliveOnFill)
-                .accessibilityIdentifier(undoIdentifier)
+            if showsUndo {
+                Button("Undo", action: onUndo)
+                    .buttonStyle(.bordered)
+                    .controlSize(buttonSize)
+                    .tint(Theme.oliveOnFill)
+                    .accessibilityIdentifier(undoIdentifier)
+            }
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)

@@ -46,30 +46,34 @@ private struct Env {
     #expect(accepted.newMentions.isEmpty)
     #expect(try env.store.memories.people(of: accepted.memory.id).map(\.id) == [mom.id])
     #expect(try env.store.people.mentions(status: .unresolved).isEmpty)
+    // A relation phrase only one person holds is the owner's own words: no mark (rule 2).
+    #expect(try env.store.entities.links(of: accepted.memory.id).map(\.link.origin) == [.said])
 }
 
-@Test func unknownPeopleRefBecomesOneMention() throws {
+// Task 3: an unknown name no longer waits as a mention; Keep makes a person marked new.
+@Test func unknownPeopleRefBecomesANewPerson() throws {
     let env = try Env()
     let accepted = try env.actions.acceptMemory(try env.memoryCandidate(people: ["my mother"]))
-    #expect(accepted.newMentions.map(\.text) == ["my mother"])
-    #expect(try env.store.people.mentions(status: .unresolved).count == 1)
-    #expect(try env.store.memories.people(of: accepted.memory.id).isEmpty)
+    #expect(accepted.newMentions.isEmpty)
+    #expect(try env.store.people.mentions(status: .unresolved).isEmpty)
+    #expect(try env.store.memories.people(of: accepted.memory.id).map(\.displayName) == ["my mother"])
+    #expect(try env.store.entities.links(of: accepted.memory.id).map(\.link.origin) == [.new])
 }
 
 @Test func samePersonTwiceInOneSegmentLinksOnce() throws {
     let env = try Env()
     let accepted = try env.actions.acceptMemory(try env.memoryCandidate(people: ["my mother", "My mother"]))
-    #expect(accepted.newMentions.count == 1)
-    let person = try #require(try env.actions.resolveMention(accepted.newMentions[0].id, to: .new(displayName: "Rosa")))
-    #expect(person.displayName == "Rosa")
-    #expect(try env.store.memories.people(of: accepted.memory.id).map(\.displayName) == ["Rosa"])
-    #expect(try env.store.people.aliases(of: person.id).map(\.text).sorted() == ["Rosa", "my mother"])
+    #expect(accepted.newMentions.isEmpty)
+    #expect(try env.store.memories.people(of: accepted.memory.id).map(\.displayName) == ["my mother"])
+    #expect(try env.store.people.people().filter { !$0.isOwner }.count == 1, "one new person for the two refs")
 }
 
+// The answers to "Who's this?" are tested on a group phrase: since Task 3 it is the only said
+// name Keep leaves as a mention.
 @Test func resolveExistingPersonLinksTheMemory() throws {
     let env = try Env()
     let rosa = try env.store.people.insertPerson(displayName: "Rosa")
-    let accepted = try env.actions.acceptMemory(try env.memoryCandidate())
+    let accepted = try env.actions.acceptMemory(try env.memoryCandidate(people: ["our parents"]))
     _ = try env.actions.resolveMention(accepted.newMentions[0].id, to: .existing(rosa.id))
     #expect(try env.store.memories.people(of: accepted.memory.id).map(\.id) == [rosa.id])
     #expect(try env.store.people.mention(id: accepted.newMentions[0].id)?.status == .resolved)
@@ -77,7 +81,7 @@ private struct Env {
 
 @Test func notAPersonLinksNothing() throws {
     let env = try Env()
-    let accepted = try env.actions.acceptMemory(try env.memoryCandidate())
+    let accepted = try env.actions.acceptMemory(try env.memoryCandidate(people: ["our parents"]))
     #expect(try env.actions.resolveMention(accepted.newMentions[0].id, to: .notAPerson) == nil)
     #expect(try env.store.memories.people(of: accepted.memory.id).isEmpty)
     #expect(try env.store.people.mention(id: accepted.newMentions[0].id)?.status == .notAPerson)
@@ -126,9 +130,9 @@ private struct Env {
 
 @Test func resolvingAMentionCandidateLinksMemoriesFromTheSameSegment() throws {
     let env = try Env()
-    let memory = try env.actions.acceptMemory(try env.memoryCandidate(people: ["my mother"], ordinal: 0))
-    // The memory already queued "my mother"; the mention card for the same name reuses that row.
-    let mention = try env.actions.acceptMention(try env.mentionCandidate("my mother", ordinal: 1))
+    let memory = try env.actions.acceptMemory(try env.memoryCandidate(people: ["our parents"], ordinal: 0))
+    // The memory already queued "our parents"; the mention card for the same phrase reuses that row.
+    let mention = try env.actions.acceptMention(try env.mentionCandidate("our parents", ordinal: 1))
     #expect(mention.id == memory.newMentions[0].id)
     _ = try env.actions.resolveMention(mention.id, to: .new(displayName: "Rosa"))
     #expect(try env.store.memories.people(of: memory.memory.id).map(\.displayName) == ["Rosa"])
@@ -145,21 +149,22 @@ private struct Env {
 @Test func resolveNewReusesAKnownPerson() throws {
     let env = try Env()
     let rosa = try env.store.people.insertPerson(displayName: "Rosa")
-    let accepted = try env.actions.acceptMemory(try env.memoryCandidate(people: ["my mother"]))
+    let accepted = try env.actions.acceptMemory(try env.memoryCandidate(people: ["our parents"]))
     let person = try #require(try env.actions.resolveMention(accepted.newMentions[0].id, to: .new(displayName: "rosa ")))
     #expect(person.id == rosa.id, "typing a name the app knows must not make a second person")
     #expect(try env.store.people.people().filter { !$0.isOwner }.count == 1)
 }
 
-@Test func resolvingOneMentionResolvesTheSameNameEverywhere() throws {
+// Task 3: an answer carries inside one recording only. It used to answer every recording.
+@Test func resolvingOneMentionLeavesOtherRecordingsAlone() throws {
     let env = try Env()
     let other = try StoreFixtures.session(in: env.store.sessions, segments: ["my mother sang"])
     let later = Mention(id: .init(), segmentID: other.1[0].id, text: "My Mother", status: .unresolved, personID: nil)
     try env.store.people.insertMention(later)
-    let accepted = try env.actions.acceptMemory(try env.memoryCandidate(people: ["my mother"]))
-    let rosa = try #require(try env.actions.resolveMention(accepted.newMentions[0].id, to: .new(displayName: "Rosa")))
-    #expect(try env.store.people.mention(id: later.id)?.personID == rosa.id)
-    #expect(try env.store.people.mentions(status: .unresolved).isEmpty)
+    let mention = try env.actions.acceptMention(try env.mentionCandidate("my mother"))
+    _ = try #require(try env.actions.resolveMention(mention.id, to: .new(displayName: "Rosa")))
+    #expect(try env.store.people.mention(id: later.id)?.personID == nil)
+    #expect(try env.store.people.mentions(status: .unresolved).map(\.id) == [later.id])
 }
 
 @Test func acceptMemoryWritesMemoryAndCandidateStatusTogether() throws {
@@ -180,11 +185,11 @@ private struct Env {
     #expect(try env.store.people.findPerson(matching: "my mom")?.id == person.id)
 }
 
-@Test func chipAddsTheKinPhraseToTheRowKeepWrote() throws {
+// Task 3: Keep writes no mention for a name, so the first row comes from a person card without the phrase.
+@Test func chipAddsTheKinPhraseToTheRowWrittenWithoutIt() throws {
     let env = try Env(text: "the garden had a pomegranate tree and my sister Maya climbed it")
-    let accepted = try env.actions.acceptMemory(try env.memoryCandidate(people: ["Maya"]))
-    let written = try #require(accepted.newMentions.first)
-    #expect(written.text == "Maya" && written.relationText == nil, "Keep writes the name without the phrase")
+    let written = try env.actions.acceptMention(try env.mentionCandidate("Maya", ordinal: 3))
+    #expect(written.text == "Maya" && written.relationText == nil, "the first card gave the name without the phrase")
     let mention = try env.actions.acceptMention(try env.mentionCandidate("Maya", ordinal: 1, relation: "my sister"))
     #expect(mention.id == written.id && mention.relationText == "my sister")
     #expect(try env.store.people.mention(id: written.id)?.relationText == "my sister")
@@ -195,19 +200,22 @@ private struct Env {
 
 @Test func blankKinPhraseLeavesTheRowWithout() throws {
     let env = try Env(text: "the garden had a pomegranate tree and Maya climbed it")
-    let written = try #require(try env.actions.acceptMemory(try env.memoryCandidate(people: ["Maya"])).newMentions.first)
+    let written = try env.actions.acceptMention(try env.mentionCandidate("Maya", ordinal: 2))
     let mention = try env.actions.acceptMention(try env.mentionCandidate("Maya", ordinal: 1, relation: "   "))
     #expect(mention.relationText == nil)
     #expect(try env.store.people.mention(id: written.id)?.relationText == nil)
 }
 
-@Test func peopleRefWithRoleAndNameMatchesTheNamedPerson() throws {
+// Task 3: the name picks Marcel, but nothing the owner said ties "my mom" to him, so the link is a
+// marked guess and the role phrase is not saved (a guess teaches no name).
+@Test func peopleRefWithRoleAndNameIsAGuessAboutTheNamedPerson() throws {
     let env = try Env(text: "the garden had a pomegranate tree and my mom, Marcel, picked them")
     let marcel = try env.store.people.insertPerson(displayName: "Marcel")
     let accepted = try env.actions.acceptMemory(try env.memoryCandidate(people: ["my mom, Marcel"]))
     #expect(accepted.newMentions.isEmpty)
     #expect(try env.store.memories.people(of: accepted.memory.id).map(\.id) == [marcel.id])
-    #expect(try env.store.people.aliases(of: marcel.id).map(\.text).contains("my mom"), "the role phrase becomes an alias")
+    #expect(try env.store.entities.links(of: accepted.memory.id).map(\.link.origin) == [.assumed])
+    #expect(try !env.store.people.aliases(of: marcel.id).map(\.text).contains("my mom"), "the role phrase waits for the owner's word")
 }
 
 @Test func dismissedCandidatesAndNotAPersonMentionsCanBeRestored() throws {

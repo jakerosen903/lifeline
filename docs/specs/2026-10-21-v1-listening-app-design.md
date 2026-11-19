@@ -127,7 +127,7 @@ SQLite. All IDs are UUID strings. All times are ISO-8601 UTC. All audio offsets 
 | `memory_span` | memory_id, segment_id, start_ms, end_ms, order | A memory can span several segments; the first span is the primary. `same_as_memory_id` from the extractor adds a span here (builder's call) |
 | `memory_person` | memory_id, person_id, role_text | `role_text` is the owner's phrase ("my sister") |
 | `memory_place` | memory_id, place_id | |
-| `person` | id, display_name, notes, is_owner, birth_date?, birth_date_origin? (`stated`/`typed`) | Exactly one row has `is_owner = true`. `contact_identifier` is deferred; no Contacts framework in V1 (builder's call) |
+| `person` | id, display_name, notes, is_owner, birth_date?, birth_date_origin? (`stated`/`typed`) | Exactly one row has `is_owner = true`. `contact_identifier` is deferred; no Contacts framework in V1 (builder's call). Superseded on 2026-11-18 by `docs/specs/2026-11-18-people-contacts.md` |
 | `profile` | id (singleton), display_name?, birth_date?, birth_place_text?, free_text?, updated_at | The "About you" screen. Typed by the owner, origin `typed`. Mirrored onto the owner's `person` row. `free_text` goes into the fixed part of the context packet (§7) |
 | `alias` | person_id, text | "Maya", "my sister", "Mai" |
 | `mention` | id, segment_id, text, status (`unresolved`/`resolved`/`not_a_person`), person_id? | The "who's this?" queue |

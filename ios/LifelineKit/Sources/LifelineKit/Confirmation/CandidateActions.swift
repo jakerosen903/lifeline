@@ -7,8 +7,9 @@ public enum MentionChoice: Sendable, Equatable {
 }
 
 /// What a tap on a card does to the store. Accepting a memory writes the memory and its edges
-/// in one transaction; names the app does not know become mentions for the "Who's this?" queue;
-/// resolving a mention links every memory from that segment that named the person.
+/// in one transaction; each said name becomes a link that records how it was made (`PersonGuess`),
+/// and only a group phrase becomes a mention for the "Who's this?" queue; resolving a mention
+/// links every memory from that segment that named the person.
 public struct CandidateActions: Sendable {
     public enum Error: Swift.Error, Equatable {
         case notPending
@@ -46,6 +47,8 @@ public struct CandidateActions: Sendable {
     let store: ExtractionStore
     /// Keeps the embeddings current; nil in the CLI and under UI testing.
     let matcher: MemoryMatcher?
+    /// The contacts the guess may match a said name against. PC-b sets it; until then there are none.
+    public var contactsForGuess: @Sendable () -> [PersonGuess.Contact] = { [] }
 
     public init(store: ExtractionStore, matcher: MemoryMatcher? = nil) { self.store = store; self.matcher = matcher }
 
@@ -128,12 +131,12 @@ public struct CandidateActions: Sendable {
 
         // The card's edges and every continuation's, as one telling (M5).
         let continuations = try store.candidates.continuations(of: candidate.id)
-        var edges = try edges(of: out, for: memory.id, segment: candidate.segmentID)
-        for row in continuations { if let o = CandidatePayload.memory(row) { edges.merge(try self.edges(of: o, for: memory.id, segment: row.segmentID)) } }
+        var edges = try edges(of: out, for: memory.id, segment: candidate.segmentID, card: candidate.id)
+        for row in continuations { if let o = CandidatePayload.memory(row) { edges.merge(try self.edges(of: o, for: memory.id, segment: row.segmentID, card: candidate.id)) } }
         // The memory, its continuation cards' status and its story line land together (M5).
         let storyRef = joinStory ? out.storyRef.flatMap { $0.isEmpty ? nil : StoryID(rawValue: $0) } : nil
         try store.memories.insert(memory, spans: spans, people: edges.people, places: edges.places, links: edges.links, entities: edges.entityWrite, anchors: edges.anchors,
-                                  acceptingCandidate: candidate.id, acceptingContinuations: continuations.map(\.id),
+                                  acceptingCandidate: candidate.id, acceptingContinuations: continuations.map(\.id) + edges.carriedPersonCards,
                                   joiningStory: storyRef.map { (id: $0, chapterID: memory.chapterID) })
         let newMentions = try finishEdges(edges, segment: candidate.segmentID)
         try reindex(memory.id)
@@ -145,8 +148,13 @@ public struct CandidateActions: Sendable {
     /// The people, places and anchors a card names, built for `memory`. Shared by Keep and
     /// Same story so a retelling links exactly as a first telling does.
     struct Edges {
+        /// One link per person, each with its origin.
         var people: [MemoryPerson] = []
+        /// Group phrases ("our parents"): each becomes a mention with its own card.
         var unknown: [String] = []
+        /// Person cards still pending from before Task 3 whose name this card carries. Keep links
+        /// the name, so they are marked accepted in the memory's transaction and ask nothing.
+        var carriedPersonCards: [CandidateID] = []
         var roleAliases: [(PersonID, String)] = []
         var places: [MemoryPlace] = []
         var anchors: [Anchor] = []
@@ -159,9 +167,14 @@ public struct CandidateActions: Sendable {
         mutating func merge(_ other: Edges) {
             // Two segments that both named a new "the house" plan one entity, not two.
             let remap = entityWrite.merge(other.entityWrite)
-            for person in other.people where !people.contains(where: { $0.personID == person.personID }) { people.append(person) }
+            func mapped(_ id: PersonID) -> PersonID { remap[EntityID(rawValue: id.rawValue)].map { PersonID(rawValue: $0.rawValue) } ?? id }
+            for var person in other.people {
+                person.personID = mapped(person.personID)
+                add(person)
+            }
             for name in other.unknown where !unknown.contains(where: { CandidateActions.same($0, name) }) { unknown.append(name) }
-            roleAliases += other.roleAliases.filter { pair in !roleAliases.contains { $0.0 == pair.0 && $0.1 == pair.1 } }
+            carriedPersonCards += other.carriedPersonCards.filter { !carriedPersonCards.contains($0) }
+            roleAliases += other.roleAliases.map { (mapped($0.0), $0.1) }.filter { pair in !roleAliases.contains { $0.0 == pair.0 && $0.1 == pair.1 } }
             for var place in other.places {
                 if let mapped = remap[EntityID(rawValue: place.placeID.rawValue)] { place.placeID = PlaceID(rawValue: mapped.rawValue) }
                 if !places.contains(where: { $0.placeID == place.placeID }) { places.append(place) }
@@ -169,7 +182,21 @@ public struct CandidateActions: Sendable {
             anchors += other.anchors.filter { a in !anchors.contains { $0.phrase == a.phrase && $0.relation == a.relation } }
             for var link in other.links {
                 link.entityID = remap[link.entityID] ?? link.entityID
-                if !links.contains(where: { $0.entityID == link.entityID && $0.relation == link.relation }) { links.append(link) }
+                if let i = links.firstIndex(where: { $0.entityID == link.entityID && $0.relation == link.relation }) {
+                    links[i].origin = LinkOrigin.stronger(links[i].origin, link.origin)
+                } else {
+                    links.append(link)
+                }
+            }
+        }
+
+        /// A memory has one link per person: a second ref that reaches the same person keeps the
+        /// first ref's words and the stronger of the two origins.
+        mutating func add(_ person: MemoryPerson) {
+            if let i = people.firstIndex(where: { $0.personID == person.personID }) {
+                people[i].origin = LinkOrigin.stronger(people[i].origin, person.origin)
+            } else {
+                people.append(person)
             }
         }
     }
@@ -188,23 +215,33 @@ public struct CandidateActions: Sendable {
         return spans
     }
 
-    func edges(of out: MemoryOut, for memory: MemoryID, segment: SegmentID? = nil) throws -> Edges {
+    /// `card` is the card the owner sees: its stored answers apply to every segment it carries.
+    func edges(of out: MemoryOut, for memory: MemoryID, segment: SegmentID? = nil, card: CandidateID? = nil) throws -> Edges {
         let currentSegment = segment
         var e = Edges()
+        let inputs = try guessInputs(card: card, segment: segment)
+        // What each people ref became (nil: "not a person"), so a fact about that name follows it.
+        var refLinks: [(ref: String, link: GuessedLink?)] = []
         // A card stored before the owner filter can still name the owner. The speaker is not
         // someone to ask about, so the name is left out here too (audit F10).
-        let owner = try store.people.ownerNames()
-        for ref in out.peopleRefs where !owner.isOwner(ref) {
-            if let person = try store.people.findPerson(matching: ref) {
-                if !e.people.contains(where: { $0.personID == person.id }) {
-                    e.people.append(MemoryPerson(memoryID: memory, personID: person.id, roleText: ref))
-                }
-                // "my mom, Marcel": the role half becomes an alias so "my mom" alone links next time.
-                let parts = PeopleRepository.parts(of: ref)
-                if parts.count > 1 { e.roleAliases += parts.dropFirst().map { (person.id, $0) } }
-            } else if !e.unknown.contains(where: { Self.same($0, ref) }) {
-                e.unknown.append(ref)
+        for ref in out.peopleRefs where !inputs.owner.isOwner(ref) {
+            // A phrase for several people is never one person: it waits as a mention (unchanged).
+            if GroupPhrase.isGroup(ref) {
+                if !e.unknown.contains(where: { Self.same($0, ref) }) { e.unknown.append(ref) }
+                continue
             }
+            let guessed = guessedLink(for: inputs.saidName(ref), inputs, plan: &e.entityWrite)
+            refLinks.append((ref, guessed))
+            guard let link = guessed else { continue }
+            e.add(MemoryPerson(memoryID: memory, personID: link.person, roleText: ref, origin: link.origin))
+            e.roleAliases += link.aliases.map { (link.person, $0) }
+        }
+        // Extraction before Task 3 left a carried name as a pending person card under its memory.
+        // Answering it after Keep would add a second link, so Keep closes it (a group phrase stays).
+        if let segment {
+            e.carriedPersonCards = try store.candidates.candidates(for: segment).filter { row in
+                row.kind == .person && row.status == .pending && CandidatePayload.mention(row).map { CarriedName.carries(out, $0) } == true
+            }.map(\.id)
         }
         // Places, things and ideas the card names (its chips) link on Keep without a card of their own (M7).
         // A place with no name ("a restaurant") stays in the quote and makes no place (audit F13).
@@ -219,8 +256,9 @@ public struct CandidateActions: Sendable {
             }
         }
         // A fact, feeling or goal is a detail of what it is about; a moment never is (M7).
-        if let kind = out.kind, !kind.isMoment, let about = try aboutEntity(out.aboutRef, segment: currentSegment, plan: &e.entityWrite) {
-            e.links.append(MomentEntity(memoryID: memory, entityID: about, relation: .detail))
+        if let kind = out.kind, !kind.isMoment, let about = try aboutEntity(out.aboutRef, segment: currentSegment, inputs: inputs,
+                                                                               refLinks: refLinks, plan: &e.entityWrite) {
+            e.links.append(MomentEntity(memoryID: memory, entityID: about.id, relation: .detail, origin: about.origin))
         }
         e.anchors = out.anchors.map {
             Anchor(id: .init(), memoryID: memory, phrase: $0.phrase, relation: $0.relation, targetKind: .none, targetID: nil,
@@ -250,23 +288,43 @@ public struct CandidateActions: Sendable {
     }
 
     /// `about_ref` resolved: `self` is the owner; an id on file is that entity; a mention's `ref`
-    /// in the same segment becomes its entity. Nil when it names nothing the app can find.
-    private func aboutEntity(_ ref: String?, segment currentSegment: SegmentID?, plan: inout EntityRepository.Write) throws -> EntityID? {
+    /// in the same segment becomes its entity. Nil when it names nothing the app can find. The
+    /// origin is the person link's, for a person (`assumed` for a person id no mention reached);
+    /// nil for the owner and anything else.
+    /// `refLinks` is what each of the card's people refs became.
+    private func aboutEntity(_ ref: String?, segment currentSegment: SegmentID?, inputs: GuessInputs,
+                             refLinks: [(ref: String, link: GuessedLink?)],
+                             plan: inout EntityRepository.Write) throws -> (id: EntityID, origin: LinkOrigin?)? {
         guard let ref = ref?.trimmingCharacters(in: .whitespacesAndNewlines), !ref.isEmpty else { return nil }
-        if ref == "self" { return try store.profile.owner()?.entityID }
-        if let known = try store.entities.entity(id: EntityID(rawValue: ref)) { return known.id }
-        // About a person named in this segment: linked now when the app knows the name, and when
-        // the person answers "Who's this?" otherwise (`linkDetails`).
+        if ref == "self" { return try store.profile.owner().map { ($0.entityID, nil) } }
+        if let known = try store.entities.entity(id: EntityID(rawValue: ref)) {
+            guard known.type == .person, try store.profile.owner()?.entityID != known.id else { return (known.id, nil) }
+            // A person id the model picked is still a guess (spec step 2, R38): the origin of the
+            // card's mention that reached the same person, else `assumed`.
+            let reached = refLinks.compactMap(\.link).first { $0.person.rawValue == known.id.rawValue }
+            return (known.id, reached?.origin ?? .assumed)
+        }
+        // About a person named in this segment: the same guess as the name in `people_refs`, so
+        // the detail and the mention reach one person with one origin. A group phrase waits for
+        // its answer ("Who are our parents?"); the owner is never guessed.
         if let segment = currentSegment,
            let named = try store.candidates.candidates(for: segment).first(where: { $0.kind == .person && CandidatePayload.mention($0)?.ref == ref }),
            let mention = CandidatePayload.mention(named) {
-            return try store.people.findPerson(matching: mention.text)?.entityID
+            guard !GroupPhrase.isGroup(mention.text), !inputs.owner.isOwner(mention.text, relation: mention.relationText) else { return nil }
+            // The card names the person too ("my roommate, Robin"): the detail follows that link, so a
+            // stored choice keyed on the whole ref reaches the mention and the detail alike.
+            let key = SaidName.key(mention.text)
+            if let carried = refLinks.first(where: { SaidName.key($0.ref) == key || SaidName(ref: $0.ref).name.map(SaidName.key) == key }) {
+                return carried.link.map { (EntityID(rawValue: $0.person.rawValue), $0.origin) }
+            }
+            let said = SaidName(ref: mention.text, mentionRelation: mention.relationText)
+            return guessedLink(for: said, inputs, plan: &plan).map { (EntityID(rawValue: $0.person.rawValue), $0.origin) }
         }
         guard let segment = currentSegment,
               let row = try store.candidates.candidates(for: segment).first(where: { ($0.kind == .entity || $0.kind == .place) && CandidatePayload.mention($0)?.ref == ref }),
               let mention = CandidatePayload.mention(row), mention.kind != .person,
               !(mention.kind == .place && GenericPhrase.isGeneric(mention.text)) else { return nil }
-        return try proposeEntity(from: mention, candidate: row, plan: &plan).id
+        return (try proposeEntity(from: mention, candidate: row, plan: &plan).id, nil)
     }
 
     /// An entity from a mention, planned: an idea's title is the person's words or the dated default.
@@ -285,7 +343,8 @@ public struct CandidateActions: Sendable {
         return try planEntity(type: type, title: title, candidate: candidate.id, plan: &plan)
     }
 
-    /// Aliases and the "Who's this?" mentions that follow the edges. Returns the new mentions.
+    /// Aliases (only the owner's own words: `said` or `confirmed` links) and the "Who's this?"
+    /// mentions for group phrases that follow the edges. Returns the new mentions.
     func finishEdges(_ edges: Edges, segment: SegmentID) throws -> [Mention] {
         for (person, alias) in edges.roleAliases where !GroupPhrase.isGroup(alias) { try store.people.addAlias(alias, to: person) }
         return try edges.unknown.map { try mention(for: $0, in: segment) }
@@ -368,34 +427,32 @@ public struct CandidateActions: Sendable {
             try store.people.markNotAPerson(id)
             person = nil
         }
+        // The same name waiting in other segments of this recording is the same question; answer
+        // it once. An answer never carries to another recording: there it is a new question.
+        let sameName = try waitingInSameRecording(as: mention)
         if let person {
             try linkMemories(naming: mention.text, in: mention.segmentID, to: person.id)
             try linkDetails(aboutMentionNamed: mention.text, in: mention.segmentID, to: person.id)
-            // The same name waiting in other segments is the same question; answer it once. A group
-            // phrase ("our parents") is a new question in every story, so it is not carried over.
-            for other in try store.people.mentions(status: .unresolved)
-                where other.id != id && Self.same(other.text, mention.text) && !GroupPhrase.isGroup(mention.text) {
+            // A group phrase ("our parents") is a new question in every story, so it is not carried over.
+            for other in sameName where !GroupPhrase.isGroup(mention.text) {
                 try store.people.resolve(other.id, to: person.id)
                 try linkMemories(naming: other.text, in: other.segmentID, to: person.id)
                 try linkDetails(aboutMentionNamed: other.text, in: other.segmentID, to: person.id)
             }
         } else {
-            for other in try store.people.mentions(status: .unresolved) where other.id != id && Self.same(other.text, mention.text) {
-                try store.people.markNotAPerson(other.id)
-            }
+            for other in sameName { try store.people.markNotAPerson(other.id) }
         }
         return person
     }
 
-    /// Records a mention the app can answer itself because the name is already known.
-    /// Returns the person when it did, nil when the name is new and needs a card.
-    @discardableResult
-    public func resolveIfKnown(_ mention: Mention) throws -> Person? {
-        guard mention.status == .unresolved, let person = try store.people.findPerson(matching: mention.text) else { return nil }
-        try store.people.resolve(mention.id, to: person.id)
-        try linkMemories(naming: mention.text, in: mention.segmentID, to: person.id)
-        try linkDetails(aboutMentionNamed: mention.text, in: mention.segmentID, to: person.id)
-        return person
+    /// Other unresolved mentions with the same text in the same session. None when the
+    /// mention's segment is gone, so an answer with no recording carries nowhere.
+    private func waitingInSameRecording(as mention: Mention) throws -> [Mention] {
+        guard let session = try store.sessions.fetchSegment(mention.segmentID)?.sessionID else { return [] }
+        return try store.people.mentions(status: .unresolved).filter { other in
+            guard other.id != mention.id, Self.same(other.text, mention.text) else { return false }
+            return try store.sessions.fetchSegment(other.segmentID)?.sessionID == session
+        }
     }
 
     /// "Who are “our parents”?" answered: each chosen person is linked to the memories of that
@@ -425,7 +482,7 @@ public struct CandidateActions: Sendable {
         for row in rows where row.kind == .memory {
             guard let out = CandidatePayload.memory(row), let about = out.aboutRef, refs.contains(about), !(out.kind ?? .event).isMoment,
                   let memory = try store.memories.memory(createdFrom: row.id), try !store.entities.hasDetail(memory.id) else { continue }
-            try store.entities.link(memory.id, EntityID(rawValue: person.rawValue), relation: .detail)
+            try store.entities.link(memory.id, EntityID(rawValue: person.rawValue), relation: .detail, origin: .confirmed)
         }
     }
 

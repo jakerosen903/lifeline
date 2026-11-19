@@ -32,24 +32,37 @@ final class ExtractionUITests: XCTestCase {
         XCTAssertTrue(memory.label.contains("The blue door"))
     }
 
+    /// Nobody is on file, so Keep links "Maya" to a new person. The landing's person chip opens "Who is this?";
+    /// Done with that person settles the link, and the relation said with the name becomes theirs.
     @MainActor
     func testWhoIsThisResolvesToANewPerson() {
         let app = launchToHome()
         app.startSession()
-        // "Who's this?" is a chip on the Maya memory's card once it is kept.
         let maya = app.staticTexts.matching(identifier: "card.title").matching(NSPredicate(format: "label == %@", "Maya climbed it")).firstMatch
         XCTAssertTrue(maya.waitForExistence(timeout: 20), "the Maya memory card arrives")
         let mayaCard = app.descendants(matching: .any).matching(identifier: "card.memory")
             .containing(NSPredicate(format: "identifier == %@ AND label == %@", "card.title", "Maya climbed it")).firstMatch
+        XCTAssertTrue(mayaCard.buttons.matching(identifier: "person.chip").matching(NSPredicate(format: "label == %@", "Maya. Change who this is.")).firstMatch
+            .waitForExistence(timeout: 5), "the card shows the new person Keep will make for Maya")
         let keep = mayaCard.buttons["card.add"].firstMatch
         XCTAssertTrue(keep.waitForExistence(timeout: 10), "Keep on the Maya card, wherever it sits in the stack")
         keep.tap()
-        let chip = app.buttons.matching(identifier: "card.followUp").matching(NSPredicate(format: "label == %@", "Maya: who's this?")).firstMatch
-        XCTAssertTrue(chip.waitForExistence(timeout: 5), "a who-is-this chip appears on the kept card")
+        XCTAssertFalse(app.buttons.matching(identifier: "card.followUp").matching(NSPredicate(format: "label == %@", "Maya: who's this?")).firstMatch.exists,
+                       "Keep linked the name, so nothing asks who Maya is")
+        app.buttons["session.finish"].tap()
+        let chip = app.buttons.matching(identifier: "person.chip").matching(NSPredicate(format: "label == %@", "Maya. Change who this is.")).firstMatch
+        XCTAssertTrue(chip.waitForExistence(timeout: 15), "the landing shows Maya on her moment")
+        XCTAssertTrue(app.scrollIntoView(chip))
         chip.tap()
-        XCTAssertTrue(app.buttons["card.newPerson"].firstMatch.waitForExistence(timeout: 5))
-        app.buttons["card.newPerson"].firstMatch.tap()
-        app.finishSession()
+        XCTAssertTrue(app.any("who.sheet").waitForExistence(timeout: 5))
+        let done = app.buttons["who.done"]
+        if !app.waitHittable(done, timeout: 2) { app.any("who.sheet").swipeUp() }
+        XCTAssertTrue(app.waitHittable(done, timeout: 5), "Done is on screen")
+        done.tap()
+        let closed = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: app.any("who.sheet"))
+        XCTAssertEqual(XCTWaiter().wait(for: [closed], timeout: 5), .completed, "Done closes the sheet")
+        app.buttons["landing.done"].tap()
+        XCTAssertTrue(app.waitHittable(app.buttons["home.start"], timeout: 10), "Done for now leads back to the timeline")
         app.openNamesQueue()
         let person = app.buttons["people.row"].firstMatch
         XCTAssertTrue(person.waitForExistence(timeout: 5))

@@ -163,6 +163,22 @@ extension XCUIApplication {
         return app
     }
 
+    /// Launches with `-uiTesting-seedGuesses`: Robin Okafor guessed for "Robin" in two moments of the latest session,
+    /// with two older moments of his own; Tomas (new) and Danielle (said) in a third; Priya, made by a guess, in one
+    /// older moment. With `landing` the latest session's landing is open; otherwise the app is on the timeline.
+    /// First open is done; do not call `skipFirstOpen()`.
+    static func launchWithGuesses(landing: Bool = false, _ extra: [String] = []) -> XCUIApplication {
+        let app = XCUIApplication()
+        app.launchArguments += ["-uiTesting", "-uiTesting-seedGuesses"] + (landing ? ["-uiTesting-guessesLanding"] : []) + extra
+        app.launch()
+        if landing {
+            XCTAssertTrue(app.buttons["landing.done"].waitForExistence(timeout: 15), "the seeded session's landing is open")
+        } else {
+            XCTAssertTrue(app.waitHittable(app.buttons["home.start"], timeout: 15), "the seeded app lands on the timeline")
+        }
+        return app
+    }
+
     /// A copy of a bundled fixture in the temporary folder, for a launch argument such as `-uiTesting-pickPhoto`.
     static func fixturePath(_ name: String, ext: String) throws -> String {
         let url = try XCTUnwrap(Bundle(for: FixtureBundle.self).url(forResource: name, withExtension: ext), "fixture \(name).\(ext) in the UI test bundle")

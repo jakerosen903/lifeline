@@ -24,6 +24,9 @@ final class EntityViewModel {
     private(set) var tags: [String] = []
     private(set) var firstTelling: (span: EntitySpan, session: Session)?
     private(set) var isGone = false
+    /// The page closes when the entity is gone and no notice is still offering Undo or its reason.
+    /// A move that removed this person keeps the page up, read-only, until its notice ends (R34).
+    var shouldClose: Bool { isGone && personMove.text == nil }
     /// False until the first `refresh()`: a page reads nothing until it is on screen.
     private(set) var isLoaded = false
     /// The owner's own page ("About you"): a session from here is about "yourself".
@@ -33,12 +36,18 @@ final class EntityViewModel {
     private(set) var photoError: String?
     /// The page's photos (S4): the cover heads the page, two or more sit in a row.
     let shelf: PhotoShelf
+    /// A person's moments that are here by a guess, keyed by memory. Empty on any other page and on the owner's.
+    /// A memory with a guessed mention and a guessed detail shows the mention link.
+    private(set) var guessed: [MemoryID: PersonLink] = [:]
+    /// "Changed to {name}." with Undo, after the sheet moved a moment off this page.
+    let personMove: PersonMoveUndo
     let player = SegmentPlayer()
     let deps: Dependencies
 
     init(entity: Entity, deps: Dependencies) {
         self.entity = entity
         self.deps = deps
+        personMove = PersonMoveUndo(store: deps.extractionStore)
         // The shelf reports to this page, which exists only once the shelf is stored: the closure is bound after.
         var report: (String) -> Void = { _ in }
         self.shelf = PhotoShelf(subject: .entity(entity.id), deps: deps, onError: { report($0) })
@@ -59,6 +68,8 @@ final class EntityViewModel {
         do {
             let store = deps.extractionStore
             guard let current = try store.entities.entity(id: entity.id) else { isGone = true; return }
+            // An Undo that restored the person brings the page back.
+            isGone = false
             entity = current
             // A failed owner lookup costs only the bar's wording, never the page.
             isOwner = (try? store.profile.owner()?.entityID) == entity.id
@@ -85,6 +96,7 @@ final class EntityViewModel {
                 strip = LifeStrip(moments: sections.moments.map(\.range), stated: entity.range,
                                   birthYear: birth?.year, currentYear: CivilDate.today().year)
             }
+            guessed = isOwner || entity.type != .person ? [:] : PersonLink.guesses(among: try store.personLinks.links(to: PersonID(rawValue: entity.id.rawValue)))
             tags = try store.tags.tags(of: .entity, entity.id.rawValue)
             if let span = try store.entities.spans(of: entity.id).first, let segment = try store.sessions.fetchSegment(span.segmentID),
                let session = try store.sessions.fetch(segment.sessionID) {
@@ -97,6 +109,35 @@ final class EntityViewModel {
             self.error = error.localizedDescription
         }
         shelf.load()
+    }
+
+    // MARK: - Guessed moments
+
+    /// "Yes, this {name}": settles that one link. The mark goes at once; there is no notice.
+    func confirm(_ memory: MemoryID) {
+        guard let link = guessed[memory] else { return }
+        do {
+            try PersonLinkActions(store: deps.extractionStore).settle(link, wholeGroup: false)
+            refresh()
+        } catch {
+            self.error = "Could not save that: \(error.localizedDescription)"
+        }
+    }
+
+    /// What "Done" in the sheet did. A move shows its notice; the page then reads again, and stays up,
+    /// read-only, when the move removed this person (`shouldClose`, R34).
+    func personSheetDone(_ outcome: WhoIsThisViewModel.Outcome) {
+        if case .unchanged = outcome { return }
+        if case .failed(let message) = outcome { error = message; return }
+        personMove.note(outcome)
+        refresh()
+    }
+
+    /// Returns true when the move was taken back.
+    func undoPersonMove() -> Bool {
+        let done = personMove.undo()
+        if done { refresh() }
+        return done
     }
 
     // MARK: - Photos

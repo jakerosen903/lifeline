@@ -312,6 +312,11 @@ struct Dependencies {
         if args.contains("-uiTesting-noOwner") { try UITestSeed.writeProfileWithoutOwner(profile: deps.profile, store: store) }
         if args.contains("-uiTesting-seedDuplicates") { try UITestSeed.writeDuplicates(store: store, profile: deps.profile, sessions: deps.sessions) }
         if args.contains("-uiTesting-seedSpine") { try UITestSeed.writeSpine(store: store, profile: deps.profile, sessions: deps.sessions) }
+        // `-uiTesting-guessesLanding`: the guesses session's landing is still open at launch.
+        if args.contains("-uiTesting-seedGuesses") {
+            try UITestSeed.writeGuesses(store: store, profile: deps.profile, sessions: deps.sessions,
+                                        landingOpen: args.contains("-uiTesting-guessesLanding"))
+        }
         // After the seeds: a seed stands for what an earlier version left behind.
         deps.launchNotice = repairArchive(store)
         return deps
