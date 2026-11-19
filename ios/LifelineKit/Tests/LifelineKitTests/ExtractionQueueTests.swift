@@ -522,3 +522,59 @@ private func storied(_ refs: [(title: String, ref: String?, hint: String?)], quo
     #expect(!text.contains("Vale") && !text.contains("Okafor"), "no contact's name in the packet: people, curiosity and all")
     #expect(text.contains("Is there one time with Robyn that stands out?"))
 }
+
+// MARK: - PC-d Task 2: the packet carries the handles of the recording so far
+
+private func handleCard(_ segment: SegmentID, ordinal: Int = 0, _ people: [PersonOut], status: CandidateStatus = .pending,
+                        in store: ExtractionStore) throws {
+    let out = MemoryOut(ref: "m1", kind: .event, title: "A card", quote: "a card", segmentSpan: WordSpan(startWord: 0, endWord: 1),
+                        peopleRefs: [], placeText: nil, anchors: [], collectionHint: nil, chapterHint: nil, confidence: 0.9,
+                        personHandles: people.map(\.handle), handlePeople: people)
+    let card = StoreFixtures.candidate(segment, ordinal: ordinal, payload: try CandidatePayload.encode(out))
+    try store.candidates.insert(card)
+    if status != .pending { try store.candidates.setStatus(card.id, status) }
+}
+
+private func packetOfLastSegment(_ env: Env) async throws -> ContextPacket? {
+    env.service.push(.success(ExtractorOutput(memories: [], mentions: [], flags: .none)))
+    let queue = env.queue()
+    let events = await queue.events
+    await queue.enqueue(env.segments.last!.id)
+    _ = await collect(events, count: 1)
+    return env.service.requests.first?.packet
+}
+
+private let threeSegments = ["Robyn moved in that fall", "my roommate cooked every night", "we painted the kitchen"]
+
+@Test func oneHandleSaidTwoWaysIsOneEntryWithBothNames() async throws {
+    let env = try Env(texts: threeSegments)
+    try handleCard(env.segments[0].id, [PersonOut(handle: "p1", saidName: "Robyn", relationText: nil, personID: nil)], in: env.store)
+    try handleCard(env.segments[1].id, [PersonOut(handle: "p1", saidName: "my roommate", relationText: "roommate", personID: nil)], in: env.store)
+    let packet = try #require(try await packetOfLastSegment(env))
+    #expect(packet.recordingPeople == [.init(handle: "p1", saidNames: ["Robyn", "my roommate"], relation: "roommate", personID: nil)])
+}
+
+@Test func theCurrentSegmentAndAnotherSessionAddNoHandles() async throws {
+    let env = try Env(texts: threeSegments)
+    try handleCard(env.segments[2].id, [PersonOut(handle: "p1", saidName: "Robyn", relationText: nil, personID: nil)], in: env.store)
+    let (_, other) = try StoreFixtures.session(in: env.store.sessions, segments: ["Theo came by", "Theo left"])
+    try handleCard(other[0].id, [PersonOut(handle: "p2", saidName: "Theo", relationText: nil, personID: nil)], in: env.store)
+    let packet = try #require(try await packetOfLastSegment(env))
+    #expect(packet.recordingPeople.isEmpty)
+}
+
+@Test func aDismissedCardAddsNoHandlesButKeptAndWaitingCardsDo() async throws {
+    let env = try Env(texts: threeSegments)
+    try handleCard(env.segments[0].id, ordinal: 0, [PersonOut(handle: "p1", saidName: "Robyn", relationText: nil, personID: nil)], status: .accepted, in: env.store)
+    try handleCard(env.segments[0].id, ordinal: 1, [PersonOut(handle: "p2", saidName: "Theo", relationText: nil, personID: nil)], status: .dismissed, in: env.store)
+    try handleCard(env.segments[1].id, [PersonOut(handle: "p3", saidName: "Ines", relationText: nil, personID: nil)], in: env.store)
+    let packet = try #require(try await packetOfLastSegment(env))
+    #expect(packet.recordingPeople.map(\.handle) == ["p1", "p3"])
+}
+
+@Test func aSupersededContinuationRowAddsNoHandlesByItself() async throws {
+    let env = try Env(texts: threeSegments)
+    try handleCard(env.segments[1].id, [PersonOut(handle: "p1", saidName: "Robyn", relationText: nil, personID: nil)], status: .superseded, in: env.store)
+    let packet = try #require(try await packetOfLastSegment(env))
+    #expect(packet.recordingPeople.isEmpty)
+}

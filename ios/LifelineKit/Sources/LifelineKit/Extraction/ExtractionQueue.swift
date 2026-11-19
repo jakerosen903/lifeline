@@ -176,6 +176,8 @@ public actor ExtractionQueue {
             .sorted { Self.isNamed($0, in: recentText) && !Self.isNamed($1, in: recentText) }
         // This session's cards still waiting, except this segment's own, so a continuation can name one (M5).
         let pending = try store.candidates.pending(in: session).filter { $0.kind == .memory && $0.segmentID != segment.id }
+        // The handles found so far in this recording, so the same person keeps one handle (PC-d).
+        let handlePeople = try store.candidates.handlePeople(inSession: session, before: segment.id)
         var storyIDs: [StoryID] = []
         var stories: [(Story, [Memory])] = []
         for memory in related + memories {
@@ -188,7 +190,8 @@ public actor ExtractionQueue {
                                           chapters: try store.chapters.chapters(), curiosity: try store.curiosity.open(),
                                           excludedMemoryIDs: try store.memories.excludedIDs(), related: related,
                                           pending: pending, stories: stories,
-                                          entities: try Self.packetEntities(store))
+                                          entities: try Self.packetEntities(store),
+                                          recordingPeople: ContextPacketBuilder.recordingPeople(from: handlePeople))
     }
 
     private static func isNamed(_ entry: (Person, [Alias]), in text: String) -> Bool {

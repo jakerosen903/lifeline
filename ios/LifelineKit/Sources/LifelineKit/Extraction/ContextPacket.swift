@@ -58,6 +58,23 @@ public struct ContextPacket: Codable, Sendable, Equatable {
         public init(id: String, type: String, title: String, detail: String?) { self.id = id; self.type = type; self.title = title; self.detail = detail }
     }
 
+    /// One person found so far in this recording, under the handle the extractor gave them (PC-d).
+    /// Only what the owner said: the said names, the relation phrase, and the id of a person
+    /// this packet already lists. Nothing from a contact.
+    public struct RecordingPerson: Codable, Sendable, Equatable {
+        public var handle: String
+        /// Each distinct name said for this handle, in the order said.
+        public var saidNames: [String]
+        /// The first relation phrase given.
+        public var relation: String?
+        /// The first person id given, sent only when the packet's `people` holds it.
+        public var personID: String?
+
+        public init(handle: String, saidNames: [String], relation: String?, personID: String?) {
+            self.handle = handle; self.saidNames = saidNames; self.relation = relation; self.personID = personID
+        }
+    }
+
     public var previousSegments: [String]
     public var people: [PersonEntry]
     public var chapters: [ChapterEntry]
@@ -68,6 +85,7 @@ public struct ContextPacket: Codable, Sendable, Equatable {
     public var pending: [PendingEntry] = []
     public var stories: [StoryEntry] = []
     public var entities: [EntityEntry] = []
+    public var recordingPeople: [RecordingPerson] = []
 
     /// Sorted keys, so the same packet always renders to the same bytes.
     public func encodedJSON() throws -> Data {
@@ -88,7 +106,7 @@ public struct ContextPacketLimits: Sendable, Equatable {
 }
 
 /// Pure. Fills the packet in relevance order and trims it to a token ceiling (M5): previous
-/// segments, pending cards, related and session memories, people (pass them already ordered),
+/// segments, pending cards, related and session memories, the recording's handles (PC-d), people (pass them already ordered),
 /// entities (M7), stories, chapters, curiosity. Whole entries go, least relevant section first, and every
 /// section keeps its first entry. Profile free text is never dropped.
 public enum ContextPacketBuilder {
@@ -99,7 +117,7 @@ public enum ContextPacketBuilder {
                              profileFreeText: String?, stage: String, limits: ContextPacketLimits = ContextPacketLimits(),
                              chapters: [Chapter] = [], curiosity: [CuriosityItem] = [], excludedMemoryIDs: Set<MemoryID> = [],
                              related: [Memory] = [], pending: [Candidate] = [], stories: [(Story, [Memory])] = [],
-                             entities: [(Entity, String?)] = [],
+                             entities: [(Entity, String?)] = [], recordingPeople: [ContextPacket.RecordingPerson] = [],
                              budgetTokens: Int = ContextPacketBuilder.defaultBudgetTokens) -> ContextPacket {
         let earlier = previous.filter { $0.index < segment.index }.sorted { $0.index < $1.index }
         let window = earlier.suffix(limits.previousSegments).map(\.text)
@@ -137,8 +155,32 @@ public enum ContextPacketBuilder {
                                    entities: entities.filter { $0.0.type != .person && !$0.0.excludedFromAI }.map { entity, detail in
                                        ContextPacket.EntityEntry(id: entity.id.rawValue, type: entity.type.rawValue, title: entity.title, detail: detail)
                                    })
+        packet.recordingPeople = recordingPeople
         trim(&packet, to: budgetTokens)
+        // After the cap and the trim: an id the model was not given a person for is never sent.
+        let sentIDs = Set(packet.people.map(\.id))
+        for i in packet.recordingPeople.indices where packet.recordingPeople[i].personID.map({ !sentIDs.contains($0) }) ?? false {
+            packet.recordingPeople[i].personID = nil
+        }
         return packet
+    }
+
+    /// One entry per handle, in the order first seen. `people` come in the order said
+    /// (`CandidateRepository.handlePeople`). A said name is kept once, by exact text.
+    public static func recordingPeople(from people: [PersonOut]) -> [ContextPacket.RecordingPerson] {
+        var entries: [ContextPacket.RecordingPerson] = []
+        var index: [String: Int] = [:]
+        for person in people {
+            guard let i = index[person.handle] else {
+                index[person.handle] = entries.count
+                entries.append(.init(handle: person.handle, saidNames: [person.saidName], relation: person.relationText, personID: person.personID))
+                continue
+            }
+            if !entries[i].saidNames.contains(person.saidName) { entries[i].saidNames.append(person.saidName) }
+            if entries[i].relation == nil { entries[i].relation = person.relationText }
+            if entries[i].personID == nil { entries[i].personID = person.personID }
+        }
+        return entries
     }
 
     /// One person as the model sees them: only names the owner said or typed (`NameForModel`; `aliases`
@@ -164,6 +206,7 @@ public enum ContextPacketBuilder {
             { $0.stories.count > 1 ? ($0.stories.removeLast(), true).1 : false },
             { $0.entities.count > 1 ? ($0.entities.removeLast(), true).1 : false },
             { $0.people.count > 1 ? ($0.people.removeLast(), true).1 : false },
+            { $0.recordingPeople.count > 1 ? ($0.recordingPeople.removeLast(), true).1 : false },
             { $0.memories.count > 1 ? ($0.memories.removeLast(), true).1 : false },
             { $0.pending.count > 1 ? ($0.pending.removeLast(), true).1 : false },
             { $0.previousSegments.count > 1 ? ($0.previousSegments.removeFirst(), true).1 : false },

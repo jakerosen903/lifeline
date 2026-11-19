@@ -175,6 +175,23 @@ public struct CandidateRepository: Sendable {
         }
     }
 
+    /// The people the extractor found in the memory cards of this session's segments before
+    /// `segment`, in session order (PC-d). Waiting and kept cards count. A dismissed card does not,
+    /// and neither does a continuation row (its "continues" marker): its people join the earlier card.
+    public func handlePeople(inSession session: SessionID, before segment: SegmentID) throws -> [PersonOut] {
+        let cards = try db.writer.read { db in
+            try Candidate.fetchAll(db, sql: """
+                select candidate.* from candidate
+                join segment on segment.id = candidate.segment_id
+                where segment.session_id = ? and candidate.kind = 'memory'
+                  and candidate.status in ('pending', 'accepted') and candidate.rejection is null
+                  and segment."index" < (select "index" from segment where id = ? and session_id = ?)
+                order by segment."index", candidate.ordinal
+                """, arguments: [session.rawValue, segment.rawValue, session.rawValue])
+        }
+        return cards.compactMap(CandidatePayload.memory).flatMap(\.handlePeople)
+    }
+
     /// True when any candidate of this version exists for the segment.
     public func hasCandidates(for segment: SegmentID, version: String) throws -> Bool {
         try db.writer.read { db in
