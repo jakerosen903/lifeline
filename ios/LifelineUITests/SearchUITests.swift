@@ -65,7 +65,9 @@ final class SearchUITests: XCTestCase {
     @MainActor
     func testTheOwnerIsNotAResult() {
         let app = XCUIApplication.launchWithSearch(); app.search("jordan")
-        XCTAssertFalse(app.searchResult("Jordan").waitForExistence(timeout: 3))
+        // No seeded word holds "jordan": "Nothing found" is the evidence that the search ran.
+        XCTAssertTrue(app.staticTexts["search.none"].waitForExistence(timeout: 5), "the search ran")
+        XCTAssertFalse(app.searchResult("Jordan").exists)
     }
     @MainActor
     func testTheBarStartsAStoryFromSearchAndTheQueryStays() {
