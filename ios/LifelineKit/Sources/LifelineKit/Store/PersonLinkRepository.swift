@@ -4,6 +4,7 @@ import GRDB
 /// The owner's answer for one said name on one waiting card (`candidate_person_choice`).
 /// `choice` is nil when the answer is "not a person".
 public struct PersonChoice: Sendable, Equatable {
+    /// `ChoiceKey.text(saidName:handle:)`: the said name's key, and the handle when the card has one (PC-d decision 8).
     public var saidKey: String
     public var choice: PersonGuess.Choice?
     public var notAPerson: Bool
@@ -49,7 +50,8 @@ public struct PersonLinkRepository: Sendable {
             try Row.fetchAll(db, sql: "select said_name, choice, person_id, contact_identifier from candidate_person_choice where candidate_id = ?",
                              arguments: [candidate.rawValue])
                 .compactMap { row -> PersonChoice? in
-                    let key = SaidName.key(row["said_name"] as String)
+                    // Stored as `ChoiceKey.text`, already normalized; keying it again would fold the handle's case.
+                    let key: String = row["said_name"]
                     switch row["choice"] as String {
                     case "person":
                         return (row["person_id"] as String?).map { PersonChoice(saidKey: key, choice: .person(PersonID(rawValue: $0)), notAPerson: false) }
@@ -60,6 +62,30 @@ public struct PersonLinkRepository: Sendable {
                     default: return nil
                     }
                 }
+        }
+    }
+
+    /// One kept link that carries the extractor's handle (PC-d): who the handle became in its recording.
+    /// `saidKey` is `SaidName.key` of the link's said name.
+    public typealias HandleLink = (handle: String, saidKey: String, person: PersonID, origin: LinkOrigin?)
+
+    /// The handle links of the kept memories of `segment`'s recording (the session of each memory's first span),
+    /// newest memory first. A handle means one person inside one recording only, so no other recording is read.
+    func handleLinks(inSessionOf segment: SegmentID) throws -> [HandleLink] {
+        try db.writer.read { db in
+            try Row.fetchAll(db, sql: """
+                select me.person_handle, me.role_text, me.origin, person.id as person_id
+                from moment_entity me
+                join person on person.entity_id = me.entity_id
+                join memory on memory.id = me.memory_id
+                where me.relation = 'mention' and me.person_handle is not null and person.is_owner = 0
+                  and \(Self.sessionSQL) = (select session_id from segment where id = ?)
+                order by memory.created_at desc, me.memory_id
+                """, arguments: [segment.rawValue]).map { row in
+                (handle: row["person_handle"], saidKey: SaidName.key(row["role_text"] as String? ?? ""),
+                           person: PersonID(rawValue: row["person_id"]),
+                           origin: (row["origin"] as String?).flatMap(LinkOrigin.init(rawValue:)))
+            }
         }
     }
 

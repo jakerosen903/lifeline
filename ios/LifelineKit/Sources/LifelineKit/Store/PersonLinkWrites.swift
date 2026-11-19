@@ -20,10 +20,11 @@ extension PersonLinkRepository {
         try db.writer.write { db in try Self.undo(receipt, in: db) }
     }
 
-    /// Stores the owner's answer for one said name on a waiting card; a second answer replaces it.
-    func storeChoice(_ target: PersonLinkActions.Target, for saidName: String, on candidate: CandidateID) throws {
-        let key = SaidName.key(saidName)
-        guard !key.isEmpty else { throw Error.notFound }   // no words, nothing Keep could match
+    /// Stores the owner's answer for one said name on a waiting card; a second answer replaces it. With a handle
+    /// the answer is that handle's alone (`ChoiceKey`): another handle of the same said name keeps its own guess.
+    func storeChoice(_ target: PersonLinkActions.Target, for saidName: String, handle: String? = nil, on candidate: CandidateID) throws {
+        guard !SaidName.key(saidName).isEmpty else { throw Error.notFound }   // no words, nothing Keep could match
+        let key = ChoiceKey.text(saidName: saidName, handle: handle)
         try db.writer.write { db in
             guard let card = try Candidate.fetchOne(db, key: candidate.rawValue), card.kind == .memory else { throw Error.notFound }
             guard card.status == .pending else { throw Error.stale }   // Keep has run: the answer would apply to nothing

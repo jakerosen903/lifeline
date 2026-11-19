@@ -896,3 +896,41 @@ private let haleCard = ContactCard(identifier: "c-hale", fullName: " Robin Hale 
     }
     #expect(Set(said).isDisjoint(with: contactNames), "\(said)")
 }
+
+// MARK: - PC-d Task 4: a waiting card's chips by handle
+
+@Test func thePreviewOfAHandleCardShowsTheChipsKeepWrites() throws {
+    let env = try Env()
+    let robyn = try env.store.people.insertPerson(displayName: "Robyn")
+    let seg = try env.session(["Robyn and Robyn painted the fence"])[0]
+    let people = [PersonOut(handle: "p1", saidName: "Robyn", relationText: nil, personID: nil),
+                  PersonOut(handle: "p2", saidName: "Robyn", relationText: nil, personID: nil)]
+    let out = MemoryOut(ref: "m0", kind: .event, title: "A title", quote: "Robyn and Robyn painted the fence", segmentSpan: WordSpan(startWord: 0, endWord: 5),
+                        peopleRefs: ["Robyn", "Robyn"], placeText: nil, anchors: [], collectionHint: nil, chapterHint: nil, confidence: 0.9,
+                        personHandles: ["p1", "p2"], handlePeople: people)
+    let card = StoreFixtures.candidate(seg, payload: try CandidatePayload.encode(out))
+    try env.store.candidates.insert(card)
+
+    var p1 = PreviewChip(saidName: "Robyn", name: "Robyn", origin: .assumed, person: robyn.id); p1.handle = "p1"
+    var p2 = PreviewChip(saidName: "Robyn", name: "Robyn", origin: .new, person: nil); p2.handle = "p2"
+    let chips = try env.actions.preview(card)
+    #expect(chips == [p1, p2])
+    #expect(chips.map(\.id) == [ChoiceKey.text(saidName: "Robyn", handle: "p1"), ChoiceKey.text(saidName: "Robyn", handle: "p2")],
+            "two chips of one said name have two ids")
+
+    // The sheet's answer for p2 is stored under p2's key, and reaches p2 only.
+    try env.actions.choose(.notAPerson, for: "Robyn", handle: "p2", on: card.id)
+    let quiet = try env.actions.preview(card)
+    #expect(quiet.map(\.isNotAPerson) == [false, true])
+    #expect(quiet.map(\.handle) == ["p1", "p2"])
+    #expect(quiet.first == p1)
+
+    try env.actions.choose(.someoneNew, for: "Robyn", handle: "p2", on: card.id)
+    let chosen = try env.actions.preview(card)
+    #expect(chosen.map(\.origin) == [.assumed, .confirmed])
+    let memory = try env.keep.acceptMemory(card, joinStory: false).memory
+    let rows = try env.personRows(memory).sorted { ($0.personHandle ?? "") < ($1.personHandle ?? "") }   // one title: no title order
+    #expect(rows.map(\.personHandle) == ["p1", "p2"])
+    #expect(rows.map(\.origin) == chosen.map(\.origin), "Keep writes what the chips showed")
+    #expect(rows.first?.entityID == robyn.entityID)
+}

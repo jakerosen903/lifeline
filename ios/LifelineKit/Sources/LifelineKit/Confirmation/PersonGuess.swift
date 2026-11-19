@@ -29,11 +29,18 @@ public enum PersonGuess {
         public var others: [Choice]
     }
 
-    public static func guess(_ said: SaidName, people: [Known], contacts: [Contact]) -> Result {
+    /// `modelPick`: the person the extractor's words point to (PC-d decision 6). It decides inside rule 4 only, when it
+    /// names one of rule 4's candidates; the link stays `assumed`. Any other id is ignored.
+    /// `taken`: the persons that another handle of the same said name already holds in this recording. They are not
+    /// candidates, so two handles never get one person from a guess. A contact a taken person holds counts as that person.
+    public static func guess(_ said: SaidName, people allPeople: [Known], contacts: [Contact], modelPick: PersonID? = nil,
+                             taken: Set<PersonID> = []) -> Result {
         let nameKey = said.name.map(SaidName.key) ?? ""
         let relationKey = said.relation.map(SaidName.key) ?? ""
-        let linkedContacts = Set(people.compactMap(\.contactIdentifier))
+        // Linked contacts are read before `taken` filters: a taken person's contact is never free.
+        let linkedContacts = Set(allPeople.compactMap(\.contactIdentifier))
         let freeContacts = contacts.filter { !linkedContacts.contains($0.identifier) }
+        let people = allPeople.filter { !taken.contains($0.id) }
 
         // With a name, the name picks the candidates. Without one, the relation phrase does.
         let persons: [Known]
@@ -68,8 +75,8 @@ public enum PersonGuess {
                 + contactCandidates.filter { SaidName.key($0.fullName) == nameKey }.map { .contact($0.identifier) }
             if fullNames.count == 1 { return result(fullNames[0], .assumed, 3) }
         }
-        // 4. A person on file, the most recently linked one first.
-        if let first = persons.first { return result(.person(first.id), .assumed, 4) }
+        // 4. A person on file: the model's pick when it is one of them, else the most recently linked one.
+        if let picked = persons.first(where: { $0.id == modelPick }) ?? persons.first { return result(.person(picked.id), .assumed, 4) }
         // 5. Exactly one contact and no person.
         if contactCandidates.count == 1 { return result(.contact(contactCandidates[0].identifier), .assumed, 5) }
         // 6 and 7. A new person; the contacts, if any, stay on the sheet.

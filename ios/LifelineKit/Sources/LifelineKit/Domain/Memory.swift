@@ -117,13 +117,17 @@ public struct MemoryPerson: Codable, Sendable, Equatable {
     public var roleText: String?
     /// How the owner's link to this person was made; nil when not known.
     public var origin: LinkOrigin?
+    /// The extractor's handle for the person in this recording (PC-d), written to `moment_entity.person_handle`.
+    /// Nil for a card from before v8 and for a link the owner made by hand.
+    public var handle: String? = nil
 
-    public init(memoryID: MemoryID, personID: PersonID, roleText: String?, origin: LinkOrigin? = nil) {
-        self.memoryID = memoryID; self.personID = personID; self.roleText = roleText; self.origin = origin
+    public init(memoryID: MemoryID, personID: PersonID, roleText: String?, origin: LinkOrigin? = nil, handle: String? = nil) {
+        self.memoryID = memoryID; self.personID = personID; self.roleText = roleText; self.origin = origin; self.handle = handle
     }
 
     public var link: MomentEntity {
-        MomentEntity(memoryID: memoryID, entityID: EntityID(rawValue: personID.rawValue), relation: .mention, roleText: roleText, origin: origin)
+        MomentEntity(memoryID: memoryID, entityID: EntityID(rawValue: personID.rawValue), relation: .mention, roleText: roleText, origin: origin,
+                     personHandle: handle)
     }
 }
 

@@ -17,6 +17,11 @@ extension CandidateActions {
         var card: CandidateID?
         /// The relation phrase each person card of the segment gave with its name (plan decision 4).
         var mentionRelations: [(text: String, relation: String)]
+        /// Who each handle became in the kept memories of this recording, newest first (PC-d). Empty for a card with no handles.
+        var handleLinks: [PersonLinkRepository.HandleLink] = []
+
+        /// The owner's stored answer under `key` (`ChoiceKey`).
+        func choice(_ key: String) -> PersonChoice? { choices.first { $0.saidKey == key } }
 
         /// The said name for a ref, with the relation phrase a person card of the segment gave it.
         func saidName(_ ref: String) -> SaidName {
@@ -32,7 +37,24 @@ extension CandidateActions {
         var aliases: [String]
     }
 
-    func guessInputs(card: CandidateID?, segment: SegmentID?) throws -> GuessInputs {
+    /// What each handle of one telling became on this Keep: the card's and each continuation row's. A continuation's
+    /// handles are on the earlier card and on its own row too (D8), so a handle is decided once and then read here.
+    struct HandlePlan {
+        struct Entry {
+            var handle: String
+            /// `SaidName.key` of the handle's said name.
+            var saidKey: String
+            /// Nil: the owner said "Not a person", or the said name holds no words.
+            var link: GuessedLink?
+            /// The contact of a person this Keep plans from a contact, so another handle of the same said name skips it.
+            var contact: String?
+        }
+        var entries: [Entry] = []
+        func entry(_ handle: String) -> Entry? { entries.first { $0.handle == handle } }
+    }
+
+    /// `readingHandles`: the card has handles, so the recording's handle links are read (one query, skipped otherwise).
+    func guessInputs(card: CandidateID?, segment: SegmentID?, readingHandles: Bool = false) throws -> GuessInputs {
         let relations = try segment.map { segment in
             try store.candidates.candidates(for: segment).compactMap { row -> (text: String, relation: String)? in
                 guard row.kind == .person, let mention = CandidatePayload.mention(row),
@@ -40,39 +62,87 @@ extension CandidateActions {
                 return (mention.text, relation)
             }
         } ?? []
+        let handleLinks = readingHandles ? try segment.map { try store.personLinks.handleLinks(inSessionOf: $0) } ?? [] : []
         return GuessInputs(known: try store.personLinks.known(), contacts: contactsForGuess(),
                            choices: try card.map { try store.personLinks.choices(for: $0) } ?? [],
-                           owner: try store.people.ownerNames(), card: card, mentionRelations: relations)
+                           owner: try store.people.ownerNames(), card: card, mentionRelations: relations, handleLinks: handleLinks)
+    }
+
+    /// The link for one handle of the card (PC-d), or nil for "not a person". The first step that applies decides:
+    /// 1. the owner's answer stored for this handle (`ChoiceKey`), origin `confirmed`;
+    /// 2. the person this handle already has on this Keep, or in a kept memory of this recording (decision 7);
+    /// 3. the guess, where a person another handle of the same said name holds is no candidate, and the model's
+    ///    person id decides inside rule 4 (decision 6).
+    func handleLink(for person: PersonOut, _ inputs: GuessInputs, handles: inout HandlePlan, plan: inout EntityRepository.Write) -> GuessedLink? {
+        if let done = handles.entry(person.handle) { return done.link }
+        let said = SaidName(ref: person.saidName, mentionRelation: person.relationText)
+        let key = SaidName.key(person.saidName)
+        let link: GuessedLink?
+        if let stored = inputs.choice(ChoiceKey.text(saidName: person.saidName, handle: person.handle)) {
+            link = storedLink(stored, for: said, handle: person.handle, inputs, plan: &plan)
+        } else if let earlier = inputs.handleLinks.first(where: { $0.handle == person.handle }) {
+            link = GuessedLink(person: earlier.person, origin: Self.carried(earlier.origin), aliases: [])
+        } else {
+            // Two handles of one said name are two people: what the others hold is taken, a planned person's contact too.
+            let others = handles.entries.filter { $0.handle != person.handle && $0.saidKey == key }
+            let taken = Set(inputs.handleLinks.filter { $0.handle != person.handle && $0.saidKey == key }.map(\.person) + others.compactMap(\.link?.person))
+            let takenContacts = Set(others.compactMap(\.contact))
+            var free = inputs
+            free.contacts = inputs.contacts.filter { !takenContacts.contains($0.identifier) }
+            let result = PersonGuess.guess(said, people: inputs.known, contacts: free.contacts,
+                                           modelPick: person.personID.map(PersonID.init(rawValue:)), taken: taken)
+            link = guessedLink(from: result, for: said, handle: person.handle, free, plan: &plan)
+        }
+        let contact = link.flatMap { link in plan.persons.first { $0.id == link.person }?.contactIdentifier }
+        handles.entries.append(.init(handle: person.handle, saidKey: key, link: link, contact: contact))
+        return link
+    }
+
+    /// Decision 7: a handle keeps its person, but not the owner's answer. `said` and `new` stay; anything else is the
+    /// app's guess now (`assumed`), a `confirmed` link included: only the owner's own action confirms a link.
+    static func carried(_ origin: LinkOrigin?) -> LinkOrigin {
+        origin == .said || origin == .new ? origin ?? .assumed : .assumed
     }
 
     /// The link for one said name, or nil when the owner said it is not a person or it names
     /// nothing. The caller filters the owner's name and group phrases. A stored choice is the
     /// owner's answer, so it wins with origin `confirmed`; otherwise `PersonGuess` decides.
     func guessedLink(for said: SaidName, _ inputs: GuessInputs, plan: inout EntityRepository.Write) -> GuessedLink? {
-        if let stored = inputs.choices.first(where: { $0.saidKey == SaidName.key(said.raw) }) {
-            if stored.notAPerson { return nil }
-            let aliases = [said.name, said.relation].compactMap { $0 }   // R8: the owner's answer teaches both halves
-            switch stored.choice {
-            case .person(let id): return GuessedLink(person: id, origin: .confirmed, aliases: aliases)
-            case .contact(let identifier):
-                // The owner chose this contact. A person who holds it now is that choice; a contact the app can still see
-                // makes a person the owner chose (PB3). A contact gone from view since falls back to the said name.
-                if let holder = inputs.known.first(where: { $0.contactIdentifier == identifier }) {
-                    return GuessedLink(person: holder.id, origin: .confirmed, aliases: aliases)
-                }
-                if let contact = inputs.contacts.first(where: { $0.identifier == identifier }),
-                   let person = plannedPerson(from: contact, alias: nil, createdByGuess: false, card: inputs.card, plan: &plan) {
-                    return GuessedLink(person: person, origin: .confirmed, aliases: aliases)
-                }
-                return plannedPerson(for: said, createdByGuess: false, card: inputs.card, plan: &plan)
-                    .map { GuessedLink(person: $0, origin: .confirmed, aliases: aliases) }
-            case .newPerson:
-                return plannedPerson(for: said, createdByGuess: false, card: inputs.card, plan: &plan)
-                    .map { GuessedLink(person: $0, origin: .confirmed, aliases: aliases) }
-            case nil: return nil   // `choices(for:)` gives no choice only for "not a person", handled above
-            }
+        if let stored = inputs.choice(ChoiceKey.text(saidName: said.raw, handle: nil)) {
+            return storedLink(stored, for: said, handle: nil, inputs, plan: &plan)
         }
-        let result = PersonGuess.guess(said, people: inputs.known, contacts: inputs.contacts)
+        return guessedLink(from: PersonGuess.guess(said, people: inputs.known, contacts: inputs.contacts), for: said, handle: nil, inputs, plan: &plan)
+    }
+
+    /// The owner's stored answer as a link, origin `confirmed`; nil for "not a person".
+    private func storedLink(_ stored: PersonChoice, for said: SaidName, handle: String?, _ inputs: GuessInputs,
+                            plan: inout EntityRepository.Write) -> GuessedLink? {
+        if stored.notAPerson { return nil }
+        let aliases = [said.name, said.relation].compactMap { $0 }   // R8: the owner's answer teaches both halves
+        switch stored.choice {
+        case .person(let id): return GuessedLink(person: id, origin: .confirmed, aliases: aliases)
+        case .contact(let identifier):
+            // The owner chose this contact. A person who holds it now is that choice; a contact the app can still see
+            // makes a person the owner chose (PB3). A contact gone from view since falls back to the said name.
+            if let holder = inputs.known.first(where: { $0.contactIdentifier == identifier }) {
+                return GuessedLink(person: holder.id, origin: .confirmed, aliases: aliases)
+            }
+            if let contact = inputs.contacts.first(where: { $0.identifier == identifier }),
+               let person = plannedPerson(from: contact, alias: nil, createdByGuess: false, card: inputs.card, plan: &plan) {
+                return GuessedLink(person: person, origin: .confirmed, aliases: aliases)
+            }
+            return plannedPerson(for: said, handle: handle, createdByGuess: false, card: inputs.card, plan: &plan)
+                .map { GuessedLink(person: $0, origin: .confirmed, aliases: aliases) }
+        case .newPerson:
+            return plannedPerson(for: said, handle: handle, createdByGuess: false, card: inputs.card, plan: &plan)
+                .map { GuessedLink(person: $0, origin: .confirmed, aliases: aliases) }
+        case nil: return nil   // `choices(for:)` gives no choice only for "not a person", handled above
+        }
+    }
+
+    /// The guess's choice as a link: a person on file, a person planned from a contact, or a new person.
+    private func guessedLink(from result: PersonGuess.Result, for said: SaidName, handle: String?, _ inputs: GuessInputs,
+                             plan: inout EntityRepository.Write) -> GuessedLink? {
         switch result.choice {
         case .person(let id):
             return GuessedLink(person: id, origin: result.origin, aliases: result.origin == .said ? [said.relation].compactMap { $0 } : [])
@@ -85,15 +155,16 @@ extension CandidateActions {
                let person = plannedPerson(from: contact, alias: alias, createdByGuess: true, card: inputs.card, plan: &plan) {
                 return GuessedLink(person: person, origin: result.origin, aliases: [])
             }
-            return newGuessedPerson(for: said, inputs, plan: &plan)
+            return newGuessedPerson(for: said, handle: handle, inputs, plan: &plan)
         case .newPerson:
-            return newGuessedPerson(for: said, inputs, plan: &plan)
+            return newGuessedPerson(for: said, handle: handle, inputs, plan: &plan)
         }
     }
 
     /// Rules 6 and 7: a person with the said name and no contact, origin `new`.
-    private func newGuessedPerson(for said: SaidName, _ inputs: GuessInputs, plan: inout EntityRepository.Write) -> GuessedLink? {
-        plannedPerson(for: said, createdByGuess: true, card: inputs.card, plan: &plan).map { GuessedLink(person: $0, origin: .new, aliases: []) }
+    private func newGuessedPerson(for said: SaidName, handle: String?, _ inputs: GuessInputs, plan: inout EntityRepository.Write) -> GuessedLink? {
+        plannedPerson(for: said, handle: handle, createdByGuess: true, card: inputs.card, plan: &plan)
+            .map { GuessedLink(person: $0, origin: .new, aliases: []) }
     }
 
     /// A new person linked to `contact` (`Person.fromContact`), planned once: a second ref in this card that reaches
@@ -118,13 +189,18 @@ extension CandidateActions {
     /// A new person for a said name, planned once: a second ref with the same name in this
     /// card reaches the person already planned. Their name is the said name, or the relation
     /// phrase when no name was said; it becomes their alias when the plan is written.
+    /// With a handle the person is that handle's alone (PC-d): a handle is decided once per Keep (`HandlePlan`),
+    /// so it always plans a new person, and no said name reaches a person planned for a handle.
     /// Nil when the ref holds no words.
-    private func plannedPerson(for said: SaidName, createdByGuess: Bool, card: CandidateID?, plan: inout EntityRepository.Write) -> PersonID? {
+    private func plannedPerson(for said: SaidName, handle: String?, createdByGuess: Bool, card: CandidateID?,
+                               plan: inout EntityRepository.Write) -> PersonID? {
         let name = (said.name ?? said.relation ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         let key = SaidName.key(name)
         guard !key.isEmpty else { return nil }
         // A person planned from a contact is reached by that contact only (PB13), never by a said name.
-        if let index = plan.persons.firstIndex(where: { $0.contactIdentifier == nil && SaidName.key($0.displayName) == key }) {
+        if handle == nil, let index = plan.persons.firstIndex(where: {
+            $0.contactIdentifier == nil && !plan.handlePersons.contains($0.id) && SaidName.key($0.displayName) == key
+        }) {
             if !createdByGuess { plan.persons[index].createdByGuess = false }   // as for a contact (M-1)
             return plan.persons[index].id
         }
@@ -132,6 +208,7 @@ extension CandidateActions {
                             nameOrigin: .said, createdByGuess: createdByGuess)
         plan.entities.append(Entity(id: person.entityID, type: .person, title: name, createdFromCandidateID: card))
         plan.persons.append(person)
+        if handle != nil { plan.handlePersons.insert(person.id) }
         return person.id
     }
 }
