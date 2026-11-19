@@ -24,3 +24,45 @@ private func memoryJSON(_ extra: String) -> Data {
     let again = try JSONDecoder().decode(MemoryOut.self, from: Data(encoded.utf8))
     #expect(again == full)
 }
+
+// MARK: - People with handles (v8)
+
+@Test func twoPeopleWithOneNameDecodeWithTwoHandles() throws {
+    let url = try #require(Bundle.module.url(forResource: "extractor-output-two-robyns", withExtension: "json", subdirectory: "Fixtures"))
+    let output = try ExtractorOutput.decode(from: try Data(contentsOf: url))
+    #expect(output.people == [PersonOut(handle: "p1", saidName: "Robyn", relationText: "from work", personID: nil),
+                              PersonOut(handle: "p2", saidName: "Robyn", relationText: "my cousin", personID: nil)])
+    #expect(output.memories.map(\.personHandles) == [["p1"], ["p2"]])
+    #expect(output.memories.allSatisfy { $0.peopleRefs.isEmpty && $0.handlePeople.isEmpty })
+    #expect(output.mentions.map(\.handle) == ["p1", "p2"])
+    let again = try ExtractorOutput.decode(from: try output.encoded())
+    #expect(again == output)
+}
+
+@Test func aV6PayloadDecodesWithNoPeopleAndNoHandles() throws {
+    let json = """
+    {"memories":[{"ref":"m1","kind":"event","title":"T","quote":"q","segment_span":{"start_word":0,"end_word":1},"people_refs":["Maya"],
+      "place_text":null,"anchors":[],"same_as_memory_ids":[],"continues_candidate_id":null,"story_ref":null,"story_title_hint":null,
+      "collection_hint":null,"chapter_hint":null,"confidence":0.9,"entity_refs":[],"about_ref":"","domain_hint":""}],
+     "mentions":[{"text":"Maya","kind":"person","likely_alias_of_person_id":"person-7","confidence":0.9,"relation_text":"my sister","ref":"","likely_entity_id":null,"title":"","domain_hint":""}],
+     "flags":{"disclosure":"none","wants_to_stop":false,"wants_to_change_subject":false}}
+    """
+    let out = try ExtractorOutput.decode(from: Data(json.utf8))
+    #expect(out.people.isEmpty)
+    #expect(out.memories[0].personHandles.isEmpty && out.memories[0].handlePeople.isEmpty && out.memories[0].peopleRefs == ["Maya"])
+    #expect(out.mentions[0].handle == nil && out.mentions[0].relationText == "my sister")
+}
+
+@Test func emptyPersonFieldsAndMentionHandleDecodeAsNone() throws {
+    let person = try JSONDecoder().decode(PersonOut.self, from: Data(#"{"handle":"p1","said_name":"Robyn","relation_text":"","person_id":" "}"#.utf8))
+    #expect(person == PersonOut(handle: "p1", saidName: "Robyn", relationText: nil, personID: nil))
+    let mention = try JSONDecoder().decode(MentionOut.self, from: Data(#"{"text":"Robyn","kind":"person","confidence":0.9,"handle":""}"#.utf8))
+    #expect(mention.handle == nil)
+}
+
+@Test func appWrittenHandlePeopleRoundTripOnAMemory() throws {
+    var memory = try JSONDecoder().decode(MemoryOut.self, from: memoryJSON(#","person_handles":["p1"]"#))
+    memory.handlePeople = [PersonOut(handle: "p1", saidName: "Robyn", relationText: "from work", personID: "person-3")]
+    let again = try JSONDecoder().decode(MemoryOut.self, from: try JSONEncoder().encode(memory))
+    #expect(again == memory && again.personHandles == ["p1"])
+}

@@ -19,18 +19,26 @@ public enum OutputValidator {
         public var accepted: [ValidatedCandidate]
         public var rejected: [Rejected]
         public var flags: Flags
+        /// The people that passed, one per handle, in the model's order (v8).
+        public var people: [PersonOut]
+
+        public init(accepted: [ValidatedCandidate], rejected: [Rejected], flags: Flags, people: [PersonOut] = []) {
+            self.accepted = accepted; self.rejected = rejected; self.flags = flags; self.people = people
+        }
     }
 
     public static let maxTitleWords = 8
 
     public static func validate(_ output: ExtractorOutput, segmentText: String, words: [String]) -> Validated {
         let haystack = tokens(segmentText)
-        var result = Validated(accepted: [], rejected: [], flags: output.flags)
+        let people = validPeople(output.people, haystack: haystack)
+        let handles = Set(people.map(\.handle))
+        var result = Validated(accepted: [], rejected: [], flags: output.flags, people: people)
 
         for var memory in output.memories {
             // A place, thing or idea the segment does not name is dropped, not the memory with it (M7).
             memory.entityRefs = memory.entityRefs.filter { contains(haystack, $0.text) }
-            if let reason = problem(with: memory, haystack: haystack, wordCount: words.count) {
+            if let reason = problem(with: memory, haystack: haystack, wordCount: words.count, handles: handles) {
                 result.rejected.append(Rejected(candidate: .memory(memory), reason: reason))
             } else {
                 result.accepted.append(.memory(memory))
@@ -48,13 +56,25 @@ public enum OutputValidator {
         return result
     }
 
-    private static func problem(with memory: MemoryOut, haystack: [String], wordCount: Int) -> String? {
+    /// The people a memory may name: the first entry of each handle, with a said name copied from
+    /// the segment. A blank handle cannot be named, so it is dropped too. A memory that names a
+    /// dropped person is rejected in `problem(with:)`: its people would otherwise be unknown.
+    private static func validPeople(_ people: [PersonOut], haystack: [String]) -> [PersonOut] {
+        var seen: Set<String> = []
+        return people.filter { person in
+            guard !person.handle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, seen.insert(person.handle).inserted else { return false }
+            return contains(haystack, person.saidName)
+        }
+    }
+
+    private static func problem(with memory: MemoryOut, haystack: [String], wordCount: Int, handles: Set<String>) -> String? {
         if !contains(haystack, memory.quote) { return "quote not in segment" }
         let span = memory.segmentSpan
         if span.startWord < 0 || span.endWord >= wordCount || span.startWord > span.endWord {
             return "segment_span \(span.startWord)...\(span.endWord) outside 0..<\(wordCount)"
         }
         if let ref = memory.peopleRefs.first(where: { !contains(haystack, $0) }) { return "people_refs not in segment: \(ref)" }
+        if let handle = memory.personHandles.first(where: { !handles.contains($0) }) { return "person_handles not in people: \(handle)" }
         if let place = memory.placeText, !contains(haystack, place) { return "place_text not in segment: \(place)" }
         if let anchor = memory.anchors.first(where: { !contains(haystack, $0.phrase) }) { return "anchors phrase not in segment: \(anchor.phrase)" }
         if memory.title.split(whereSeparator: \.isWhitespace).count > maxTitleWords { return "title longer than \(maxTitleWords) words" }

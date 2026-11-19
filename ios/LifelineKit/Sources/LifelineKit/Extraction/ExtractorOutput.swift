@@ -3,12 +3,25 @@ import Foundation
 /// The extractor's structured output, exactly the schema in the design spec (§7).
 /// Coding keys are the wire names; every field is present in the JSON, optional ones as null.
 public struct ExtractorOutput: Codable, Sendable, Equatable {
+    /// The people of the segment, one per handle (v8). Earlier versions send none.
+    public var people: [PersonOut]
     public var memories: [MemoryOut]
     public var mentions: [MentionOut]
     public var flags: Flags
 
-    public init(memories: [MemoryOut], mentions: [MentionOut], flags: Flags) {
-        self.memories = memories; self.mentions = mentions; self.flags = flags
+    public init(people: [PersonOut] = [], memories: [MemoryOut], mentions: [MentionOut], flags: Flags) {
+        self.people = people; self.memories = memories; self.mentions = mentions; self.flags = flags
+    }
+
+    enum CodingKeys: String, CodingKey { case people, memories, mentions, flags }
+
+    /// Stored payloads and v6 output have no `people`; they read as an empty list.
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        people = try c.decodeIfPresent([PersonOut].self, forKey: .people) ?? []
+        memories = try c.decode([MemoryOut].self, forKey: .memories)
+        mentions = try c.decode([MentionOut].self, forKey: .mentions)
+        flags = try c.decode(Flags.self, forKey: .flags)
     }
 
     public static func decode(from data: Data) throws -> ExtractorOutput {
@@ -19,6 +32,33 @@ public struct ExtractorOutput: Codable, Sendable, Equatable {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
         return try encoder.encode(self)
+    }
+}
+
+/// One person the extractor found in the recording (v8). A handle means one person inside one
+/// recording; two people with the same name get two handles.
+public struct PersonOut: Codable, Sendable, Equatable {
+    /// A short text ("p1"), stable across the segments of one recording.
+    public var handle: String
+    /// The name as said in this segment, copied from it.
+    public var saidName: String
+    /// The kin or role phrase said with the name, or nil.
+    public var relationText: String?
+    /// The id of a person in the packet, only when the story's words point to that person.
+    public var personID: String?
+
+    public init(handle: String, saidName: String, relationText: String?, personID: String?) {
+        self.handle = handle; self.saidName = saidName; self.relationText = relationText; self.personID = personID
+    }
+
+    enum CodingKeys: String, CodingKey { case handle, saidName = "said_name", relationText = "relation_text", personID = "person_id" }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        handle = try c.decode(String.self, forKey: .handle)
+        saidName = try c.decode(String.self, forKey: .saidName)
+        relationText = try c.decodeNonEmpty(forKey: .relationText)
+        personID = try c.decodeNonEmpty(forKey: .personID)
     }
 }
 
@@ -84,7 +124,12 @@ public struct MemoryOut: Codable, Sendable, Equatable {
     public var title: String
     public var quote: String
     public var segmentSpan: WordSpan
+    /// Said names of the people in this memory. Since v8 the app fills it from the handles (Task 3).
     public var peopleRefs: [String]
+    /// Handles of the people in this memory, from the output's `people` (v8).
+    public var personHandles: [String]
+    /// The people of `personHandles`, written by the app after validation, never asked of the model.
+    public var handlePeople: [PersonOut]
     public var placeText: String?
     public var anchors: [AnchorOut]
     /// Memories from the packet that tell this same moment; several when the archive already holds duplicates (M5).
@@ -113,8 +158,10 @@ public struct MemoryOut: Codable, Sendable, Equatable {
     public init(ref: String, kind: MemoryKind? = nil, title: String, quote: String, segmentSpan: WordSpan, peopleRefs: [String], placeText: String?,
                 anchors: [AnchorOut], sameAsMemoryIDs: [String] = [], continuesCandidateID: String? = nil, storyRef: String? = nil,
                 storyTitleHint: String? = nil, collectionHint: String?, chapterHint: String?, confidence: Double, extraSpans: [ExtraSpan] = [],
-                entityRefs: [EntityRefOut] = [], aboutRef: String? = nil, domainHint: String? = nil) {
+                entityRefs: [EntityRefOut] = [], aboutRef: String? = nil, domainHint: String? = nil,
+                personHandles: [String] = [], handlePeople: [PersonOut] = []) {
         self.ref = ref; self.kind = kind; self.title = title; self.quote = quote; self.segmentSpan = segmentSpan; self.peopleRefs = peopleRefs
+        self.personHandles = personHandles; self.handlePeople = handlePeople
         self.placeText = placeText; self.anchors = anchors; self.sameAsMemoryIDs = sameAsMemoryIDs; self.continuesCandidateID = continuesCandidateID
         self.storyRef = storyRef; self.storyTitleHint = storyTitleHint
         self.collectionHint = collectionHint; self.chapterHint = chapterHint; self.confidence = confidence; self.extraSpans = extraSpans
@@ -134,6 +181,7 @@ public struct MemoryOut: Codable, Sendable, Equatable {
         case storyRef = "story_ref", storyTitleHint = "story_title_hint", collectionHint = "collection_hint", chapterHint = "chapter_hint"
         case confidence, extraSpans = "extra_spans"
         case entityRefs = "entity_refs", aboutRef = "about_ref", domainHint = "domain_hint"
+        case personHandles = "person_handles", handlePeople = "handle_people"
     }
 
     /// Reads v3/v4 payloads (one `same_as_memory_id`) and v5 ones (a list); the app-written fields default when absent.
@@ -145,6 +193,8 @@ public struct MemoryOut: Codable, Sendable, Equatable {
         quote = try c.decode(String.self, forKey: .quote)
         segmentSpan = try c.decode(WordSpan.self, forKey: .segmentSpan)
         peopleRefs = try c.decode([String].self, forKey: .peopleRefs)
+        personHandles = try c.decodeIfPresent([String].self, forKey: .personHandles) ?? []
+        handlePeople = try c.decodeIfPresent([PersonOut].self, forKey: .handlePeople) ?? []
         placeText = try c.decodeIfPresent(String.self, forKey: .placeText)
         anchors = try c.decode([AnchorOut].self, forKey: .anchors)
         if let list = try c.decodeIfPresent([String].self, forKey: .sameAsMemoryIDs) {
@@ -172,6 +222,8 @@ public struct MemoryOut: Codable, Sendable, Equatable {
         try c.encode(quote, forKey: .quote)
         try c.encode(segmentSpan, forKey: .segmentSpan)
         try c.encode(peopleRefs, forKey: .peopleRefs)
+        try c.encode(personHandles, forKey: .personHandles)
+        try c.encode(handlePeople, forKey: .handlePeople)
         try c.encode(placeText, forKey: .placeText)
         try c.encode(anchors, forKey: .anchors)
         try c.encode(sameAsMemoryIDs, forKey: .sameAsMemoryIDs)
@@ -215,6 +267,7 @@ public enum MentionKind: String, Codable, Sendable, CaseIterable {
 public struct MentionOut: Codable, Sendable, Equatable {
     public var text: String
     public var kind: MentionKind
+    /// Asked of the model before v8; no longer in the schema. Read from stored payloads only.
     public var likelyAliasOfPersonID: String?
     public var confidence: Double
     /// The owner's kin or role phrase for a person ("my mom", "my best friend"), or nil.
@@ -226,16 +279,19 @@ public struct MentionOut: Codable, Sendable, Equatable {
     /// An idea's title: the person's own words, at most 8, or nil (v6). Never composed.
     public var title: String?
     public var domainHint: String?
+    /// For a person mention, the handle of that person in the output's `people` (v8), or nil.
+    public var handle: String?
 
-    public init(text: String, kind: MentionKind, likelyAliasOfPersonID: String?, confidence: Double, relationText: String? = nil,
-                ref: String? = nil, likelyEntityID: String? = nil, title: String? = nil, domainHint: String? = nil) {
+    public init(text: String, kind: MentionKind, likelyAliasOfPersonID: String? = nil, confidence: Double, relationText: String? = nil,
+                ref: String? = nil, likelyEntityID: String? = nil, title: String? = nil, domainHint: String? = nil, handle: String? = nil) {
         self.text = text; self.kind = kind; self.likelyAliasOfPersonID = likelyAliasOfPersonID; self.confidence = confidence
         self.relationText = relationText; self.ref = ref; self.likelyEntityID = likelyEntityID; self.title = title; self.domainHint = domainHint
+        self.handle = handle
     }
 
     enum CodingKeys: String, CodingKey {
         case text, kind, likelyAliasOfPersonID = "likely_alias_of_person_id", confidence, relationText = "relation_text"
-        case ref, likelyEntityID = "likely_entity_id", title, domainHint = "domain_hint"
+        case ref, likelyEntityID = "likely_entity_id", title, domainHint = "domain_hint", handle
     }
 
     public init(from decoder: Decoder) throws {
@@ -249,6 +305,7 @@ public struct MentionOut: Codable, Sendable, Equatable {
         likelyEntityID = try c.decodeIfPresent(String.self, forKey: .likelyEntityID)
         title = try c.decodeNonEmpty(forKey: .title)
         domainHint = try c.decodeNonEmpty(forKey: .domainHint)
+        handle = try c.decodeNonEmpty(forKey: .handle)
     }
 }
 

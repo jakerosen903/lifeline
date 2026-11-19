@@ -2,3 +2,5 @@
 
 - **D1.** Ruling: `MentionOut.init` keeps the argument `likelyAliasOfPersonID`, with a default of nil; the schema and the prompt drop the key, and the decoder ignores it — the plan's removal would touch about ten call sites for no gain — if wrong, a later commit removes a dead argument.
 - **D2.** Ruling: when the app does not build after Task 4 because of the chip id, the change to `WhoIsThisViewModel` moves from Task 5 into Task 4 — each task must leave the app building — if wrong, one file is reviewed a task early.
+- **D3.** Ruling (Task 1): `OutputValidator.Validated` gains `people: [PersonOut]`, the people that passed (first of each handle, said name in the segment, handle not blank), with a default of [] in its init — "dropped" needs a list to drop from, and Task 3's `HandleResolve` reads the validated people — if wrong, Task 3 reads `output.people` and re-applies the same checks.
+- **D4.** Ruling (Task 1): `extractor.v8.md` also names `recordingPeople` in its Context paragraph, beside the new rule 8 — the paragraph lists what the packet holds and would be wrong without it — if wrong, one sentence of the prompt is removed.
