@@ -43,3 +43,4 @@ Pre-flight: Task 6 needs a column that Task 1 owns: Task 1 text now carries it (
 - Task 5: minor (deferred): `sam` is in the seed's function-level guard; look it up inside `if assumedName`.
 - Checked: the Task 1 minor (static `link` refusing a declined pair) was closed in Task 2 (`aStoryLinkToADeclinedPageWritesNothing`).
 - Task 7: dispatched from bdd5fa1 while Task 5 was in review (independent files). Task 6 waits for Task 7 (one simulator, one implementer at a time).
+- Task 7: built at fc39a09 (base 5041ae9), in review. Task 6 dispatched from fc39a09 in parallel with that review (different files).
