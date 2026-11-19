@@ -934,3 +934,104 @@ private let haleCard = ContactCard(identifier: "c-hale", fullName: " Robin Hale 
     #expect(rows.map(\.origin) == chosen.map(\.origin), "Keep writes what the chips showed")
     #expect(rows.first?.entityID == robyn.entityID)
 }
+
+// MARK: - PC-d Task 5: the group is the extractor's handle
+
+extension Env {
+    /// The memory's mention becomes a link of `person` with `handle`, as Keep writes it for a v8 card.
+    /// The tests set it by hand: two handles of one name never reach one person through the guess.
+    func give(_ memory: Memory, handle: String, to person: Person) throws {
+        try db.writer.write { db in
+            try db.execute(sql: "update moment_entity set entity_id = ?, person_handle = ? where memory_id = ? and relation = 'mention'",
+                           arguments: [person.entityID.rawValue, handle, memory.id.rawValue])
+        }
+    }
+
+    /// A detail of `person` on a kept fact, as Keep leaves it when the card's `about_ref` reached them.
+    func detail(_ memory: Memory, of person: Person) throws {
+        try db.writer.write { try MomentEntity(memoryID: memory.id, entityID: person.entityID, relation: .detail, origin: .assumed).insert($0) }
+    }
+
+    /// A v8 person card: a mention that carries its handle.
+    func mention(in segment: SegmentID, _ text: String, ref: String, handle: String?, ordinal: Int) throws {
+        let mention = MentionOut(text: text, kind: .person, likelyAliasOfPersonID: nil, confidence: 0.9, relationText: nil, ref: ref, handle: handle)
+        try store.candidates.insert(StoreFixtures.candidate(segment, ordinal: ordinal, kind: .person, payload: try CandidatePayload.encode(mention)))
+    }
+}
+
+@Test func settleWithTheGroupSettlesOneHandleNotTheSaidName() throws {
+    let env = try Env()
+    let robyn = try env.store.people.insertPerson(displayName: "Robyn")
+    let segs = try env.session(["Robyn painted the fence", "Robyn fixed the gate", "Robyn cut the grass"])
+    let memories = try segs.map { try env.kept(in: $0, people: ["Robyn"]) }
+    for (memory, handle) in zip(memories, ["p1", "p1", "p2"]) { try env.give(memory, handle: handle, to: robyn) }
+    #expect(try memories.map { try env.link($0).origin } == [.assumed, .assumed, .assumed])
+
+    try env.actions.settle(try env.link(memories[0]), wholeGroup: true)
+    #expect(try memories.map { try env.link($0).origin } == [.confirmed, .confirmed, .assumed],
+            "p2 is another Robyn the extractor told apart, though the owner's answer reached the same person")
+}
+
+// Review Focus 2: two spellings of one handle are one person.
+@Test func aMoveOfAHandleCarriesItsSpellingsOnlyWithTheGroup() throws {
+    for whole in [false, true] {
+        let env = try Env()
+        let robyn = try env.store.people.insertPerson(displayName: "Robyn")
+        let vale = try env.store.people.insertPerson(displayName: "Tomas Vale")
+        let segs = try env.session(["Robyn painted the fence", "Robin fixed the gate"])
+        let memories = [try env.kept(in: segs[0], people: ["Robyn"]), try env.kept(in: segs[1], people: ["Robin"])]
+        for memory in memories { try env.give(memory, handle: "p1", to: robyn) }
+
+        try env.actions.move(try env.link(memories[0]), to: .person(vale.id), wholeGroup: whole)
+        #expect(try env.onlyPerson(memories[0]) == vale.id)
+        #expect(try env.onlyPerson(memories[1]) == (whole ? vale.id : robyn.id), whole ? "the group is the handle, not the words" : "the tapped link only")
+    }
+}
+
+@Test func aMoveOfAHandleTakesTheFactsAboutThatHandleOnly() throws {
+    let env = try Env()
+    let robyn = try env.store.people.insertPerson(displayName: "Robyn")
+    let vale = try env.store.people.insertPerson(displayName: "Tomas Vale")
+    let segs = try env.session(["Robyn painted the fence", "Robyn fixed the gate", "Robyn is the kindest person I know",
+                                "Robyn is the bravest person I know", "Robyn is the tallest person I know", "Robyn is the oldest person I know"])
+    let event = try env.kept(in: segs[0], people: ["Robyn"]), other = try env.kept(in: segs[1], people: ["Robyn"])
+    try env.give(event, handle: "p1", to: robyn)
+    try env.give(other, handle: "p2", to: robyn)
+    // About p1 by its handle; about p2 through its person mention; about p1 through its mention; a v6 mention with no handle.
+    let aboutP1 = try env.kept(in: segs[2], people: [], kind: .fact, about: "p1")
+    try env.mention(in: segs[3], "Robyn", ref: "t2", handle: "p2", ordinal: 5)
+    let aboutP2 = try env.kept(in: segs[3], people: [], kind: .fact, about: "t2")
+    try env.mention(in: segs[4], "Robyn", ref: "t3", handle: "p1", ordinal: 5)
+    let aboutP1ByMention = try env.kept(in: segs[4], people: [], kind: .fact, about: "t3")
+    try env.mention(in: segs[5], "Robyn", ref: "t4", handle: nil, ordinal: 5)
+    let aboutTheName = try env.kept(in: segs[5], people: [], kind: .fact, about: "t4")
+    for fact in [aboutP1, aboutP2, aboutP1ByMention, aboutTheName] {
+        if try env.personRows(fact, .detail).isEmpty { try env.detail(fact, of: robyn) }
+        #expect(try env.onlyPerson(fact, .detail) == robyn.id)
+    }
+
+    try env.actions.move(try env.link(event), to: .person(vale.id), wholeGroup: true)
+    #expect(try env.onlyPerson(event) == vale.id)
+    #expect(try env.onlyPerson(other) == robyn.id, "p2's link stays")
+    #expect(try env.onlyPerson(aboutP1, .detail) == vale.id, "the fact about p1 follows p1")
+    #expect(try env.onlyPerson(aboutP1ByMention, .detail) == vale.id, "a mention with p1's handle is p1")
+    #expect(try env.onlyPerson(aboutP2, .detail) == robyn.id, "the fact about p2 stays")
+    #expect(try env.onlyPerson(aboutTheName, .detail) == vale.id, "a mention with no handle goes by the said name, as before")
+}
+
+@Test func undoOfAMoveRestoresTheHandles() throws {
+    let env = try Env()
+    let robyn = try env.store.people.insertPerson(displayName: "Robyn")
+    let vale = try env.store.people.insertPerson(displayName: "Tomas Vale")
+    let segs = try env.session(["Robyn painted the fence", "Robyn fixed the gate"])
+    let memories = try segs.map { try env.kept(in: $0, people: ["Robyn"]) }
+    for memory in memories { try env.give(memory, handle: "p1", to: robyn) }
+    let before = try env.dump()
+
+    let receipt = try env.actions.move(try env.link(memories[0]), to: .person(vale.id), wholeGroup: true)
+    #expect(try memories.map { try env.personRows($0).map(\.personHandle) } == [["p1"], ["p1"]], "a moved link keeps its handle")
+    #expect(try memories.map { try env.onlyPerson($0) } == [vale.id, vale.id])
+    try env.actions.undo(receipt)
+    #expect(try env.dump() == before, "every row as it was, its handle included")
+    #expect(try memories.map { try env.link($0).handle } == ["p1", "p1"])
+}

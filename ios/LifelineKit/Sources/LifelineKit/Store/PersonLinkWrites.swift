@@ -194,29 +194,44 @@ extension PersonLinkRepository {
 
     /// The facts, feelings and goals of the link's session that are details of its person, and either
     /// sit in a memory of `mentioned` (a detail the model linked by a person id, R38) or have a card
-    /// whose `about_ref` is a person mention with the link's said name. A detail placed by hand in
-    /// another memory has no such card ref and stays.
+    /// whose `about_ref` names the link's person (`names`). A detail placed by hand in another memory
+    /// has no such card ref and stays.
     private static func details(about link: PersonLink, mentionedIn mentioned: Set<MemoryID>, in db: Database) throws -> [MomentEntity] {
         guard let session = try session(of: link.memoryID, in: db) else { return [] }
         let said = link.saidName.map { SaidName(ref: $0) }
-        // An older link with no said name matches no card ref; only its own memories' details go.
+        // An older link with no said name matches no card ref by name; only its own memories' details go.
         let keys = Set(said.map { [SaidName.key($0.raw)] + ($0.name.map { [SaidName.key($0)] } ?? []) } ?? []).subtracting([""])
         let candidates = try fetch(where: "person.id = ? and me.relation = 'detail' and \(sessionSQL) = ?",
                                    arguments: [link.person.id.rawValue, session], order: "memory.created_at, me.memory_id", in: db)
         return try rows(of: try candidates.filter { candidate in
             if mentioned.contains(candidate.memoryID) { return true }
-            guard !keys.isEmpty else { return false }
-            return try aboutMentionText(of: candidate.memoryID, in: db).map { keys.contains(SaidName.key($0)) } == true
+            return try about(of: candidate.memoryID, in: db).map { names($0, handle: link.handle, saidKeys: keys) } == true
         }, in: db)
     }
 
-    /// The text of the person mention a memory's card is about, when its `about_ref` names one.
-    private static func aboutMentionText(of memory: MemoryID, in db: Database) throws -> String? {
+    /// What a detail's card is about: its `about_ref`, and the person mention of its segment with that ref, if any.
+    private typealias About = (ref: String, mention: MentionOut?)
+
+    /// Whether a detail's `about_ref` names the link's person. A link with a handle (PC-d): the ref is that handle
+    /// (decision D15 reads a handle first), or a person mention with that handle; a mention with another handle is
+    /// another person. A link with no handle, or a mention with none (v6): a mention said with the link's said name.
+    private static func names(_ about: About, handle: String?, saidKeys: Set<String>) -> Bool {
+        if let handle {
+            if about.ref == handle { return true }
+            if let other = about.mention?.handle { return other == handle }
+        }
+        guard let text = about.mention?.text else { return false }
+        return saidKeys.contains(SaidName.key(text))
+    }
+
+    /// The `about_ref` of a memory's card, with the person mention it names. Nil when the card has no `about_ref`.
+    private static func about(of memory: MemoryID, in db: Database) throws -> About? {
         guard let card = try Candidate.fetchOne(db, sql: "select candidate.* from candidate join memory on memory.created_from_candidate_id = candidate.id where memory.id = ?",
                                                 arguments: [memory.rawValue]),
-              let about = CandidatePayload.memory(card)?.aboutRef else { return nil }
-        return try Candidate.fetchAll(db, sql: "select * from candidate where segment_id = ? and kind = 'person'", arguments: [card.segmentID.rawValue])
-            .compactMap(CandidatePayload.mention).first { $0.ref == about }?.text
+              let ref = CandidatePayload.memory(card)?.aboutRef else { return nil }
+        let mention = try Candidate.fetchAll(db, sql: "select * from candidate where segment_id = ? and kind = 'person'", arguments: [card.segmentID.rawValue])
+            .compactMap(CandidatePayload.mention).first { $0.ref == ref }
+        return (ref, mention)
     }
 
     // MARK: - First tellings

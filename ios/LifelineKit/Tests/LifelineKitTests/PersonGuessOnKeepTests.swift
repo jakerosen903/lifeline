@@ -967,3 +967,37 @@ private func expectPreviewMatches(_ chips: [PreviewChip], _ links: [MomentEntity
     #expect(links.first?.entityID == robyn.entityID && links.first?.origin == .confirmed && links.first?.personHandle == "p1")
     expectPreviewMatches(chips, links, madeByKeep: [])
 }
+
+// PC-d Task 5 (D16): a telling's people are its handles, so two Robyns of one memory part on "Separate this telling".
+@Test func separatingATellingTakesThePersonOfItsHandleOnly() throws {
+    let env = try Env()
+    let (_, segs) = try StoreFixtures.session(in: env.store.sessions, segments: ["Robyn fixed the gate"])
+    let here = try env.actions.acceptMemory(try env.handleCard(in: segs[0].id, "Robyn fixed the gate", people: [handled("p1", "Robyn")]), joinStory: false)
+    _ = try env.actions.mergeCandidate(try env.handleCard(in: segs[0].id, "Robyn fixed the gate", people: [handled("p2", "Robyn")], ordinal: 1),
+                                       into: here.memory.id)
+    let links = try env.byHandle(here.memory.id)
+    #expect(links.map(\.personHandle) == ["p1", "p2"])
+    #expect(links[0].entityID != links[1].entityID, "two handles, two Robyns")
+
+    let fresh = try env.actions.separateTelling(here.memory.id, order: 1)
+    #expect(try env.byHandle(fresh.id).map(\.entityID) == [links[1].entityID], "the telling takes p2's Robyn only")
+    #expect(try env.byHandle(fresh.id).map(\.personHandle) == ["p2"])
+    #expect(try env.byHandle(here.memory.id).map(\.entityID) == [links[0].entityID], "p1's Robyn stays with the first telling")
+}
+
+// A telling from another recording kept no handle (D11): it finds its people by said name, and its handle never reads as
+// a handle of the memory's own recording.
+@Test func separatingATellingOfAnotherRecordingGoesByTheSaidName() throws {
+    let env = try Env()
+    let (_, first) = try StoreFixtures.session(in: env.store.sessions, segments: ["Robyn painted the fence"])
+    let (_, later) = try StoreFixtures.session(in: env.store.sessions, segments: ["Tomas painted the fence"])
+    let kept = try env.actions.acceptMemory(try env.handleCard(in: first[0].id, "Robyn painted the fence", people: [handled("p1", "Robyn")]), joinStory: false)
+    _ = try env.actions.mergeCandidate(try env.handleCard(in: later[0].id, "Tomas painted the fence", people: [handled("p1", "Tomas")]), into: kept.memory.id)
+    let robyn = try #require(try env.byHandle(kept.memory.id).first { $0.roleText == "Robyn" })
+    let tomas = try #require(try env.byHandle(kept.memory.id).first { $0.roleText == "Tomas" })
+    #expect(robyn.personHandle == "p1" && tomas.personHandle == nil)
+
+    let fresh = try env.actions.separateTelling(kept.memory.id, order: 1)
+    #expect(try env.byHandle(fresh.id).map(\.entityID) == [tomas.entityID], "the later telling takes Tomas, not the first recording's p1")
+    #expect(try env.byHandle(kept.memory.id).map(\.entityID) == [robyn.entityID])
+}

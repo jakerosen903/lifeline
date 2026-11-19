@@ -158,16 +158,20 @@ extension CandidateActions {
                            kind: original.kind)
 
         // What this telling alone named goes with it; what another telling also named stays.
-        let leaving = try tellingOutputs(of: span, card: card)
-        let staying = try spans.filter { $0.order != order && $0.continuesOrder != order }
-            .flatMap { try tellingOutputs(of: $0, card: try $0.candidateID.flatMap { try store.candidates.fetch($0) }) }
-            + (original.createdFromCandidateID.flatMap { try? store.candidates.fetch($0) }.flatMap(CandidatePayload.memory).map { [$0] } ?? [])
+        let leavingTellings = try tellings(of: card.map { [$0] } ?? [])
+        let stayingTellings = try tellings(of: spans.filter { $0.order != order && $0.continuesOrder != order }
+            .compactMap { try $0.candidateID.flatMap { try store.candidates.fetch($0) } })
+            + (original.createdFromCandidateID.flatMap { try? store.candidates.fetch($0) }
+                .flatMap { card in CandidatePayload.memory(card).map { [Telling(card: card, outputs: [$0])] } } ?? [])
+        let leaving = leavingTellings.flatMap(\.outputs), staying = stayingTellings.flatMap(\.outputs)
         let leavingAnchors = leaving.flatMap(\.anchors), stayingAnchors = staying.flatMap(\.anchors)
         let anchors = try store.memories.anchors(of: memory).filter { anchor in
             leavingAnchors.contains(where: { $0.phrase == anchor.phrase && $0.relation == anchor.relation })
                 && !stayingAnchors.contains(where: { $0.phrase == anchor.phrase && $0.relation == anchor.relation })
         }.map(\.id)
-        let leavingPeople = try people(named: leaving.flatMap(\.peopleRefs), in: memory), stayingPeople = try people(named: staying.flatMap(\.peopleRefs), in: memory)
+        let recording = try spans.first { $0.order == 0 }.flatMap { try store.sessions.fetchSegment($0.segmentID)?.sessionID }
+        let leavingPeople = try people(of: leavingTellings, in: memory, recording: recording)
+        let stayingPeople = try people(of: stayingTellings, in: memory, recording: recording)
         let leavingPlaces = Set(leaving.compactMap(\.placeText).map { $0.lowercased() }), stayingPlaces = Set(staying.compactMap(\.placeText).map { $0.lowercased() })
         let places = try store.memories.places(of: memory)
             .filter { leavingPlaces.contains($0.nameText.lowercased()) && !stayingPlaces.contains($0.nameText.lowercased()) }.map(\.id)
@@ -184,10 +188,40 @@ extension CandidateActions {
         return try store.memories.fetch(fresh.id) ?? fresh
     }
 
-    /// The payloads behind one telling: its card and the card's continuations.
-    private func tellingOutputs(of span: MemorySpan, card: Candidate?) throws -> [MemoryOut] {
-        guard let card, let out = CandidatePayload.memory(card) else { return [] }
-        return [out] + (try store.candidates.continuations(of: card.id)).compactMap(CandidatePayload.memory)
+    /// One telling's card and the payloads behind it.
+    private struct Telling { var card: Candidate; var outputs: [MemoryOut] }
+
+    /// Each card with the payloads behind its telling: the card and the card's continuations.
+    private func tellings(of cards: [Candidate]) throws -> [Telling] {
+        try cards.compactMap { card in
+            guard let out = CandidatePayload.memory(card) else { return nil }
+            return Telling(card: card, outputs: [out] + (try store.candidates.continuations(of: card.id)).compactMap(CandidatePayload.memory))
+        }
+    }
+
+    /// The people these tellings named in this memory. A telling of the memory's own recording with handles (PC-d)
+    /// names the links that carry its handles: two Robyns of one memory are two handles of one said name (D16).
+    /// Any other telling names the links whose `role_text` is one of its said names: a v6 card, and a card of another
+    /// recording, whose handles Same story left off (D11) and which would read as this recording's handles.
+    private func people(of tellings: [Telling], in memory: MemoryID, recording: SessionID?) throws -> Set<PersonID> {
+        var handles: Set<String> = [], refs: [String] = []
+        for telling in tellings {
+            let ownRecording = try recording != nil && store.sessions.fetchSegment(telling.card.segmentID)?.sessionID == recording
+            if ownRecording, telling.outputs.contains(where: { !$0.handlePeople.isEmpty }) {
+                handles.formUnion(telling.outputs.flatMap(\.handlePeople).map(\.handle))
+            } else {
+                refs += telling.outputs.flatMap(\.peopleRefs)
+            }
+        }
+        return try people(handled: handles, in: memory).union(try people(named: refs, in: memory))
+    }
+
+    /// The people this memory links by one of these handles.
+    private func people(handled handles: Set<String>, in memory: MemoryID) throws -> Set<PersonID> {
+        guard !handles.isEmpty else { return [] }
+        return Set(try store.entities.links(of: memory).filter { entry in
+            entry.entity.type == .person && entry.link.relation == .mention && entry.link.personHandle.map(handles.contains) == true
+        }.map { PersonID(rawValue: $0.entity.id.rawValue) })
     }
 
     /// The people this memory links by one of these said names: a link's `role_text` is the ref
@@ -195,6 +229,7 @@ extension CandidateActions {
     /// person a second ref also reached keeps the first ref's words and is found by those only.
     private func people(named refs: [String], in memory: MemoryID) throws -> Set<PersonID> {
         let keys = Set(refs.map(SaidName.key).filter { !$0.isEmpty })
+        guard !keys.isEmpty else { return [] }
         return Set(try store.entities.links(of: memory).filter { entry in
             entry.entity.type == .person && entry.link.relation == .mention && entry.link.roleText.map { keys.contains(SaidName.key($0)) } == true
         }.map { PersonID(rawValue: $0.entity.id.rawValue) })

@@ -102,21 +102,24 @@ public struct PersonLinkRepository: Sendable {
         try fetch(where: "person.id = ?", arguments: [person.rawValue], order: "memory.created_at desc, me.memory_id, me.relation")
     }
 
-    /// The links one answer can change together: the same person and relation in the same session,
-    /// said with the same name (`SaidName.key`). A link with no said name is a group of only itself.
-    /// Includes `link`.
+    /// The links one answer can change together: the same person and relation in the same session, and
+    /// - for a link with a handle (PC-d), the same handle, whatever words each link said: a handle is one person
+    ///   in one recording, and another handle of the same name is another person;
+    /// - for a link with no handle, the same said name (`SaidName.key`) among the links with no handle.
+    /// A link with neither is a group of only itself. Includes `link`.
     public func group(of link: PersonLink) throws -> [PersonLink] {
         try db.writer.read { try Self.group(of: link, in: $0) }
     }
 
     static func group(of link: PersonLink, in db: Database) throws -> [PersonLink] {
         let key = SaidName.key(link.saidName ?? "")
-        guard !key.isEmpty else { return [link] }
+        guard link.handle != nil || !key.isEmpty else { return [link] }
         guard let session = try session(of: link.memoryID, in: db) else { return [link] }
         let sameSession = try fetch(where: "person.id = ? and me.relation = ? and \(sessionSQL) = ?",
                                     arguments: [link.person.id.rawValue, link.relation.rawValue, session],
                                     order: "memory.created_at, me.memory_id", in: db)
-        return sameSession.filter { $0.saidName.map(SaidName.key) == key }
+        if let handle = link.handle { return sameSession.filter { $0.handle == handle } }
+        return sameSession.filter { $0.handle == nil && $0.saidName.map(SaidName.key) == key }
     }
 
     /// How many guesses the session's memories hold: assumed mentions, one per memory and person.
@@ -183,7 +186,7 @@ public struct PersonLinkRepository: Sendable {
 
     static func fetch(where clause: String, arguments: StatementArguments, order: String, in db: Database) throws -> [PersonLink] {
         let rows = try Row.fetchAll(db, sql: """
-            select me.memory_id, me.relation, me.role_text, me.origin, person.id as person_id,
+            select me.memory_id, me.relation, me.role_text, me.origin, me.person_handle, person.id as person_id,
                    \(sessionSQL) as session_id, \(firstSessionSQL(entity: "me.entity_id")) as first_session_id
             from moment_entity me
             join person on person.entity_id = me.entity_id
@@ -202,7 +205,7 @@ public struct PersonLinkRepository: Sendable {
             let session: String? = row["session_id"], first: String? = row["first_session_id"]
             return PersonLink(memoryID: MemoryID(rawValue: row["memory_id"]), person: person, saidName: row["role_text"],
                               origin: (row["origin"] as String?).flatMap(LinkOrigin.init(rawValue:)), relation: relation,
-                              inPersonsFirstRecording: session == nil || first == nil || session == first)
+                              inPersonsFirstRecording: session == nil || first == nil || session == first, handle: row["person_handle"])
         }
     }
 }
