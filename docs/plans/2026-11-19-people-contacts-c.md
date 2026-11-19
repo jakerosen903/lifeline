@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Status:** Draft. The owner must approve it, with the plan decisions below, before work starts.
+**Status:** Approved by the owner on 2026-11-19 ("Yes, build both"), without a review of each decision. Each decision stays open to an overrule.
 
 **Goal:** The owner can say that two people on file are one person. The app joins them into one, asks first, and gives Undo for 6 seconds.
 
@@ -14,7 +14,7 @@
 
 **Not this plan:** PC-d (extractor handles). A merge of two places or two things by drag (spec call 2 is open: the owner said "two things").
 
-**Worktree and branch:** `.claude/worktrees/people-contacts-16241d`. A new branch `people-contacts-c`, cut from `people-contacts-b` (`8c882a9`, PR #35). That commit already holds `main`'s photo order and migration `v16`, so **Task 1 is only "cut the branch"**: its merge of `origin/main` is not needed, `PhotoRepository.writeOrder` is already visible inside the kit, and `photo_page_declined` is a real table (decisions 8 and 9 need no hand-made table in tests). (revised 2026-11-19, after PR #35 opened) No AI attribution in a commit or in PR text.
+**Worktree and branch:** `.claude/worktrees/people-contacts-16241d`. Branch `people-contacts-c`, cut from the tip of `people-contacts-d` (5bf37b2), which is cut from `people-contacts-b` (PR #35). So the stack is PC-b, PC-d, PC-c. That tip already holds `main`'s photo order, migration `v16` and the extractor handles of PC-d. **Task 1 is only "the branch exists"**: its merge of `origin/main` is not needed, `PhotoRepository.writeOrder` is already visible inside the kit, and `photo_page_declined` is a real table (decisions 8 and 9 need no hand-made table in tests). A link's `person_handle` (PC-d) moves with the link. (revised 2026-11-19) No AI attribution in a commit or in PR text.
 
 ---
 
