@@ -594,6 +594,48 @@ extension Env {
     #expect(later == PreviewChip(saidName: "Robyn", name: "Robyn Vale", origin: .assumed, person: person.id, fromContact: false))
 }
 
+// M-1 (fix wave): a guess and the owner's stored choice reach one planned person from one contact. The owner chose
+// that person, so it is not the app's guess, whichever name of the card comes first (PB3).
+@Test func aStoredContactChoiceAndAGuessToTheSameContactMakeAPersonTheOwnerChose() throws {
+    for people in [["Robyn", "Rob"], ["Rob", "Robyn"]] {
+        let env = try Env(contacts: [vale])
+        let card = try env.card("Robyn painted the fence with Rob", people: people)
+        try env.db.writer.write { db in
+            try db.execute(sql: "insert into candidate_person_choice (candidate_id, said_name, choice, contact_identifier) values (?, ?, 'contact', 'c-vale')",
+                           arguments: [card.id.rawValue, SaidName.key("Rob")])
+        }
+        let kept = try env.actions.acceptMemory(card, joinStory: false)
+        let robyn = try env.person(try #require(try env.personLinks(kept.memory.id).first))
+        #expect(try env.others().map(\.id) == [robyn.id], "one contact, one person (\(people))")
+        #expect(robyn.contactIdentifier == "c-vale")
+        #expect(!robyn.createdByGuess, "the owner chose this person (\(people))")
+    }
+    // The same for a stored "Someone new" and a guess that plan one person by the said name.
+    for people in [["Tomas", "my brother, Tomas"], ["my brother, Tomas", "Tomas"]] {
+        let env = try Env()
+        let card = try env.card("Tomas and I painted the fence", people: people)
+        try env.storeChoice("new", saidName: "my brother, Tomas", on: card.id)
+        let kept = try env.actions.acceptMemory(card, joinStory: false)
+        #expect(try env.others().count == 1)
+        #expect(try env.person(try #require(try env.personLinks(kept.memory.id).first)).createdByGuess == false, "\(people)")
+    }
+    // Two plans that join one person: the person is a guess only when both plans guessed.
+    func plan(guess: Bool) -> EntityRepository.Write {
+        var write = EntityRepository.Write()
+        let person = Person(id: .init(), displayName: "Robyn Vale", notes: nil, isOwner: false, birthDate: nil, birthDateOrigin: nil,
+                            nameOrigin: .contact, createdByGuess: guess, contactIdentifier: "c-vale", contactName: "Robyn Vale",
+                            contactState: Person.contactLinked)
+        write.entities.append(Entity(id: person.entityID, type: .person, title: "Robyn Vale"))
+        write.persons.append(person)
+        return write
+    }
+    for (mine, theirs) in [(true, false), (false, true), (true, true)] {
+        var joined = plan(guess: mine)
+        _ = joined.merge(plan(guess: theirs))
+        #expect(joined.persons.map(\.createdByGuess) == [mine && theirs])
+    }
+}
+
 // PB11: "new, from your contacts" belongs to the recording that made the person.
 @Test func aLaterRecordingsGuessToAPersonFromAContactSaysWhatWasSaid() throws {
     let env = try Env(contacts: [vale])

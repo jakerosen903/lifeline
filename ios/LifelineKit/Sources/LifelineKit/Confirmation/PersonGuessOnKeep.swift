@@ -103,7 +103,11 @@ extension CandidateActions {
     /// passes a contact a person holds, so the unique index is not reached here.
     private func plannedPerson(from contact: PersonGuess.Contact, alias: String?, createdByGuess: Bool, card: CandidateID?,
                                plan: inout EntityRepository.Write) -> PersonID? {
-        if let planned = plan.persons.first(where: { $0.contactIdentifier == contact.identifier }) { return planned.id }
+        if let index = plan.persons.firstIndex(where: { $0.contactIdentifier == contact.identifier }) {
+            // The owner's stored choice reaching a person the guess planned makes them the owner's (PB3, M-1).
+            if !createdByGuess { plan.persons[index].createdByGuess = false }
+            return plan.persons[index].id
+        }
         guard let person = Person.fromContact(contact, createdByGuess: createdByGuess) else { return nil }
         plan.entities.append(Entity(id: person.entityID, type: .person, title: person.displayName, createdFromCandidateID: card))
         plan.persons.append(person)
@@ -120,7 +124,10 @@ extension CandidateActions {
         let key = SaidName.key(name)
         guard !key.isEmpty else { return nil }
         // A person planned from a contact is reached by that contact only (PB13), never by a said name.
-        if let planned = plan.persons.first(where: { $0.contactIdentifier == nil && SaidName.key($0.displayName) == key }) { return planned.id }
+        if let index = plan.persons.firstIndex(where: { $0.contactIdentifier == nil && SaidName.key($0.displayName) == key }) {
+            if !createdByGuess { plan.persons[index].createdByGuess = false }   // as for a contact (M-1)
+            return plan.persons[index].id
+        }
         let person = Person(id: .init(), displayName: name, notes: nil, isOwner: false, birthDate: nil, birthDateOrigin: nil,
                             nameOrigin: .said, createdByGuess: createdByGuess)
         plan.entities.append(Entity(id: person.entityID, type: .person, title: name, createdFromCandidateID: card))

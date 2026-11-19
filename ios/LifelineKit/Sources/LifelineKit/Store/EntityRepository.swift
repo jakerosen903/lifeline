@@ -216,6 +216,11 @@ public struct EntityRepository: Sendable {
                 let contact = other.persons.first { $0.entityID == entity.id }?.contactIdentifier
                 if let mine = same(as: entity, contact: contact) { remap[entity.id] = mine.id } else { entities.append(entity) }
             }
+            // A joined person stays the app's guess only when both plans guessed: either plan may be the owner's choice (PB3).
+            for theirs in other.persons {
+                guard let mine = remap[theirs.entityID], let index = persons.firstIndex(where: { $0.entityID == mine }) else { continue }
+                persons[index].createdByGuess = persons[index].createdByGuess && theirs.createdByGuess
+            }
             // A person both plans made for one name is this plan's person; the other's row would have no entity.
             persons += other.persons.filter { p in !persons.contains { $0.id == p.id } && remap[p.entityID] == nil }
             links += other.links.map { var l = $0; l.entityID = remap[l.entityID] ?? l.entityID; return l }
