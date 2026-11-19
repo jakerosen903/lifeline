@@ -60,6 +60,8 @@ Other launch arguments you can add next to `-uiTesting` (see `ios/Lifeline/Depen
 - `-uiTesting-noKey`: act as if no key is saved.
 - `-uiTesting-slow`: a new segment every few seconds, not every second.
 - `-uiTesting-speaks`: the app speaks its lines out loud.
+- `-uiTesting-seedGuesses`: seed links that Keep guessed, to try the "Assumed" marks and the "Who is this?" sheet.
+- `-uiTesting-guessesLanding`: with `-uiTesting-seedGuesses`, leave the latest session's landing open at launch.
 
 ### Live mode and the API key
 

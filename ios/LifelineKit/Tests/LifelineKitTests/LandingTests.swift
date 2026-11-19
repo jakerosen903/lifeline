@@ -31,6 +31,7 @@ private func possible(_ title: String, quote: String, in seg: Segment) -> (Candi
     #expect(rows[0].quote == "we had a pomegranate tree" && rows[0].isKept && rows[0].play == MsRange(start: 3_000, end: 4_000))
     #expect(rows[1].play == segs[0].range && !rows[1].isKept, "a possible memory plays its whole moment")
     #expect(Set(rows.map(\.id)).count == 5)
+    #expect(rows[0].source == .memory(kept0.0.id) && rows[1].source == .candidate(p0b.0.id), "a row names where its people come from")
 }
 
 @Test func stillSortingCountsPendingSegments() {
@@ -62,4 +63,5 @@ private func possible(_ title: String, quote: String, in seg: Segment) -> (Candi
     let (rows, _) = Landing.rows(kept: [(memory, first), (memory, second)], possible: [], segments: segs)
     #expect(rows.count == 2 && Set(rows.map(\.id)).count == 2, "each telling is its own row with its own id")
     #expect(rows[1].title == "Grew up behind the door" && rows[1].play.start == 11_000, "a retelling shows the words it was kept under")
+    #expect(rows.allSatisfy { $0.source == .memory(memory.id) }, "both tellings show the one memory's people")
 }

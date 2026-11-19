@@ -199,14 +199,13 @@ public actor ExtractionQueue {
     /// Writes one row per candidate in output order, plus a flag row when any flag is set, and
     /// marks the segment extracted, all in one transaction. Rejected rows are dismissed with the
     /// reason; after a serious disclosure the memory rows are withheld the same way. A person
-    /// mention whose name the app already knows is resolved on the spot and not shown; one that
-    /// no memory in the output names becomes an open mention for the People queue.
+    /// mention a memory of this pass carries is a record: Keep links that name (`PersonGuess`).
+    /// One that no memory in the output names becomes an open mention for the People queue.
     /// Returns the rows to show.
     private func storeCandidates(_ validated: OutputValidator.Validated, segment: SegmentID, version: String) throws -> [Candidate] {
         var ordinal = 0
         var rows: [Candidate] = []
         var shown: [Candidate] = []
-        var knownMentions: [(Candidate, MentionOut)] = []
         // Flags and place mentions are records with nothing to tap in M2; they are stored
         // accepted so the pending set is exactly the cards still waiting for an answer.
         func row(_ kind: CandidateKind, _ payload: String, _ confidence: Double, _ rejection: String?) -> Candidate {
@@ -254,12 +253,17 @@ public actor ExtractionQueue {
                 rows.append(c)
                 continue
             }
-            rows.append(c)
-            if case .mention(let mention) = candidate, mention.kind == .person, try store.people.findPerson(matching: mention.text) != nil {
-                knownMentions.append((c, mention))
-            } else {
-                shown.append(c)
+            // A person a memory here carries gets no card: the kept card shows the person (plan decision 5).
+            // A group phrase keeps its own card ("Who are our parents?"). After a serious disclosure no
+            // memory is offered to keep, so the name waits in the People queue instead of being lost.
+            if case .mention(let mention) = candidate, mention.kind == .person,
+               !validated.flags.seriousDisclosure, Self.carried(mention, by: validated.accepted) {
+                c.status = .accepted
+                rows.append(c)
+                continue
             }
+            rows.append(c)
+            shown.append(c)
             if case .memory(let memory) = candidate {
                 rows += try hintRows(for: memory, keyedTo: c.id, row: row)
             }
@@ -282,10 +286,6 @@ public actor ExtractionQueue {
         shown.removeAll { unownedMentions.contains($0) }
         // The rows, the segment's status and the grown cards land together.
         let grown = try store.candidates.insertAll(rows, markingExtracted: segment, in: store.sessions, extending: extended)
-        for (candidate, _) in knownMentions {
-            let mention = try actions.acceptMention(candidate)
-            try actions.resolveIfKnown(mention)
-        }
         for candidate in unownedMentions { _ = try actions.acceptMention(candidate) }
         for continuation in extended {
             // The grown card shows again; a card kept in the meantime leaves its continuation as an ordinary card.
@@ -340,6 +340,7 @@ public actor ExtractionQueue {
     static func carried(_ mention: MentionOut, by accepted: [OutputValidator.ValidatedCandidate]) -> Bool {
         accepted.contains { candidate in
             guard case .memory(let memory) = candidate else { return false }
+            if mention.kind == .person { return CarriedName.carries(memory, mention) }
             if let ref = mention.ref, memory.aboutRef == ref { return true }
             return memory.allEntityRefs.contains { $0.kind == mention.kind && MatchKey.of($0.text) == MatchKey.of(mention.text) }
         }

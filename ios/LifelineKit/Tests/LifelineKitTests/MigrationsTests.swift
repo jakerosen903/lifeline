@@ -112,10 +112,17 @@ import GRDB
 }
 
 @Test func schemaVersionsOrderByMigrationPosition() {
-    #expect(Migrations.currentSchemaVersion == "v14")
+    #expect(Migrations.currentSchemaVersion == "v15")
     #expect(Migrations.isNewer("v9", than: "v8") && !Migrations.isNewer("v8", than: "v9") && Migrations.isNewer("v10", than: "v9"))
     #expect(Migrations.isNewer("v8", than: "v7") && !Migrations.isNewer("v7", than: "v8") && !Migrations.isNewer("v8", than: "v8"))
     #expect(Migrations.isNewer("v99", than: "v8"), "an unknown version is from the future")
+}
+
+/// The unmerged photo branches own `v14` (`session.subject_photo_id`). GRDB records a migration by name,
+/// so this branch must not register it; a photo build's `v14` backup reads here as from the future.
+@Test func v14IsLeftToThePhotoBranches() {
+    #expect(!Migrations.versions.contains("v14"))
+    #expect(Migrations.isNewer("v14", than: Migrations.currentSchemaVersion), "a backup that says v14 is refused, not half-read")
 }
 
 @Test func v11OnAPopulatedV10Database() throws {
@@ -181,7 +188,7 @@ import GRDB
         try queue.read { db in try tables.map { try Row.fetchAll(db, sql: "select * from \($0) order by rowid") } }
     }
     let rowsBefore = try rows()
-    try Migrations.migrator.migrate(queue, upTo: "v13")  // v14 adds a session column; its own test checks that
+    try Migrations.migrator.migrate(queue, upTo: "v13")  // v14 adds a session column and v15 adds columns to two of these tables; each has its own test.
     #expect(try rows() == rowsBefore, "no existing row or column changes")
     #expect(Set(try queue.read { try $0.columns(in: "photo") }.map(\.name))
             == ["id", "file_name", "asset_local_id", "taken_at", "taken_origin", "lat", "lon", "location_origin", "sha256", "pixel_width", "pixel_height", "added_at"])
@@ -222,7 +229,7 @@ import GRDB
             """)
     }
     func count(_ table: String) throws -> Int { try queue.read { try Int.fetchOne($0, sql: "select count(*) from \(table)") ?? -1 } }
-    try Migrations.migrator.migrate(queue)
+    try Migrations.migrator.migrate(queue, upTo: "v14")
     #expect(try count("session") == 1 && count("photo") == 1 && count("photo_link") == 1, "no row is lost")
     #expect(try queue.read { try String?.fetchAll($0, sql: "select subject_photo_id from session") } == [nil], "every pointer starts empty")
     try queue.write { try $0.execute(sql: "update session set subject_photo_id = 'p1' where id = 's1'") }
@@ -243,4 +250,103 @@ import GRDB
     let after = try #require(try SessionRepository(db).fetch(session.id))
     #expect(after.subjectPhotoID == nil)
     #expect(after.startedFrom == .photo, "the session row remains")
+}
+
+@Test func v15KeepsEveryRowAndAddsNothingToOldLinks() throws {
+    var config = Configuration()
+    config.foreignKeysEnabled = true
+    let queue = try DatabaseQueue(configuration: config)
+    try Migrations.migrator.migrate(queue, upTo: "v13")
+    try queue.write { db in
+        try db.execute(sql: """
+            insert into entity (id, type, title, created_at) values ('e1', 'person', 'Maya', '2026-10-01');
+            insert into person (id, entity_id, display_name, is_owner) values ('e1', 'e1', '', 0);
+            insert into memory (id, title, summary_quote, visibility, created_at) values ('m1', 'A', 'a', 'timeline', '2026-10-01');
+            insert into moment_entity (memory_id, entity_id, relation, role_text) values ('m1', 'e1', 'mention', 'my sister');
+            """)
+    }
+    let tables = ["entity", "person", "memory", "moment_entity"]
+    func rows() throws -> [[Row]] {
+        try queue.read { db in try tables.map { try Row.fetchAll(db, sql: "select * from \($0) order by rowid") } }
+    }
+    let before = try rows()
+    try Migrations.migrator.migrate(queue)
+    let after = try rows()
+    for (old, new) in zip(before, after) {
+        #expect(old.count == new.count, "no row is added or deleted")
+        for (o, n) in zip(old, new) { for (column, value) in o { #expect(n[column] == value, "\(column) is unchanged") } }
+    }
+    try queue.read { db in
+        #expect(try Row.fetchOne(db, sql: "select origin from moment_entity")?["origin"] as String? == nil, "an old link has no origin")
+        #expect(try Row.fetchOne(db, sql: "select person_handle from moment_entity")?["person_handle"] as String? == nil)
+        #expect(try Bool.fetchOne(db, sql: "select created_by_guess from person") == false)
+        #expect(try Row.fetchOne(db, sql: "select contact_identifier from person")?["contact_identifier"] as String? == nil)
+        let tableNames = try String.fetchAll(db, sql: "select name from sqlite_master where type = 'table'")
+        #expect(tableNames.contains("contact_declined") && tableNames.contains("candidate_person_choice"))
+    }
+}
+
+@Test func oneContactBelongsToOnePerson() throws {
+    let db = try AppDatabase.inMemory()
+    func person(_ id: String) -> String {
+        """
+        insert into entity (id, type, title, created_at) values ('\(id)', 'person', '\(id)', '2026-10-01');
+        insert into person (id, entity_id, display_name, is_owner) values ('\(id)', '\(id)', '', 0);
+        """
+    }
+    try db.writer.write { try $0.execute(sql: person("a") + person("b") + person("c")) }
+    // Persons with no contact do not collide.
+    try db.writer.write { try $0.execute(sql: "update person set contact_identifier = null") }
+    try db.writer.write { try $0.execute(sql: "update person set contact_identifier = 'k1' where id = 'a'") }
+    #expect(throws: DatabaseError.self, "a second person cannot take the same contact") {
+        try db.writer.write { try $0.execute(sql: "update person set contact_identifier = 'k1' where id = 'b'") }
+    }
+}
+
+@Test func contactDeclinedAndCandidateChoiceFollowTheirOwners() throws {
+    let db = try AppDatabase.inMemory()
+    try db.writer.write { db in
+        try db.execute(sql: """
+            insert into entity (id, type, title, created_at) values ('p1', 'person', 'Maya', '2026-10-01');
+            insert into person (id, entity_id, display_name, is_owner) values ('p1', 'p1', '', 0);
+            insert into contact_declined (person_id, contact_identifier) values ('p1', 'k1');
+            """)
+    }
+    #expect(throws: DatabaseError.self, "the pair is the key") {
+        try db.writer.write { try $0.execute(sql: "insert into contact_declined (person_id, contact_identifier) values ('p1', 'k1')") }
+    }
+    try db.writer.write { try $0.execute(sql: "delete from person where id = 'p1'") }
+    #expect(try db.writer.read { try Int.fetchOne($0, sql: "select count(*) from contact_declined") } == 0, "declined goes with the person")
+}
+
+@Test func aCandidateChoiceIsOnePerSaidNameAndGoesWithItsCandidate() throws {
+    let db = try AppDatabase.inMemory()
+    try db.writer.write { db in
+        try db.execute(sql: """
+            insert into session (id, started_at, ended_at, audio_path, stage_log, landing_choice_made) values ('s1', '2026-10-01', '2026-10-01', 'a.m4a', '[]', 1);
+            insert into segment (id, session_id, "index", start_ms, end_ms, text, status) values ('g1', 's1', 0, 0, 1000, 'hi', 'extracted');
+            """)
+    }
+    let candidateColumns = try db.writer.read { try $0.columns(in: "candidate") }.map(\.name)
+    #expect(candidateColumns.contains("id"))
+    // Build the minimal candidate row from its own NOT NULL columns.
+    let required = try db.writer.read { try $0.columns(in: "candidate") }.filter { $0.isNotNull && $0.defaultValueSQL == nil }.map(\.name)
+    let values = required.map { name -> String in
+        switch name {
+        case "id": "'c1'"
+        case "session_id": "'s1'"
+        case "segment_id": "'g1'"
+        case "created_at": "'2026-10-01'"
+        default: "'x'"
+        }
+    }
+    try db.writer.write { db in
+        try db.execute(sql: "insert into candidate (\(required.joined(separator: ", "))) values (\(values.joined(separator: ", ")))")
+        try db.execute(sql: "insert into candidate_person_choice (candidate_id, said_name, choice) values ('c1', 'maya', 'new')")
+    }
+    #expect(throws: DatabaseError.self, "one answer for a said name on a card") {
+        try db.writer.write { try $0.execute(sql: "insert into candidate_person_choice (candidate_id, said_name, choice) values ('c1', 'maya', 'not_a_person')") }
+    }
+    try db.writer.write { try $0.execute(sql: "delete from candidate where id = 'c1'") }
+    #expect(try db.writer.read { try Int.fetchOne($0, sql: "select count(*) from candidate_person_choice") } == 0)
 }
