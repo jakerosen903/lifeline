@@ -44,3 +44,8 @@ The owner said "Yes, build both" (PC-d, then PC-c) on 2026-11-19, without a revi
 - Task 7b: minor (deferred): a carried mention can add a relation phrase ("my roommate") as a second said name of a handle; a force unwrap in the rank sort.
 - Task 8 (docs): complete (commit 98fb00f).
 - Final whole-branch review (8c882a9..98fb00f): with fixes. No Critical. Important I1 to I6, Minor M1 to M10. One fix wave dispatched (`fix-wave-brief.md`): I1, I2, I3, I4, M1, M2, M3, M5, M7, M8, M9. Parked by ruling: I5 (D31), I6 (needs the owner's key), M10.
+- Final review fix wave: complete (commits 18f8b0f..ac7f85e, nine commits). Scoped re-review: every finding addressed (I1, I2, I3, I4, M1, M2, M3, M5, M7, M8, M9, M4, M6), no new Critical or Important. Kit: 1695 tests, all pass. No second fix wave.
+- Parked — a detail that reaches a carried person through a packet person id takes the carried origin and is not marked carried (`CandidateActions.aboutEntity`, known-entity branch), so Same story can raise an existing `assumed` detail — Ruling D32: real, narrow, and only on the `v8` path; it must close before `v8` is the default (one-line fix: pass `reached?.carried`).
+- Parked — a continuation's carried handle is checked against the card's segment text, so it can get `assumed` where D29 would carry `said` or `new` — Ruling D32: it adds a mark and never removes one; stays.
+- Parked — I5 (D31), I6 (no live call has proved the changed schema; needs the owner's key; blocks a build to the phone), M10 (UI tests cover only the handle path).
+- Open: the Task 6 UI classes are not run yet; the comparison is not run; `v8` is not the default (Task 8 steps 4 and 5 wait for the owner).
