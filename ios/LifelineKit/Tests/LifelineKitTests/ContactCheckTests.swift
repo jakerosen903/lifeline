@@ -678,3 +678,19 @@ extension Fixture {
     #expect(try f.store.people.linkFromReguess(robyn, to: vale.forGuess, saidName: "Robyn", in: session) == 0)
     #expect(try f.dump() == before, "no link, no rename: the look again did not link this person")
 }
+
+// Fix wave (ledger Task 4): under limited access a missing contact that is shared again is linked again.
+@Test func underLimitedAccessAMissingContactThatIsSharedAgainIsLinked() async throws {
+    let f = try Fixture()
+    let robin = try f.store.people.insertPerson(displayName: "Robin")
+    try await f.actions.link(robin.id, to: vale)
+    f.directory.currentAccess = .limited
+    f.directory.cards = [reyes]
+    try await f.actions.check()
+    #expect(try f.person(robin.id).contactState == Person.contactMissing)
+
+    f.directory.cards = [vale, reyes]
+    try await f.actions.check()
+    let person = try f.person(robin.id)
+    #expect(person.contactIdentifier == "c-vale" && person.contactState == Person.contactLinked)
+}

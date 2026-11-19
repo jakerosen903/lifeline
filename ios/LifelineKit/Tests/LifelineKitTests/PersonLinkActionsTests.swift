@@ -749,6 +749,27 @@ private let haleCard = ContactCard(identifier: "c-hale", fullName: " Robin Hale 
     #expect(try env.store.people.person(id: created) == nil)
 }
 
+// Fix wave (ledger Task 6 f): the group moves to one new person from the contact; a second move to that contact goes to them.
+@Test func aWholeGroupMovesToOnePersonFromAContactAndASecondMoveFindsThem() throws {
+    let env = try Env()
+    let robin = try env.store.people.insertPerson(displayName: "Robin")
+    let here = try env.session(["Robin painted the fence", "Robin fixed the gate"])
+    let memories = try here.map { try env.kept(in: $0, people: ["Robin"]) }
+    let elsewhere = try env.kept(in: try env.session(["Robin cut the grass"])[0], people: ["Robin"])
+
+    let first = try env.actions.move(try env.link(memories[1]), to: .contact(haleCard), wholeGroup: true)
+    let made = try #require(first.createdPerson)
+    #expect(try memories.map { try env.onlyPerson($0) } == [made, made], "the whole group, one person")
+    #expect(try env.onlyPerson(elsewhere) == robin.id)
+    let people = try env.count("person")
+
+    let second = try env.actions.move(try env.link(elsewhere), to: .contact(haleCard), wholeGroup: false)
+    #expect(second.createdPerson == nil, "the contact now belongs to the person the first move made")
+    #expect(try env.onlyPerson(elsewhere) == made)
+    #expect(try env.count("person") == people, "no second person for one contact")
+    #expect(try env.store.people.person(id: made)?.contactIdentifier == "c-hale")
+}
+
 @Test func aMoveToAContactAPersonHoldsGoesToThatPerson() throws {
     let env = try Env()
     let tove = try env.store.people.insertPerson(displayName: "Tove")
