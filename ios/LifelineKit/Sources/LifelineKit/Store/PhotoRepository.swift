@@ -302,8 +302,7 @@ public struct PhotoRepository: Sendable {
     /// Inside a move of a name, after the name links are written and before an empty guess is judged, so the
     /// story's own link does not hold the first person. Acts only when the session has a subject photo and a moved
     /// memory holds it (plan decision 10). The new person gets the photo by the Keep's rules. The first person loses
-    /// it only when a story made the link and no memory of the session that holds the photo names them now; no
-    /// decline is recorded. Nil when no photo link changed.
+    /// it only by `removeUnheldStoryLink`; no decline is recorded. Nil when no photo link changed.
     static func followMovedName(_ moved: Set<MemoryID>, of session: SessionID, from first: EntityID, to new: EntityID?,
                                 in db: Database) throws -> PhotoPageChange? {
         guard let photo = try subjectPhoto(of: session, in: db)?.id else { return nil }
@@ -313,28 +312,33 @@ public struct PhotoRepository: Sendable {
         if let new {
             for memory in holding { added += try linkToPeoplePages(photo, namedBy: memory, only: new, in: db) }
         }
-        let stillNamed = try Bool.fetchOne(db, sql: """
-            select exists (
-                select 1 from moment_entity me join photo_link pl on pl.memory_id = me.memory_id and pl.photo_id = ?
-                where me.entity_id = ? and me.memory_id in (
-                    select ms.memory_id from memory_span ms join segment on segment.id = ms.segment_id
-                    where ms."order" = 0 and segment.session_id = ?))
-            """, arguments: [photo.rawValue, first.rawValue, session.rawValue]) ?? false
-        let removed = try !stillNamed && removeStoryLink(of: photo, from: first, in: db) ? [first] : []
+        let removed = try removeUnheldStoryLink(of: photo, from: first, in: db) ? [first] : []
         guard !added.isEmpty || !removed.isEmpty else { return nil }
         return PhotoPageChange(photo: photo, added: added, removed: removed)
     }
 
-    /// Inside the Undo of a move, after a person the move removed exists again. Takes back only what is still as the
-    /// move left it (plan decision 11): an added link the owner made their own stays; a removed link comes back as
-    /// `story` unless the page holds the photo or the owner took it off since (`link` refuses both).
+    /// Inside the Undo of a move, after the name links are put back and a person the move removed exists again. Takes
+    /// back only what is still as the move left it (plan decision 11): an added link goes by `removeUnheldStoryLink`, so
+    /// the owner's link and one a kept memory still names stay; a removed link comes back as `story` unless the page
+    /// holds the photo or the owner took it off since (`link` refuses both).
     static func undo(_ change: PhotoPageChange, in db: Database) throws {
-        for page in change.added { _ = try removeStoryLink(of: change.photo, from: page, in: db) }
+        for page in change.added { _ = try removeUnheldStoryLink(of: change.photo, from: page, in: db) }
         // The session can let the photo go after the move; with no row there is nothing to put back.
         guard try Photo.exists(db, key: change.photo.rawValue) else { return }
         for page in change.removed where try Entity.exists(db, key: page.rawValue) {
             try link(change.photo, to: .entity(page), origin: .story, in: db)
         }
+    }
+
+    /// The one rule for a move and its Undo: a story link goes only when no memory that holds the photo names the
+    /// person now, in any session (one photo can be the subject of several stories). True when the link went.
+    private static func removeUnheldStoryLink(of photo: PhotoID, from page: EntityID, in db: Database) throws -> Bool {
+        let named = try Bool.fetchOne(db, sql: """
+            select exists (
+                select 1 from moment_entity me join photo_link pl on pl.memory_id = me.memory_id and pl.photo_id = ?
+                where me.entity_id = ?)
+            """, arguments: [photo.rawValue, page.rawValue]) ?? false
+        return try !named && removeStoryLink(of: photo, from: page, in: db)
     }
 
     private static func isHeld(_ photo: PhotoID, by memory: MemoryID, in db: Database) throws -> Bool {

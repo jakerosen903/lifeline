@@ -290,11 +290,11 @@ private struct StoryFixture {
     /// `people` are the card's people refs; `place` its place; `aboutSelf` makes it a fact about the owner (a detail link);
     /// `storyRef` joins a story on Keep.
     func pendingCard(title: String = "The tree house", ordinal: Int = 0, words: (Int, Int) = (0, 1), people: [String] = [],
-                     place: String? = nil, aboutSelf: Bool = false, storyRef: String? = nil) throws -> Candidate {
+                     place: String? = nil, aboutSelf: Bool = false, storyRef: String? = nil, segment: SegmentID? = nil) throws -> Candidate {
         let out = MemoryOut(ref: "m1", kind: aboutSelf ? .fact : nil, title: title, quote: "the tree",
                             segmentSpan: WordSpan(startWord: words.0, endWord: words.1), peopleRefs: people, placeText: place, anchors: [],
                             storyRef: storyRef, collectionHint: nil, chapterHint: nil, confidence: 0.9, aboutRef: aboutSelf ? "self" : nil)
-        let card = StoreFixtures.candidate(segments[0].id, ordinal: ordinal, payload: try CandidatePayload.encode(out))
+        let card = StoreFixtures.candidate(segment ?? segments[0].id, ordinal: ordinal, payload: try CandidatePayload.encode(out))
         try store.candidates.insert(card)
         return card
     }
@@ -970,4 +970,32 @@ private func personID(_ entity: EntityID) -> PersonID { PersonID(rawValue: entit
     try f.actions.undo(receipt)
     #expect(try f.page(dad).isEmpty, "the owner took the photo off Dad's page")
     #expect(try f.page(maya).isEmpty, "the story's link to Maya goes with Undo")
+}
+
+/// Fix round 1: one photo can be the subject of two sessions. A story link stays while any memory that holds the photo names the person.
+@Test func aMoveLeavesTheLinkWhileAnotherStoryOfTheSamePhotoNamesThePerson() throws {
+    let f = try StoryFixture()
+    let dad = try f.person("Dad"), maya = try f.person("Maya")
+    _ = try f.keep(try f.pendingCard(people: ["Dad"]))
+    let (second, segments) = try StoreFixtures.session(in: f.store.sessions, segments: ["the beach"])
+    var row = try #require(try f.store.sessions.fetch(second))
+    row.subjectPhotoID = f.subject.id; row.startedFrom = .photo
+    try f.store.sessions.update(row)
+    let other = try f.keep(try f.pendingCard(title: "The beach", people: ["Dad"], segment: segments[0].id))
+    let receipt = try f.actions.move(try f.nameLink(other, dad), to: .person(personID(maya)), wholeGroup: false)
+    #expect(try f.page(dad) == [f.subject.id], "the first session's moment still names Dad")
+    #expect(try f.pageLinkOrigin(dad) == PhotoLinkOrigin.story.rawValue)
+    #expect(receipt.photoPages?.removed == [])
+}
+
+@Test func undoLeavesTheNewPersonsPhotoWhileAnotherKeptMomentNamesThem() throws {
+    let f = try StoryFixture()
+    let dad = try f.person("Dad"), maya = try f.person("Maya")
+    let kept = try f.keep(try f.pendingCard(people: ["Dad"]))
+    let receipt = try f.actions.move(try f.nameLink(kept, dad), to: .person(personID(maya)), wholeGroup: false)
+    #expect(receipt.photoPages?.added == [maya])
+    _ = try f.keep(try f.pendingCard(title: "The beach", ordinal: 1, words: (1, 2), people: ["Maya"]))
+    try f.actions.undo(receipt)
+    #expect(try f.page(maya) == [f.subject.id], "the other kept moment still names Maya")
+    #expect(try f.page(dad) == [f.subject.id])
 }
