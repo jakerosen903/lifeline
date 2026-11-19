@@ -50,6 +50,12 @@ extension XCUIApplication {
         return settled() && element.isHittable
     }
 
+    /// A label set as a page appears (the record bar's) can lag the page: waits until it reads `label`.
+    func waitForLabel(_ element: XCUIElement, _ label: String, timeout: TimeInterval = 5) -> Bool {
+        let match = XCTNSPredicateExpectation(predicate: NSPredicate(format: "label == %@", label), object: element)
+        return XCTWaiter().wait(for: [match], timeout: timeout) == .completed
+    }
+
     /// Lists are lazy: a row below the fold is not in the tree until it scrolls into view.
     func reveal(_ element: XCUIElement, swipes: Int = 6) -> Bool {
         for _ in 0..<swipes {
@@ -161,6 +167,54 @@ extension XCUIApplication {
         app.launch()
         XCTAssertTrue(app.waitHittable(app.buttons["home.start"], timeout: 15), "the seeded app lands on the timeline")
         return app
+    }
+
+    /// Launches with `-uiTesting-seedSearch`: the invented family, then Zoë, Lena's alias "Linny", "Dad's Volvo",
+    /// "São Paulo", and moments and a fact with words of their own (one hidden, one kept from AI). First open is done.
+    static func launchWithSearch(_ extra: [String] = []) -> XCUIApplication {
+        let app = XCUIApplication()
+        app.launchArguments += ["-uiTesting", "-uiTesting-seedSearch"] + extra
+        app.launch()
+        XCTAssertTrue(app.waitHittable(app.buttons["home.start"], timeout: 15), "the seeded app lands on the timeline")
+        return app
+    }
+
+    // MARK: - Search
+
+    /// Search, from the Search button in the open tab's top bar. Already on search, it stays there.
+    func openSearch() {
+        if searchFields.firstMatch.exists { return }
+        let button = buttons["shell.search"]
+        XCTAssertTrue(waitHittable(button, timeout: 10), "the Search button is on screen")
+        button.tap()
+    }
+
+    /// Search, then its field, then `text` typed into it.
+    func search(_ text: String) {
+        openSearch()
+        let field = searchFields.firstMatch
+        XCTAssertTrue(waitHittable(field, timeout: 10), "the search field is on screen")
+        field.tap()
+        field.typeText(text)
+    }
+
+    /// Empties the search field, keeping it active.
+    func clearSearch() {
+        let field = searchFields.firstMatch
+        XCTAssertTrue(waitHittable(field, timeout: 5), "the search field is on screen")
+        let typed = (field.value as? String) ?? ""
+        field.tap()
+        field.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: typed.count))
+    }
+
+    /// The keyboard's Search key: the keyboard goes and the query stays in the field.
+    func dismissSearchKeyboard() {
+        searchFields.firstMatch.typeText("\n")
+    }
+
+    /// The search result whose label (its first line) is `label`.
+    func searchResult(_ label: String) -> XCUIElement {
+        buttons.matching(identifier: "search.result").matching(NSPredicate(format: "label == %@", label)).firstMatch
     }
 
     /// A copy of a bundled fixture in the temporary folder, for a launch argument such as `-uiTesting-pickPhoto`.

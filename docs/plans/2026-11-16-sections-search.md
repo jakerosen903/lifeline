@@ -16,6 +16,8 @@
 
 ## Decisions made in this plan
 
+> **Changed while building, 2026-11-19 (ruling R4).** Search is not a tab. An iPhone tab bar holds five tabs; a sixth puts You and Search under "More". The five tabs stay. Each tab's root has a "Search" button in its top bar (identifier `shell.search`), and it pushes the search screen in that tab's own stack. Where the text below says "the search tab", read "the search screen". Decisions 15, 16 and 24 and Task 5 are read with this change: there is no `AppTab.search`, no `tab.search` and no `testSearchIsATabBesideTheFive`; `testSearchIsOnEveryTab` replaces it. Each tab's search screen keeps its own query.
+
 The spec leaves these open. Each one is decided here so the owner can overrule it before work starts. A decision that serves a principle names it (P1 to P9, `docs/PRINCIPLES.md`). Copy that this plan invents is marked **(invented copy)**.
 
 1. **The engine is a scan in Swift, not SQLite FTS5.** The app builds an in-memory index when the search tab appears, and scans it on each change of the query. FTS5 is available: the GRDB 7.11.1 package manifest defines `SQLITE_ENABLE_FTS5`. This plan does not use it, for four reasons.
