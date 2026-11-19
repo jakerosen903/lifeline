@@ -60,3 +60,8 @@ Pre-flight: Task 6 needs a column that Task 1 owns: Task 1 text now carries it (
 - Task 6: minor (deferred): `card(for:)` reads the session row a second time for one flag.
 - Task 6: cannot verify from diff: the line-height reservation was in the brief (Task 5's open item) — controller confirms; `keptPages` drops when the screen is left (a new view model per visit) and the done state after a kill — device check lines 23 and 25.
 - Task 6: fix round 1 queued behind the Task 7 fix (one writer at a time in the worktree).
+- Task 7: fix round 1/5 (1 addressed, 0 open — two picks at the same time; commit 6e050fd)
+- Task 7: minor (deferred): the `PhotoAddBatch` merge path (a second pick joins the first) is no longer reachable through the UI; kept as defence.
+- Task 7: minor (deferred): `-uiTesting-slowPhotoFile` now has two meanings (slow file, and a 3 s wait in the test pick path).
+- Task 7: minor (deferred): the disabled state has a UI test on the entity page only; Memory and You share `AddPhotoButton`.
+- Task 7: complete (commits 5041ae9..6e050fd, review clean after one fix round; minors deferred above)
