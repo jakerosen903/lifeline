@@ -417,10 +417,11 @@ final class PeopleGuessUITests: XCTestCase {
         tapDone(app)
         XCTAssertTrue(waitCount(robyns, 2), "both Robyns are people again")
 
+        // The card carries both Robyns, so it has no follow-ups: Keep makes it leave, with no kept card
+        // (cards-follow-ups spec, rule 3). The People grid below shows what Keep wrote.
         card.buttons["card.add"].firstMatch.tap()
-        let kept = app.any("card.kept")
-        XCTAssertTrue(kept.waitForExistence(timeout: 5), "Keep turns the card into a kept card")
-        XCTAssertTrue(waitCount(kept.buttons.matching(NSPredicate(format: "label == %@", plain("Robyn"))), 2), "the kept card names both")
+        XCTAssertTrue(waitGone(card, timeout: 5), "Keep takes the card away")
+        XCTAssertFalse(app.any("card.kept").exists, "a card with no follow-ups leaves no kept card")
         app.finishSession()
         app.openTab("People")
         let tiles = app.buttons.matching(identifier: "entities.row").matching(NSPredicate(format: "label == %@", "Robyn"))
