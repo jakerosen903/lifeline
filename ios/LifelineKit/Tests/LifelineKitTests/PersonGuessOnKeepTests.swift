@@ -1214,3 +1214,29 @@ extension Env {
     #expect(try env.personLinks(source).map(\.personHandle) == ["p1"])
     #expect(try env.personLinks(target).map(\.personHandle) == ["p1"])
 }
+
+// MARK: - Final review M2: a v6 card continued by a v8 row keeps its names
+
+@Test func aV6CardContinuedByAV8RowLinksBothItsNamesAndTheHandle() throws {
+    let env = try Env()
+    let (_, segs) = try StoreFixtures.session(in: env.store.sessions, segments: ["Maya and I painted the fence", "and Dara held the ladder"])
+    let card = try env.card(in: segs[0].id, "Maya and I painted the fence", people: ["Maya"])
+    let dara = handled("p1", "Dara")
+    let rest = MemoryOut(ref: "m1", kind: .event, title: "A title", quote: "and Dara held the ladder", segmentSpan: WordSpan(startWord: 0, endWord: 4),
+                         peopleRefs: ["Dara"], placeText: nil, anchors: [], continuesCandidateID: card.id.rawValue, collectionHint: nil, chapterHint: nil,
+                         confidence: 0.9, personHandles: ["p1"], handlePeople: [dara])
+    var row = StoreFixtures.candidate(segs[1].id, ordinal: 0, payload: try CandidatePayload.encode(rest))
+    row.status = .superseded
+    row.rejection = CandidateRepository.continuesReason(card.id)
+    try env.store.candidates.insertAll([row], markingExtracted: segs[1].id, in: env.store.sessions,
+                                       extending: [.init(earlierID: card.id, rowID: row.id, span: ExtraSpan(segmentID: segs[1].id.rawValue, startWord: 0, endWord: 4),
+                                                         people: [dara])])
+    let grown = try #require(try env.store.candidates.fetch(card.id))
+    #expect(CandidatePayload.memory(grown)?.handlePeople == [dara], "the continuation gave the v6 card a handle")
+
+    #expect(Set(try env.linkActions.preview(grown).map(\.saidName)) == ["Maya", "Dara"])
+    let kept = try env.actions.acceptMemory(grown, joinStory: false)
+    let links = try env.personLinks(kept.memory.id)
+    #expect(Set(links.map(\.roleText)) == ["Maya", "Dara"], "Maya by said name, Dara by handle")
+    #expect(links.first { $0.roleText == "Dara" }?.personHandle == "p1" && links.first { $0.roleText == "Maya" }?.personHandle == nil)
+}

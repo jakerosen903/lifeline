@@ -145,9 +145,9 @@ public struct PersonLinkActions: Sendable {
             return PreviewChip(saidName: said, name: person.displayName, origin: origin, person: person.id, fromContact: fromContact,
                                handle: link.handle)
         }
-        // A card with handles names its people by handle; an older card by said name alone.
+        // The said names no handle covers by said name alone, then each handle (`CandidateActions.edges`).
         let names = ([out] + continuations.compactMap(CandidatePayload.memory)).flatMap { o -> [(saidName: String, handle: String?)] in
-            o.handlePeople.isEmpty ? o.peopleRefs.map { ($0, nil) } : o.handlePeople.map { ($0.saidName, $0.handle) }
+            CandidateActions.saidNamesNoHandleCovers(o).map { ($0, nil) } + o.handlePeople.map { ($0.saidName, $0.handle) }
         }
         return Self.withNotAPerson(linked, names: names, choices: try store.personLinks.choices(for: candidate.id))
     }

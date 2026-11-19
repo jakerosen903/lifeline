@@ -230,6 +230,8 @@ extension CandidateActions {
             let ownRecording = try recording != nil && store.sessions.fetchSegment(telling.card.segmentID)?.sessionID == recording
             if ownRecording, telling.outputs.contains(where: { !$0.handlePeople.isEmpty }) {
                 handles.formUnion(telling.outputs.flatMap(\.handlePeople).map(\.handle))
+                // A `v6` card that a `v8` row continued keeps its own names beside the handles (M2).
+                refs += telling.outputs.flatMap(CandidateActions.saidNamesNoHandleCovers)
             } else {
                 refs += telling.outputs.flatMap(\.peopleRefs)
             }

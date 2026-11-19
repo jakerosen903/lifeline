@@ -237,7 +237,8 @@ public struct CandidateActions: Sendable {
     }
 
     /// `card` is the card the owner sees: its stored answers apply to every segment it carries.
-    /// A card with handles (v8) links each handle; an older card links each said name in `people_refs`.
+    /// A card links each said name in `people_refs` that no handle covers (an older card: all of them), then each
+    /// handle (v8). A `v6` card that a `v8` row continued has both (M2).
     func edges(of out: MemoryOut, for memory: MemoryID, segment: SegmentID? = nil, card: CandidateID? = nil,
                handles: inout HandlePlan) throws -> Edges {
         let currentSegment = segment
@@ -246,31 +247,28 @@ public struct CandidateActions: Sendable {
         // What each people ref became (nil: "not a person"), so a fact about that name follows it.
         var refLinks: [(ref: String, link: GuessedLink?)] = []
         func addGroup(_ ref: String) { if !e.unknown.contains(where: { Self.same($0, ref) }) { e.unknown.append(ref) } }
-        if out.handlePeople.isEmpty {
-            // A card stored before the owner filter can still name the owner. The speaker is not
-            // someone to ask about, so the name is left out here too (audit F10).
-            for ref in out.peopleRefs where !inputs.owner.isOwner(ref) {
-                // A phrase for several people is never one person: it waits as a mention (unchanged).
-                if GroupPhrase.isGroup(ref) { addGroup(ref); continue }
-                let guessed = guessedLink(for: inputs.saidName(ref), inputs, plan: &e.entityWrite)
-                refLinks.append((ref, guessed))
-                guard let link = guessed else { continue }
-                e.add(MemoryPerson(memoryID: memory, personID: link.person, roleText: ref, origin: link.origin))
-                e.roleAliases += link.aliases.map { (link.person, $0) }
-            }
-        } else {
-            // The relation phrase of a handle is its own (`handlePeople`), not a person card's.
-            for person in out.handlePeople where !inputs.owner.isOwner(person.saidName, relation: person.relationText) {
-                if GroupPhrase.isGroup(person.saidName) { addGroup(person.saidName); continue }
-                let decided = handles.entry(person.handle) != nil
-                let guessed = handleLink(for: person, inputs, handles: &handles, plan: &e.entityWrite)
-                refLinks.append((person.saidName, guessed))
-                // A handle decided on an earlier row of this telling is linked there already (D8).
-                guard !decided, let link = guessed else { continue }
-                e.add(MemoryPerson(memoryID: memory, personID: link.person, roleText: person.saidName, origin: link.origin, handle: person.handle),
-                      carried: link.carried)
-                e.roleAliases += link.aliases.map { (link.person, $0) }
-            }
+        // A card stored before the owner filter can still name the owner. The speaker is not
+        // someone to ask about, so the name is left out here too (audit F10).
+        for ref in Self.saidNamesNoHandleCovers(out) where !inputs.owner.isOwner(ref) {
+            // A phrase for several people is never one person: it waits as a mention (unchanged).
+            if GroupPhrase.isGroup(ref) { addGroup(ref); continue }
+            let guessed = guessedLink(for: inputs.saidName(ref), inputs, plan: &e.entityWrite)
+            refLinks.append((ref, guessed))
+            guard let link = guessed else { continue }
+            e.add(MemoryPerson(memoryID: memory, personID: link.person, roleText: ref, origin: link.origin))
+            e.roleAliases += link.aliases.map { (link.person, $0) }
+        }
+        // The relation phrase of a handle is its own (`handlePeople`), not a person card's.
+        for person in out.handlePeople where !inputs.owner.isOwner(person.saidName, relation: person.relationText) {
+            if GroupPhrase.isGroup(person.saidName) { addGroup(person.saidName); continue }
+            let decided = handles.entry(person.handle) != nil
+            let guessed = handleLink(for: person, inputs, handles: &handles, plan: &e.entityWrite)
+            refLinks.append((person.saidName, guessed))
+            // A handle decided on an earlier row of this telling is linked there already (D8).
+            guard !decided, let link = guessed else { continue }
+            e.add(MemoryPerson(memoryID: memory, personID: link.person, roleText: person.saidName, origin: link.origin, handle: person.handle),
+                  carried: link.carried)
+            e.roleAliases += link.aliases.map { (link.person, $0) }
         }
         // Extraction before Task 3 left a carried name as a pending person card under its memory.
         // Answering it after Keep would add a second link, so Keep closes it (a group phrase stays).
@@ -373,7 +371,19 @@ public struct CandidateActions: Sendable {
         return (try proposeEntity(from: mention, candidate: row, plan: &plan).id, nil, false)
     }
 
-    /// A fact, feeling or goal whose `about_ref` may be a handle of the recording so far, said in an earlier
+    /// The card's `people_refs` that no `handlePeople` entry stands for, in order. A `v8` card fills `people_refs`
+    /// with its handles' said names, so none is left; an older card has no handles, so all are. A `v6` card that a
+    /// `v8` continuation row grew keeps its own names here, beside the handles the row gave it (D8, M2).
+    static func saidNamesNoHandleCovers(_ out: MemoryOut) -> [String] {
+        var covering = out.handlePeople.map(\.saidName)
+        return out.peopleRefs.filter { ref in
+            guard let i = covering.firstIndex(of: ref) else { return true }
+            covering.remove(at: i)
+            return false
+        }
+    }
+
+    /// A fact, feeling or goal whose `about_ref` may be a handle of the recording's other segments, said in an earlier
     /// segment ("She was always late"). The card may name no people of its own, so the recording's handle
     /// links are read for it too (D17). An `about_ref` that is no handle finds no handle link and reads on as before.
     static func mayFollowAHandle(_ out: MemoryOut) -> Bool {
