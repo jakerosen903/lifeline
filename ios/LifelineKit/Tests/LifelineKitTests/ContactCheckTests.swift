@@ -650,3 +650,31 @@ extension Fixture {
     #expect(try f.dump() == before, "only the app's copy is remembered")
 }
 
+// MARK: - The look again: details and a settled link (M-5, M-6, fix wave)
+
+@Test func reguessMarksTheSessionsNewDetailLinksAsGuessesToo() async throws {
+    let f = try Fixture()
+    let (session, memories) = try f.keptSession([("Robyn loved the sea", ["Robyn"])])
+    let robyn = try f.onlyPerson(memories[0])
+    try await f.db.writer.write { db in
+        try db.execute(sql: "insert into moment_entity (memory_id, entity_id, relation, origin) values (?, ?, 'detail', 'new')",
+                       arguments: [memories[0].id.rawValue, robyn.rawValue])
+    }
+    let result = try await f.actions.reguess(session: session, contacts: [vale.forGuess])
+    #expect(result.changedLinks == 1, "the count is of mention links")
+    let detail = try f.store.entities.links(of: memories[0].id).first { $0.link.relation == .detail }
+    #expect(detail?.link.origin == .assumed, "a fact about the person now hangs on a contact guess, and says so")
+}
+
+@Test func theLookAgainLinksNothingOnceTheNewLinkIsSettled() async throws {
+    let f = try Fixture()
+    let (session, memories) = try f.keptSession([("Robyn painted the fence", ["Robyn"])])
+    let robyn = try f.onlyPerson(memories[0])
+    // The owner settled the link between the look's read and its write.
+    try await f.db.writer.write { db in
+        try db.execute(sql: "update moment_entity set origin = 'confirmed' where memory_id = ?", arguments: [memories[0].id.rawValue])
+    }
+    let before = try f.dump()
+    #expect(try f.store.people.linkFromReguess(robyn, to: vale.forGuess, saidName: "Robyn", in: session) == 0)
+    #expect(try f.dump() == before, "no link, no rename: the look again did not link this person")
+}

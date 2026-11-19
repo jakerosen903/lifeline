@@ -166,22 +166,29 @@ extension PeopleRepository {
                                     arguments: [contact.identifier]) == false,
                   // "No, someone else" is kept (PB35).
                   try Bool.fetchOne(db, sql: "select exists (select 1 from contact_declined where person_id = ? and contact_identifier = ?)",
-                                    arguments: [id.rawValue, contact.identifier]) == false else { return 0 }
+                                    arguments: [id.rawValue, contact.identifier]) == false,
+                  // A `new` mention link is still there: the owner may have settled it since the look read it (M-6).
+                  try Bool.fetchOne(db, sql: "select exists (select 1 from moment_entity where entity_id = ? and relation = 'mention' and origin = ? and memory_id in (\(Self.firstTellingIn)))",
+                                    arguments: [person.entityID.rawValue, LinkOrigin.new.rawValue, session.rawValue]) == true else { return 0 }
             try Self.insertAlias(person.displayName, id, db)
             try Self.insertAlias(saidName, id, db)
             try db.execute(sql: "update entity set title = ? where id = ?", arguments: [name, person.entityID.rawValue])
             try db.execute(sql: """
                 update person set name_origin = ?, contact_identifier = ?, contact_name = ?, contact_state = ? where id = ?
                 """, arguments: [NameOrigin.contact.rawValue, contact.identifier, name, Person.contactLinked, id.rawValue])
-            try db.execute(sql: """
-                update moment_entity set origin = ?
-                where entity_id = ? and relation = 'mention' and origin = ? and memory_id in (
-                    select ms.memory_id from memory_span ms join segment on segment.id = ms.segment_id
-                    where ms."order" = 0 and segment.session_id = ?)
-                """, arguments: [LinkOrigin.assumed.rawValue, person.entityID.rawValue, LinkOrigin.new.rawValue, session.rawValue])
+            // A fact about the person becomes a guess too, as Keep marks it under rule 5 (M-5). The count is of mentions.
+            try db.execute(sql: "update moment_entity set origin = ? where entity_id = ? and relation = 'detail' and origin = ? and memory_id in (\(Self.firstTellingIn))",
+                           arguments: [LinkOrigin.assumed.rawValue, person.entityID.rawValue, LinkOrigin.new.rawValue, session.rawValue])
+            try db.execute(sql: "update moment_entity set origin = ? where entity_id = ? and relation = 'mention' and origin = ? and memory_id in (\(Self.firstTellingIn))",
+                           arguments: [LinkOrigin.assumed.rawValue, person.entityID.rawValue, LinkOrigin.new.rawValue, session.rawValue])
             return db.changesCount
         }
     }
+
+    /// The memories whose first telling is in the session given as the next argument.
+    private static let firstTellingIn = """
+        select ms.memory_id from memory_span ms join segment on segment.id = ms.segment_id where ms."order" = 0 and segment.session_id = ?
+        """
 }
 
 extension ContactCard {
