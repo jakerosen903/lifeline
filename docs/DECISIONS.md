@@ -82,6 +82,7 @@ One entry per decision. Newest first. Status is Decided, Open, or Superseded.
 9. **The Undo notice after a name move can sit below the screen for its 6 seconds.** The owner must scroll down to reach it. One fix is to pin it above the record bar.
 
 The device check is `docs/plans/2026-11-18-photo-on-people-pages-device-check.md`. Its last part lists the small items the reviews deferred.
+
 ## 2026-11-18 · S6b: a pinned card with the life strip, a frame and a During line
 
 **Status:** Decided by the builder. The owner can overrule each one. Source: `docs/plans/2026-11-18-timeline-card.md`, ledger `.superpowers/sdd/2026-11-18-timeline-card/rulings.md`.
