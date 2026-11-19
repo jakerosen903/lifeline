@@ -118,11 +118,11 @@ import GRDB
     #expect(Migrations.isNewer("v99", than: "v8"), "an unknown version is from the future")
 }
 
-/// The unmerged photo branches own `v14` (`session.subject_photo_id`). GRDB records a migration by name,
-/// so this branch must not register it; a photo build's `v14` backup reads here as from the future.
-@Test func v14IsLeftToThePhotoBranches() {
-    #expect(!Migrations.versions.contains("v14"))
-    #expect(Migrations.isNewer("v14", than: Migrations.currentSchemaVersion), "a backup that says v14 is refused, not half-read")
+/// The photo story's `v14` (`session.subject_photo_id`) and the contacts `v15` are both here, in that order.
+/// A phone that ran a photo build has `v14` recorded and takes only `v15`; a phone on `v13` takes both.
+@Test func v14ThenV15AreBothRegistered() {
+    #expect(Array(Migrations.versions.suffix(2)) == ["v14", "v15"])
+    #expect(!Migrations.isNewer("v14", than: Migrations.currentSchemaVersion), "a photo build's backup can be read")
 }
 
 @Test func v11OnAPopulatedV10Database() throws {
