@@ -19,3 +19,8 @@ Pre-flight: Task 6 needs a column that Task 1 owns: Task 1 text now carries it (
 - Task 2: minor (deferred): `aFailedKeepWritesNothing` has no control assertion that the same card without the trigger writes the page link.
 - Task 2: minor (deferred): `undoingAKeepLeavesNoLinkAndKeepsThePhoto` (PhotoRepositoryTests) is misnamed; it is a plain delete.
 - Open for the owner: a kept fact about a person also places the photo; after a kept memory is deleted the chip still reads "added by this story" though no kept memory names the person.
+- Task 3: built at 5aca2f1 (base 62ca0d7). Review: approved; one stated deviation.
+- Task 3: Ruling: `PhotoStoryReader.removeFromPage` is not added — the app removes a photo from a page through `PhotoLibrary.remove`, which calls `unlink` (records the decline) and deletes the file; a reader method would be a second path that leaves an orphan file — the plan's Task 5 line "the chip's remove goes through `removeFromPage`" is void: the chip keeps `PhotoLibrary.remove`. Carried into Task 5's dispatch. Cost if wrong: none; one path remains.
+- Task 3: process deviation recorded: tests were written after the code; the failing run was a compile error. The reviewer's mutation check found the tests fail on wrong behavior.
+- Task 3: minor (deferred): `stateValue` trusts `byStory` without `isChosen` (only `PhotoStory.card` builds pages).
+- Task 3: complete (commits 62ca0d7..5aca2f1, approved).
