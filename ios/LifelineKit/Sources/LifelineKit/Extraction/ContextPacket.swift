@@ -141,17 +141,10 @@ public enum ContextPacketBuilder {
         return packet
     }
 
-    /// One person as the model sees them: only names the owner said or typed. A person whose name came
-    /// from a contact goes by their oldest alias (`aliases` must come oldest first), never by the
-    /// contact's name; with no alias they are left out.
+    /// One person as the model sees them: only names the owner said or typed (`NameForModel`; `aliases`
+    /// come oldest first). A person whose name came from a contact and who has no alias is left out.
     static func personEntry(_ person: Person, _ aliases: [Alias]) -> ContextPacket.PersonEntry? {
-        let name: String
-        if person.nameOrigin == .contact {
-            guard let oldest = aliases.first else { return nil }
-            name = oldest.text
-        } else {
-            name = person.displayName
-        }
+        guard let name = NameForModel.of(person, aliasesOldestFirst: aliases) else { return nil }
         return ContextPacket.PersonEntry(id: person.id.rawValue, name: name,
                                          aliases: aliases.map(\.text).filter { $0.caseInsensitiveCompare(name) != .orderedSame })
     }

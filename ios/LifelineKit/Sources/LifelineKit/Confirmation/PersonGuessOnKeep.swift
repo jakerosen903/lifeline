@@ -110,7 +110,8 @@ extension CandidateActions {
         let name = (said.name ?? said.relation ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         let key = SaidName.key(name)
         guard !key.isEmpty else { return nil }
-        if let planned = plan.persons.first(where: { SaidName.key($0.displayName) == key }) { return planned.id }
+        // A person planned from a contact is reached by that contact only (PB13), never by a said name.
+        if let planned = plan.persons.first(where: { $0.contactIdentifier == nil && SaidName.key($0.displayName) == key }) { return planned.id }
         let person = Person(id: .init(), displayName: name, notes: nil, isOwner: false, birthDate: nil, birthDateOrigin: nil,
                             nameOrigin: .said, createdByGuess: createdByGuess)
         plan.entities.append(Entity(id: person.entityID, type: .person, title: name, createdFromCandidateID: card))

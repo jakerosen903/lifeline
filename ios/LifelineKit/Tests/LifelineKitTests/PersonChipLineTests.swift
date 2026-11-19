@@ -60,3 +60,10 @@ import Testing
     #expect(PersonChipLine.text(origin: .confirmed, saidName: "Robyn", fromContact: true, contacts: .someMatch) == nil)
     #expect(PersonChipLine.text(origin: .said, saidName: "Robyn", fromContact: true, contacts: .someMatch) == nil)
 }
+
+@Test func aChipFromTheContactsReadsItsLineAloud() {
+    #expect(PersonChipLine.accessibilityLabel(name: "Robyn Vale", origin: .assumed, saidName: "Robyn", fromContact: true)
+            == "Robyn Vale, assumed, new, from your contacts. Change who this is.")
+    #expect(PersonChipLine.accessibilityLabel(name: "Robyn Vale", origin: .confirmed, saidName: "Robyn", fromContact: true)
+            == "Robyn Vale. Change who this is.")
+}

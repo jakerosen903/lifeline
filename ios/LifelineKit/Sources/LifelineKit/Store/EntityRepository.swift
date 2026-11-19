@@ -195,11 +195,26 @@ public struct EntityRepository: Sendable {
             return entities.first { $0.type == type && MatchKey.of($0.title) == MatchKey.of(title) }
         }
 
+        /// The entity of this plan that `entity`, from another plan, is the same as. A person planned from
+        /// a contact is the same as the one planned from that contact, whatever the titles, and never one
+        /// with another contact or none (PB13): the unique index allows one person per contact.
+        /// Anything else joins by type and title.
+        func same(as entity: Entity, contact: String?) -> Entity? {
+            let contactOf = { (id: EntityID) in persons.first { $0.entityID == id }?.contactIdentifier }
+            if let contact {
+                guard let person = persons.first(where: { $0.contactIdentifier == contact }) else { return nil }
+                return entities.first { $0.id == person.entityID }
+            }
+            guard entity.type == .person else { return planned(entity.type, entity.title) }
+            return entities.first { $0.type == .person && MatchKey.of($0.title) == MatchKey.of(entity.title) && contactOf($0.id) == nil }
+        }
+
         /// The union with another plan; an entity both planned keeps this plan's id.
         mutating func merge(_ other: Write) -> [EntityID: EntityID] {
             var remap: [EntityID: EntityID] = [:]
             for entity in other.entities {
-                if let mine = planned(entity.type, entity.title) { remap[entity.id] = mine.id } else { entities.append(entity) }
+                let contact = other.persons.first { $0.entityID == entity.id }?.contactIdentifier
+                if let mine = same(as: entity, contact: contact) { remap[entity.id] = mine.id } else { entities.append(entity) }
             }
             // A person both plans made for one name is this plan's person; the other's row would have no entity.
             persons += other.persons.filter { p in !persons.contains { $0.id == p.id } && remap[p.entityID] == nil }

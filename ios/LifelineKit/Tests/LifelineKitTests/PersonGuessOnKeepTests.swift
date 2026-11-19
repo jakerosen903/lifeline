@@ -589,9 +589,69 @@ extension Env {
             == PersonChipLine.text(origin: chip.origin, saidName: chip.saidName, fromContact: chip.fromContact, contacts: .someMatch))
     #expect(PersonChipLine.text(origin: chip.origin, saidName: chip.saidName, fromContact: chip.fromContact, contacts: .someMatch)
             == "Assumed \u{00B7} new, from your contacts")
-    // Once the person is on file, a later card's preview names them and still reads as from the contacts.
+    // Once the person is on file, a card of a later recording names them, and they are no longer new (PB11).
     let later = try #require(try env.linkActions.preview(try env.card("Robyn fixed the gate", people: ["Robyn"])).first)
-    #expect(later == PreviewChip(saidName: "Robyn", name: "Robyn Vale", origin: .assumed, person: person.id, fromContact: true))
+    #expect(later == PreviewChip(saidName: "Robyn", name: "Robyn Vale", origin: .assumed, person: person.id, fromContact: false))
+}
+
+// PB11: "new, from your contacts" belongs to the recording that made the person.
+@Test func aLaterRecordingsGuessToAPersonFromAContactSaysWhatWasSaid() throws {
+    let env = try Env(contacts: [vale])
+    let (_, segs) = try StoreFixtures.session(in: env.store.sessions, segments: ["Robyn painted the fence", "Robyn fixed the gate"])
+    let first = try env.actions.acceptMemory(try env.card(in: segs[0].id, "Robyn painted the fence", people: ["Robyn"]), joinStory: false)
+    let same = try env.actions.acceptMemory(try env.card(in: segs[1].id, "Robyn fixed the gate", people: ["Robyn"]), joinStory: false)
+    let later = try env.actions.acceptMemory(try env.card("Robyn came to the wedding", people: ["Robyn"]), joinStory: false)
+    let robyn = try env.person(try #require(try env.personLinks(first.memory.id).first))
+    let links = Dictionary(uniqueKeysWithValues: try env.store.personLinks.links(to: robyn.id).map { ($0.memoryID, $0) })
+    #expect(links[first.memory.id]?.personFromContact == true)
+    #expect(links[same.memory.id]?.personFromContact == true, "the same recording")
+    let laterLink = try #require(links[later.memory.id])
+    #expect(laterLink.origin == .assumed && !laterLink.personFromContact)
+    #expect(PersonChipLine.text(origin: laterLink.origin, saidName: laterLink.saidName, fromContact: laterLink.personFromContact, contacts: .someMatch)
+            == "Assumed \u{00B7} you said \u{201C}Robyn\u{201D}")
+}
+
+// PB10: a rename keeps the owner's words; the contact's name is never saved as an alias.
+@Test func aRenameOfAPersonFromAContactSavesNoContactName() throws {
+    let env = try Env(contacts: [vale])
+    let kept = try env.actions.acceptMemory(try env.card("Robyn painted the fence", people: ["Robyn"]), joinStory: false)
+    let robyn = try env.person(try #require(try env.personLinks(kept.memory.id).first))
+    try env.store.people.rename(robyn.id, to: "Bee")
+    #expect(try env.aliases(robyn.id) == ["Robyn", "Bee"])
+    #expect(try env.store.people.person(id: robyn.id)?.nameOrigin == .typed)
+    // A person whose name the owner said or typed keeps the old spelling as an alias, as before.
+    let tomas = try env.store.people.insertPerson(displayName: "Tomas")
+    try env.store.people.rename(tomas.id, to: "Tom")
+    #expect(Set(try env.aliases(tomas.id)) == ["Tomas", "Tom"])
+}
+
+// PB13: two plans join a person planned from one contact whatever the titles, and never two contacts.
+@Test func plansJoinPersonsByContactOnly() {
+    func plan(_ title: String, contact: String?) -> EntityRepository.Write {
+        var write = EntityRepository.Write()
+        let person = Person(id: .init(), displayName: title, notes: nil, isOwner: false, birthDate: nil, birthDateOrigin: nil,
+                            nameOrigin: contact == nil ? .said : .contact, createdByGuess: true, contactIdentifier: contact,
+                            contactName: contact == nil ? nil : title, contactState: contact == nil ? nil : Person.contactLinked)
+        write.entities.append(Entity(id: person.entityID, type: .person, title: title))
+        write.persons.append(person)
+        write.aliases.append(Alias(personID: person.id, text: "Robyn"))
+        return write
+    }
+    var same = plan("Robyn Vale", contact: "c-vale")
+    let renamedContact = plan("Robyn Vale-Okafor", contact: "c-vale")
+    let remap = same.merge(renamedContact)
+    #expect(remap[renamedContact.persons[0].entityID] == same.persons[0].entityID, "one contact, one person")
+    #expect(same.persons.count == 1 && same.entities.count == 1)
+    #expect(Set(same.aliases.map(\.personID)) == [same.persons[0].id])
+
+    var vale = plan("Robyn Vale", contact: "c-vale")
+    let otherVale = plan("Robyn Vale", contact: "c-vale-2")
+    #expect(vale.merge(otherVale).isEmpty, "two contacts with one name stay two persons")
+    #expect(vale.persons.compactMap(\.contactIdentifier) == ["c-vale", "c-vale-2"])
+
+    var said = plan("Robyn Vale", contact: nil)
+    #expect(said.merge(plan("Robyn Vale", contact: "c-vale")).isEmpty, "a said name never joins a person from a contact")
+    #expect(said.merge(plan("robyn vale", contact: nil)).count == 1, "two said names still join by title")
 }
 
 // MARK: - The rule, in the sources

@@ -31,6 +31,9 @@ final class EntityViewModel {
     private(set) var isLoaded = false
     /// The owner's own page ("About you"): a session from here is about "yourself".
     private(set) var isOwner = false
+    /// The name the interviewer's model may hear for this page (`NameForModel`). A person's is read in
+    /// `refresh()`; until then nil, so a session started early opens plainly and names no contact.
+    private(set) var modelTitle: String?
     private(set) var error: String?
     /// Why the last photo action failed, for the pinned slot (decision 21). Cleared when the next one starts.
     private(set) var photoError: String?
@@ -61,7 +64,10 @@ final class EntityViewModel {
     var canAddDates: Bool { entity.type == .place || entity.type == .thing }
     var isPlaying: Bool { player.isPlaying }
     /// What a session started from this page is about.
-    var subject: SessionSubject { SessionSubject(entityID: entity.id, title: entity.title, isOwner: isOwner, excludedFromAI: entity.excludedFromAI) }
+    var subject: SessionSubject {
+        SessionSubject(entityID: entity.id, title: entity.title, isOwner: isOwner, excludedFromAI: entity.excludedFromAI,
+                       modelTitle: entity.type == .person ? modelTitle : entity.title)
+    }
 
     func refresh() {
         defer { isLoaded = true }
@@ -73,6 +79,8 @@ final class EntityViewModel {
             entity = current
             // A failed owner lookup costs only the bar's wording, never the page.
             isOwner = (try? store.profile.owner()?.entityID) == entity.id
+            // A failed read leaves no name for the model: the opening is the plain one (PB10).
+            modelTitle = entity.type == .person ? (try? store.people.nameForModel(of: PersonID(rawValue: entity.id.rawValue))) ?? nil : nil
             let details = try store.entities.details(of: entity.id)
             let mentions = try store.entities.moments(of: entity.id)
             let sections = EntityPage.sections(details: details, mentions: mentions)

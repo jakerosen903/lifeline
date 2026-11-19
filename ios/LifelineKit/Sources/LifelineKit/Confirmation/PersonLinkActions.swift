@@ -39,7 +39,7 @@ public struct PreviewChip: Sendable, Equatable, Identifiable {
     public var saidName: String; public var name: String; public var origin: LinkOrigin; public var person: PersonID?
     /// The owner marked this name "Not a person": Keep links nothing, and the quiet chip reopens the sheet (R37).
     public var isNotAPerson: Bool
-    /// The person is, or Keep will make them, from a contact (`PersonLink.personFromContact`).
+    /// Keep will make the person from a contact, or did in this recording (`PersonLink.personFromContact`).
     public var fromContact: Bool
     public var id: String { SaidName.key(saidName) }
 
@@ -100,6 +100,7 @@ public struct PersonLinkActions: Sendable {
             if let o = CandidatePayload.memory(row) { edges.merge(try keep.edges(of: o, for: unwritten, segment: row.segmentID, card: candidate.id)) }
         }
         let planned = Dictionary(edges.entityWrite.persons.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        let recording = try store.sessions.fetchSegment(candidate.segmentID)?.sessionID
         let linked: [PreviewChip] = try edges.people.compactMap { link in
             // Keep's guess gives every person link its said name and an origin.
             guard let origin = link.origin else { return nil }
@@ -108,7 +109,10 @@ public struct PersonLinkActions: Sendable {
                 return PreviewChip(saidName: said, name: new.displayName, origin: origin, person: nil, fromContact: new.isGuessFromContact)
             }
             guard let person = try store.people.person(id: link.personID) else { return nil }
-            return PreviewChip(saidName: said, name: person.displayName, origin: origin, person: person.id, fromContact: person.isGuessFromContact)
+            // As `PersonLink.personFromContact`: only in the recording of the person's first link (PB11).
+            let first = try store.personLinks.firstSession(of: person.id)
+            let fromContact = person.isGuessFromContact && (first == nil || first == recording)
+            return PreviewChip(saidName: said, name: person.displayName, origin: origin, person: person.id, fromContact: fromContact)
         }
         let refs = out.peopleRefs + (try store.candidates.continuations(of: candidate.id).compactMap(CandidatePayload.memory).flatMap(\.peopleRefs))
         return Self.withNotAPerson(linked, refs: refs, choices: try store.personLinks.choices(for: candidate.id))

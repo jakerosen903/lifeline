@@ -25,8 +25,10 @@ public enum PersonChipLine {
         }
     }
 
-    public static func accessibilityLabel(name: String, origin: LinkOrigin?, saidName: String?) -> String {
+    /// `fromContact` as in `text`: the chip's line, read aloud.
+    public static func accessibilityLabel(name: String, origin: LinkOrigin?, saidName: String?, fromContact: Bool = false) -> String {
         guard origin == .assumed else { return "\(name). Change who this is." }
+        if fromContact { return "\(name), assumed, new, from your contacts. Change who this is." }
         guard let said = clean(saidName) else { return "\(name), assumed. Change who this is." }
         return "\(name), assumed, you said \(said). Change who this is."
     }

@@ -112,6 +112,25 @@ public struct PersonLinkRepository: Sendable {
          where ms.memory_id = me.memory_id and ms."order" = 0)
         """
 
+    /// The session of a person's first link: the oldest linked memory's first span. `entity` is an SQL
+    /// expression for the person's entity id.
+    static func firstSessionSQL(entity: String) -> String {
+        """
+        (select segment.session_id from moment_entity first_me
+         join memory first_memory on first_memory.id = first_me.memory_id
+         join memory_span ms on ms.memory_id = first_memory.id and ms."order" = 0
+         join segment on segment.id = ms.segment_id
+         where first_me.entity_id = \(entity) order by first_memory.created_at, first_memory.id limit 1)
+        """
+    }
+
+    /// The recording of a person's first link, or nil when they have none.
+    public func firstSession(of person: PersonID) throws -> SessionID? {
+        try db.writer.read { db in
+            try String.fetchOne(db, sql: "select \(Self.firstSessionSQL(entity: "?"))", arguments: [person.rawValue]).map(SessionID.init(rawValue:))
+        }
+    }
+
     static func session(of memory: MemoryID, in db: Database) throws -> String? {
         try String.fetchOne(db, sql: """
             select segment.session_id from memory_span ms join segment on segment.id = ms.segment_id
@@ -126,7 +145,8 @@ public struct PersonLinkRepository: Sendable {
 
     static func fetch(where clause: String, arguments: StatementArguments, order: String, in db: Database) throws -> [PersonLink] {
         let rows = try Row.fetchAll(db, sql: """
-            select me.memory_id, me.relation, me.role_text, me.origin, person.id as person_id
+            select me.memory_id, me.relation, me.role_text, me.origin, person.id as person_id,
+                   \(sessionSQL) as session_id, \(firstSessionSQL(entity: "me.entity_id")) as first_session_id
             from moment_entity me
             join person on person.entity_id = me.entity_id
             join entity on entity.id = person.entity_id
@@ -140,8 +160,11 @@ public struct PersonLinkRepository: Sendable {
                 people[personID] = try Person.fetchOne(db, sql: Person.selectSQL + " where person.id = ?", arguments: [personID])
             }
             guard let person = people[personID], let relation = EntityRelation(rawValue: row["relation"]) else { return nil }
+            // A link with no span to read a recording from counts as the first recording.
+            let session: String? = row["session_id"], first: String? = row["first_session_id"]
             return PersonLink(memoryID: MemoryID(rawValue: row["memory_id"]), person: person, saidName: row["role_text"],
-                              origin: (row["origin"] as String?).flatMap(LinkOrigin.init(rawValue:)), relation: relation)
+                              origin: (row["origin"] as String?).flatMap(LinkOrigin.init(rawValue:)), relation: relation,
+                              inPersonsFirstRecording: session == nil || first == nil || session == first)
         }
     }
 }

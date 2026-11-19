@@ -84,7 +84,8 @@ public struct ResolverRunner: Sendable {
         // Entity questions are made and retired in the same step (M7).
         let byID = Dictionary(uniqueKeysWithValues: memories.map { ($0.id, $0) })
         try store.curiosity.replaceOpenEntityItems(EntityCuriosity.drafts(entities: try store.entities.allEntities(), links: try store.entities.allLinks(),
-                                                                          memories: byID, owner: try store.profile.owner()?.entityID))
+                                                                          memories: byID, owner: try store.profile.owner()?.entityID,
+                                                                          personNames: try store.people.namesForModel()))
 
         changes.sort { $0.title < $1.title }
         return RunReport(placed: changes.count, floatingCreated: floatingCreated, curiosityOpen: try store.curiosity.open().count, changes: changes)

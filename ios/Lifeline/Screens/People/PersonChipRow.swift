@@ -24,7 +24,7 @@ struct PersonChipRow: View {
         }
         var accessibilityLabel: String {
             isNotAPerson ? PersonChipLine.notAPersonLabel(saidName: saidName ?? name)
-                         : PersonChipLine.accessibilityLabel(name: name, origin: origin, saidName: saidName)
+                         : PersonChipLine.accessibilityLabel(name: name, origin: origin, saidName: saidName, fromContact: fromContact)
         }
         var identifier: String {
             if isNotAPerson { return "person.chip.notPerson" }
