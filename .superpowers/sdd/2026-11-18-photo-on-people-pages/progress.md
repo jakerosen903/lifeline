@@ -72,3 +72,11 @@ Pre-flight: Task 6 needs a column that Task 1 owns: Task 1 text now carries it (
 
 ## Final review
 - Whole-branch package 00f14c2..HEAD dispatched.
+- Verdict: ready with fixes. No Critical. Important 1: `PhotoCard.swift:35` hides the whole pages part when `pageGroups` is empty, so a kept chip that was the card's only page still disappears. Important 2: DECISIONS, the spec status, OVERVIEW and the device check do not cover parts 3 and 4.
+- Fix wave takes (findings file `final-findings.md`): Important 1 and 2; Undo must not restore a story link to a hidden person; UI assertions for the multi-photo lines; the `adds` comment; two assertions in `v16FromV13`.
+- Ruling: the two geometry- and time-dependent UI tests stay as they are in this wave — their cause is where the Undo notice sits, which is the owner's call — cost if wrong: a flake in the full run, rerun alone.
+- Owner's call, from the final review: deleting a photo story leaves its photo on the people's pages (a `story` link with no story), unlike "Remove the photo from this story".
+- Owner's call: a story link whose photo the owner made the key photo is still the story's; a later move or photo removal takes it off the page.
+- Owner's call: the Undo notice after a name move can sit below the screen for its 6 seconds; pin it above the record bar?
+- Owner's call: spec Part 4 lists "an idea", but an idea page has no "Add a photo" (from before this branch).
+- Closed by the final review: Task 5's card height change (reserved line), Task 5's missing UI test for a page that held the photo before the story, Task 1's static link refusing a declined pair.
