@@ -18,7 +18,6 @@ struct PersonContactRow: View {
             VStack(alignment: .leading, spacing: 12) {
                 row(state)
                 if case .notLinked(let suggestion?) = state { suggestionCard(suggestion) }
-                if let message = viewModel.message { ErrorLine(text: message) }
             }
             .disabled(viewModel.isWorking)
             .sheet(isPresented: $searching) { search }
@@ -42,7 +41,14 @@ struct PersonContactRow: View {
                     VStack(alignment: .leading, spacing: 8) { linkButton; unlinkButton }
                 }
             case .missing(let name, canSeeContacts: false):
-                texts(heading: name, body: Self.noAccessHeading + ". " + Self.noAccessBody)
+                // The contact's name, then the no-access heading and body as their own lines.
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(name).font(.body.weight(.semibold)).foregroundStyle(Theme.ink)
+                    Text(Self.noAccessHeading).font(.subheadline.weight(.semibold)).foregroundStyle(Theme.ink)
+                    Text(Self.noAccessBody).font(.subheadline).foregroundStyle(Theme.secondaryText)
+                }
+                .fixedSize(horizontal: false, vertical: true)
+                .accessibilityElement(children: .combine)
                 settingsButton
             case .noAccess:
                 texts(heading: Self.noAccessHeading, body: Self.noAccessBody)
@@ -108,7 +114,10 @@ struct PersonContactRow: View {
     }
 
     private var settingsButton: some View {
-        Button { Task { await viewModel.allowContacts() } } label: { buttonLabel("Allow contacts in Settings") }
+        // Under denied it opens Settings; never asked, it shows the system prompt and says so (PB51).
+        Button { Task { await viewModel.allowContacts() } } label: {
+            buttonLabel(viewModel.access == .notAsked ? "Allow contacts" : "Allow contacts in Settings")
+        }
             .buttonStyle(.bordered).tint(Theme.oliveOnFill)
             .accessibilityIdentifier("entity.contact.settings")
     }

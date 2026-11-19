@@ -62,3 +62,18 @@ func noContactUnderAccessIsNotLinkedWithTheSuggestion(access: ContactsAccess) {
     #expect(PersonContactState.row(for: nil, access: .full, suggestion: nil) == nil, "a place or a thing has no person")
     #expect(PersonContactState.row(for: unlinked, access: .denied, suggestion: nil) == .noAccess)
 }
+
+// MARK: - The row's sentences
+
+private struct SomeOtherError: Error {}
+
+@Test func aHeldContactNamesThePersonWhoHoldsIt() {
+    let held = ContactLinkActions.Error.heldByAnother(PersonID(rawValue: "p-2"), name: "Tomas")
+    #expect(ContactLinkMessage.sentence(for: held, fallback: "Could not link this contact. Try again.") == "Tomas is already linked to this contact.")
+}
+
+@Test func anyOtherFailureIsTheFixedSentenceAndNeverTheErrorsText() {
+    #expect(ContactLinkMessage.sentence(for: ContactLinkActions.Error.notFound, fallback: "Could not link this contact. Try again.")
+            == "Could not link this contact. Try again.")
+    #expect(ContactLinkMessage.sentence(for: SomeOtherError(), fallback: "Could not save that. Try again.") == "Could not save that. Try again.")
+}

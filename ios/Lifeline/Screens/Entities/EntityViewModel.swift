@@ -61,6 +61,8 @@ final class EntityViewModel {
         self.shelf = PhotoShelf(subject: .entity(entity.id), deps: deps, onError: { report($0) })
         report = { [weak self] in self?.photoError = $0 }
         contact.onChanged = { [weak self] in self?.refresh() }
+        contact.onMessage = { [weak self] in self?.personMove.say($0) }
+        contact.onClearMessage = { [weak self] in self?.personMove.clearMessage() }
     }
 
     /// True while the first picture is the copy the app took from the contact: it says "picture from your contacts".

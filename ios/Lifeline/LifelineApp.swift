@@ -36,6 +36,7 @@ final class AppModel {
     /// The check of linked contacts; made when the first screen shows, never on the launch path before it.
     @ObservationIgnored private var contactsCheck: ContactsCheck?
     @ObservationIgnored private var contactsObserver: (any NSObjectProtocol)?
+    @ObservationIgnored private var checkRequestObserver: (any NSObjectProtocol)?
 
     init() {
         do {
@@ -82,6 +83,10 @@ final class AppModel {
         let check = ContactsCheck(deps: deps)
         contactsCheck = check
         Task.detached(priority: .utility) { await check.request() }
+        // A screen asks for a check now (access given on a person's page); scripted contacts too.
+        checkRequestObserver = NotificationCenter.default.addObserver(forName: ContactsCheck.requested, object: nil, queue: nil) { _ in
+            Task.detached(priority: .utility) { await check.request() }
+        }
         guard deps.contacts is SystemContactsDirectory else { return }
         contactsObserver = NotificationCenter.default.addObserver(forName: SystemContactsDirectory.didChange, object: nil, queue: nil) { _ in
             Task.detached(priority: .utility) { await check.request() }

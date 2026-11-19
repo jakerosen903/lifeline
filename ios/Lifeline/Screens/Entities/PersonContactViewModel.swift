@@ -10,8 +10,8 @@ final class PersonContactViewModel {
     private(set) var state: PersonContactState?
     /// The photo the app copied from the contact, for the caption on the first picture.
     private(set) var contactPhotoID: PhotoID?
-    /// One fixed sentence after an action that did not go through: a held contact or a failed write. Never an error's text.
-    private(set) var message: String?
+    /// The access read at the last refresh, for the button's wording; actions read it again.
+    private(set) var access: ContactsAccess = .notAsked
     /// True while a link runs: the row's buttons wait.
     private(set) var isWorking = false
     /// The person's name, for "That is fine. {name} has a page and stories either way."
@@ -21,19 +21,23 @@ final class PersonContactViewModel {
     let deps: Dependencies
     /// Called after a write, so the page reads again (the copied picture joins the photos).
     var onChanged: () -> Void = {}
+    /// Puts one fixed sentence in the page's pinned message slot (PB50): a held contact or a failed write.
+    var onMessage: (String) -> Void = { _ in }
+    /// An action began: a message still showing goes.
+    var onClearMessage: () -> Void = {}
 
     init(entity: Entity, deps: Dependencies) {
         person = entity.type == .person ? PersonID(rawValue: entity.id.rawValue) : nil
         self.deps = deps
     }
 
-    var access: ContactsAccess { deps.contacts.access() }
-
     /// Reads the person, the access and the suggestion. Called by the page's refresh, never from `body`.
     func refresh() {
         guard let person else { state = nil; return }
+        // A failed read hides the row (`row(for: nil)`): a row built on a guess could offer a link the person already has.
         let found = try? deps.extractionStore.people.person(id: person)
-        let access = self.access
+        let access = deps.contacts.access()
+        self.access = access
         let canSee = access == .full || access == .limited
         // A failed suggestion read only hides the card; the row still shows.
         let suggestion = canSee && found?.contactIdentifier == nil
@@ -53,9 +57,9 @@ final class PersonContactViewModel {
     /// "Link to a contact": with access not asked, the one system prompt first, through the landing's path, so the
     /// "asked" flag and the cache behave the same. True when the search can open; on a no the row reads again.
     func prepareSearch() async -> Bool {
-        message = nil
-        var access = self.access
-        if access == .notAsked { access = await ContactsAccessPrompt(deps: deps).ask() }
+        onClearMessage()
+        var access = deps.contacts.access()
+        if access == .notAsked { access = await askAccess() }
         let canSee = access == .full || access == .limited
         if !canSee { refresh() }
         return canSee
@@ -65,7 +69,7 @@ final class PersonContactViewModel {
     func link(_ card: ContactCard) async {
         guard let person, !isWorking else { return }
         isWorking = true
-        message = nil
+        onClearMessage()
         let links = deps.contactLinks
         // Off the main actor: the link writes, then reads and stores the contact's picture.
         let failure: Swift.Error? = await Task.detached(priority: .userInitiated) {
@@ -73,7 +77,7 @@ final class PersonContactViewModel {
         }.value
         isWorking = false
         if let failure {
-            message = Self.sentence(for: failure, fallback: "Could not link this contact. Try again.")
+            onMessage(ContactLinkMessage.sentence(for: failure, fallback: "Could not link this contact. Try again."))
             Self.log("link", failure)
             return
         }
@@ -83,12 +87,12 @@ final class PersonContactViewModel {
     /// "Unlink": no question and no Undo; the owner can link again. Only the link fields go.
     func unlink() {
         guard let person else { return }
-        message = nil
+        onClearMessage()
         do {
             try deps.contactLinks.unlink(person)
             onChanged()
         } catch {
-            message = "Could not unlink this contact. Try again."
+            onMessage(ContactLinkMessage.sentence(for: error, fallback: "Could not unlink this contact. Try again."))
             Self.log("unlink", error)
         }
     }
@@ -96,32 +100,34 @@ final class PersonContactViewModel {
     /// "No, someone else": the card goes, and this contact is not offered for this person again.
     func decline(_ card: ContactCard) {
         guard let person else { return }
-        message = nil
+        onClearMessage()
         do {
             try deps.contactLinks.decline(card, for: person)
             onChanged()
         } catch {
-            message = "Could not save that. Try again."
+            onMessage(ContactLinkMessage.sentence(for: error, fallback: "Could not save that. Try again."))
             Self.log("decline", error)
         }
     }
 
-    /// "Allow contacts in Settings". Under "not asked" the Settings page has no Contacts switch yet, so the app shows
-    /// the one system prompt instead (PB46); after it, the row reads again.
+    /// "Allow contacts in Settings" under denied opens Settings. "Allow contacts", for a person with a contact while
+    /// access was never asked, shows the one system prompt (PB51): Settings has no Contacts switch yet. Then the page reads again.
     func allowContacts() async {
-        message = nil
-        if access == .notAsked {
-            _ = await ContactsAccessPrompt(deps: deps).ask()
+        onClearMessage()
+        if deps.contacts.access() == .notAsked {
+            _ = await askAccess()
             onChanged()
         } else {
             deps.openSettings()
         }
     }
 
-    /// The held contact names the person who holds it; any other failure is one fixed sentence.
-    private static func sentence(for error: Swift.Error, fallback: String) -> String {
-        if case ContactLinkActions.Error.heldByAnother(_, let name) = error { return "\(name) is already linked to this contact." }
-        return fallback
+    /// The one system prompt, through the landing's path (same flag and cache). On a yes, the app's contacts check runs
+    /// now, as at launch, so a linked contact that no longer resolves is found at once.
+    private func askAccess() async -> ContactsAccess {
+        let access = await ContactsAccessPrompt(deps: deps).ask()
+        if access == .full || access == .limited { NotificationCenter.default.post(name: ContactsCheck.requested, object: nil) }
+        return access
     }
 
     /// The error's type only: its text could carry a contact's name, which never goes to the log.

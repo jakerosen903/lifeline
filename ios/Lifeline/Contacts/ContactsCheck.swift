@@ -8,6 +8,8 @@ import LifelineKit
 actor ContactsCheck {
     /// Posted on the main thread after each check, so an open person's page reads its contact row again.
     static let finished = Notification.Name("ContactsCheck.finished")
+    /// Posted by a screen that wants a check now (a person's page after access is given); the app model runs one.
+    static let requested = Notification.Name("ContactsCheck.requested")
 
     private let deps: Dependencies
     private var running = false

@@ -206,8 +206,9 @@ struct EntityScreen: View {
             }
         }
         .onAppear { isVisible = true; viewModel.refresh() }
-        // The contacts check finished, or the app came back (access may have changed in Settings): the row reads again.
-        .onReceive(NotificationCenter.default.publisher(for: ContactsCheck.finished)) { _ in if isVisible { viewModel.contact.refresh() } }
+        // The check can follow a rename and copy or replace the picture: the whole page reads again, not only the row.
+        .onReceive(NotificationCenter.default.publisher(for: ContactsCheck.finished)) { _ in if isVisible { viewModel.refresh() } }
+        // The app came back (access may have changed in Settings): the row reads again.
         .onChange(of: scenePhase) { if scenePhase == .active, isVisible { viewModel.contact.refresh() } }
         .onDisappear { isVisible = false; viewModel.stop(); viewModel.clearPhotoError() }
         // A session started here lands under a cover; when it closes, read what it added.

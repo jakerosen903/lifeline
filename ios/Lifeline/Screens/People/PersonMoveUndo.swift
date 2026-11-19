@@ -24,6 +24,20 @@ final class PersonMoveUndo {
         show(PersonChipLine.movedNotice(newName: receipt.newName))
     }
 
+    /// Another message for the same slot, with no Undo (a person's contact row, PB50). It replaces what shows, a move's
+    /// offer included, and clears after the usual window.
+    func say(_ sentence: String) {
+        receipt = nil
+        show(sentence)
+    }
+
+    /// The next action began: a message with no Undo goes. A move's offer stays until its window ends.
+    func clearMessage() {
+        guard receipt == nil, text != nil else { return }
+        timer?.cancel()
+        text = nil
+    }
+
     /// Returns true when the move was taken back. A refusal says why in the slot and ends the offer.
     @discardableResult func undo() -> Bool {
         guard let receipt else { return false }
