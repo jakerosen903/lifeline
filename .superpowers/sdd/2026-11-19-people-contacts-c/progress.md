@@ -29,3 +29,5 @@ The owner said "Yes, build both" (PC-d, then PC-c) on 2026-11-19, without a revi
 - Task 3: fix round 1/5 (2 addressed, 0 open — the stayer's decline of its held contact goes from either side; Undo gives back the legacy `memory_person` rows; commits 730f52a..3418877)
 - Task 3: complete (commits 568dc0f..3418877, review clean after one fix round). Ruling C7.
 - Task 3: minor (deferred): a delete the staleness checks do not cover makes Undo fail with a database error, not `.stale`; the transaction rolls back and the app shows the failed-Undo line.
+- Task 5: complete (commit 13bb264, review clean). `PeopleContactsUITests` 15 of 15. `PeopleGuessUITests` 13 of 16: two older tests need a scroll because the merge row makes the page longer (`testAMoveThatRemovesAGuessedPersonKeepsThePageForUndo`, `testWithoutUndoTheEmptiedPageClosesWhenTheNoticeEnds`), carried to Task 7; `testTwoPeopleWithOneNameGetTwoChips` (PC-d's test) fails after Keep and is checked on the PC-d branch alone. Ruling C8.
+- Task 5: minor (deferred), carried to Task 7: no UI test for the forced "Merge" itself nor for two different contacts in the forced case.
