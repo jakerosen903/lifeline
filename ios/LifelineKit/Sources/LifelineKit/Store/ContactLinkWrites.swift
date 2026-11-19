@@ -181,7 +181,7 @@ extension PeopleRepository {
 
 extension ContactCard {
     /// The contact's full name as the app keeps it in `contact_name`: trimmed, as Keep keeps it.
-    var keptName: String { fullName.trimmingCharacters(in: .whitespacesAndNewlines) }
+    public var keptName: String { fullName.trimmingCharacters(in: .whitespacesAndNewlines) }
 }
 
 extension PersonLinkRepository {

@@ -27,18 +27,20 @@ extension PersonLinkRepository {
         try db.writer.write { db in
             guard let card = try Candidate.fetchOne(db, key: candidate.rawValue), card.kind == .memory else { throw Error.notFound }
             guard card.status == .pending else { throw Error.stale }   // Keep has run: the answer would apply to nothing
-            let choice: String, person: PersonID?
-            switch target {
+            let choice: String, person: PersonID?, contact: String?
+            switch try Self.resolved(target, in: db) {
             case .person(let id):
                 guard try Person.exists(db, key: id.rawValue) else { throw Error.notFound }
-                (choice, person) = ("person", id)
-            case .someoneNew: (choice, person) = ("new", nil)
-            case .notAPerson: (choice, person) = ("not_a_person", nil)
+                (choice, person, contact) = ("person", id, nil)
+            case .someoneNew: (choice, person, contact) = ("new", nil, nil)
+            case .notAPerson: (choice, person, contact) = ("not_a_person", nil, nil)
+            // Keep makes the person from the contact (`guessedLink`), or names them by the said name if it is gone by then.
+            case .contact(let card): (choice, person, contact) = ("contact", nil, card.identifier)
             }
             try db.execute(sql: """
                 insert or replace into candidate_person_choice (candidate_id, said_name, choice, person_id, contact_identifier)
-                values (?, ?, ?, ?, null)
-                """, arguments: [candidate.rawValue, key, choice, person?.rawValue])
+                values (?, ?, ?, ?, ?)
+                """, arguments: [candidate.rawValue, key, choice, person?.rawValue, contact])
         }
     }
 
@@ -75,7 +77,17 @@ extension PersonLinkRepository {
 
     // MARK: - Move
 
-    private static func move(_ link: PersonLink, to target: PersonLinkActions.Target, wholeGroup: Bool, in db: Database) throws -> PersonMoveReceipt {
+    /// A contact a person holds is that person: one contact, one person. Read inside the write, so the unique index
+    /// is never the one to refuse.
+    private static func resolved(_ target: PersonLinkActions.Target, in db: Database) throws -> PersonLinkActions.Target {
+        guard case .contact(let card) = target,
+              let holder = try String.fetchOne(db, sql: "select id from person where contact_identifier = ?", arguments: [card.identifier])
+        else { return target }
+        return .person(PersonID(rawValue: holder))
+    }
+
+    private static func move(_ link: PersonLink, to asked: PersonLinkActions.Target, wholeGroup: Bool, in db: Database) throws -> PersonMoveReceipt {
+        let target = try resolved(asked, in: db)
         let current = try current(link, in: db)
         let old = current.person
         if case .person(let id) = target, id == old.id {
@@ -103,6 +115,9 @@ extension PersonLinkRepository {
             person = p
         case .someoneNew:
             let p = try newPerson(for: current, in: db)
+            (person, created) = (p, PersonMoveReceipt.PersonName(id: p.id, name: p.displayName, origin: p.nameOrigin))
+        case .contact(let card):
+            let p = try newPerson(from: card, in: db)
             (person, created) = (p, PersonMoveReceipt.PersonName(id: p.id, name: p.displayName, origin: p.nameOrigin))
         case .notAPerson:
             person = nil
@@ -146,14 +161,28 @@ extension PersonLinkRepository {
     }
 
     /// "Someone new": a person named by the said name. The owner chose them, so they are not a guess (R14).
+    /// A link with no said name goes by the person's name for the model (`NameForModel`): for a person whose name
+    /// came from a contact, the oldest name the owner said, so a contact's name never becomes a said name (PB10).
+    /// Refused (`notFound`) when there is none: the app has no name of the owner's to give the new person.
     private static func newPerson(for link: PersonLink, in db: Database) throws -> Person {
         let said = try saidName(of: link.memoryID, ref: link.saidName, in: db)
-        // An older link with no said name has only the person's name to go by.
-        let name = (said?.name ?? said?.relation ?? link.person.displayName).trimmingCharacters(in: .whitespacesAndNewlines)
+        let aliases = try Alias.filter(Column("person_id") == link.person.id.rawValue).order(Column.rowID).fetchAll(db)
+        guard let found = said?.name ?? said?.relation ?? NameForModel.of(link.person, aliasesOldestFirst: aliases) else { throw Error.notFound }
+        let name = found.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty else { throw Error.notFound }
         let person = Person(id: .init(), displayName: name, notes: nil, isOwner: false, birthDate: nil, birthDateOrigin: nil,
                             nameOrigin: .said, createdByGuess: false)
         try person.insertWithEntity(db)
         try PeopleRepository.insertAlias(name, person.id, db)
+        return person
+    }
+
+    /// A move to a contact no one holds: a person made from it (`Person.fromContact`), whom the owner chose, so not a
+    /// guess (PB3). The contact's name is not saved as an alias; the move saves the said names (PB10). Refused
+    /// (`notFound`) for a contact with no full name: there is nothing to name the person by.
+    private static func newPerson(from card: ContactCard, in db: Database) throws -> Person {
+        guard let person = Person.fromContact(card.forGuess, createdByGuess: false) else { throw Error.notFound }
+        try person.insertWithEntity(db)
         return person
     }
 
@@ -300,7 +329,12 @@ extension PersonLinkRepository {
         if let created = r.createdPerson {
             touched.insert(EntityID(rawValue: created.rawValue))
             let links = try Int.fetchOne(db, sql: "select count(*) from moment_entity where entity_id = ?", arguments: [created.rawValue]) ?? 0
-            let photos = try Int.fetchOne(db, sql: "select count(*) from photo_link where entity_id = ?", arguments: [created.rawValue]) ?? 0
+            // The picture the app copied from the made person's contact is the app's act, not later work (PB12): it goes
+            // with the person, and its homeless row waits for the sweep. A photo the owner added keeps them.
+            let photos = try Int.fetchOne(db, sql: """
+                select count(*) from photo_link where entity_id = ?
+                    and photo_id is not (select contact_photo_id from person where id = ?)
+                """, arguments: [created.rawValue, created.rawValue]) ?? 0
             if links != r.after.filter({ $0.entityID.rawValue == created.rawValue }).count || photos > 0 { throw Error.stale }
         }
         let touchedIDs = Array(touched).sorted { $0.rawValue < $1.rawValue }

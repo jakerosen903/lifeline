@@ -60,6 +60,8 @@ struct Dependencies {
     var restoreFromPath: String? = nil
     /// Under `-uiTesting`: Export keeps the file in Documents and shows no share sheet, which a UI test cannot drive.
     var exportWithoutShareSheet = false
+    /// Under `-uiTesting`: the contacts search shows a plain stand-in for `ContactAccessButton`, which a UI test cannot drive.
+    var contactAccessButtonStandIn = false
     /// What the launch repair joined, in one sentence for the person, or nil when it joined nothing. The shell shows it once.
     var launchNotice: String? = nil
 
@@ -335,6 +337,7 @@ struct Dependencies {
             contactLinks: ContactLinkActions(store: store, photos: library, directory: contacts))
         if let i = args.firstIndex(of: "-uiTesting-restoreFrom"), i + 1 < args.count { deps.restoreFromPath = args[i + 1] }
         deps.exportWithoutShareSheet = true
+        deps.contactAccessButtonStandIn = true
         if let i = args.firstIndex(of: "-uiTesting-pickPhoto"), i + 1 < args.count { deps.pickPhotoPath = args[i + 1] }
         let photoAccess = args.firstIndex(of: "-uiTesting-photoAccess").flatMap { $0 + 1 < args.count ? args[$0 + 1] : nil }
         deps.photoPickSource = try ScriptedPhotoPickSource(mode: photoAccess, slowFile: args.contains("-uiTesting-slowPhotoFile"),

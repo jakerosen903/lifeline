@@ -69,7 +69,8 @@ public struct PreviewChip: Sendable, Equatable, Identifiable {
 /// another person, and can take a move back. Nothing here runs without a tap.
 public struct PersonLinkActions: Sendable {
     public enum Error: Swift.Error, Equatable { case stale, notFound }
-    public enum Target: Sendable, Equatable { case person(PersonID), someoneNew, notAPerson }
+    /// `contact`: the person who holds that contact, or a new person made from it (`Person.fromContact`).
+    public enum Target: Sendable, Equatable { case person(PersonID), someoneNew, notAPerson, contact(ContactCard) }
 
     private let store: ExtractionStore
     /// The contacts Keep's guess may match against, so a preview shows what Keep will do.
@@ -82,7 +83,8 @@ public struct PersonLinkActions: Sendable {
         try store.personLinks.settle(link, wholeGroup: wholeGroup)
     }
 
-    /// The sheet's "Done" with another choice. One transaction.
+    /// The sheet's "Done" with another choice. One transaction. A contact a person holds is a move to that person;
+    /// a contact no one holds makes a person the owner chose, and Undo removes them.
     @discardableResult public func move(_ link: PersonLink, to target: Target, wholeGroup: Bool) throws -> PersonMoveReceipt {
         try store.personLinks.move(link, to: target, wholeGroup: wholeGroup)
     }
@@ -91,7 +93,7 @@ public struct PersonLinkActions: Sendable {
         try store.personLinks.undo(receipt)
     }
 
-    /// The sheet used on a card that waits: stored, applied on Keep.
+    /// The sheet used on a card that waits: stored, applied on Keep. A contact a person holds is stored as that person.
     public func choose(_ target: Target, for saidName: String, on candidate: CandidateID) throws {
         try store.personLinks.storeChoice(target, for: saidName, on: candidate)
     }

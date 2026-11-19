@@ -399,3 +399,36 @@ private struct InjectedFailure: Error {}
     #expect(try f.moves.move(link, to: .person(robin.id), wholeGroup: false).removedPerson == nil)
     #expect(try f.store.people.person(id: robyn) != nil)
 }
+
+// PC-b Task 6: the picture the app copies after a move to a contact does not make that move's Undo stale (PB12).
+@Test func undoOfAMoveToAContactSucceedsAfterThePictureWasCopied() async throws {
+    let f = try Fixture()
+    f.directory.pictures = ["c-reyes": try f.picture("reyes", rgb: 0xAA6633)]
+    // No contact fits "my cousin", so Keep makes a person with the said name.
+    let memory = try f.kept("my cousin painted the fence", people: ["my cousin"])
+    let cousin = try f.onlyPerson(memory)
+    let link = try #require(try f.store.personLinks.links(to: cousin).first)
+    let receipt = try f.moves.move(link, to: .contact(reyes), wholeGroup: false)
+    let made = try #require(receipt.createdPerson)
+    try await f.actions.copyPicture(for: made)
+    let copy = try #require(try f.person(made).contactPhotoID)
+    #expect(try f.photos(of: made).map(\.id) == [copy])
+
+    try f.moves.undo(receipt)
+    #expect(try f.store.people.person(id: made) == nil, "Undo removes the person and the copy's link")
+    #expect(try f.store.people.person(id: cousin) != nil)
+    let links = try await f.db.writer.read { try Int.fetchOne($0, sql: "select count(*) from photo_link where photo_id = ?", arguments: [copy.rawValue]) }
+    #expect(links == 0)
+    #expect(try await f.db.writer.read { try Photo.exists($0, key: copy.rawValue) }, "the homeless row waits for the sweep (PB12)")
+}
+
+@Test func undoOfAMoveToAContactIsRefusedOnceTheOwnerAddedAPhoto() async throws {
+    let f = try Fixture()
+    let memory = try f.kept("my cousin painted the fence", people: ["my cousin"])
+    let link = try #require(try f.store.personLinks.links(to: try f.onlyPerson(memory)).first)
+    let receipt = try f.moves.move(link, to: .contact(reyes), wholeGroup: false)
+    let made = try #require(receipt.createdPerson)
+    _ = try await f.library.add(fileAt: try f.source("own", rgb: 0x22AA22), assetLocalID: nil, to: .entity(EntityID(rawValue: made.rawValue)))
+    #expect(throws: PersonLinkActions.Error.stale) { try f.moves.undo(receipt) }
+    #expect(try f.store.people.person(id: made) != nil, "a photo the owner added keeps the person")
+}

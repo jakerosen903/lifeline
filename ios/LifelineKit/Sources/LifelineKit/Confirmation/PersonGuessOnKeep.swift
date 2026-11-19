@@ -54,8 +54,19 @@ extension CandidateActions {
             let aliases = [said.name, said.relation].compactMap { $0 }   // R8: the owner's answer teaches both halves
             switch stored.choice {
             case .person(let id): return GuessedLink(person: id, origin: .confirmed, aliases: aliases)
-            // PC-b links the new person to the contact; until then a contact choice is a new person.
-            case .newPerson, .contact:
+            case .contact(let identifier):
+                // The owner chose this contact. A person who holds it now is that choice; a contact the app can still see
+                // makes a person the owner chose (PB3). A contact gone from view since falls back to the said name.
+                if let holder = inputs.known.first(where: { $0.contactIdentifier == identifier }) {
+                    return GuessedLink(person: holder.id, origin: .confirmed, aliases: aliases)
+                }
+                if let contact = inputs.contacts.first(where: { $0.identifier == identifier }),
+                   let person = plannedPerson(from: contact, alias: nil, createdByGuess: false, card: inputs.card, plan: &plan) {
+                    return GuessedLink(person: person, origin: .confirmed, aliases: aliases)
+                }
+                return plannedPerson(for: said, createdByGuess: false, card: inputs.card, plan: &plan)
+                    .map { GuessedLink(person: $0, origin: .confirmed, aliases: aliases) }
+            case .newPerson:
                 return plannedPerson(for: said, createdByGuess: false, card: inputs.card, plan: &plan)
                     .map { GuessedLink(person: $0, origin: .confirmed, aliases: aliases) }
             case nil: return nil   // `choices(for:)` gives no choice only for "not a person", handled above
@@ -68,8 +79,10 @@ extension CandidateActions {
         case .contact(let identifier):
             // Rules 3 and 5: a person linked to the one contact that fits. The guess only picks a contact
             // it was given, so the lookup cannot miss; if it ever did, a new person is the safe answer.
+            // A contact matches only by a said name, so one is always there; the guard keeps an empty one out.
             if let contact = inputs.contacts.first(where: { $0.identifier == identifier }),
-               let person = plannedPerson(from: contact, said: said, card: inputs.card, plan: &plan) {
+               let alias = said.name?.trimmingCharacters(in: .whitespacesAndNewlines), !alias.isEmpty,
+               let person = plannedPerson(from: contact, alias: alias, createdByGuess: true, card: inputs.card, plan: &plan) {
                 return GuessedLink(person: person, origin: result.origin, aliases: [])
             }
             return newGuessedPerson(for: said, inputs, plan: &plan)
@@ -83,22 +96,18 @@ extension CandidateActions {
         plannedPerson(for: said, createdByGuess: true, card: inputs.card, plan: &plan).map { GuessedLink(person: $0, origin: .new, aliases: []) }
     }
 
-    /// A new person linked to `contact`, planned once: a second ref in this card that reaches the same
-    /// contact reaches this person. The name is the contact's full name; the said name is the one alias
-    /// ("The person's name"), so the context packet has the owner's words for them. Keep is the app's
-    /// action, so the person is a guess (PB3). The picture is copied after Keep, outside this plan.
-    /// The guess never picks a contact a person holds, so the unique index is not reached here.
-    private func plannedPerson(from contact: PersonGuess.Contact, said: SaidName, card: CandidateID?, plan: inout EntityRepository.Write) -> PersonID? {
+    /// A new person linked to `contact` (`Person.fromContact`), planned once: a second ref in this card that reaches
+    /// the same contact reaches this person. `alias` is the said name Keep's guess saves with the plan ("The person's
+    /// name"), so the context packet has the owner's words for them; the owner's stored choice passes nil and saves
+    /// its said names as that link's aliases. The picture is copied after Keep, outside this plan. The caller never
+    /// passes a contact a person holds, so the unique index is not reached here.
+    private func plannedPerson(from contact: PersonGuess.Contact, alias: String?, createdByGuess: Bool, card: CandidateID?,
+                               plan: inout EntityRepository.Write) -> PersonID? {
         if let planned = plan.persons.first(where: { $0.contactIdentifier == contact.identifier }) { return planned.id }
-        let name = contact.fullName.trimmingCharacters(in: .whitespacesAndNewlines)
-        // A contact matches only by a said name, so one is always there; the guard keeps an empty one out.
-        guard let saidName = said.name?.trimmingCharacters(in: .whitespacesAndNewlines), !saidName.isEmpty, !name.isEmpty else { return nil }
-        let person = Person(id: .init(), displayName: name, notes: nil, isOwner: false, birthDate: nil, birthDateOrigin: nil,
-                            nameOrigin: .contact, createdByGuess: true, contactIdentifier: contact.identifier,
-                            contactName: name, contactState: Person.contactLinked)
-        plan.entities.append(Entity(id: person.entityID, type: .person, title: name, createdFromCandidateID: card))
+        guard let person = Person.fromContact(contact, createdByGuess: createdByGuess) else { return nil }
+        plan.entities.append(Entity(id: person.entityID, type: .person, title: person.displayName, createdFromCandidateID: card))
         plan.persons.append(person)
-        plan.aliases.append(Alias(personID: person.id, text: saidName))
+        if let alias { plan.aliases.append(Alias(personID: person.id, text: alias)) }
         return person.id
     }
 

@@ -11,9 +11,9 @@ private let tove = person("p-tove", "Tove Brandt")
 private let me = person("p-me", "Ada Quill", owner: true)
 
 private func build(current: PersonID?, isGuess: Bool = true, candidates: [PersonID], others: Int = 2,
-                   people: [(Person, stories: Int)]) -> WhoIsThisOptions {
-    WhoIsThisOptions.build(saidName: "Robin", quote: "Robin and I split the deposit.", current: current, currentIsGuess: isGuess,
-                           candidates: candidates, people: people, otherMoments: others)
+                   people: [(Person, stories: Int)], contacts: [ContactCard] = [], saidName: String = "Robin") -> WhoIsThisOptions {
+    WhoIsThisOptions.build(saidName: saidName, quote: "Robin and I split the deposit.", current: current, currentIsGuess: isGuess,
+                           candidates: candidates, people: people, contacts: contacts, otherMoments: others)
 }
 
 @Test func theGuessIsFirstAndSaysItIsAGuess() {
@@ -74,4 +74,62 @@ private func build(current: PersonID?, isGuess: Bool = true, candidates: [Person
 
 @Test func otherMomentsPassThrough() {
     #expect(build(current: nil, candidates: [], others: 0, people: []).otherMoments == 0)
+}
+
+// PC-b Task 6: the contacts that fit the said name, after the people on file. Names are invented.
+
+private func card(_ id: String, _ full: String, given: String = "", nickname: String = "") -> ContactCard {
+    ContactCard(identifier: id, fullName: full, givenName: given, familyName: "", nickname: nickname, hasPicture: false)
+}
+
+private let hale = card("c-hale", "Robin Hale", given: "Robin")
+private let birdie = card("c-birdie", "Wren Abbot", given: "Wren", nickname: "Robin")
+private let okafor = card("c-okafor", "Robin Okafor", given: "Robin")
+private let brandt = card("c-brandt", "Tove Brandt", given: "Tove")
+
+@Test func contactsThatFitComeAfterThePeopleOnFile() {
+    let o = build(current: robyn.id, candidates: [tove.id], people: [(robyn, 3), (tove, 1)], contacts: [hale, brandt, birdie])
+    #expect(o.rows.map(\.target) == [.person(robyn.id), .person(tove.id), .contact(hale), .contact(birdie)],
+            "full name, given name or nickname; by full name")
+    #expect(o.rows[2].id == "contact:c-hale")
+    #expect(o.rows[2].title == "Robin Hale")
+    #expect(o.rows[2].line == "In your contacts \u{00B7} not in a story yet")
+    #expect(o.rows[2].isCurrent == false)
+}
+
+@Test func aLinkedContactIsNotListedButItsPersonIs() {
+    var okaforPerson = robin
+    okaforPerson.contactIdentifier = "c-okafor"
+    let o = build(current: nil, candidates: [], people: [(okaforPerson, 12), (tove, 1)], contacts: [okafor, hale])
+    #expect(o.rows.map(\.target) == [.person(robin.id), .contact(hale)])
+    #expect(o.everyoneElse.map(\.target) == [.person(tove.id)], "the person is listed once")
+}
+
+@Test func aContactListedTwiceOrWithNoFullNameShowsOnceOrNotAtAll() {
+    let blank = card("c-blank", "  ", given: "Robin")
+    let o = build(current: nil, candidates: [], people: [], contacts: [hale, hale, blank])
+    #expect(o.rows.map(\.target) == [.contact(hale)])
+}
+
+@Test func aSaidNameWithNoNameFitsNoContact() {
+    let o = build(current: nil, candidates: [], people: [], contacts: [hale], saidName: "my brother")
+    #expect(o.rows.isEmpty)
+}
+
+@Test func noAccessGivesNoContactRow() {
+    for access in [ContactsAccess.notAsked, .denied] {
+        #expect(WhoIsThisOptions.offered([hale], access: access).isEmpty)
+    }
+    #expect(WhoIsThisOptions.offered([hale], access: .full) == [hale])
+    #expect(WhoIsThisOptions.offered([hale], access: .limited) == [hale])
+}
+
+@Test func aPickedContactBecomesARow() {
+    let o = build(current: robin.id, candidates: [], people: [(robin, 12)], contacts: [])
+    let picked = o.adding(brandt, heldBy: nil)
+    #expect(picked.rows.map(\.target) == [.person(robin.id), .contact(brandt)])
+    #expect(picked.rows[1].line == "In your contacts \u{00B7} not in a story yet")
+    #expect(picked.adding(brandt, heldBy: nil) == picked, "a contact already listed is not added again")
+    let held = o.adding(okafor, heldBy: "Robin Okafor")
+    #expect(held.rows[1].line == "In a story as Robin Okafor")
 }

@@ -719,3 +719,158 @@ private let valeContact = PersonGuess.Contact(identifier: "c-vale", fullName: "R
     #expect(try env.actions.move(try env.link(robynMoment), to: .person(robin.id), wholeGroup: false).removedPerson == nil)
     #expect(try env.store.people.person(id: robyn)?.contactIdentifier == "c-vale")
 }
+
+// MARK: - PC-b Task 6: a move to a contact
+
+private let haleCard = ContactCard(identifier: "c-hale", fullName: " Robin Hale ", givenName: "Robin", familyName: "Hale", nickname: "", hasPicture: false)
+
+@Test func aMoveToAContactMakesALinkedPersonTheOwnerChose() throws {
+    let env = try Env()
+    let robin = try env.store.people.insertPerson(displayName: "Robin")
+    let m = try env.kept(in: try env.session(["my roommate Robin painted the fence"])[0], people: ["my roommate, Robin"])
+    #expect(try env.onlyPerson(m) == robin.id)
+    let before = try env.dump()
+
+    let receipt = try env.actions.move(try env.link(m), to: .contact(haleCard), wholeGroup: false)
+    let created = try #require(receipt.createdPerson)
+    let person = try #require(try env.store.people.person(id: created))
+    #expect(person.displayName == "Robin Hale" && person.nameOrigin == .contact)
+    #expect(person.createdByGuess == false, "the owner chose this contact (PB3)")
+    #expect(person.contactIdentifier == "c-hale" && person.contactName == "Robin Hale" && person.contactState == Person.contactLinked)
+    #expect(try env.onlyPerson(m) == created)
+    #expect(try env.link(m).origin == .confirmed)
+    #expect(Set(try env.aliases(created)) == ["Robin", "my roommate"], "the said name, never the contact's name")
+    #expect(try env.store.people.nameForModel(of: created) == "Robin")
+    #expect(receipt.newName == "Robin Hale")
+    #expect(PersonChipLine.movedNotice(newName: receipt.newName) == "Changed to Robin Hale.")
+
+    try env.actions.undo(receipt)
+    #expect(try env.dump() == before, "Undo removes the person and restores every row")
+    #expect(try env.store.people.person(id: created) == nil)
+}
+
+@Test func aMoveToAContactAPersonHoldsGoesToThatPerson() throws {
+    let env = try Env()
+    let tove = try env.store.people.insertPerson(displayName: "Tove")
+    try env.db.writer.write { db in
+        try db.execute(sql: "update person set contact_identifier = 'c-hale', contact_name = 'Robin Hale', contact_state = 'linked' where id = ?",
+                       arguments: [tove.id.rawValue])
+    }
+    let robin = try env.store.people.insertPerson(displayName: "Robin")
+    let m = try env.kept(in: try env.session(["Robin painted the fence"])[0], people: ["Robin"])
+    #expect(try env.onlyPerson(m) == robin.id)
+    let people = try env.count("person")
+
+    let receipt = try env.actions.move(try env.link(m), to: .contact(haleCard), wholeGroup: false)
+    #expect(receipt.createdPerson == nil)
+    #expect(try env.onlyPerson(m) == tove.id)
+    #expect(try env.link(m).origin == .confirmed)
+    #expect(try env.count("person") == people, "no second person for one contact")
+    #expect(receipt.newName == "Tove")
+
+    // The contact of the link's own person: the same as choosing that person, a settle.
+    let other = try env.kept(in: try env.session(["I fixed the gate"])[0], people: [])
+    try env.store.entities.link(other.id, tove.entityID, relation: .mention, roleText: "Robin", origin: .assumed)
+    let settled = try env.actions.move(try env.link(other, of: tove.id), to: .contact(haleCard), wholeGroup: false)
+    #expect(settled.createdPerson == nil && settled.removedPerson == nil)
+    #expect(try env.link(other, of: tove.id).origin == .confirmed)
+}
+
+@Test func aMoveToAContactWithNoFullNameIsRefused() throws {
+    let env = try Env()
+    let m = try env.kept(in: try env.session(["Robin painted the fence"])[0], people: ["Robin"])
+    let blank = ContactCard(identifier: "c-blank", fullName: "  ", givenName: "", familyName: "", nickname: "Robin", hasPicture: false)
+    let before = try env.dump()
+    #expect(throws: PersonLinkActions.Error.notFound) { try env.actions.move(try env.link(m), to: .contact(blank), wholeGroup: false) }
+    #expect(try env.dump() == before)
+}
+
+@Test func aStoredContactChoiceIsAppliedByKeepAsConfirmed() throws {
+    let env = try Env(contacts: [haleCard.forGuess])
+    let seg = try env.session(["my roommate Robin painted the fence"])[0]
+    let card = try env.card(in: seg, people: ["my roommate, Robin"])
+    try env.actions.choose(.contact(haleCard), for: "my roommate, Robin", on: card.id)
+    let stored = try env.db.writer.read { try Row.fetchOne($0, sql: "select choice, person_id, contact_identifier from candidate_person_choice") }
+    #expect(stored?["choice"] == "contact" && stored?["contact_identifier"] == "c-hale")
+    #expect((stored?["person_id"] as String?) == nil)
+    #expect(try env.actions.preview(card) == [PreviewChip(saidName: "my roommate, Robin", name: "Robin Hale", origin: .confirmed, person: nil)],
+            "the contact's name, with no mark")
+
+    let memory = try env.keep.acceptMemory(card, joinStory: false).memory
+    let made = try #require(try env.store.people.person(id: env.onlyPerson(memory)))
+    #expect(made.displayName == "Robin Hale" && made.nameOrigin == .contact && made.createdByGuess == false)
+    #expect(made.contactIdentifier == "c-hale" && made.contactName == "Robin Hale" && made.contactState == Person.contactLinked)
+    #expect(try env.link(memory).origin == .confirmed)
+    #expect(Set(try env.aliases(made.id)) == ["Robin", "my roommate"])
+}
+
+@Test func aStoredContactChoiceForAContactNoLongerSeenMakesAPersonWithTheSaidName() throws {
+    let env = try Env(contacts: [])
+    let card = try env.card(in: try env.session(["Robin painted the fence"])[0], people: ["Robin"])
+    try env.actions.choose(.contact(haleCard), for: "Robin", on: card.id)
+    let memory = try env.keep.acceptMemory(card, joinStory: false).memory
+    let made = try #require(try env.store.people.person(id: env.onlyPerson(memory)))
+    #expect(made.displayName == "Robin" && made.nameOrigin == .said && made.contactIdentifier == nil && !made.createdByGuess)
+    #expect(try env.link(memory).origin == .confirmed)
+}
+
+@Test func aStoredContactChoiceForAHeldContactGoesToItsHolder() throws {
+    let env = try Env(contacts: [haleCard.forGuess])
+    let tove = try env.store.people.insertPerson(displayName: "Tove")
+    let card = try env.card(in: try env.session(["Robin painted the fence"])[0], people: ["Robin"])
+    try env.actions.choose(.contact(haleCard), for: "Robin", on: card.id)
+    // The owner links Tove to that contact after choosing it, before Keep.
+    try env.db.writer.write { db in
+        try db.execute(sql: "update person set contact_identifier = 'c-hale', contact_name = 'Robin Hale', contact_state = 'linked' where id = ?",
+                       arguments: [tove.id.rawValue])
+    }
+    let memory = try env.keep.acceptMemory(card, joinStory: false).memory
+    #expect(try env.onlyPerson(memory) == tove.id)
+    #expect(try env.link(memory).origin == .confirmed)
+
+    // Chosen while a person holds it: stored as that person.
+    let second = try env.card(in: try env.session(["Robin fixed the gate"])[0], people: ["Robin"])
+    try env.actions.choose(.contact(haleCard), for: "Robin", on: second.id)
+    #expect(try env.store.personLinks.choices(for: second.id).map(\.choice) == [.person(tove.id)])
+}
+
+@Test func noMoveStoresAContactsNameAsAnAliasOrASaidName() throws {
+    let env = try Env(contacts: [valeContact])
+    // A person Keep made from a contact, with the said name "Robyn" as their one alias.
+    let first = try env.kept(in: try env.session(["Robyn painted the fence"])[0], people: ["Robyn"])
+    let vale = try env.onlyPerson(first)
+    // A link with no said name to that person: "Someone new" names the new person by the name for the model.
+    let bare = try env.kept(in: try env.session(["I painted the gate"])[0], people: [])
+    try env.store.entities.link(bare.id, EntityID(rawValue: vale.rawValue), relation: .mention, roleText: nil, origin: .assumed)
+    let made = try env.actions.move(try env.link(bare, of: vale), to: .someoneNew, wholeGroup: false)
+    let createdID = try #require(made.createdPerson)
+    let created = try #require(try env.store.people.person(id: createdID))
+    #expect(created.displayName == "Robyn" && created.nameOrigin == .said)
+
+    // A person from a contact with no said name at all: "Someone new" has nothing to name them by, and is refused.
+    let unnamed = try env.store.people.insertPerson(displayName: "Wren Abbot")
+    try env.db.writer.write { db in
+        try db.execute(sql: "update person set name_origin = 'contact', contact_identifier = 'c-abbot', contact_name = 'Wren Abbot', contact_state = 'linked' where id = ?",
+                       arguments: [unnamed.id.rawValue])
+        try db.execute(sql: "delete from alias where person_id = ?", arguments: [unnamed.id.rawValue])
+    }
+    let other = try env.kept(in: try env.session(["I fixed the roof"])[0], people: [])
+    try env.store.entities.link(other.id, unnamed.entityID, relation: .mention, roleText: nil, origin: .assumed)
+    let before = try env.dump()
+    #expect(throws: PersonLinkActions.Error.notFound) { try env.actions.move(try env.link(other, of: unnamed.id), to: .someoneNew, wholeGroup: false) }
+    #expect(try env.dump() == before)
+
+    // A move to a contact and a move away from a contact person teach only said names.
+    let third = try env.kept(in: try env.session(["Robin swept the porch"])[0], people: ["Robin"])
+    try env.actions.move(try env.link(third), to: .contact(haleCard), wholeGroup: false)
+    let robin = try env.store.people.insertPerson(displayName: "Robin")
+    try env.actions.move(try env.link(first), to: .person(robin.id), wholeGroup: false)
+
+    let contactNames: Set<String> = ["robyn vale", "wren abbot", "robin hale"]
+    let aliases = try env.db.writer.read { try String.fetchAll($0, sql: "select lower(trim(text)) from alias") }
+    #expect(Set(aliases).isDisjoint(with: contactNames), "\(aliases)")
+    let said = try env.db.writer.read {
+        try String.fetchAll($0, sql: "select lower(trim(entity.title)) from person join entity on entity.id = person.entity_id where person.name_origin = 'said'")
+    }
+    #expect(Set(said).isDisjoint(with: contactNames), "\(said)")
+}
