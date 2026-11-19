@@ -364,7 +364,8 @@ public struct EntityRepository: Sendable {
     }
 
     /// The words the person used for each entity of a type, where they used any. A role text
-    /// counts only from a told memory that is not hidden.
+    /// counts only from a told memory that is not hidden, and never from an assumed link: a phrase
+    /// said beside a guessed name is the owner's only once the guess is settled (ruling R7).
     public func ownWords(type: EntityType) throws -> [EntityID: String] {
         try db.writer.read { try Self.ownWords(where: "entity.type = ?", arguments: [type.rawValue], in: $0) }
     }
@@ -391,7 +392,8 @@ public struct EntityRepository: Sendable {
             select entity.id, entity.title, me.role_text from moment_entity me
             join entity on entity.id = me.entity_id
             join memory on memory.id = me.memory_id
-            where \(condition) and me.role_text is not null and \(Self.toldAndVisible)
+            where \(condition) and me.role_text is not null and (me.origin is null or me.origin <> 'assumed')
+              and \(Self.toldAndVisible)
             """, arguments: arguments) {
             let id = EntityID(rawValue: row["id"])
             titles[id] = row["title"]
