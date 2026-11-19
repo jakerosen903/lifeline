@@ -141,7 +141,8 @@ extension PersonLinkRepository {
         let removed = try removeIfEmptyGuess(old.id, in: db)
         return PersonMoveReceipt(before: before, after: after, removedPerson: removed?.person, addedAliases: added, createdPerson: created?.id,
                                  newName: person?.displayName ?? "", removedEntity: removed?.entity, removedAliases: removed?.aliases ?? [],
-                                 spansBefore: spansBefore, spansAfter: try spans(of: touched, in: db), clearedGuess: cleared, createdName: created)
+                                 spansBefore: spansBefore, spansAfter: try spans(of: touched, in: db), clearedGuess: cleared, createdName: created,
+                                 removedContactPhoto: removed?.contactPhoto)
     }
 
     /// "Someone new": a person named by the said name. The owner chose them, so they are not a guess (R14).
@@ -233,29 +234,39 @@ extension PersonLinkRepository {
 
     // MARK: - The empty guess
 
-    /// Deletes a person the guess made that nothing holds any more: no link, photo, contact the owner
-    /// linked, name the owner gave, mention, choice, tag, curiosity or session subject. A person the owner
-    /// edited (a typed name, stated dates, hidden or kept from the AI) stays (R39). A person Keep made from
-    /// a contact is still the app's guess and may go with that contact (PB2). Returns what Undo needs.
+    /// Deletes a person the guess made that nothing holds any more: no link, photo the owner added, contact
+    /// the owner linked, name the owner gave, mention, choice, tag, curiosity or session subject. A person the
+    /// owner edited (a typed name, stated dates, hidden or kept from the AI) stays (R39). A person Keep made from
+    /// a contact is still the app's guess and may go with that contact (PB2), and with the picture the app copied
+    /// from it (PB12): that photo's link goes with the entity, and its row waits for the sweep, as any homeless
+    /// photo does. Returns what Undo needs.
     /// The pre-v10 link table is not checked: only v15 Keep makes a guessed person, and it never writes there.
-    private static func removeIfEmptyGuess(_ id: PersonID, in db: Database) throws -> (person: Person, entity: Entity, aliases: [Alias])? {
+    private static func removeIfEmptyGuess(_ id: PersonID, in db: Database)
+        throws -> (person: Person, entity: Entity, aliases: [Alias], contactPhoto: PersonMoveReceipt.ContactPhotoLink?)? {
         guard let person = try Person.fetchOne(db, sql: Person.selectSQL + "where person.id = ?", arguments: [id.rawValue]),
-              person.createdByGuess, !person.isOwner, person.contactPhotoID == nil,
+              person.createdByGuess, !person.isOwner,
               (person.nameOrigin == .said && person.contactIdentifier == nil) || person.isGuessFromContact,
               let entity = try Entity.fetchOne(db, key: person.entityID.rawValue),
               entity.range == .unplaced, !entity.hiddenFromTimeline, !entity.excludedFromAI else { return nil }
         let held = try Int.fetchOne(db, sql: """
-            select (select count(*) from moment_entity where entity_id = :e) + (select count(*) from photo_link where entity_id = :e)
+            select (select count(*) from moment_entity where entity_id = :e)
+                 + (select count(*) from photo_link where entity_id = :e and photo_id is not :c)
                  + (select count(*) from mention where person_id = :p)
                  + (select count(*) from candidate_person_choice where person_id = :p) + (select count(*) from contact_declined where person_id = :p)
                  + (select count(*) from curiosity_item where entity_id = :e) + (select count(*) from session where subject_entity_id = :e)
                  + (select count(*) from domain_tag where element_kind = 'entity' and element_id = :e)
-            """, arguments: ["e": entity.id.rawValue, "p": id.rawValue]) ?? 1
+            """, arguments: ["e": entity.id.rawValue, "p": id.rawValue, "c": person.contactPhotoID?.rawValue]) ?? 1
         guard held == 0 else { return nil }
         // Oldest first, so Undo puts them back in the order the packet reads them.
         let aliases = try Alias.filter(Column("person_id") == id.rawValue).order(Column.rowID).fetchAll(db)
-        _ = try Entity.deleteOne(db, key: entity.id.rawValue)   // the person, aliases and spans go by cascade
-        return (person, entity, aliases)
+        let contactPhoto = try person.contactPhotoID.flatMap { photo in
+            try Row.fetchOne(db, sql: "select role, sort_order from photo_link where entity_id = ? and photo_id = ?",
+                             arguments: [entity.id.rawValue, photo.rawValue]).map { row in
+                PersonMoveReceipt.ContactPhotoLink(photo: photo, role: PhotoRole(rawValue: row["role"]) ?? .attached, sortOrder: row["sort_order"])
+            }
+        }
+        _ = try Entity.deleteOne(db, key: entity.id.rawValue)   // the person, aliases, spans and photo links go by cascade
+        return (person, entity, aliases, contactPhoto)
     }
 
     // MARK: - Undo
@@ -296,10 +307,17 @@ extension PersonLinkRepository {
         if try spans(of: touchedIDs, in: db) != r.spansAfter.sorted(by: spanOrder) { throw Error.stale }
 
         for row in r.after { try delete(row, in: db) }
-        if let person = r.removedPerson, let entity = r.removedEntity {
+        if var person = r.removedPerson, let entity = r.removedEntity {
             try entity.insert(db)
+            // The copied picture comes back with the person (PB12), unless a sweep has taken its homeless row since.
+            let copyKept = try person.contactPhotoID.map { try Photo.exists(db, key: $0.rawValue) } ?? false
+            if !copyKept { person.contactPhotoID = nil }
             try person.insert(db)
             for alias in r.removedAliases { try alias.insert(db) }
+            if copyKept, let link = r.removedContactPhoto {
+                try db.execute(sql: "insert into photo_link (photo_id, entity_id, role, sort_order) values (?, ?, ?, ?)",
+                               arguments: [link.photo.rawValue, entity.id.rawValue, link.role.rawValue, link.sortOrder])
+            }
         }
         try db.execute(sql: "delete from entity_span where entity_id in (\(touchedIDs.map { _ in "?" }.joined(separator: ",")))",
                        arguments: StatementArguments(touchedIDs.map(\.rawValue)))

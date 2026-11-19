@@ -8,7 +8,7 @@ public struct PeopleRepository: Sendable {
         case emptyName
     }
 
-    private let db: AppDatabase
+    let db: AppDatabase
 
     public init(_ db: AppDatabase) { self.db = db }
 
@@ -35,6 +35,18 @@ public struct PeopleRepository: Sendable {
 
     public func person(id: PersonID) throws -> Person? {
         try db.writer.read { try Person.fetchOne($0, sql: Person.selectSQL + "where person.id = ?", arguments: [id.rawValue]) }
+    }
+
+    /// The person linked to this contact, if any. The unique index allows at most one.
+    public func person(holding identifier: String) throws -> Person? {
+        try db.writer.read { try Person.fetchOne($0, sql: Person.selectSQL + "where person.contact_identifier = ?", arguments: [identifier]) }
+    }
+
+    /// Every person linked to a contact, by name.
+    public func linkedPersons() throws -> [Person] {
+        try db.writer.read {
+            try Person.fetchAll($0, sql: Person.selectSQL + "where person.contact_identifier is not null order by entity.title collate nocase")
+        }
     }
 
     public func aliases(of person: PersonID) throws -> [Alias] {

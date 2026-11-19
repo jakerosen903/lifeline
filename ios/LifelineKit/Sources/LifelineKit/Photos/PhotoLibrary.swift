@@ -23,14 +23,25 @@ public actor PhotoLibrary {
     /// picking a photo again repairs one that does not show. Otherwise: writes `.<id>.partial`, renames it to
     /// `<id>.jpg`, then inserts the row and link. A kill after the rename leaves a file with no row; the sweep removes it.
     public func add(fileAt source: URL, assetLocalID: String?, to subject: PhotoSubject, now: Date = .now) throws -> Photo {
+        try importPhoto(fileAt: source, assetLocalID: assetLocalID, now: now, link: subject).photo
+    }
+
+    /// `add`, and whether it made a new photo. False when it reused a stored photo with the same bytes, so a
+    /// caller that records a photo as its own copy (the contact's picture) does not claim the owner's photo.
+    func addNotingNew(fileAt source: URL, assetLocalID: String?, to subject: PhotoSubject, now: Date = .now) throws -> (photo: Photo, isNew: Bool) {
         try importPhoto(fileAt: source, assetLocalID: assetLocalID, now: now, link: subject)
+    }
+
+    /// Deletes the file of a photo whose row is already gone. A file that will not delete waits for the next sweep.
+    func removeFile(of gone: Photo) {
+        try? FileManager.default.removeItem(at: url(for: gone))
     }
 
     /// The import of `add` with no link: the photo waits for a home (a session row that points at it, or a later link).
     /// Same photo already stored: returns it, writes a missing file again, adds no link. A photo that never gets a home
     /// goes at the next sweep.
     public func store(fileAt source: URL, assetLocalID: String?, now: Date = .now) throws -> Photo {
-        try importPhoto(fileAt: source, assetLocalID: assetLocalID, now: now, link: nil)
+        try importPhoto(fileAt: source, assetLocalID: assetLocalID, now: now, link: nil).photo
     }
 
     /// The session lets go of its photo; when nothing else holds the photo, its row and then its file go.
@@ -40,12 +51,12 @@ public actor PhotoLibrary {
         try? FileManager.default.removeItem(at: directory.appending(path: gone.fileName))
     }
 
-    private func importPhoto(fileAt source: URL, assetLocalID: String?, now: Date, link subject: PhotoSubject?) throws -> Photo {
+    private func importPhoto(fileAt source: URL, assetLocalID: String?, now: Date, link subject: PhotoSubject?) throws -> (photo: Photo, isNew: Bool) {
         let sha256 = try PhotoImport.sha256(of: source)
         if let stored = try photos.photo(sha256: sha256) {
             if !FileManager.default.fileExists(atPath: url(for: stored).path) { _ = try writeFile(from: source, named: stored.fileName) }
             if let subject { try photos.link(stored.id, to: subject) }
-            return stored
+            return (stored, false)
         }
         let metadata = try PhotoImport.metadata(of: source)
         let id = PhotoID()
@@ -61,7 +72,7 @@ public actor PhotoLibrary {
             try? FileManager.default.removeItem(at: url(for: photo))
             throw error
         }
-        return photo
+        return (photo, true)
     }
 
     /// Writes the downscaled copy to `.<name>.partial`, then renames it to `<name>`. A failure leaves no partial file.

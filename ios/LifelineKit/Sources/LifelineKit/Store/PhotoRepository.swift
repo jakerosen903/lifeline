@@ -180,7 +180,7 @@ public struct PhotoRepository: Sendable {
             """, arguments: [session.rawValue])
     }
 
-    private static func deleteIfHomeless(_ photo: PhotoID, in db: Database) throws -> Photo? {
+    static func deleteIfHomeless(_ photo: PhotoID, in db: Database) throws -> Photo? {
         guard let row = try Photo.fetchOne(db, sql: "select * from photo where id = ? and \(homeless)", arguments: [photo.rawValue]) else { return nil }
         _ = try Photo.deleteOne(db, key: photo.rawValue)
         return row

@@ -19,18 +19,26 @@ public struct PersonMoveReceipt: Sendable, Equatable {
     var clearedGuess: PersonName?
     /// The "Someone new" person's name as made. Undo refuses to delete them after a rename.
     var createdName: PersonName?
+    /// The removed person's link to the picture the app copied from their contact (PB12), to put it back.
+    var removedContactPhoto: ContactPhotoLink?
 
     /// A person's name and where it came from, so Undo can tell the owner renamed them since.
     struct PersonName: Sendable, Equatable {
         var id: PersonID; var name: String; var origin: NameOrigin?
     }
 
+    /// The contact's copied picture as the removed person's page held it.
+    struct ContactPhotoLink: Sendable, Equatable {
+        var photo: PhotoID; var role: PhotoRole; var sortOrder: Int
+    }
+
     init(before: [MomentEntity], after: [MomentEntity], removedPerson: Person?, addedAliases: [Alias], createdPerson: PersonID?, newName: String,
          removedEntity: Entity? = nil, removedAliases: [Alias] = [], spansBefore: [EntitySpan] = [], spansAfter: [EntitySpan] = [],
-         clearedGuess: PersonName? = nil, createdName: PersonName? = nil) {
+         clearedGuess: PersonName? = nil, createdName: PersonName? = nil, removedContactPhoto: ContactPhotoLink? = nil) {
         self.before = before; self.after = after; self.removedPerson = removedPerson; self.addedAliases = addedAliases
         self.createdPerson = createdPerson; self.newName = newName; self.removedEntity = removedEntity; self.removedAliases = removedAliases
         self.spansBefore = spansBefore; self.spansAfter = spansAfter; self.clearedGuess = clearedGuess; self.createdName = createdName
+        self.removedContactPhoto = removedContactPhoto
     }
 }
 
