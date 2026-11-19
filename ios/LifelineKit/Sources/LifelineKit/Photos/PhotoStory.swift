@@ -8,9 +8,11 @@ public struct PhotoStoryCard: Sendable, Equatable {
         /// The page holds the photo.
         public var isChosen: Bool
         public var isOwner: Bool
+        /// The page holds the photo through a link a photo story made, not one the owner made.
+        public var byStory: Bool = false
         public var id: EntityID { entity.id }
         public var title: String { isOwner ? "You" : entity.title }
-        public var stateValue: String { isChosen ? "added" : "not added" }
+        public var stateValue: String { byStory ? "added by this story" : isChosen ? "added" : "not added" }
     }
 
     /// The pages of one entity type.
@@ -58,6 +60,13 @@ public struct PhotoStoryCard: Sendable, Equatable {
         }
     }
 
+    /// The line under "Also show this photo on": it names the story's choice while a page holds the photo through a story link.
+    public var pagesLine: String {
+        pageGroups.contains { $0.pages.contains(where: \.byStory) }
+            ? "The people in this story have this photo on their pages. Tap to take it off, or to add it to another page."
+            : "Tap to add. Tap again to take it off."
+    }
+
     /// False while a moment waits, and with no line.
     public var momentsLineOpens: Bool { !hasPendingMoments && !memories.isEmpty }
 }
@@ -83,8 +92,10 @@ public enum PhotoStory {
     ///   - holding: the ones that hold the photo.
     ///   - linked: the entities each memory names, of every type.
     ///   - pagesWithPhoto: the entities that already hold the photo, named by a memory or not.
+    ///   - storyPages: the entities whose link to the photo a story made. An id that is not in `pagesWithPhoto` is ignored.
     public static func card(photo: Photo, sessionMemories: [Memory], holding: Set<MemoryID>, linked: [MemoryID: [Entity]],
-                            pagesWithPhoto: [Entity], ownerEntity: EntityID?, hasPendingMoments: Bool, hasOtherHome: Bool) -> PhotoStoryCard {
+                            pagesWithPhoto: [Entity], ownerEntity: EntityID?, storyPages: Set<EntityID> = [], hasPendingMoments: Bool,
+                            hasOtherHome: Bool) -> PhotoStoryCard {
         let memories = sessionMemories.filter { holding.contains($0.id) }
         let holders = Set(pagesWithPhoto.map(\.id))
         let named = memories.flatMap { linked[$0.id] ?? [] }
@@ -94,7 +105,8 @@ public enum PhotoStory {
         let groups = EntityType.allCases.compactMap { type -> PhotoStoryCard.PageGroup? in
             let ofType = pages.filter { $0.type == type }.sorted { inListOrder($0, $1, owner: ownerEntity) }
             return ofType.isEmpty ? nil : PhotoStoryCard.PageGroup(type: type, pages: ofType.map {
-                PhotoStoryCard.Page(entity: $0, isChosen: holders.contains($0.id), isOwner: $0.id == ownerEntity)
+                PhotoStoryCard.Page(entity: $0, isChosen: holders.contains($0.id), isOwner: $0.id == ownerEntity,
+                                    byStory: holders.contains($0.id) && storyPages.contains($0.id))
             })
         }
         // Only a moment takes the photo's date: a fact, a feeling or a goal shows no date on its page, so a date written

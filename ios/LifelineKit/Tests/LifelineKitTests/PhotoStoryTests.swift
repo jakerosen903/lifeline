@@ -731,3 +731,65 @@ private struct TwoMemories {
     #expect(try f.page(maya) == [f.subject.id])
     #expect(try f.store.photos.storyPages(of: f.subject.id) == [maya])
 }
+
+// MARK: - Pages the story chose
+
+private func storyCard(_ maya: Entity, holds: Bool = true, story: Set<EntityID>) -> PhotoStoryCard {
+    let m = memory("A")
+    return PhotoStory.card(photo: photo(), sessionMemories: [m], holding: [m.id], linked: [m.id: [maya]],
+                           pagesWithPhoto: holds ? [maya] : [], ownerEntity: nil, storyPages: story,
+                           hasPendingMoments: false, hasOtherHome: false)
+}
+
+@Test func aPageTheStoryChoseReadsAddedByThisStory() {
+    let maya = entity("Maya")
+    let page = pages(storyCard(maya, story: [maya.id]))[0]
+    #expect(page.isChosen && page.byStory)
+    #expect(page.stateValue == "added by this story")
+}
+
+@Test func aPageTheOwnerTappedReadsAdded() {
+    let maya = entity("Maya")
+    let page = pages(storyCard(maya, story: []))[0]
+    #expect(page.isChosen && !page.byStory)
+    #expect(page.stateValue == "added")
+}
+
+@Test func theLineNamesTheStorysChoiceWhileOnePageHasIt() {
+    let maya = entity("Maya")
+    #expect(storyCard(maya, story: [maya.id]).pagesLine
+            == "The people in this story have this photo on their pages. Tap to take it off, or to add it to another page.")
+}
+
+@Test func theLineIsThePlainOneWithNoStoryPage() {
+    let maya = entity("Maya")
+    #expect(storyCard(maya, story: []).pagesLine == "Tap to add. Tap again to take it off.")
+}
+
+@Test func byStoryIsFalseForAPageThatDoesNotHoldThePhoto() {
+    let maya = entity("Maya")
+    let card = storyCard(maya, holds: false, story: [maya.id])
+    let page = pages(card)[0]
+    #expect(!page.isChosen && !page.byStory)
+    #expect(page.stateValue == "not added")
+    #expect(card.pagesLine == "Tap to add. Tap again to take it off.")
+}
+
+@Test func theReaderCardFollowsTheStorysChoiceTheOwnersRemovalAndTheOwnersAdd() throws {
+    let f = try StoryFixture()
+    try f.store.sessions.setStatus(.extracted, for: f.segments[0].id)
+    _ = try CandidateActions(store: f.store).acceptMemory(try f.pendingCard(people: ["Maya"]))
+    let kept = try #require(try f.reader.card(for: f.sessionID))
+    let mayaPage = try #require(pages(kept).first { $0.title == "Maya" })
+    #expect(mayaPage.isChosen && mayaPage.byStory)
+    // The owner's removal goes through the store call PhotoLibrary.remove makes.
+    _ = try f.store.photos.unlink(f.subject.id, from: .entity(mayaPage.id))
+    let removed = try #require(try f.reader.card(for: f.sessionID))
+    let after = try #require(pages(removed).first { $0.title == "Maya" })
+    #expect(!after.isChosen && !after.byStory)
+    #expect(removed.pagesLine == "Tap to add. Tap again to take it off.")
+    try f.reader.addToPage(f.subject.id, mayaPage.id)
+    let added = try #require(try f.reader.card(for: f.sessionID))
+    let again = try #require(pages(added).first { $0.title == "Maya" })
+    #expect(again.isChosen && !again.byStory)
+}
