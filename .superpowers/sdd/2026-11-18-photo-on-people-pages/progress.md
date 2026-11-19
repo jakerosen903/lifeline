@@ -13,3 +13,9 @@ Pre-flight: Task 6 needs a column that Task 1 owns: Task 1 text now carries it (
 - Task 2: Ruling: Undo of a Keep takes back the story's page links that Keep left without a reason: after the memory is gone, a `story` link of the session's photo is removed when no memory that holds the photo names that person; an owner's link stays; no decline is recorded — the spec's rule is that the app shows and can take back its own assumption; a photo left on a page by an undone Keep is an assumption with no source — if wrong, the photo stays on a page after an Undo. Sent back to the implementer before review (correctness).
 - Task 2: accepted: `aFailedKeepWritesNothing` forces the failure with a trigger after the links, because a duplicate span fails before any link exists.
 - Task 2: Ruling withdrawn: there is no undo of a Keep in the kit (the implementer checked `CandidateActions.restore`, `CardHandler.undo`, `MergeActions.unmerge`, `MemoryRepository.delete`). A deleted memory leaves the photo on the people's pages, as the spec's edge case for a removed moment says; the owner takes it off with the chip. Nothing built for it. Comment commit 56d7c00.
+- Task 2: complete (commits b07c5d7..56d7c00, review clean). Kit 1373. No existing test changed.
+- Task 2: minor (deferred): no test where `letGo` makes the photo homeless after it removed story links (delete the memory, then let go).
+- Task 2: minor (deferred): the returned order of `linkToPeoplePages` is promised in the doc and not asserted.
+- Task 2: minor (deferred): `aFailedKeepWritesNothing` has no control assertion that the same card without the trigger writes the page link.
+- Task 2: minor (deferred): `undoingAKeepLeavesNoLinkAndKeepsThePhoto` (PhotoRepositoryTests) is misnamed; it is a plain delete.
+- Open for the owner: a kept fact about a person also places the photo; after a kept memory is deleted the chip still reads "added by this story" though no kept memory names the person.
