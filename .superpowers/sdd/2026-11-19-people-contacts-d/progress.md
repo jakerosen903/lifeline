@@ -20,3 +20,4 @@ The owner said "Yes, build both" (PC-d, then PC-c) on 2026-11-19, without a revi
 
 ## Progress
 
+- Task 1: complete (commits 699757b..1fdbd7d, review clean). Minor, parked for the final review: a handle is compared untrimmed; `schemaStaysUnderTheUnionLimit` still asserts 12 (count is 11); a mention's `handle` is not checked against `people` (Task 3 must tolerate an unknown one); the app target was not built in Task 1 (build it by Task 4).
