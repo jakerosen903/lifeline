@@ -1152,3 +1152,65 @@ private func expectPreviewMatches(_ chips: [PreviewChip], _ links: [MomentEntity
         expectPreviewMatches(chips.sorted { ($0.handle ?? "") < ($1.handle ?? "") }, links, madeByKeep: [])
     }
 }
+
+// MARK: - Final review I2: a memory folded into another recording's memory leaves its handles behind
+
+extension Env {
+    /// A kept memory of a new recording from a handle card.
+    func keptHandleMemory(_ text: String, people: [PersonOut]) throws -> MemoryID {
+        try actions.acceptMemory(try handleCard(text, people: people), joinStory: false).memory.id
+    }
+}
+
+@Test func aFoldAcrossRecordingsClearsTheMovedHandles() throws {
+    let env = try Env()
+    let target = try env.keptHandleMemory("Robyn painted the fence", people: [handled("p1", "Robyn")])
+    let source = try env.keptHandleMemory("Tomas painted the fence", people: [handled("p1", "Tomas")])
+    _ = try env.actions.merge(source, into: target)
+    let links = try env.personLinks(target)
+    #expect(links.first { $0.roleText == "Robyn" }?.personHandle == "p1", "the target's own handle stays")
+    #expect(links.first { $0.roleText == "Tomas" }?.personHandle == nil, "p1 of another recording means nothing here")
+}
+
+@Test func aLaterCardDoesNotTakeTheFoldedMemorysPersonByHandle() throws {
+    let env = try Env()
+    let (_, segs) = try StoreFixtures.session(in: env.store.sessions, segments: ["We painted the fence", "Kira fixed the gate"])
+    let target = try env.actions.acceptMemory(try env.card(in: segs[0].id, "We painted the fence", people: []), joinStory: false).memory.id
+    let source = try env.keptHandleMemory("Tomas painted the fence", people: [handled("p1", "Tomas")])
+    let tomas = try #require(try env.personLinks(source).first)
+    _ = try env.actions.merge(source, into: target)
+    let kept = try env.actions.acceptMemory(try env.handleCard(in: segs[1].id, "Kira fixed the gate", people: [handled("p1", "Kira")]), joinStory: false)
+    let link = try #require(try env.personLinks(kept.memory.id).first)
+    #expect(link.entityID != tomas.entityID, "Kira is this recording's p1, not the folded Tomas")
+    #expect(try env.person(link).displayName == "Kira" && link.origin == .new)
+}
+
+@Test func separatingAFoldedTellingGoesByTheSaidName() throws {
+    let env = try Env()
+    let target = try env.keptHandleMemory("Robyn painted the fence", people: [handled("p1", "Robyn")])
+    let source = try env.keptHandleMemory("Tomas painted the fence", people: [handled("p1", "Tomas")])
+    let tomas = try #require(try env.personLinks(source).first)
+    _ = try env.actions.merge(source, into: target)
+    let fresh = try env.actions.separateTelling(target, order: 1)
+    #expect(try env.personLinks(fresh.id).map(\.entityID) == [tomas.entityID], "the folded telling takes Tomas with it")
+    #expect(try env.personLinks(target).map(\.roleText) == ["Robyn"])
+}
+
+@Test func aFoldWithinOneRecordingKeepsTheHandles() throws {
+    let env = try Env()
+    let (_, segs) = try StoreFixtures.session(in: env.store.sessions, segments: ["Robyn painted the fence", "Tomas fixed the gate"])
+    let target = try env.actions.acceptMemory(try env.handleCard(in: segs[0].id, "Robyn painted the fence", people: [handled("p1", "Robyn")]), joinStory: false)
+    let source = try env.actions.acceptMemory(try env.handleCard(in: segs[1].id, "Tomas fixed the gate", people: [handled("p2", "Tomas")]), joinStory: false)
+    _ = try env.actions.merge(source.memory.id, into: target.memory.id)
+    #expect(try env.byHandle(target.memory.id).map(\.personHandle) == ["p1", "p2"])
+}
+
+@Test func undoingAFoldAcrossRecordingsGivesTheHandlesBack() throws {
+    let env = try Env()
+    let target = try env.keptHandleMemory("Robyn painted the fence", people: [handled("p1", "Robyn")])
+    let source = try env.keptHandleMemory("Tomas painted the fence", people: [handled("p1", "Tomas")])
+    let receipt = try env.actions.merge(source, into: target)
+    try env.actions.unmerge(receipt)
+    #expect(try env.personLinks(source).map(\.personHandle) == ["p1"])
+    #expect(try env.personLinks(target).map(\.personHandle) == ["p1"])
+}
