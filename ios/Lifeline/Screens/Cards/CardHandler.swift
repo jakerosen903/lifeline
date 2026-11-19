@@ -45,6 +45,21 @@ final class CardHandler {
     init(deps: Dependencies) {
         self.deps = deps
         personMove = PersonMoveUndo(actions: deps.personLinkActions())
+        watchContacts()
+    }
+
+    /// A waiting card's chips come from the contacts cache. When a check refilled it, or the owner just gave access,
+    /// they are read again, so a chip says what Keep will write (M-3). Each watch ends at the first notice after
+    /// this handler is gone.
+    private func watchContacts() {
+        for name in [ContactsCheck.finished, ContactsAccessPrompt.accessGiven] {
+            Task { [weak self] in
+                for await _ in NotificationCenter.default.notifications(named: name).map({ _ in () }) {
+                    guard let self else { return }
+                    self.peopleChanged()
+                }
+            }
+        }
     }
 
     /// Called when a card is first shown. Writes the mention row for a who-is-this card so the

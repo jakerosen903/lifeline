@@ -7,6 +7,8 @@ import LifelineKit
 @MainActor
 struct ContactsAccessPrompt {
     nonisolated static let askedKey = "contacts.accessPromptShown"
+    /// Posted on the main actor after a yes, once the cache holds the contacts: a waiting card's chips read again (M-3).
+    nonisolated static let accessGiven = Notification.Name("ContactsAccessPrompt.accessGiven")
 
     let deps: Dependencies
 
@@ -26,6 +28,7 @@ struct ContactsAccessPrompt {
         UserDefaults.standard.set(true, forKey: Self.askedKey)
         guard access == .full || access == .limited else { return access }
         await deps.contactsCache.refresh(from: deps.contacts)
+        NotificationCenter.default.post(name: Self.accessGiven, object: nil)
         return access
     }
 
