@@ -1,6 +1,6 @@
 # The photo picker opens with the person's name in its search
 
-Status: approved by the owner on 2026-11-19, with the calls in "Calls made without the owner" as written. The owner can still overrule each call. The trial in "Before the build" comes first. No plan yet.
+Status: approved by the owner on 2026-11-19, with the calls in "Calls made without the owner" as written. The owner can still overrule each call. The owner tried the trial build on a phone with iOS 27 on 2026-11-19 and said "Great looks good". Plan: `docs/plans/2026-11-19-photo-search-name.md`. Built on branch `photo-search-name`; the device check has not been run on the final build.
 
 Depends on: PC-b of `docs/specs/2026-11-18-people-contacts.md` (a person can be linked to a contact) and part 4 of `docs/specs/2026-11-18-photo-on-people-pages.md` (several photos at one time). Neither is on `main` on 2026-11-19.
 

@@ -2,6 +2,29 @@
 
 One entry per decision. Newest first. Status is Decided, Open, or Superseded.
 
+## 2026-11-19 · The photo picker opens with the person's name
+
+**Status:** Decided. The owner approved the spec on 2026-11-19, tried the trial build on a phone with iOS 27 and said "Great looks good". The owner can overrule each call. Built on branch `photo-search-name`. The device check has not been run on the final build. Source: `docs/specs/2026-11-19-photo-search-name.md`, `docs/plans/2026-11-19-photo-search-name.md`.
+
+**Decision.**
+
+1. On iOS 27 or later, "Add a photo" on a person's page gives a name of that person to the system picker's search. iOS 26 has no such control, and the picker opens as before. The app's minimum stays iOS 26.0.
+2. The rule is `PhotoSearchName` in LifelineKit. A linked contact that the app can see gives the contact's full name. Every other person gives the name on the page. The owner's page, and a page that is not a person, give no text. A name of spaces gives no text.
+3. A contact that is not in the owner's contacts now gives the page's name. The kept contact name can be stale.
+4. The app adds no control of its own. The owner clears the search in the picker. The app does not remember a cleared search.
+5. Only "Add a photo" on a person's page. Not the picker that starts a photo story, and not the memory page or You.
+6. Nothing is stored. No migration.
+
+**What leaves the app.** The name goes to the system picker on the phone. It does not go to the model or to a server. The app does not see what the search finds, and it asks for no access to the photo library. A contact's name is still never saved as an alias.
+
+**Open for the owner.**
+
+1. A person with no linked contact also gets the text. The owner asked for the linked case.
+2. The contact's full name is used, not the given name.
+3. With no match the picker shows "No Results" first. One tap on the clear button shows the library.
+4. On the simulator the text "Sam O'Neil" showed as "Sam ONeil". The app passes the name as it is. The device check has a line for it.
+5. No setting turns this off.
+
 ## 2026-11-19 · PC-b: a person can be linked to a contact — decisions and rulings made while building
 
 **Status:** Decided by the builder and the controller. The owner must confirm plan decisions 4, 5, 6 and 8, and the new copy and identifier listed at the end. The owner can overrule each one. Source: `docs/plans/2026-11-18-people-contacts-b.md`, ledger `.superpowers/sdd/2026-11-18-people-contacts-b/rulings.md` (PB1 to PB67). Narrows `docs/specs/2026-11-18-people-contacts.md` in five places, each marked in the spec.
