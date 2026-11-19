@@ -18,6 +18,9 @@ public enum SpineLayout {
         public let mark: Mark
         /// "1999" or "2008–10".
         public let years: String
+        /// The first and last year the margin shows, as numbers; nil for a confirmed relation, whose
+        /// margin shows no years. Derived from the same years as `years`.
+        public let yearSpan: ClosedRange<Int>?
         /// "around" for a dashed dot, and for a capsule whose date text is "around {years}" (an age
         /// guess over two calendar years, ruling R17); nil otherwise. Always nil for a confirmed
         /// relation, whose far edge is the builder's slack and never reads as a fact.
@@ -51,7 +54,9 @@ public enum SpineLayout {
             let qualifier = !isRelation && (mark == .dashedDot || item.range.displayText == around + " " + years) ? around : nil
             let period = LifePeriod.containing(year: shown.start, birthYear: birthYear)
             let stop = Stop(
-                id: item.id, mark: mark, years: years, qualifier: qualifier,
+                id: item.id, mark: mark, years: years,
+                yearSpan: isRelation ? nil : min(shown.start, shown.end)...max(shown.start, shown.end),
+                qualifier: qualifier,
                 showsYears: !isRelation && (previousWasRelation || !(previous?.years == years && previous?.qualifier == qualifier)),
                 rowDateText: rowDateText(for: item.range, years: years),
                 gapAbove: latestEnd.map { gap(years: max(0, shown.start - $0), labelled: !isRelation && !latestEndIsRelation) },

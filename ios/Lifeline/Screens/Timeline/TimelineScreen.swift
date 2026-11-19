@@ -19,6 +19,8 @@ struct TimelineScreen: View {
     @State private var lifeMap: LifeMapViewModel?
     /// The list row to scroll to the top: a story just opened, so its members show above the record bar.
     @State private var scrollTarget: StoryScrollTarget?
+    /// Where the list's rows can be seen, for the card's frame (`ScreenArea`).
+    @State private var screenArea = ScreenArea()
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     /// A story's row id in the list it sits in: the spine keys rows by `SpineRow.id`, the shelf by story.
@@ -135,6 +137,11 @@ struct TimelineScreen: View {
                 shelfAndQuestion
                 footer
             }
+            .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { screenArea.frame = $0 }
+            // The card's height changes only by its "During" line and the room above it; a point more for rounding.
+            .background { DuringLineTallest { screenArea.slack = $0 + TimelineCardView.duringSpacingAbove + 1 } }
+            // The card stays under the title while the list scrolls; the summary row scrolls away under it.
+            .safeAreaInset(edge: .top, spacing: 0) { PinnedTimelineCard(timeline: viewModel) { lifeMap = viewModel.lifeMap() } }
             .onChange(of: scrollTarget) { _, target in
                 guard let target else { return }
                 scrollTarget = nil
@@ -205,7 +212,8 @@ struct TimelineScreen: View {
                     SpineRowView(row: row, isFirst: row.id == viewModel.spine.first?.id, isLast: row.id == viewModel.spine.last?.id,
                                  expanded: storyID(of: row).map { viewModel.expandedStories.contains($0) } ?? false,
                                  onToggleStory: { if let id = storyID(of: row) { toggleStory(id, rowID: .spine(row.id)) } },
-                                 actions: rowActions, storyActions: storyActions)
+                                 actions: rowActions, storyActions: storyActions,
+                                 screenArea: screenArea, onScreenChange: { viewModel.setOnScreen(row.id, $0) })
                 }
                 .listRowSeparator(.hidden)
                 .listRowBackground(Color.clear)
@@ -263,6 +271,25 @@ struct TimelineScreen: View {
         // A start error shows on the record bar instead, under the same identifier.
         if let error = viewModel.error ?? viewModel.cards.error ?? viewModel.home.error {
             Text(error).foregroundStyle(.red).accessibilityIdentifier("timeline.error")
+        }
+    }
+}
+
+/// The card over the screen's linen, so rows that scroll under it do not show through. It reads
+/// `card` in its own body: a scroll that moves the frame redraws this view, not the list. With no
+/// dated moment it holds nothing, and the inset has no height. A rotation or a size change lays it
+/// out again from the same card.
+private struct PinnedTimelineCard: View {
+    let timeline: TimelineViewModel
+    let onOpen: () -> Void
+
+    var body: some View {
+        if !timeline.card.isEmpty {
+            TimelineCardView(card: timeline.card, onOpen: onOpen)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 8)
+                // Not into the safe area: the title above must stay visible.
+                .background(Theme.linen, ignoresSafeAreaEdges: [])
         }
     }
 }

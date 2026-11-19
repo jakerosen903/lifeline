@@ -32,39 +32,10 @@ final class ChaptersUITests: XCTestCase {
         return buttons.min { abs($0.frame.minY - top) < abs($1.frame.minY - top) } ?? app.buttons["row.more"].firstMatch
     }
 
-    /// Calls `visit` on every screen of the lazy Timeline, from its top to its last row, "The blue kite".
-    private func eachScreenOfTheTimeline(_ app: XCUIApplication, _ visit: () -> Void) {
-        let first = memoryRow(app, "The tree house")
-        for _ in 0..<10 where !(first.exists && app.waitHittable(first, timeout: 1)) { app.swipeDown() }
-        let last = memoryRow(app, "The blue kite")
-        for _ in 0..<10 {
-            visit()
-            if last.exists && app.waitHittable(last, timeout: 1) { break }
-            app.swipeUp()
-        }
-        visit()
-        XCTAssertTrue(last.exists, "the scroll reached the last row, so every row above it was on screen once")
-    }
-
-    /// Every tag on the whole Timeline as (row title: tag label). A tag belongs to the row whose top is the nearest above it.
-    private func tagsOnTheWholeTimeline(_ app: XCUIApplication) -> [String: String] {
-        var seen: [String: String] = [:]
-        eachScreenOfTheTimeline(app) {
-            let rows = app.buttons.matching(identifier: "timeline.memory").allElementsBoundByIndex
-                .filter { $0.exists && !$0.frame.isEmpty }
-                .map { (title: $0.label.components(separatedBy: " · ")[0], y: $0.frame.minY) }
-            for tag in allTags(app).allElementsBoundByIndex where tag.exists && !tag.frame.isEmpty {
-                guard let row = rows.filter({ $0.y <= tag.frame.minY }).max(by: { $0.y < $1.y }) else { continue }
-                seen[row.title] = tag.label
-            }
-        }
-        return seen
-    }
-
     /// The labels, of any element on any screen of the Timeline, that contain one of `texts`.
     private func timelineLabels(_ app: XCUIApplication, containingAny texts: [String]) -> Set<String> {
         var found: Set<String> = []
-        eachScreenOfTheTimeline(app) {
+        app.eachScreenOfTheTimeline {
             for text in texts {
                 let hits = app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", text)).allElementsBoundByIndex
                 for hit in hits where hit.exists { found.insert(hit.label) }
@@ -188,7 +159,7 @@ final class ChaptersUITests: XCTestCase {
         let swim = memoryRow(app, "Learning to swim")
         XCTAssertTrue(app.reveal(swim), "Learning to swim (2000) is on the timeline")
         XCTAssertEqual(tags(in: "Learning to swim", app).count, 0, "2000 is inside 1998 to 2001, and the moment still has no tag")
-        XCTAssertEqual(tagsOnTheWholeTimeline(app), ["The tree house": "Maple Street"], "one tag on the whole timeline")
+        XCTAssertEqual(app.tagsOnTheWholeTimeline(), ["The tree house": "Maple Street"], "one tag on the whole timeline")
     }
 
     @MainActor
@@ -279,7 +250,7 @@ final class ChaptersUITests: XCTestCase {
         XCTAssertTrue(waitUntilGone(pick, timeout: 5), "the sheet closed")
         XCTAssertTrue(app.waitHittable(memoryRow(app, "Learning to swim"), timeout: 5))
         XCTAssertEqual(tags(in: "Learning to swim", app).map(\.label), ["Maple Street"], "the moment has the tag")
-        XCTAssertEqual(tagsOnTheWholeTimeline(app), ["The tree house": "Maple Street", "Learning to swim": "Maple Street"], "two tags show")
+        XCTAssertEqual(app.tagsOnTheWholeTimeline(), ["The tree house": "Maple Street", "Learning to swim": "Maple Street"], "two tags show")
 
         XCTAssertTrue(app.reveal(memoryRow(app, "Learning to swim")))
         moreButton(of: "Learning to swim", app).tap()
@@ -287,7 +258,7 @@ final class ChaptersUITests: XCTestCase {
         XCTAssertTrue(app.waitHittable(takeOut, timeout: 5), "Take out is in the menu of a moment with a tag")
         takeOut.tap()
         XCTAssertTrue(waitUntilGone(takeOut, timeout: 5))
-        XCTAssertEqual(tagsOnTheWholeTimeline(app), ["The tree house": "Maple Street"], "one tag shows")
+        XCTAssertEqual(app.tagsOnTheWholeTimeline(), ["The tree house": "Maple Street"], "one tag shows")
     }
 
     // The chapter with no name shows on the life map, never on the Timeline. Naming it puts its tag on its moment.
@@ -295,7 +266,7 @@ final class ChaptersUITests: XCTestCase {
     func testAChapterWithNoNameShowsOnTheLifeMapOnly() {
         let app = XCUIApplication.launchWithSpine()
         XCTAssertEqual(timelineLabels(app, containingAny: ["Untitled chapter", "No name yet"]), [], "no element on any screen of the Timeline names the chapter with no name")
-        XCTAssertEqual(tagsOnTheWholeTimeline(app), ["The tree house": "Maple Street"], "only the named chapter shows as a tag")
+        XCTAssertEqual(app.tagsOnTheWholeTimeline(), ["The tree house": "Maple Street"], "only the named chapter shows as a tag")
 
         openLifeMap(app)
         let unnamed = app.any("lifemap.unplaced").buttons["No name yet, no dates yet"]
@@ -314,7 +285,7 @@ final class ChaptersUITests: XCTestCase {
         closeSheet(app, done: "chapter.done")
         closeSheet(app, done: "lifemap.done")
 
-        XCTAssertEqual(tagsOnTheWholeTimeline(app)["The science fair"], "Mr. Okafor's class", "the new name is the tag on its moment")
+        XCTAssertEqual(app.tagsOnTheWholeTimeline()["The science fair"], "Mr. Okafor's class", "the new name is the tag on its moment")
     }
 
     // `-uiTesting-seed` makes memories with no chapter, so the life map has nothing to list.

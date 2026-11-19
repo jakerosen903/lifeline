@@ -321,3 +321,42 @@ extension XCUIApplication {
         XCTAssertTrue(buttons["session.finish"].waitForExistence(timeout: 5))
     }
 }
+
+// MARK: - The Timeline's whole spine
+
+extension XCUIApplication {
+    /// Calls `visit` on every screen of the lazy Timeline, from its top to its last row, "The blue kite" (the spine seed).
+    func eachScreenOfTheTimeline(_ visit: () -> Void) {
+        let app = self
+        func memoryRow(_ title: String) -> XCUIElement {
+            app.buttons.matching(identifier: "timeline.memory").matching(NSPredicate(format: "label BEGINSWITH %@", title)).firstMatch
+        }
+        let first = memoryRow("The tree house")
+        for _ in 0..<10 where !(first.exists && app.waitHittable(first, timeout: 1)) { app.swipeDown() }
+        let last = memoryRow("The blue kite")
+        for _ in 0..<10 {
+            visit()
+            if last.exists && app.waitHittable(last, timeout: 1) { break }
+            app.swipeUp()
+        }
+        visit()
+        XCTAssertTrue(last.exists, "the scroll reached the last row, so every row above it was on screen once")
+    }
+
+    /// Every tag on the whole Timeline as (row title: tag label). A tag belongs to the row whose top is the nearest above it.
+    func tagsOnTheWholeTimeline() -> [String: String] {
+        let app = self
+        var seen: [String: String] = [:]
+        eachScreenOfTheTimeline {
+            let rows = app.buttons.matching(identifier: "timeline.memory").allElementsBoundByIndex
+                .filter { $0.exists && !$0.frame.isEmpty }
+                .map { (title: $0.label.components(separatedBy: " · ")[0], y: $0.frame.minY) }
+            let tags = app.descendants(matching: .any).matching(identifier: "timeline.tag")
+            for tag in tags.allElementsBoundByIndex where tag.exists && !tag.frame.isEmpty {
+                guard let row = rows.filter({ $0.y <= tag.frame.minY }).max(by: { $0.y < $1.y }) else { continue }
+                seen[row.title] = tag.label
+            }
+        }
+        return seen
+    }
+}
