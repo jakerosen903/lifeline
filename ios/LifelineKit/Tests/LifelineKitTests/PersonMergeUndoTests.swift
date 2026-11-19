@@ -29,16 +29,26 @@ extension MergeEnv {
                 try RowCopy.read("memory_person", where: "person_id in (?, ?)", arguments: ids, in: db),
                 try RowCopy.read("mention", where: "1", arguments: [], in: db),
                 try RowCopy.read("candidate_person_choice", where: "1", arguments: [], in: db),
-                try RowCopy.read("curiosity_item", where: "1", arguments: [], in: db),
+                // A question the merge left on the leaving person comes back with a new rowid (ruling C15). Its table has a
+                // text key and nothing reads it in rowid order, so its rows compare in key order.
+                Self.inKeyOrder(try RowCopy.read("curiosity_item", where: "1", arguments: [], in: db)),
                 try RowCopy.read("session", where: "1", arguments: [], in: db),
             ]
         }
     }
 }
 
+extension MergeEnv {
+    static func inKeyOrder(_ copy: RowCopy) -> RowCopy {
+        var sorted = copy
+        sorted.rows.sort { ($0["id"]?.description ?? "") < ($1["id"]?.description ?? "") }
+        return sorted
+    }
+}
+
 /// The merge tests of Task 2 that change rows, each as the state before a merge of Robin into Robyn Vale.
 enum MergeCase: String, CaseIterable, Sendable {
-    case links, linkedToBoth, names, contact, values, photos, sharedPhoto, pageDeclines, whatPointsAt, firstTellings
+    case links, linkedToBoth, names, contact, values, photos, sharedPhoto, pageDeclines, whatPointsAt, firstTellings, sameQuestion
 
     func build(_ env: MergeEnv) throws -> (leaving: Person, staying: Person) {
         let robin = try env.store.people.insertPerson(displayName: "Robin")
@@ -107,6 +117,12 @@ enum MergeCase: String, CaseIterable, Sendable {
             try env.store.tags.tag(.entity, r, "school")
             try env.store.tags.tag(.entity, s, "family")
             try env.sql("insert into contact_declined (person_id, contact_identifier) values (?, 'c-other'), (?, 'c-other'), (?, 'picture:c-hale')", [r, s, r])
+        case .sameQuestion:
+            // Ruling C15: Robin's open question stays with Robin and goes by cascade; the others move.
+            try env.question(.personWithoutMoment, about: robyn, "When did you meet Robyn?")
+            try env.question(.personWithoutMoment, about: robin, "When did you meet Robin?")
+            try env.question(.personWithoutMoment, .dismissed, about: robin, "Where did Robin live?")
+            try env.question(.unexplainedPerson, about: robin, "Who is Robin?")
         case .firstTellings:
             let segments = try env.session(["Robyn cut the grass", "Robin painted the fence", "Robin fixed the gate"])
             try env.store.entities.insertSpan(EntitySpan(entityID: robyn.entityID, segmentID: segments[0], startMs: 0, endMs: 900, order: 0))

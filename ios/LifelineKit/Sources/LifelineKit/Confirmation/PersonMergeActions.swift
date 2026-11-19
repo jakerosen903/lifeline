@@ -32,6 +32,9 @@ public struct PersonMergeReceipt: Sendable, Equatable {
     var leavingPerson: RowCopy, leavingEntity: RowCopy
     /// Table name to the keys of the rows the merge pointed at the staying person.
     var repointed: [String: [String]]
+    /// The leaving person's open questions of a kind the staying person had open too (ruling C15). The merge left them
+    /// on the leaving entity, so they went by cascade; Undo inserts them again.
+    var leavingQuestions: RowCopy
 }
 
 /// Two people who are one real person (spec "Merging two people"): the person the owner picks stays, and the other

@@ -61,7 +61,8 @@ extension PersonLinkRepository {
         let before = try ownedRows(of: [l.id, s.id], in: db)
         let (personBefore, entityBefore) = (try row("person", s.id, in: db), try row("entity", s.id, in: db))
         let (leavingPerson, leavingEntity) = (try row("person", l.id, in: db), try row("entity", l.id, in: db))
-        let repointed = try rowsPointing(at: l.id, in: db)
+        let repointed = try rowsPointing(at: l.id, staying: s.id, in: db)
+        let leavingQuestions = try RowCopy.read("curiosity_item", where: "entity_id = ? and \(sameOpenQuestion)", arguments: [l.id.rawValue, s.id.rawValue], in: db)
         try moveLinks(from: l.entityID, to: s.entityID, in: db)
         try moveFirstTellings(from: l.entityID, to: s.entityID, in: db)
         try moveNames(of: l, to: s, in: db)
@@ -74,7 +75,8 @@ extension PersonLinkRepository {
                                   before: before, after: try ownedRows(of: [s.id], in: db),
                                   personBefore: personBefore, personAfter: try row("person", s.id, in: db),
                                   entityBefore: entityBefore, entityAfter: try row("entity", s.id, in: db),
-                                  leavingPerson: leavingPerson, leavingEntity: leavingEntity, repointed: repointed)
+                                  leavingPerson: leavingPerson, leavingEntity: leavingEntity, repointed: repointed,
+                                  leavingQuestions: leavingQuestions)
     }
 
     /// A memory linked to both keeps the stayer's row, with its role text and handle (ruling C2); that row takes the
@@ -139,7 +141,8 @@ extension PersonLinkRepository {
     /// Every row that points at the leaving person points at the stayer. Order matters: a stored choice cascades on its
     /// person and a mention is set null, so both move before the delete. A tag has no foreign key, so one the stayer has
     /// already is deleted here, not left behind. A declined contact and a picture-removal marker are both rows of
-    /// `contact_declined` and move alike.
+    /// `contact_declined` and move alike. An open question of a kind the stayer has open already stays and goes with the
+    /// leaving entity by cascade (ruling C15): one person is not asked the same question twice.
     private static func moveWhatPointsAt(_ l: Person, to s: Person, in db: Database) throws {
         let (lp, sp) = (l.id.rawValue, s.id.rawValue)
         if try db.tableExists("photo_page_declined") {
@@ -151,7 +154,7 @@ extension PersonLinkRepository {
         }
         try db.execute(sql: "update mention set person_id = ? where person_id = ?", arguments: [sp, lp])
         try db.execute(sql: "update candidate_person_choice set person_id = ? where person_id = ?", arguments: [sp, lp])
-        try db.execute(sql: "update curiosity_item set entity_id = ? where entity_id = ?", arguments: [sp, lp])
+        try db.execute(sql: "update curiosity_item set entity_id = ? where entity_id = ? and not (\(sameOpenQuestion))", arguments: [sp, lp, sp])
         try db.execute(sql: "update session set subject_entity_id = ? where subject_entity_id = ?", arguments: [sp, lp])
         let entity = ElementKind.entity.rawValue
         try db.execute(sql: "update or ignore domain_tag set element_id = ? where element_kind = ? and element_id = ?", arguments: [sp, entity, lp])
@@ -209,6 +212,7 @@ extension PersonLinkRepository {
         try receipt.entityBefore.update(in: db, key: "id")
         try receipt.leavingEntity.insert(in: db)
         try receipt.leavingPerson.insert(in: db)
+        try receipt.leavingQuestions.insert(in: db)
         for copy in receipt.before { try copy.insert(in: db) }
         for repoint in repoints {
             for key in receipt.repointed[repoint.table] ?? [] {
@@ -281,20 +285,28 @@ extension PersonLinkRepository {
     }
 
     /// A column the merge points at the stayer, and the key that finds each row again. A stored choice has no one-column
-    /// key; its rowid holds for the few seconds of Undo, because the app never runs VACUUM.
-    private struct Repoint { var table: String, column: String, key: String }
+    /// key; its rowid holds for the few seconds of Undo, because the app never runs VACUUM. `except` is a condition, with
+    /// the stayer's id as its one argument, for the rows the merge leaves on the leaving person.
+    private struct Repoint { var table: String, column: String, key: String, except: String? = nil }
 
     private static let repoints = [Repoint(table: "mention", column: "person_id", key: "id"),
                                    Repoint(table: "candidate_person_choice", column: "person_id", key: "rowid"),
-                                   Repoint(table: "curiosity_item", column: "entity_id", key: "id"),
+                                   Repoint(table: "curiosity_item", column: "entity_id", key: "id", except: sameOpenQuestion),
                                    Repoint(table: "session", column: "subject_entity_id", key: "id")]
 
+    /// A `curiosity_item` row that is open while the stayer (the one argument) has an open item of the same kind (C15).
+    private static let sameOpenQuestion = """
+        status = 'open' and kind in (select kind from curiosity_item where entity_id = ? and status = 'open')
+        """
+
     /// Table name to the keys of the rows that point at the leaving person, read before the merge points them away.
-    private static func rowsPointing(at l: PersonID, in db: Database) throws -> [String: [String]] {
+    private static func rowsPointing(at l: PersonID, staying s: PersonID, in db: Database) throws -> [String: [String]] {
         var keys: [String: [String]] = [:]
         for repoint in repoints {
-            keys[repoint.table] = try String.fetchAll(db, sql: "select cast(\(repoint.key) as text) from \(repoint.table) where \(repoint.column) = ?",
-                                                      arguments: [l.rawValue])
+            let except = repoint.except.map { " and not (\($0))" } ?? ""
+            let arguments: StatementArguments = repoint.except == nil ? [l.rawValue] : [l.rawValue, s.rawValue]
+            keys[repoint.table] = try String.fetchAll(db, sql: "select cast(\(repoint.key) as text) from \(repoint.table) where \(repoint.column) = ?\(except)",
+                                                      arguments: arguments)
         }
         return keys
     }

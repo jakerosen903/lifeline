@@ -589,6 +589,43 @@ extension MergeEnv {
     #expect(declined == ["c-other", "picture:c-vale"])
 }
 
+extension MergeEnv {
+    @discardableResult
+    func question(_ kind: CuriosityKind, _ status: CuriosityStatus = .open, about person: Person, _ text: String) throws -> CuriosityItem {
+        let item = CuriosityItem(id: .init(), kind: kind, text: text, payoffCount: 0, status: status,
+                                 sourceMemoryID: nil, targetMemoryID: nil, entityID: person.entityID)
+        try db.writer.write { try item.insert($0) }
+        return item
+    }
+
+    /// The questions about `person`, as "kind|status|text", sorted.
+    func questions(about person: Person) throws -> [String] {
+        try db.writer.read { db in
+            try CuriosityItem.filter(Column("entity_id") == person.id.rawValue).fetchAll(db)
+                .map { "\($0.kind.rawValue)|\($0.status.rawValue)|\($0.text)" }.sorted()
+        }
+    }
+}
+
+// Ruling C15: one person is never asked the same question twice. An open question of the leaving person goes with them
+// when the stayer has an open one of the same kind; every other question moves.
+@Test func anOpenQuestionTheStayerAlsoHasGoesWithTheLeavingPerson() throws {
+    let env = try MergeEnv()
+    let robin = try env.store.people.insertPerson(displayName: "Robin")
+    let robyn = try env.store.people.insertPerson(displayName: "Robyn Vale")
+    try env.question(.personWithoutMoment, about: robyn, "When did you meet Robyn?")
+    try env.question(.personWithoutMoment, about: robin, "When did you meet Robin?")
+    try env.question(.personWithoutMoment, .dismissed, about: robin, "Where did Robin live?")
+    try env.question(.unexplainedPerson, about: robin, "Who is Robin?")
+
+    try env.actions.merge(robin.id, into: robyn.id)
+
+    #expect(try env.questions(about: robyn) == ["person_without_moment|dismissed|Where did Robin live?",
+                                                "person_without_moment|open|When did you meet Robyn?",
+                                                "unexplained_person|open|Who is Robin?"])
+    #expect(try env.store.curiosity.open().filter { $0.kind == .personWithoutMoment }.count == 1)
+}
+
 @Test func theLeavingFirstTellingFollowsTheStayersOwn() throws {
     let env = try MergeEnv()
     let robin = try env.store.people.insertPerson(displayName: "Robin")
