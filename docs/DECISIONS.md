@@ -4,7 +4,7 @@ One entry per decision. Newest first. Status is Decided, Open, or Superseded.
 
 ## 2026-11-19 · PC-c: two people can be merged — decisions and rulings made while building
 
-**Status:** Decided by the builder and the controller. The owner approved the plan on 2026-11-19 ("Yes, build both") without a review of each decision. The owner can overrule each one. Source: `docs/plans/2026-11-19-people-contacts-c.md`, ledger `.superpowers/sdd/2026-11-19-people-contacts-c/rulings.md` (C1 to C9). Narrows `docs/specs/2026-11-18-people-contacts.md`, section "Merging two people", and call 21, each marked in the spec.
+**Status:** Decided by the builder and the controller. The owner approved the plan on 2026-11-19 ("Yes, build both") without a review of each decision. The owner can overrule each one. Source: `docs/plans/2026-11-19-people-contacts-c.md`, ledger `.superpowers/sdd/2026-11-19-people-contacts-c/rulings.md` (C1 to C15). Narrows `docs/specs/2026-11-18-people-contacts.md`, section "Merging two people", and call 21, each marked in the spec.
 
 **Decision.** The plan's ten decisions, as built:
 
@@ -22,7 +22,7 @@ One entry per decision. Newest first. Status is Decided, Open, or Superseded.
 Rulings:
 
 - C1 (Task 2): `PhotoRepository.writeOrder` is visible inside the kit.
-- **C2** (pre-flight): a merged link keeps its extractor handle (`person_handle`). When both persons link one memory, the staying person's row and its handle stay, and the other row goes into the receipt. Cost if wrong: a later card of that recording with the other handle is guessed again (D31 of PC-d).
+- **C2** (pre-flight): a merged link keeps its extractor handle (`person_handle`). When both persons link one memory, the staying person's row and its handle stay, and the other row goes into the receipt. Cost: see C11.
 - C3 (Task 2): `undo` came in Task 3, not as a stub. When a photo is on both pages and the leaving side's link is the owner's, the staying link becomes the owner's.
 - **C4** (after the Task 2 review): the staying person keeps no row that disagrees with what they hold. The merge removes their "taken off this page" row for a photo they now hold, and their decline of the contact they now hold. When both persons link one memory and the staying link has no role text, it takes the leaving link's role text. Why: the owner's words are kept first.
 - C5 (Task 2): tags left on the leaving entity are deleted by hand, because `domain_tag` has no foreign key. The refusals run again inside the write.
@@ -30,6 +30,7 @@ Rulings:
 - **C7** (Task 3): the receipt keeps one copy per table, for both persons, in rowid order. The legacy `memory_person` rows are owned, so Undo gives them back. The merge does not move them to the staying person, because no code reads that table.
 - C8 (Task 5): the contact search makes its link after its own sheet has closed, so "Same person?" never opens over it. The forced confirm reads the pictures itself.
 - **C9** (Task 6): the drag carries the person's id as plain text with the prefix `lifeline-person:`, so no type is declared in Info.plist. A drop of other text does nothing. The merge and its notice exist on the People grid only, not for places and things. The Undo window starts when the motion ends. Cost: a tile dragged into another app pastes an internal id, with no content.
+- **C11** (final review I1, parked): when both persons link one memory under two handles of one said name, the merge drops the leaving handle. A card of that recording that is still waiting and names the dropped handle finds no handle link. The staying person is taken by the kept handle for the same said name, so Keep makes a new person with that name, marked as a guess. The owner must merge again, once for each such card. With two different said names, the alias finds the staying person. One link per person and memory holds one handle, so a fix needs a decision from the owner. It joins PC-d's limit D31. Kit tests pin the behaviour (`knownLimitC11ADroppedHandleOnAWaitingCardMakesANewMarkedPerson`).
 - Tests: the longer person page (the new row) made five older UI tests miss their target. The tests now scroll to it. No assertion changed. The drag test runs on the simulator with a slow drag and a hold.
 
 **Why.** Two entries for one real person split the stories, names and photos. The merge joins them, asks first and gives Undo (principles 1 and 9). The flags stay on so that a merge never sends to the model a person the owner kept from it.

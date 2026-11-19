@@ -202,6 +202,23 @@ func undoPutsEveryRowOfBothPeopleBack(_ mergeCase: MergeCase) throws {
     #expect(try env.dump() == dump)
 }
 
+// Rulings C2 and C11: both rows come back, each with its own handle, whether the merge moved a link or dropped one.
+@Test(arguments: [false, true])
+func undoBringsBackEachLinkWithItsOwnHandle(oneMemory: Bool) throws {
+    let env = try MergeEnv()
+    let (leaving, staying, _) = oneMemory ? try env.handlesOnOneMemory() : try env.handlesOnTwoMemories()
+    let handles = { (person: Person) in try env.store.entities.links(to: person.entityID).compactMap(\.personHandle) }
+    let (leavingHandle, stayingHandle) = (oneMemory ? "p2" : "p1", oneMemory ? "p1" : "p2")
+    #expect(try handles(leaving) == [leavingHandle] && handles(staying) == [stayingHandle])
+    let rows = try env.rows(of: leaving, staying), dump = try env.dump()
+
+    try env.actions.undo(try env.actions.merge(leaving.id, into: staying.id))
+
+    #expect(try handles(leaving) == [leavingHandle] && handles(staying) == [stayingHandle])
+    #expect(try env.rows(of: leaving, staying) == rows)
+    #expect(try env.dump() == dump)
+}
+
 // MARK: - Stale: Undo refuses and changes nothing
 
 /// Merges a pair with one link each, makes `change` after the merge, and expects Undo to refuse with no row changed.

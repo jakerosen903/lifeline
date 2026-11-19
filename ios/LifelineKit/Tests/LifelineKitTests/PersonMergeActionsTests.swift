@@ -179,6 +179,99 @@ private let valeContact = PersonGuess.Contact(identifier: "c-vale", fullName: "R
     #expect(!String(decoding: try packet.encodedJSON(), as: UTF8.self).contains("Vale"), "the contact's name never reaches the model")
 }
 
+// MARK: - Handles (PC-d), rulings C2 and C11
+
+extension MergeEnv {
+    /// A memory card as extractor v8 leaves it, with a handle per said name: `(handle, said name)`.
+    func handleCard(in segment: SegmentID, people: [(String, String)]) throws -> Candidate {
+        let text = try #require(try store.sessions.fetchSegment(segment)).text
+        let outs = people.map { PersonOut(handle: $0.0, saidName: $0.1, relationText: nil, personID: nil) }
+        let out = MemoryOut(ref: "m0", kind: .event, title: "A title", quote: text,
+                            segmentSpan: WordSpan(startWord: 0, endWord: text.split(separator: " ").count - 1),
+                            peopleRefs: outs.map(\.saidName), placeText: nil, anchors: [], collectionHint: nil, chapterHint: nil, confidence: 0.9,
+                            aboutRef: nil, personHandles: outs.map(\.handle), handlePeople: outs)
+        let card = StoreFixtures.candidate(segment, payload: try CandidatePayload.encode(out))
+        try store.candidates.insert(card)
+        return card
+    }
+
+    /// Keeps a handle card and gives the memory's person links, sorted by handle.
+    func keepHandles(in segment: SegmentID, _ people: [(String, String)]) throws -> [MomentEntity] {
+        let memory = try keep.acceptMemory(try handleCard(in: segment, people: people), joinStory: false).memory
+        return try store.entities.links(of: memory.id).filter { $0.entity.type == .person && $0.link.relation == .mention }.map(\.link)
+            .sorted { ($0.personHandle ?? "") < ($1.personHandle ?? "") }
+    }
+
+    func person(of link: MomentEntity) throws -> Person { try #require(try person(PersonID(rawValue: link.entityID.rawValue))) }
+
+    /// One recording, two memories: "p1" made Robin on the first, "p2" made Robyn on the second. A third segment waits.
+    func handlesOnTwoMemories() throws -> (leaving: Person, staying: Person, segments: [SegmentID]) {
+        let segments = try session(["Robin painted the fence", "Robyn fixed the gate", "Robin held the ladder"])
+        let robin = try person(of: try #require(try keepHandles(in: segments[0], [("p1", "Robin")]).first))
+        let robyn = try person(of: try #require(try keepHandles(in: segments[1], [("p2", "Robyn")]).first))
+        #expect(robin.id != robyn.id && robin.displayName == "Robin" && robyn.displayName == "Robyn")
+        return (robin, robyn, segments)
+    }
+
+    /// One recording, one memory with two handles of one said name: "p1" stays, "p2" leaves. A second segment waits.
+    func handlesOnOneMemory() throws -> (leaving: Person, staying: Person, segments: [SegmentID]) {
+        let segments = try session(["Robyn and Robyn painted the fence", "Robyn fixed the gate"])
+        let links = try keepHandles(in: segments[0], [("p1", "Robyn"), ("p2", "Robyn")])
+        #expect(links.map(\.personHandle) == ["p1", "p2"])
+        let (staying, leaving) = (try person(of: links[0]), try person(of: links[1]))
+        #expect(staying.id != leaving.id)
+        return (leaving, staying, segments)
+    }
+}
+
+@Test func linksOnTwoMemoriesBothJoinTheStayerEachWithItsOwnHandle() throws {
+    let env = try MergeEnv()
+    let (robin, robyn, segments) = try env.handlesOnTwoMemories()
+
+    try env.actions.merge(robin.id, into: robyn.id)
+
+    let links = try env.store.entities.links(to: robyn.entityID).sorted { ($0.personHandle ?? "") < ($1.personHandle ?? "") }
+    #expect(links.map(\.personHandle) == ["p1", "p2"], "each link keeps its own handle (C2)")
+    let handles = try env.store.personLinks.handleLinks(inSessionOf: segments[0])
+    #expect(Set(handles.map(\.handle)) == ["p1", "p2"])
+    #expect(handles.allSatisfy { $0.person == robyn.id }, "both handles now mean the stayer in this recording")
+
+    let later = try #require(try env.keepHandles(in: segments[2], [("p1", "Robin")]).first)
+    #expect(later.entityID == robyn.entityID, "a later card with the leaving handle links the stayer")
+    #expect(later.personHandle == "p1")
+}
+
+@Test func aMemoryLinkedToBothUnderTwoHandlesKeepsTheStayersHandle() throws {
+    let env = try MergeEnv()
+    let (leaving, staying, segments) = try env.handlesOnOneMemory()
+    let memory = try #require(try env.store.entities.links(to: staying.entityID).first).memoryID
+
+    try env.actions.merge(leaving.id, into: staying.id)
+
+    let links = try env.store.entities.links(of: memory).filter { $0.entity.type == .person }.map(\.link)
+    #expect(links.count == 1)
+    #expect(links.first?.entityID == staying.entityID && links.first?.personHandle == "p1", "the stayer's row and handle stay (C2)")
+    let handles = try env.store.personLinks.handleLinks(inSessionOf: segments[0])
+    #expect(handles.map(\.handle) == ["p1"], "the leaving handle p2 is dropped")
+}
+
+// Known limit, ruling C11 (with PC-d's limit D31): one link per person and memory holds one handle, so the merge drops
+// "p2". A waiting card of the same recording that names "p2" finds no handle link, and the stayer is `taken` by "p1"
+// for the same said name. Keep makes a new person "Robyn", marked as a guess, never `said` or `confirmed`; the owner
+// merges again. This test pins today's behaviour; a change to it is a decision for the owner.
+@Test func knownLimitC11ADroppedHandleOnAWaitingCardMakesANewMarkedPerson() throws {
+    let env = try MergeEnv()
+    let (leaving, staying, segments) = try env.handlesOnOneMemory()
+    try env.actions.merge(leaving.id, into: staying.id)
+
+    let later = try #require(try env.keepHandles(in: segments[1], [("p2", "Robyn")]).first)
+
+    #expect(later.entityID != staying.entityID, "the stayer is taken by p1 for the same said name")
+    #expect(later.origin == .new, "marked: a new person, never said or confirmed")
+    let made = try env.person(of: later)
+    #expect(made.id != leaving.id && made.displayName == "Robyn" && made.createdByGuess)
+}
+
 // MARK: - Refusals
 
 @Test func twoPeopleWhoBothHoldAContactAreRefusedAndNothingChanges() throws {
