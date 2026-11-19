@@ -793,3 +793,181 @@ private func storyCard(_ maya: Entity, holds: Bool = true, story: Set<EntityID>)
     let again = try #require(pages(added).first { $0.title == "Maya" })
     #expect(again.isChosen && !again.byStory)
 }
+
+// MARK: - The photo follows a moved name
+
+private extension StoryFixture {
+    var actions: PersonLinkActions { PersonLinkActions(store: store) }
+
+    /// The memory's mention of the person, as the "Who is this?" sheet gets it.
+    func nameLink(_ memory: Memory, _ person: EntityID) throws -> PersonLink {
+        try #require(try store.personLinks.links(to: PersonID(rawValue: person.rawValue)).first { $0.memoryID == memory.id && $0.relation == .mention })
+    }
+
+    /// The origin of the page's link to the story's photo, as stored; nil for the owner's link or no link.
+    func pageLinkOrigin(_ entity: EntityID) throws -> String? {
+        try db.writer.read { try String.fetchOne($0, sql: "select origin from photo_link where photo_id = ? and entity_id = ?",
+                                                 arguments: [subject.id.rawValue, entity.rawValue]) }
+    }
+
+    /// Two moments of the story that name Dad, kept.
+    func twoMomentsNamingDad() throws -> (Memory, Memory) {
+        (try keep(try pendingCard(people: ["Dad"])), try keep(try pendingCard(title: "The beach", ordinal: 1, words: (1, 2), people: ["Dad"])))
+    }
+}
+
+private func entityID(_ person: PersonID?) throws -> EntityID { EntityID(rawValue: try #require(person).rawValue) }
+private func personID(_ entity: EntityID) -> PersonID { PersonID(rawValue: entity.rawValue) }
+
+@Test func movingANameMovesTheStorysPhoto() throws {
+    let f = try StoryFixture()
+    let dad = try f.person("Dad")
+    let kept = try f.keep(try f.pendingCard(people: ["Dad"]))
+    #expect(try f.nameLinkOrigin(kept.id, dad) == LinkOrigin.assumed.rawValue)
+    let receipt = try f.actions.move(try f.nameLink(kept, dad), to: .someoneNew, wholeGroup: false)
+    let new = try entityID(receipt.createdPerson)
+    #expect(try f.page(new) == [f.subject.id])
+    #expect(try f.pageLinkOrigin(new) == PhotoLinkOrigin.story.rawValue)
+    #expect(try f.page(dad).isEmpty)
+    #expect(receipt.photoPages == PhotoPageChange(photo: f.subject.id, added: [new], removed: [dad]))
+}
+
+@Test func aMoveToAPersonOnFileMovesThePhoto() throws {
+    let f = try StoryFixture()
+    let dad = try f.person("Dad"), maya = try f.person("Maya")
+    let kept = try f.keep(try f.pendingCard(people: ["Dad"]))
+    let receipt = try f.actions.move(try f.nameLink(kept, dad), to: .person(personID(maya)), wholeGroup: false)
+    #expect(try f.page(maya) == [f.subject.id])
+    #expect(try f.pageLinkOrigin(maya) == PhotoLinkOrigin.story.rawValue)
+    #expect(try f.page(dad).isEmpty)
+    #expect(receipt.photoPages == PhotoPageChange(photo: f.subject.id, added: [maya], removed: [dad]))
+}
+
+@Test func notAPersonRemovesTheStorysLinkAndAddsNone() throws {
+    let f = try StoryFixture()
+    let dad = try f.person("Dad")
+    let kept = try f.keep(try f.pendingCard(people: ["Dad"]))
+    let receipt = try f.actions.move(try f.nameLink(kept, dad), to: .notAPerson, wholeGroup: false)
+    #expect(try f.page(dad).isEmpty)
+    #expect(try f.db.writer.read { try Int.fetchOne($0, sql: "select count(*) from photo_link where entity_id is not null") } == 0)
+    #expect(receipt.photoPages == PhotoPageChange(photo: f.subject.id, added: [], removed: [dad]))
+}
+
+@Test func theFirstPersonKeepsThePhotoWhileAnotherMomentNamesThem() throws {
+    let f = try StoryFixture()
+    let dad = try f.person("Dad")
+    let (first, _) = try f.twoMomentsNamingDad()
+    let receipt = try f.actions.move(try f.nameLink(first, dad), to: .someoneNew, wholeGroup: false)
+    let new = try entityID(receipt.createdPerson)
+    #expect(try f.page(dad) == [f.subject.id], "the other moment still names Dad")
+    #expect(try f.page(new) == [f.subject.id])
+    #expect(receipt.photoPages == PhotoPageChange(photo: f.subject.id, added: [new], removed: []))
+}
+
+@Test func aMoveLeavesAnOwnersLink() throws {
+    let f = try StoryFixture()
+    let dad = try f.person("Dad")
+    try f.store.photos.link(f.subject.id, to: .entity(dad))
+    let kept = try f.keep(try f.pendingCard(people: ["Dad"]))
+    let receipt = try f.actions.move(try f.nameLink(kept, dad), to: .someoneNew, wholeGroup: false)
+    #expect(try f.page(dad) == [f.subject.id], "the owner put the photo there before the story")
+    #expect(try f.pageLinkOrigin(dad) == nil)
+    #expect(receipt.photoPages?.removed == [])
+}
+
+@Test func aMoveDoesNotAddToADeclinedPage() throws {
+    let f = try StoryFixture()
+    let dad = try f.person("Dad"), maya = try f.person("Maya")
+    try f.store.photos.link(f.subject.id, to: .entity(maya))
+    _ = try f.store.photos.unlink(f.subject.id, from: .entity(maya))
+    let kept = try f.keep(try f.pendingCard(people: ["Dad"]))
+    let receipt = try f.actions.move(try f.nameLink(kept, dad), to: .person(personID(maya)), wholeGroup: false)
+    #expect(try f.page(maya).isEmpty, "the owner took the photo off Maya's page")
+    #expect(receipt.photoPages?.added == [])
+}
+
+@Test func aMoveInAStoryWithNoPhotoTouchesNoPhotoLink() throws {
+    let f = try StoryFixture(photoSession: false)
+    let dad = try f.person("Dad")
+    let kept = try f.keep(try f.pendingCard(people: ["Dad"]))
+    let receipt = try f.actions.move(try f.nameLink(kept, dad), to: .someoneNew, wholeGroup: false)
+    #expect(receipt.photoPages == nil)
+}
+
+/// Decision 10: the move acts only when the moved moment holds the photo.
+@Test func aMoveOfAMomentThatDoesNotHoldThePhotoTouchesNoPhotoLink() throws {
+    let f = try StoryFixture()
+    let dad = try f.person("Dad")
+    let kept = try f.keep(try f.pendingCard(people: ["Dad"]))
+    _ = try f.store.photos.unlink(f.subject.id, from: .memory(kept.id))
+    let receipt = try f.actions.move(try f.nameLink(kept, dad), to: .someoneNew, wholeGroup: false)
+    #expect(receipt.photoPages == nil)
+    #expect(try f.page(dad) == [f.subject.id], "the page keeps the photo, as after a removed moment")
+    #expect(try f.page(try entityID(receipt.createdPerson)).isEmpty)
+}
+
+@Test func theRemovalRecordsNoDecline() throws {
+    let f = try StoryFixture()
+    let dad = try f.person("Dad")
+    let kept = try f.keep(try f.pendingCard(people: ["Dad"]))
+    _ = try f.actions.move(try f.nameLink(kept, dad), to: .notAPerson, wholeGroup: false)
+    #expect(try f.page(dad).isEmpty)
+    #expect(try !f.store.photos.isDeclined(f.subject.id, on: dad))
+    #expect(try f.store.photos.photo(id: f.subject.id) != nil, "the session still points at the photo")
+}
+
+@Test func undoPutsThePhotoBack() throws {
+    let f = try StoryFixture()
+    let dad = try f.person("Dad")
+    let kept = try f.keep(try f.pendingCard(people: ["Dad"]))
+    let receipt = try f.actions.move(try f.nameLink(kept, dad), to: .someoneNew, wholeGroup: false)
+    let new = try #require(receipt.createdPerson)
+    try f.actions.undo(receipt)
+    #expect(try f.page(dad) == [f.subject.id])
+    #expect(try f.pageLinkOrigin(dad) == PhotoLinkOrigin.story.rawValue)
+    #expect(try f.store.people.person(id: new) == nil, "the new person is gone, as today")
+    #expect(try f.store.photos.storyPages(of: f.subject.id) == [dad])
+}
+
+/// A guessed person the move empties goes; Undo brings the person back first, then the photo link.
+@Test func undoPutsThePhotoBackOnAGuessedPersonTheMoveRemoved() throws {
+    let f = try StoryFixture()
+    let maya = try f.person("Maya")
+    let kept = try f.keep(try f.pendingCard(people: ["Tomas"]))
+    let tomas = try #require(try f.store.personLinks.links(of: kept.id).first).person
+    #expect(tomas.createdByGuess)
+    #expect(try f.page(tomas.entityID) == [f.subject.id])
+    let receipt = try f.actions.move(try f.nameLink(kept, tomas.entityID), to: .person(personID(maya)), wholeGroup: false)
+    #expect(try f.store.people.person(id: tomas.id) == nil, "the photo the story put there does not hold the guess")
+    #expect(receipt.photoPages == PhotoPageChange(photo: f.subject.id, added: [maya], removed: [tomas.entityID]))
+    try f.actions.undo(receipt)
+    #expect(try f.store.people.person(id: tomas.id) != nil)
+    #expect(try f.page(tomas.entityID) == [f.subject.id])
+    #expect(try f.pageLinkOrigin(tomas.entityID) == PhotoLinkOrigin.story.rawValue)
+    #expect(try f.page(maya).isEmpty)
+}
+
+@Test func undoLeavesALinkTheOwnerMadeAfterTheMove() throws {
+    let f = try StoryFixture()
+    let dad = try f.person("Dad"), maya = try f.person("Maya")
+    let kept = try f.keep(try f.pendingCard(people: ["Dad"]))
+    let receipt = try f.actions.move(try f.nameLink(kept, dad), to: .person(personID(maya)), wholeGroup: false)
+    _ = try f.store.photos.unlink(f.subject.id, from: .entity(maya))
+    try f.store.photos.link(f.subject.id, to: .entity(maya))
+    #expect(try f.pageLinkOrigin(maya) == nil, "now the owner's link")
+    try f.actions.undo(receipt)
+    #expect(try f.page(maya) == [f.subject.id], "Undo leaves the owner's link")
+    #expect(try f.page(dad) == [f.subject.id])
+}
+
+@Test func undoDoesNotBringBackAPhotoTheOwnerTookOff() throws {
+    let f = try StoryFixture()
+    let dad = try f.person("Dad"), maya = try f.person("Maya")
+    let kept = try f.keep(try f.pendingCard(people: ["Dad"]))
+    let receipt = try f.actions.move(try f.nameLink(kept, dad), to: .person(personID(maya)), wholeGroup: false)
+    try f.store.photos.link(f.subject.id, to: .entity(dad))
+    _ = try f.store.photos.unlink(f.subject.id, from: .entity(dad))
+    try f.actions.undo(receipt)
+    #expect(try f.page(dad).isEmpty, "the owner took the photo off Dad's page")
+    #expect(try f.page(maya).isEmpty, "the story's link to Maya goes with Undo")
+}

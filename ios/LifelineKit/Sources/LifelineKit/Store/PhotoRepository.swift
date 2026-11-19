@@ -222,7 +222,15 @@ public struct PhotoRepository: Sendable {
     private static func removeStoryLinks(of photo: PhotoID, in db: Database) throws {
         let pages = try String.fetchAll(db, sql: "select entity_id from photo_link where photo_id = ? and entity_id is not null and origin = ?",
                                         arguments: [photo.rawValue, PhotoLinkOrigin.story.rawValue])
-        for page in pages { _ = try removeLink(photo, from: .entity(EntityID(rawValue: page)), in: db) }
+        for page in pages { _ = try removeStoryLink(of: photo, from: EntityID(rawValue: page), in: db) }
+    }
+
+    /// Removes the page's link to the photo only while a story made it; an owner's link stays. Records no decline and
+    /// never deletes the photo row. True when a link went.
+    private static func removeStoryLink(of photo: PhotoID, from page: EntityID, in db: Database) throws -> Bool {
+        let isStory = try Bool.fetchOne(db, sql: "select exists (select 1 from photo_link where photo_id = ? and entity_id = ? and origin = ?)",
+                                        arguments: [photo.rawValue, page.rawValue, PhotoLinkOrigin.story.rawValue]) ?? false
+        return try isStory && removeLink(photo, from: .entity(page), in: db)
     }
 
     /// Deletes every photo row with no link and no session that points at it; returns them.
@@ -271,8 +279,9 @@ public struct PhotoRepository: Sendable {
     /// names, with origin `story`. Skips the owner, a hidden entity, a page that holds the photo, and a declined pair.
     /// Returns the entities it linked, in the order the memory's links were written.
     /// Every relation counts, by ruling: a kept fact about a person in a photo story (`detail`) also places the photo.
+    /// `only` limits the write to that one person, by the same rules (a moved name).
     @discardableResult
-    static func linkToPeoplePages(_ photo: PhotoID, namedBy memory: MemoryID, in db: Database) throws -> [EntityID] {
+    static func linkToPeoplePages(_ photo: PhotoID, namedBy memory: MemoryID, only: EntityID? = nil, in db: Database) throws -> [EntityID] {
         let people = try String.fetchAll(db, sql: """
             select moment_entity.entity_id from moment_entity
             join entity on entity.id = moment_entity.entity_id
@@ -282,8 +291,55 @@ public struct PhotoRepository: Sendable {
             order by min(moment_entity.rowid)
             """, arguments: [memory.rawValue, EntityType.person.rawValue]).map(EntityID.init(rawValue:))
         var linked: [EntityID] = []
-        for person in people where try link(photo, to: .entity(person), origin: .story, in: db) { linked.append(person) }
+        for person in people where only == nil || person == only {
+            if try link(photo, to: .entity(person), origin: .story, in: db) { linked.append(person) }
+        }
         return linked
+    }
+
+    // MARK: - A moved name (Task 4)
+
+    /// Inside a move of a name, after the name links are written and before an empty guess is judged, so the
+    /// story's own link does not hold the first person. Acts only when the session has a subject photo and a moved
+    /// memory holds it (plan decision 10). The new person gets the photo by the Keep's rules. The first person loses
+    /// it only when a story made the link and no memory of the session that holds the photo names them now; no
+    /// decline is recorded. Nil when no photo link changed.
+    static func followMovedName(_ moved: Set<MemoryID>, of session: SessionID, from first: EntityID, to new: EntityID?,
+                                in db: Database) throws -> PhotoPageChange? {
+        guard let photo = try subjectPhoto(of: session, in: db)?.id else { return nil }
+        let holding = try moved.filter { try isHeld(photo, by: $0, in: db) }.sorted { $0.rawValue < $1.rawValue }
+        guard !holding.isEmpty else { return nil }
+        var added: [EntityID] = []
+        if let new {
+            for memory in holding { added += try linkToPeoplePages(photo, namedBy: memory, only: new, in: db) }
+        }
+        let stillNamed = try Bool.fetchOne(db, sql: """
+            select exists (
+                select 1 from moment_entity me join photo_link pl on pl.memory_id = me.memory_id and pl.photo_id = ?
+                where me.entity_id = ? and me.memory_id in (
+                    select ms.memory_id from memory_span ms join segment on segment.id = ms.segment_id
+                    where ms."order" = 0 and segment.session_id = ?))
+            """, arguments: [photo.rawValue, first.rawValue, session.rawValue]) ?? false
+        let removed = try !stillNamed && removeStoryLink(of: photo, from: first, in: db) ? [first] : []
+        guard !added.isEmpty || !removed.isEmpty else { return nil }
+        return PhotoPageChange(photo: photo, added: added, removed: removed)
+    }
+
+    /// Inside the Undo of a move, after a person the move removed exists again. Takes back only what is still as the
+    /// move left it (plan decision 11): an added link the owner made their own stays; a removed link comes back as
+    /// `story` unless the page holds the photo or the owner took it off since (`link` refuses both).
+    static func undo(_ change: PhotoPageChange, in db: Database) throws {
+        for page in change.added { _ = try removeStoryLink(of: change.photo, from: page, in: db) }
+        // The session can let the photo go after the move; with no row there is nothing to put back.
+        guard try Photo.exists(db, key: change.photo.rawValue) else { return }
+        for page in change.removed where try Entity.exists(db, key: page.rawValue) {
+            try link(change.photo, to: .entity(page), origin: .story, in: db)
+        }
+    }
+
+    private static func isHeld(_ photo: PhotoID, by memory: MemoryID, in db: Database) throws -> Bool {
+        try Bool.fetchOne(db, sql: "select exists (select 1 from photo_link where photo_id = ? and memory_id = ?)",
+                          arguments: [photo.rawValue, memory.rawValue]) ?? false
     }
 
     /// True when this call wrote the link; false when the subject already held the photo, whatever its origin.

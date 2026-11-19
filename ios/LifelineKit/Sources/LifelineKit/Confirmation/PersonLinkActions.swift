@@ -19,6 +19,8 @@ public struct PersonMoveReceipt: Sendable, Equatable {
     var clearedGuess: PersonName?
     /// The "Someone new" person's name as made. Undo refuses to delete them after a rename.
     var createdName: PersonName?
+    /// The page links of the story's photo that followed the name. Nil: the move touched no photo link.
+    public var photoPages: PhotoPageChange?
 
     /// A person's name and where it came from, so Undo can tell the owner renamed them since.
     struct PersonName: Sendable, Equatable {
@@ -27,11 +29,19 @@ public struct PersonMoveReceipt: Sendable, Equatable {
 
     init(before: [MomentEntity], after: [MomentEntity], removedPerson: Person?, addedAliases: [Alias], createdPerson: PersonID?, newName: String,
          removedEntity: Entity? = nil, removedAliases: [Alias] = [], spansBefore: [EntitySpan] = [], spansAfter: [EntitySpan] = [],
-         clearedGuess: PersonName? = nil, createdName: PersonName? = nil) {
+         clearedGuess: PersonName? = nil, createdName: PersonName? = nil, photoPages: PhotoPageChange? = nil) {
         self.before = before; self.after = after; self.removedPerson = removedPerson; self.addedAliases = addedAliases
         self.createdPerson = createdPerson; self.newName = newName; self.removedEntity = removedEntity; self.removedAliases = removedAliases
         self.spansBefore = spansBefore; self.spansAfter = spansAfter; self.clearedGuess = clearedGuess; self.createdName = createdName
+        self.photoPages = photoPages
     }
+}
+
+/// How a move of a name changed the page links of its story's photo, so Undo can take it back.
+public struct PhotoPageChange: Sendable, Equatable {
+    public var photo: PhotoID
+    public var added: [EntityID]        // pages the move put the photo on (origin `story`)
+    public var removed: [EntityID]      // pages the move took the story's link from
 }
 
 /// One said name of a waiting card, as Keep would link it, or as the owner marked it "Not a person".
