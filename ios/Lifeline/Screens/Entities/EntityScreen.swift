@@ -87,7 +87,9 @@ struct EntityScreen: View {
 
                 if hasPhotos, viewModel.shelf.photos.count >= 2 {
                     Section {
-                        PhotoRow(photos: viewModel.shelf.photos, label: viewModel.photoLabel, cache: viewModel.deps.photoImages) { viewing = $0 }
+                        PhotoRow(photos: viewModel.shelf.photos, label: viewModel.photoLabel, cache: viewModel.deps.photoImages,
+                                 onOpen: { viewing = $0 },
+                                 onMove: { id, index in Task { await viewModel.movePhoto(id, to: index); onChange() } })
                             .listRowBackground(Color.clear)
                     }
                 }

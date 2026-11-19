@@ -89,6 +89,10 @@ public actor PhotoLibrary {
         try photos.setCover(photo, of: subject)
     }
 
+    public func reorder(_ photos: [PhotoID], of subject: PhotoSubject) throws {
+        try self.photos.reorder(photos, of: subject)
+    }
+
     public nonisolated func url(for photo: Photo) -> URL { directory.appending(path: photo.fileName) }
 
     public struct Swept: Sendable, Equatable {

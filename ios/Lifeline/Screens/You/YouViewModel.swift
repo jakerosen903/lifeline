@@ -94,6 +94,11 @@ final class YouViewModel {
         await shelf?.makeCover(photo)
     }
 
+    func movePhoto(_ photo: PhotoID, to index: Int) async {
+        clearError()
+        await shelf?.move(photo, to: index)
+    }
+
     func removePhoto(_ photo: PhotoID) async {
         clearError()
         await shelf?.remove(photo)

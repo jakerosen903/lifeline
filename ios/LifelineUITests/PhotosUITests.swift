@@ -49,10 +49,136 @@ final class PhotosUITests: XCTestCase {
         XCTAssertTrue(app.reveal(app.staticTexts["Photos"]))
         app.buttons.matching(identifier: "photo.thumb").element(boundBy: 1).tap()
         XCTAssertTrue(app.any("photo.viewer").waitForExistence(timeout: 5))
+        XCTAssertEqual(app.buttons["photo.makeCover"].label, "Make this the key photo")
         app.buttons["photo.makeCover"].tap()
         XCTAssertTrue(app.buttons["photo.header"].waitForExistence(timeout: 5))
         XCTAssertEqual(app.buttons["photo.header"].value as? String, "")
         XCTAssertFalse(app.staticTexts["photo.caption"].exists, "no date, no caption")
+        XCTAssertTrue(app.reveal(app.staticTexts["Photos"]))
+        XCTAssertEqual(thumbValues(app), ["", "taken 14 June 2012"], "the key photo moved to the front")
+    }
+
+    // MARK: - The key photo on the shelf
+
+    @MainActor
+    func testTheShelfSaysWhichPhotoIsTheKeyPhoto() {
+        let app = openMayasShelf()
+        let hint = app.staticTexts["photo.shelfHint"]
+        XCTAssertTrue(hint.exists)
+        XCTAssertEqual(hint.label, "The first photo is the key photo. Hold a photo and drag it to the front to change it.")
+        let first = thumbs(app).element(boundBy: 0)
+        XCTAssertLessThan(app.staticTexts["Photos"].frame.maxY, hint.frame.minY + 1, "the line sits under the heading")
+        XCTAssertLessThan(hint.frame.maxY, first.frame.minY + 1, "and above the tiles")
+        let key = app.any("photo.keyLabel")
+        XCTAssertTrue(key.exists)
+        XCTAssertEqual(key.label, "Key photo")
+        XCTAssertTrue(first.frame.contains(key.frame), "the pill is on the first tile: \(key.frame) in \(first.frame)")
+    }
+
+    @MainActor
+    func testDraggingAPhotoToTheFrontChangesTheKeyPhoto() {
+        let app = openMayasShelf()
+        let all = thumbs(app)
+        all.element(boundBy: 1).press(forDuration: 1.0, thenDragTo: all.element(boundBy: 0))
+        XCTAssertFalse(app.any("photo.viewer").exists, "a drag does not open the viewer")
+        XCTAssertTrue(app.buttons["photo.header"].waitForValue("", timeout: 5), "the undated photo is the key photo now")
+        XCTAssertTrue(app.reveal(app.staticTexts["Photos"]))
+        XCTAssertEqual(thumbValues(app), ["", "taken 14 June 2012"])
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+        app.openEntityPage("Maya")
+        XCTAssertEqual(app.buttons["photo.header"].value as? String, "", "the order is stored")
+        XCTAssertTrue(app.reveal(app.staticTexts["Photos"]))
+        XCTAssertEqual(thumbValues(app), ["", "taken 14 June 2012"])
+    }
+
+    @MainActor
+    func testDraggingTheKeyPhotoAwayMakesTheNextOneTheKeyPhoto() {
+        let app = openMayasShelf()
+        let all = thumbs(app)
+        all.element(boundBy: 0).press(forDuration: 1.0, thenDragTo: all.element(boundBy: 1))
+        XCTAssertTrue(app.buttons["photo.header"].waitForValue("", timeout: 5), "the next photo is the key photo")
+    }
+
+    @MainActor
+    func testADragThatEndsWhereItStartedChangesNothing() {
+        let app = openMayasShelf()
+        let second = thumbs(app).element(boundBy: 1)
+        let start = second.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+        start.press(forDuration: 1.0, thenDragTo: start.withOffset(CGVector(dx: 6, dy: 0)))
+        XCTAssertEqual(thumbValues(app), ["taken 14 June 2012", ""])
+        XCTAssertFalse(app.any("photo.error").exists)
+        XCTAssertFalse(app.any("photo.viewer").exists)
+    }
+
+    @MainActor
+    func testADragThatRestsBeforeTheReleaseDoesNotOpenTheViewer() {
+        let app = openMayasShelf()
+        let all = thumbs(app)
+        all.element(boundBy: 1).press(forDuration: 1.0, thenDragTo: all.element(boundBy: 0), withVelocity: .default, thenHoldForDuration: 1.0)
+        XCTAssertTrue(app.buttons["photo.header"].waitForValue("", timeout: 5), "the move happened")
+        XCTAssertFalse(app.any("photo.viewer").exists, "the release of a drag is not a tap")
+    }
+
+    @MainActor
+    func testAHoldWithNoMoveDoesNotOpenTheViewer() {
+        let app = openMayasShelf()
+        thumbs(app).element(boundBy: 1).press(forDuration: 1.5)
+        XCTAssertFalse(app.any("photo.viewer").waitForExistence(timeout: 2), "the release of a hold is not a tap")
+        XCTAssertEqual(thumbValues(app), ["taken 14 June 2012", ""], "the order is unchanged")
+    }
+
+    @MainActor
+    func testATapOnAThumbStillOpensTheViewer() {
+        let app = openMayasShelf()
+        let all = thumbs(app)
+        all.element(boundBy: 1).press(forDuration: 1.0, thenDragTo: all.element(boundBy: 0))
+        XCTAssertTrue(app.buttons["photo.header"].waitForValue("", timeout: 5))
+        XCTAssertTrue(app.reveal(app.staticTexts["Photos"]))
+        thumbs(app).element(boundBy: 1).tap()
+        XCTAssertTrue(app.any("photo.viewer").waitForExistence(timeout: 5))
+    }
+
+    @MainActor
+    func testOnePhotoHasNoHintAndNoDrag() {
+        let app = XCUIApplication.launchWithPhotos(); app.openEntityPage("Maya")
+        let moment = app.buttons.matching(identifier: "entity.moment").matching(NSPredicate(format: "label == %@", "The tree house")).firstMatch
+        XCTAssertTrue(app.reveal(moment)); moment.tap()
+        XCTAssertTrue(app.buttons["memory.range"].waitForExistence(timeout: 5))
+        let thumb = thumbs(app).firstMatch
+        XCTAssertTrue(thumb.exists)
+        XCTAssertTrue(app.any("photo.keyLabel").exists)
+        XCTAssertFalse(app.staticTexts["photo.shelfHint"].exists)
+        let start = thumb.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+        start.press(forDuration: 1.0, thenDragTo: start.withOffset(CGVector(dx: 120, dy: 0)))
+        XCTAssertFalse(app.any("photo.viewer").exists)
+        XCTAssertEqual(thumbs(app).count, 1)
+        XCTAssertEqual(thumbValues(app), ["taken 4 July 1999"])
+        XCTAssertFalse(app.any("photo.error").exists)
+    }
+
+    @MainActor
+    func testTheShelfHoldsAtTheLargestText() {
+        let app = openMayasShelf(["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"])
+        let hint = app.staticTexts["photo.shelfHint"]
+        XCTAssertTrue(app.reveal(hint))
+        XCTAssertGreaterThan(hint.frame.height, 44, "the line wraps, it does not clip")
+        for thumb in thumbs(app).allElementsBoundByIndex { XCTAssertGreaterThanOrEqual(thumb.frame.height, 44) }
+    }
+
+    @MainActor
+    private func openMayasShelf(_ extra: [String] = []) -> XCUIApplication {
+        let app = XCUIApplication.launchWithPhotos(extra)
+        app.openEntityPage("Maya")
+        XCTAssertTrue(app.reveal(app.staticTexts["Photos"]))
+        return app
+    }
+
+    @MainActor
+    private func thumbs(_ app: XCUIApplication) -> XCUIElementQuery { app.buttons.matching(identifier: "photo.thumb") }
+
+    @MainActor
+    private func thumbValues(_ app: XCUIApplication) -> [String] {
+        thumbs(app).allElementsBoundByIndex.map { $0.value as? String ?? "" }
     }
 
     @MainActor
@@ -147,5 +273,13 @@ final class PhotosUITests: XCTestCase {
         app.addPhotoFromMenu("you.more", "you.addPhoto")
         XCTAssertTrue(app.any("you.error").waitForExistence(timeout: 10))
         XCTAssertEqual(app.any("you.error").label, "Could not add this photo: Lifeline cannot read this file as a photo.")
+    }
+}
+
+private extension XCUIElement {
+    /// A write lands after the gesture ends: waits for the element to read `value`.
+    func waitForValue(_ value: String, timeout: TimeInterval) -> Bool {
+        let expectation = XCTNSPredicateExpectation(predicate: NSPredicate(format: "value == %@", value), object: self)
+        return XCTWaiter().wait(for: [expectation], timeout: timeout) == .completed
     }
 }

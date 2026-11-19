@@ -1,6 +1,6 @@
 import Foundation
 
-/// Gathers what `PhotoStory.card` needs from the store, and applies the two taps the card offers.
+/// Gathers what `PhotoStory.card` needs from the store, and applies the card's taps: a page, the date and its Undo.
 public struct PhotoStoryReader: Sendable {
     private let store: ExtractionStore
 
@@ -15,7 +15,7 @@ public struct PhotoStoryReader: Sendable {
         let holding = Set(memories.map(\.id)).intersection(held.memories)
         var linked: [MemoryID: [Entity]] = [:]
         for id in holding { linked[id] = try store.entities.links(of: id).map(\.entity) }
-        let pagesWithPhoto = held.entities
+        let pagesWithPhoto = try held.entities.compactMap { try store.entities.entity(id: $0) }
         let pendingCards = try store.candidates.pending(in: session).contains { $0.kind == .memory }
         let pendingSegments = try !store.sessions.segments(in: session, status: .pending).isEmpty
         return PhotoStory.card(photo: photo, sessionMemories: memories, holding: holding, linked: linked, pagesWithPhoto: pagesWithPhoto,
@@ -28,11 +28,25 @@ public struct PhotoStoryReader: Sendable {
         try store.photos.link(photo, to: .entity(entity))
     }
 
-    /// The memory takes the photo's day in one write; its chapter's stated years do not change (S6c). The resolver then runs, so a memory
-    /// placed relative to this one is placed again at once; it leaves a settled date alone.
-    /// A memory whose range changed since the card was drawn is left alone: the offer was made against the older range.
-    public func useDate(_ offer: PhotoStoryCard.DateOffer) throws {
-        guard try store.memories.updateRange(offer.memory.id, .fromPhoto(offer.date), ifCurrently: offer.memory.range) else { return }
+    /// Sets each memory to `.fromPhoto(date)` in one write, checked against the range each `Memory` value carries. A memory whose
+    /// range changed since the value was read is left alone. The resolver then runs one time, so a memory placed relative to
+    /// a changed one is placed again at once; it leaves a settled date alone. Returns one change for each memory it wrote.
+    public func useDate(_ date: CivilDate, for memories: [Memory]) throws -> [PhotoDateChange] {
+        let changes = memories.map { MemoryRepository.RangeChange(memory: $0.id, range: .fromPhoto(date), ifCurrently: $0.range) }
+        let written = Set(try store.memories.updateRanges(changes))
+        guard !written.isEmpty else { return [] }
         _ = try ResolverRunner(store: store).run()
+        return memories.filter { written.contains($0.id) }.map { PhotoDateChange(memory: $0.id, before: $0.range, date: date) }
+    }
+
+    /// Puts back each `before` in one write, only where the stored range is still `.fromPhoto(change.date)`: a date the person
+    /// set after the tap stays. The resolver then runs one time. A guess with an anchor comes back the same; a guess that
+    /// nothing supports becomes unplaced, as in every resolver run. Returns the memories it put back.
+    @discardableResult
+    public func undoDate(_ changes: [PhotoDateChange]) throws -> [MemoryID] {
+        let back = changes.map { MemoryRepository.RangeChange(memory: $0.memory, range: $0.before, ifCurrently: .fromPhoto($0.date)) }
+        let restored = try store.memories.updateRanges(back)
+        if !restored.isEmpty { _ = try ResolverRunner(store: store).run() }
+        return restored
     }
 }
