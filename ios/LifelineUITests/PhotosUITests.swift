@@ -304,6 +304,19 @@ final class PhotosUITests: XCTestCase {
         XCTAssertEqual(thumbValues(app), ["taken 14 June 2012", "", "taken 14 June 2012", "taken 2 March 2005"])
     }
 
+    /// More than one failure in a pick: one line that says how many (PhotoAddProgress.failureLine, verbatim).
+    @MainActor
+    func testTwoBadPhotosSayHowManyCouldNotBeAdded() throws {
+        let app = XCUIApplication.launchWithPeople(try pickPhotos(["not-a-photo", "not-a-photo"]))
+        app.openEntityPage("Lena")
+        app.addPhotoFromMenu("entity.more", "entity.addPhoto")
+        let error = app.any("photo.error")
+        XCTAssertTrue(error.waitForExistence(timeout: 20))
+        XCTAssertEqual(error.label, "2 photos could not be added.")
+        XCTAssertEqual(app.descendants(matching: .any).matching(identifier: "photo.error").count, 1, "one error line")
+        XCTAssertFalse(app.buttons["photo.header"].exists, "nothing is added")
+    }
+
     @MainActor
     func testTheFirstPickedPhotoIsTheKeyPhotoOnAnEmptyPage() throws {
         let app = XCUIApplication.launchWithPeople(try pickPhotos(["photo-green", "photo-orange"]))
@@ -332,13 +345,28 @@ final class PhotosUITests: XCTestCase {
         XCTAssertFalse(app.any("photo.error").exists, "the second is no failure")
     }
 
+    /// The line counts the photos of a pick (PhotoAddProgress.line(adding:of:), verbatim). Each file waits three seconds.
+    @MainActor
+    func testTheAddingLineCountsThePhotos() throws {
+        let app = XCUIApplication.launchWithPeople(try pickPhotos(["photo-orange", "photo-green"]) + ["-uiTesting-slowPhotoFile"])
+        app.openEntityPage("Lena")
+        app.addPhotoFromMenu("entity.more", "entity.addPhoto")
+        XCTAssertTrue(waitForAddingLine(app, "Adding photo 1 of 2…", timeout: 5), "the first photo")
+        XCTAssertTrue(waitForAddingLine(app, "Adding photo 2 of 2…", timeout: 10), "the line moves to the next photo")
+        XCTAssertTrue(waitForAbsence(app.any("photo.adding"), timeout: 30), "both photos are done")
+        XCTAssertTrue(app.staticTexts["Photos"].waitForExistence(timeout: 5), "both photos were added")
+    }
+
     /// Each file waits three seconds (`-uiTesting-slowPhotoFile`), so the page is seen while the photos are added.
     @MainActor
     func testAddAPhotoWaitsWhilePhotosAreAdded() throws {
         let app = XCUIApplication.launchWithPeople(try pickPhotos(["photo-orange", "photo-green"]) + ["-uiTesting-slowPhotoFile"])
         app.openEntityPage("Lena")
         app.addPhotoFromMenu("entity.more", "entity.addPhoto")
-        XCTAssertTrue(app.any("photo.adding").waitForExistence(timeout: 5), "the photos are being added")
+        let adding = app.any("photo.adding")
+        XCTAssertTrue(adding.waitForExistence(timeout: 5), "the photos are being added")
+        // PhotoAddProgress.line(adding:of:), verbatim. The line and its spinner are one activity indicator.
+        XCTAssertTrue(waitForAddingLine(app, "Adding photo 1 of 2…", timeout: 5), "the line counts the photos")
         app.buttons["entity.more"].tap()
         let add = app.buttons["entity.addPhoto"]
         XCTAssertTrue(add.waitForExistence(timeout: 5), "Add a photo stays in the menu")
@@ -371,6 +399,19 @@ final class PhotosUITests: XCTestCase {
         return XCTWaiter().wait(for: [expectation], timeout: timeout) == .completed
     }
 
+    /// Polls the adding line until its label reads `text`. The line is found again on each read: an element found once
+    /// stays bound to its first match, and a key-path predicate on `label` did not match this activity indicator.
+    @MainActor
+    private func waitForAddingLine(_ app: XCUIApplication, _ text: String, timeout: TimeInterval) -> Bool {
+        let deadline = Date().addingTimeInterval(timeout)
+        repeat {
+            let line = app.any("photo.adding")
+            if line.exists && line.label == text { return true }
+            RunLoop.current.run(until: Date().addingTimeInterval(0.25))
+        } while Date() < deadline
+        return false
+    }
+
     @MainActor
     private func waitForAbsence(_ element: XCUIElement, timeout: TimeInterval) -> Bool {
         let expectation = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: element)
@@ -384,4 +425,5 @@ private extension XCUIElement {
         let expectation = XCTNSPredicateExpectation(predicate: NSPredicate(format: "value == %@", value), object: self)
         return XCTWaiter().wait(for: [expectation], timeout: timeout) == .completed
     }
+
 }
