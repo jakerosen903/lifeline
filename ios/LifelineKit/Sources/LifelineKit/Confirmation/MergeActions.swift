@@ -40,7 +40,8 @@ extension CandidateActions {
                               order: try store.memories.nextSpanOrder(of: target), titleText: out.title, candidateID: candidate.id)
         // The card's edges and its continuations', as one telling (M5).
         let continuations = try store.candidates.continuations(of: candidate.id)
-        let edges = try handlesKept(try tellingEdges(of: out, card: candidate, continuations: continuations, for: target), joining: target, from: candidate)
+        let edges = try keepingTargetOrigins(try handlesKept(try tellingEdges(of: out, card: candidate, continuations: continuations, for: target),
+                                                             joining: target, from: candidate), of: [target])
         // The owner named this moment before telling it; now they have told it.
         let promotion = targetMemory.isFloating ? (title: out.title, summaryQuote: out.quote) : nil
         let addedPhoto = try store.memories.mergeSpan(span, continuations: try continuationSpans(of: out, for: target), people: edges.people, places: edges.places, links: edges.links, entities: edges.entityWrite,
@@ -91,7 +92,8 @@ extension CandidateActions {
                               startMs: words[out.segmentSpan.startWord].startMs, endMs: words[out.segmentSpan.endWord].endMs,
                               order: 0, titleText: out.title, candidateID: candidate.id)
         let continuations = try store.candidates.continuations(of: candidate.id)
-        let edges = try handlesKept(try tellingEdges(of: out, card: candidate, continuations: continuations, for: oldest.id), joining: oldest.id, from: candidate)
+        let edges = try keepingTargetOrigins(try handlesKept(try tellingEdges(of: out, card: candidate, continuations: continuations, for: oldest.id),
+                                                             joining: oldest.id, from: candidate), of: [oldest.id] + later.map(\.id))
         let promotion = oldest.isFloating && later.isEmpty ? (title: out.title, summaryQuote: out.quote) : nil
         // The write says what it linked, after the folds: a photo a folded memory held is moved, not added.
         let addedPhoto = try store.memories.mergeGroup(sources: later, into: oldest, span: span, continuations: try continuationSpans(of: out, for: oldest.id),
@@ -117,6 +119,25 @@ extension CandidateActions {
         guard !same else { return edges }
         var out = edges
         out.people = edges.people.map { var person = $0; person.handle = nil; return person }
+        return out
+    }
+
+    /// D29: a link that only a carried handle made never changes the origin of a link the target already has, up or down.
+    /// Its origin is cleared, so the write keeps the target's row as it is (`insertKeepingStrongerOrigin` ignores nil).
+    /// `memories` are the target and every memory folded into it.
+    private func keepingTargetOrigins(_ edges: Edges, of memories: [MemoryID]) throws -> Edges {
+        guard !edges.carriedPeople.isEmpty || !edges.carriedDetails.isEmpty else { return edges }
+        let existing = Set(try memories.flatMap { try store.entities.links(of: $0) }.map { "\($0.link.entityID.rawValue)|\($0.link.relation.rawValue)" })
+        func held(_ entity: EntityID, _ relation: EntityRelation) -> Bool { existing.contains("\(entity.rawValue)|\(relation.rawValue)") }
+        var out = edges
+        for i in out.people.indices where edges.carriedPeople.contains(out.people[i].personID)
+            && held(EntityID(rawValue: out.people[i].personID.rawValue), .mention) {
+            out.people[i].origin = nil
+        }
+        for i in out.links.indices where out.links[i].relation == .detail && edges.carriedDetails.contains(out.links[i].entityID)
+            && held(out.links[i].entityID, .detail) {
+            out.links[i].origin = nil
+        }
         return out
     }
 

@@ -1013,7 +1013,7 @@ private func expectPreviewMatches(_ chips: [PreviewChip], _ links: [MomentEntity
                                             joinStory: false)
     let details = try env.personLinks(fact.memory.id, relation: .detail)
     #expect(details.map(\.entityID) == [robyn.entityID], "the detail follows the recording's link of p1")
-    #expect(details.map(\.origin) == [.new], "the origin of a person the app made for this handle stays new (decision 7)")
+    #expect(details.map(\.origin) == [.assumed], "a detail that follows a handle of another segment is a guess (D29)")
     #expect(try env.personLinks(fact.memory.id).isEmpty, "a fact with no people of its own names no one")
 }
 
@@ -1069,4 +1069,86 @@ private func expectPreviewMatches(_ chips: [PreviewChip], _ links: [MomentEntity
     let link = try #require(try env.personLinks(first.memory.id).first)
     #expect(link.entityID == guessed.entityID && link.personHandle == "p1", "the naming card kept later links the same person")
     #expect(try env.store.people.people().filter { !$0.isOwner }.count == 1)
+}
+
+// MARK: - Final review I1 (D29): a carried handle keeps its person, but its mark only when this card says the same name
+
+@Test func aCarriedHandleUnderAnotherSaidNameIsAssumed() throws {
+    let env = try Env()
+    let (_, segs) = try StoreFixtures.session(in: env.store.sessions, segments: ["Robyn painted the fence", "my roommate fixed the gate"])
+    let first = try env.actions.acceptMemory(try env.handleCard(in: segs[0].id, "Robyn painted the fence", people: [handled("p1", "Robyn")]), joinStory: false)
+    let second = try env.actions.acceptMemory(try env.handleCard(in: segs[1].id, "my roommate fixed the gate", people: [handled("p1", "my roommate")]),
+                                              joinStory: false)
+    let a = try #require(try env.personLinks(first.memory.id).first), b = try #require(try env.personLinks(second.memory.id).first)
+    #expect(a.origin == .new)
+    #expect(b.entityID == a.entityID && b.origin == .assumed, "another said name: the model's reuse of the handle is a guess")
+}
+
+@Test func theModelsReuseOfAHandleForAnotherNameIsAssumed() throws {
+    let env = try Env()
+    let (_, segs) = try StoreFixtures.session(in: env.store.sessions, segments: ["Robyn painted the fence", "Tomas fixed the gate"])
+    let first = try env.actions.acceptMemory(try env.handleCard(in: segs[0].id, "Robyn painted the fence", people: [handled("p1", "Robyn")]), joinStory: false)
+    let second = try env.actions.acceptMemory(try env.handleCard(in: segs[1].id, "Tomas fixed the gate", people: [handled("p1", "Tomas")]), joinStory: false)
+    let a = try #require(try env.personLinks(first.memory.id).first), b = try #require(try env.personLinks(second.memory.id).first)
+    #expect(b.entityID == a.entityID, "the handle keeps its person")
+    #expect(b.origin == .assumed, "the link to Robyn shows the Assumed mark")
+}
+
+@Test func aPronounCardThatStoresTheRecordingsEntryIsAssumed() throws {
+    let env = try Env()
+    let (_, segs) = try StoreFixtures.session(in: env.store.sessions, segments: ["Robyn moved in that fall", "She was always late"])
+    _ = try env.actions.acceptMemory(try env.handleCard(in: segs[0].id, "Robyn moved in that fall", people: [handled("p1", "Robyn")]), joinStory: false)
+    let fact = try env.actions.acceptMemory(try env.handleCard(in: segs[1].id, "She was always late", kind: .fact, people: [handled("p1", "Robyn")],
+                                                               about: "p1"), joinStory: false)
+    #expect(try env.personLinks(fact.memory.id).map(\.origin) == [.assumed], "the name was said in another segment")
+    #expect(try env.personLinks(fact.memory.id, relation: .detail).map(\.origin) == [.assumed])
+}
+
+@Test func aCarriedSaidLinkDoesNotRaiseAnAssumedLinkOnSameStory() throws {
+    let env = try Env()
+    let sister = try env.store.people.insertPerson(displayName: "Robyn")
+    try env.store.people.addAlias("my sister", to: sister.id)
+    let (_, segs) = try StoreFixtures.session(in: env.store.sessions, segments: ["Robyn my sister painted the fence", "Robyn fixed the gate", "Robyn waved"])
+    let first = try env.actions.acceptMemory(try env.handleCard(in: segs[0].id, "Robyn my sister painted the fence",
+                                                                people: [handled("p1", "Robyn", relation: "my sister")]), joinStory: false)
+    #expect(try env.personLinks(first.memory.id).map(\.origin) == [.said])
+    // A memory of this recording whose link to the sister is a guess (no handle: an older card).
+    let waved = try env.actions.acceptMemory(try env.card(in: segs[2].id, "Robyn waved", people: ["Robyn"]), joinStory: false)
+    #expect(try env.personLinks(waved.memory.id).map(\.origin) == [.assumed])
+    // Robyn said again under p1: alone it would carry `said`, but it never raises the target's link.
+    _ = try env.actions.mergeCandidate(try env.handleCard(in: segs[1].id, "Robyn fixed the gate", people: [handled("p1", "Robyn")]), into: waved.memory.id)
+    let links = try env.personLinks(waved.memory.id)
+    #expect(links.map(\.entityID) == [sister.entityID])
+    #expect(links.map(\.origin) == [.assumed], "a carried origin never raises an existing link")
+}
+
+@Test func aCarriedAssumedLinkLeavesANewLinkAsItIs() throws {
+    let env = try Env()
+    let (_, segs) = try StoreFixtures.session(in: env.store.sessions, segments: ["Robyn painted the fence", "my roommate fixed the gate"])
+    let first = try env.actions.acceptMemory(try env.handleCard(in: segs[0].id, "Robyn painted the fence", people: [handled("p1", "Robyn")]), joinStory: false)
+    _ = try env.actions.mergeCandidate(try env.handleCard(in: segs[1].id, "my roommate fixed the gate", people: [handled("p1", "my roommate")]),
+                                       into: first.memory.id)
+    #expect(try env.personLinks(first.memory.id).map(\.origin) == [.new], "a carried assumed does not overwrite the existing origin")
+}
+
+// Final review M1: rule 1 decides before handle order does.
+@Test func aHandleWhoseGuessIsSaidIsDecidedFirstInEitherOrder() throws {
+    for sisterFirst in [true, false] {
+        let env = try Env()
+        let other = try env.store.people.insertPerson(displayName: "Robyn")
+        let sister = try env.store.people.insertPerson(displayName: "Robyn")
+        try env.store.people.addAlias("my sister", to: sister.id)
+        // The sister is the most recently linked Robyn, so rule 4 alone would pick her for a plain "Robyn".
+        let waved = try env.card("Robyn waved", people: ["Robyn"])
+        try env.storeChoice("person", saidName: "Robyn", person: sister.id, on: waved.id)
+        _ = try env.actions.acceptMemory(waved, joinStory: false)
+
+        let plain = handled("p1", "Robyn"), withRelation = handled("p2", "Robyn", relation: "my sister")
+        let card = try env.handleCard("Robyn and Robyn my sister painted the fence", people: sisterFirst ? [withRelation, plain] : [plain, withRelation])
+        let (links, chips) = try env.keepAndPreview(card)
+        let p1 = try #require(links.first { $0.personHandle == "p1" }), p2 = try #require(links.first { $0.personHandle == "p2" })
+        #expect(p2.entityID == sister.entityID && p2.origin == .said, "the sister is on file: rule 1")
+        #expect(p1.entityID == other.entityID && p1.origin == .assumed, "the plain Robyn gets the next candidate")
+        expectPreviewMatches(chips.sorted { ($0.handle ?? "") < ($1.handle ?? "") }, links, madeByKeep: [])
+    }
 }

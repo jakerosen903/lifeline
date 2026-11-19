@@ -19,6 +19,8 @@ extension CandidateActions {
         var mentionRelations: [(text: String, relation: String)]
         /// Who each handle became in the kept memories of this recording, newest first (PC-d). Empty for a card with no handles.
         var handleLinks: [PersonLinkRepository.HandleLink] = []
+        /// The text of the card's own segment, read with the handle links: a carried handle keeps its mark only for a name said here (D29).
+        var segmentText: String = ""
 
         /// The owner's stored answer under `key` (`ChoiceKey`).
         func choice(_ key: String) -> PersonChoice? { choices.first { $0.saidKey == key } }
@@ -35,6 +37,8 @@ extension CandidateActions {
         var origin: LinkOrigin
         /// The owner's words to save as aliases: only from `said` or `confirmed` (a guess teaches no name).
         var aliases: [String]
+        /// The person came from a handle the recording linked before (D29): it never raises a link the target already has.
+        var carried: Bool = false
     }
 
     /// What each handle of one telling became on this Keep: the card's and each continuation row's. A continuation's
@@ -66,16 +70,20 @@ extension CandidateActions {
             }
         } ?? []
         let handleLinks = readingHandles ? try segment.map { try store.personLinks.handleLinks(inSessionOf: $0) } ?? [] : []
+        let segmentText = readingHandles ? try segment.flatMap { try store.sessions.fetchSegment($0)?.text } ?? "" : ""
         return GuessInputs(known: try store.personLinks.known(), contacts: contactsForGuess(),
                            choices: try card.map { try store.personLinks.choices(for: $0) } ?? [],
-                           owner: try store.people.ownerNames(), card: card, mentionRelations: relations, handleLinks: handleLinks)
+                           owner: try store.people.ownerNames(), card: card, mentionRelations: relations, handleLinks: handleLinks,
+                           segmentText: segmentText)
     }
 
     /// The link for one handle of the card (PC-d), or nil for "not a person". The first step that applies decides:
     /// 1. the owner's answer stored for this handle (`ChoiceKey`), origin `confirmed`;
-    /// 2. the person this handle already has on this Keep, or in a kept memory of this recording (decision 7);
+    /// 2. the person this handle already has on this Keep, or in a kept memory of this recording, with the origin
+    ///    `carried` gives (D29);
     /// 3. the guess, where a person another handle of the same said name holds is no candidate, and the model's
-    ///    person id decides inside rule 4 (decision 6).
+    ///    person id decides inside rule 4 (decision 6). A handle whose own guess is not `said` also leaves out the
+    ///    person another undecided handle of the name reaches by rule 1 or 2, so handle order never decides (M1).
     func handleLink(for person: PersonOut, _ inputs: GuessInputs, handles: inout HandlePlan, plan: inout EntityRepository.Write) -> GuessedLink? {
         if let done = handles.entry(person.handle) { return done.link }
         let said = SaidName(ref: person.saidName, mentionRelation: person.relationText)
@@ -84,7 +92,7 @@ extension CandidateActions {
         if let stored = inputs.choice(ChoiceKey.text(saidName: person.saidName, handle: person.handle)) {
             link = storedLink(stored, for: said, handle: person.handle, inputs, plan: &plan)
         } else if let earlier = inputs.handleLinks.first(where: { $0.handle == person.handle }) {
-            link = GuessedLink(person: earlier.person, origin: Self.carried(earlier.origin), aliases: [])
+            link = GuessedLink(person: earlier.person, origin: Self.carried(earlier, as: person, saidIn: inputs.segmentText), aliases: [], carried: true)
         } else {
             // Two handles of one said name are two people: what the others hold is taken, a planned person's contact too,
             // and what the owner chose for another handle of the telling, decided yet or not.
@@ -95,8 +103,14 @@ extension CandidateActions {
             let takenContacts = Set(others.compactMap(\.contact) + chosen.contacts)
             var free = inputs
             free.contacts = inputs.contacts.filter { !takenContacts.contains($0.identifier) }
-            let result = PersonGuess.guess(said, people: inputs.known, contacts: free.contacts,
-                                           modelPick: person.personID.map(PersonID.init(rawValue:)), taken: taken)
+            let modelPick = person.personID.map(PersonID.init(rawValue:))
+            var result = PersonGuess.guess(said, people: inputs.known, contacts: free.contacts, modelPick: modelPick, taken: taken)
+            if result.origin != .said {
+                let claimed = Self.saidClaims(otherThan: person.handle, saidKey: key, handles, free, taken: taken)
+                if !claimed.isEmpty {
+                    result = PersonGuess.guess(said, people: inputs.known, contacts: free.contacts, modelPick: modelPick, taken: taken.union(claimed))
+                }
+            }
             link = guessedLink(from: result, for: said, handle: person.handle, free, plan: &plan)
         }
         let contact = link.flatMap { link in plan.persons.first { $0.id == link.person }?.contactIdentifier }
@@ -121,10 +135,30 @@ extension CandidateActions {
         return (persons, contacts)
     }
 
-    /// Decision 7: a handle keeps its person, but not the owner's answer. `said` and `new` stay; anything else is the
-    /// app's guess now (`assumed`), a `confirmed` link included: only the owner's own action confirms a link.
-    static func carried(_ origin: LinkOrigin?) -> LinkOrigin {
-        origin == .said || origin == .new ? origin ?? .assumed : .assumed
+    /// The persons that the other undecided handles of the telling with this said key reach by rule 1 or 2 (`said`):
+    /// the owner's words name them, so a plain name of the same key must not take them first (M1). A handle with a
+    /// stored answer or a link in this recording is left to `ownersChoices` and `taken`.
+    static func saidClaims(otherThan handle: String, saidKey key: String, _ handles: HandlePlan, _ inputs: GuessInputs,
+                           taken: Set<PersonID>) -> Set<PersonID> {
+        var claimed: Set<PersonID> = []
+        for other in handles.telling where other.handle != handle && SaidName.key(other.saidName) == key && handles.entry(other.handle) == nil
+            && inputs.choice(ChoiceKey.text(saidName: other.saidName, handle: other.handle)) == nil
+            && !inputs.handleLinks.contains(where: { $0.handle == other.handle }) {
+            let result = PersonGuess.guess(SaidName(ref: other.saidName, mentionRelation: other.relationText), people: inputs.known,
+                                           contacts: inputs.contacts, taken: taken)
+            if result.origin == .said, case .person(let id) = result.choice { claimed.insert(id) }
+        }
+        return claimed
+    }
+
+    /// D29 (overrides decision 7): a handle keeps its person, and the earlier link's origin only when it is `said` or `new`
+    /// and this card says the same name (`SaidName.key`) in its own segment. Anything else is the model's opinion, so
+    /// `assumed`: another said name, a pronoun card that stores the recording's entry (D17), a `confirmed` link (only the
+    /// owner's own action confirms a link).
+    static func carried(_ earlier: PersonLinkRepository.HandleLink, as person: PersonOut, saidIn segmentText: String) -> LinkOrigin {
+        guard let origin = earlier.origin, origin == .said || origin == .new,
+              SaidName.key(person.saidName) == earlier.saidKey, OutputValidator.contains(segmentText, person.saidName) else { return .assumed }
+        return origin
     }
 
     /// The link for one said name, or nil when the owner said it is not a person or it names
