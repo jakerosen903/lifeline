@@ -104,13 +104,17 @@ extension PersonLinkRepository {
     }
 
     /// Each alias of the leaving person, oldest first, then their name (plan decision 3), so the name said in a later
-    /// story still finds the merged person. A name that came from a contact is never an alias: no contact name may reach
-    /// the model. A name equal to the stayer's adds nothing, so a contact name the stayer carries is never copied in either.
+    /// story still finds the merged person. The leaving name is skipped when it came from a contact (no contact name may
+    /// reach the model) or equals the stayer's name. When the stayer's name came from a contact, a leaving alias equal to
+    /// it is skipped too (ruling C13): typed by the owner or not, it is the contact's exact name, and an alias goes to the
+    /// model. Every other alias is copied as it is.
     private static func moveNames(of l: Person, to s: Person, in db: Database) throws {
-        for alias in try Alias.filter(Column("person_id") == l.id.rawValue).order(Column.rowID).fetchAll(db) {
+        let stayersName = PeopleRepository.normalize(s.displayName)
+        for alias in try Alias.filter(Column("person_id") == l.id.rawValue).order(Column.rowID).fetchAll(db)
+        where s.nameOrigin != .contact || PeopleRepository.normalize(alias.text) != stayersName {
             try PeopleRepository.insertAlias(alias.text, s.id, db)
         }
-        guard l.nameOrigin != .contact, PeopleRepository.normalize(l.displayName) != PeopleRepository.normalize(s.displayName) else { return }
+        guard l.nameOrigin != .contact, PeopleRepository.normalize(l.displayName) != stayersName else { return }
         try PeopleRepository.insertAlias(l.displayName, s.id, db)
     }
 

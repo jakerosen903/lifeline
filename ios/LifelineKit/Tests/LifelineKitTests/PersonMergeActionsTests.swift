@@ -272,6 +272,33 @@ extension MergeEnv {
     #expect(made.id != leaving.id && made.displayName == "Robyn" && made.createdByGuess)
 }
 
+// Ruling C13: the owner typed "Robyn Vale" for the leaving person, and the stayer was made from the contact "Robyn Vale".
+// The typed alias equals the contact's name, so it is not added: the contact's exact name would reach the packet.
+@Test func aLeavingAliasEqualToAContactNamedStayersNameIsNotAdded() throws {
+    let env = try MergeEnv(contacts: [valeContact])
+    let segment = try env.session(["Robyn painted the fence"])[0]
+    let moment = try env.keep.acceptMemory(try env.card(in: segment, people: ["Robyn"]), joinStory: false).memory
+    let stayer = try env.person(of: try #require(try env.store.entities.links(of: moment.id).first { $0.entity.type == .person }?.link))
+    #expect(stayer.nameOrigin == .contact && stayer.displayName == "Robyn Vale")
+    let typed = try env.store.people.insertPerson(displayName: "Robyn Vale")
+    try env.store.people.addAlias("Robyn V.", to: typed.id)
+    #expect(try env.store.people.aliasesOldestFirst(of: typed.id).map(\.text) == ["Robyn Vale", "Robyn V."])
+    let rows = try env.rows(of: typed, stayer), dump = try env.dump()
+
+    let receipt = try env.actions.merge(typed.id, into: stayer.id)
+
+    #expect(try env.store.people.aliasesOldestFirst(of: stayer.id).map(\.text) == ["Robyn", "Robyn V."], "only the typed alias that is not the contact's name")
+    let people = try env.store.people.peopleByRecentLink().map { ($0, try env.store.people.aliasesOldestFirst(of: $0.id)) }
+    let seg = try #require(try env.store.sessions.fetchSegment(segment))
+    let packet = ContextPacketBuilder.build(segment: seg, previous: [], people: people, memories: [], profileFreeText: nil, stage: "open")
+    #expect(!String(decoding: try packet.encodedJSON(), as: UTF8.self).contains("Vale"), "the contact's name never reaches the model")
+
+    try env.actions.undo(receipt)
+    #expect(try env.store.people.aliasesOldestFirst(of: typed.id).map(\.text) == ["Robyn Vale", "Robyn V."])
+    #expect(try env.rows(of: typed, stayer) == rows)
+    #expect(try env.dump() == dump)
+}
+
 // MARK: - Refusals
 
 @Test func twoPeopleWhoBothHoldAContactAreRefusedAndNothingChanges() throws {
