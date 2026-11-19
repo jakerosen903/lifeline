@@ -112,16 +112,16 @@ import GRDB
 }
 
 @Test func schemaVersionsOrderByMigrationPosition() {
-    #expect(Migrations.currentSchemaVersion == "v15")
+    #expect(Migrations.currentSchemaVersion == "v16")
     #expect(Migrations.isNewer("v9", than: "v8") && !Migrations.isNewer("v8", than: "v9") && Migrations.isNewer("v10", than: "v9"))
     #expect(Migrations.isNewer("v8", than: "v7") && !Migrations.isNewer("v7", than: "v8") && !Migrations.isNewer("v8", than: "v8"))
     #expect(Migrations.isNewer("v99", than: "v8"), "an unknown version is from the future")
 }
 
-/// The photo story's `v14` (`session.subject_photo_id`) and the contacts `v15` are both here, in that order.
-/// A phone that ran a photo build has `v14` recorded and takes only `v15`; a phone on `v13` takes both.
+/// The photo story's `v14` (`session.subject_photo_id`), the contacts `v15` and the photo pages `v16` are all here, in that order.
+/// A phone that ran a photo build has `v14` recorded and takes `v15` and `v16`; a phone on `v13` takes all three.
 @Test func v14ThenV15AreBothRegistered() {
-    #expect(Array(Migrations.versions.suffix(2)) == ["v14", "v15"])
+    #expect(Array(Migrations.versions.suffix(3)) == ["v14", "v15", "v16"])
     #expect(!Migrations.isNewer("v14", than: Migrations.currentSchemaVersion), "a photo build's backup can be read")
 }
 
@@ -349,4 +349,69 @@ import GRDB
     }
     try db.writer.write { try $0.execute(sql: "delete from candidate where id = 'c1'") }
     #expect(try db.writer.read { try Int.fetchOne($0, sql: "select count(*) from candidate_person_choice") } == 0)
+}
+
+/// v16 (photo on people's pages): one column on `photo_link`, one on `session`, one new table. No existing row changes.
+@Test func v16KeepsEveryRowAndOldLinksHaveNoOrigin() throws {
+    var config = Configuration()
+    config.foreignKeysEnabled = true
+    let queue = try DatabaseQueue(configuration: config)
+    try Migrations.migrator.migrate(queue, upTo: "v15")
+    try queue.write { db in
+        try db.execute(sql: """
+            insert into session (id, started_at, ended_at, audio_path, stage_log, landing_choice_made) values ('s1', '2026-10-01', '2026-10-01', 'a.m4a', '[]', 1);
+            insert into entity (id, type, title, created_at) values ('e1', 'person', 'Maya', '2026-10-01');
+            insert into person (id, entity_id, display_name, is_owner) values ('e1', 'e1', '', 0);
+            insert into photo (id, file_name, sha256, pixel_width, pixel_height, added_at) values ('p1', 'p1.jpg', 'p1-hash', 4, 3, '2026-10-01');
+            insert into photo_link (photo_id, entity_id, role, sort_order) values ('p1', 'e1', 'cover', 0);
+            update session set subject_photo_id = 'p1' where id = 's1';
+            """)
+    }
+    let tables = ["session", "entity", "person", "photo", "photo_link"]
+    func rows() throws -> [[Row]] {
+        try queue.read { db in try tables.map { try Row.fetchAll(db, sql: "select * from \($0) order by rowid") } }
+    }
+    let before = try rows()
+    try Migrations.migrator.migrate(queue)
+    let after = try rows()
+    for (old, new) in zip(before, after) {
+        #expect(old.count == new.count, "no row is added or deleted")
+        for (o, n) in zip(old, new) { for (column, value) in o { #expect(n[column] == value, "\(column) is unchanged") } }
+    }
+    try queue.read { db throws in
+        #expect(try Row.fetchOne(db, sql: "select origin from photo_link")?["origin"] as String? == nil, "an old link has no origin")
+        #expect(try Int.fetchAll(db, sql: "select photo_pages_done from session") == [0], "every old story starts open")
+        #expect(try db.tableExists("photo_page_declined"))
+    }
+    #expect(Migrations.currentSchemaVersion == "v16")
+}
+
+/// A phone on `v13` (before the photo story) takes `v14`, `v15` and `v16` in one launch.
+@Test func v16FromV13() throws {
+    var config = Configuration()
+    config.foreignKeysEnabled = true
+    let queue = try DatabaseQueue(configuration: config)
+    try Migrations.migrator.migrate(queue, upTo: "v13")
+    try queue.write { db in
+        try db.execute(sql: """
+            insert into session (id, started_at, ended_at, audio_path, stage_log, landing_choice_made) values ('s1', '2026-10-01', '2026-10-01', 'a.m4a', '[]', 1);
+            insert into segment (id, session_id, "index", start_ms, end_ms, text, status) values ('g1', 's1', 0, 0, 1000, 'hi', 'extracted');
+            insert into entity (id, type, title, created_at) values ('e1', 'person', 'Maya', '2026-10-01');
+            insert into person (id, entity_id, display_name, is_owner) values ('e1', 'e1', '', 0);
+            insert into memory (id, title, summary_quote, visibility, created_at) values ('m1', 'The beach', 'a', 'timeline', '2026-10-01');
+            insert into moment_entity (memory_id, entity_id, relation) values ('m1', 'e1', 'mention');
+            insert into photo (id, file_name, sha256, pixel_width, pixel_height, added_at) values ('p1', 'p1.jpg', 'p1-hash', 4, 3, '2026-10-01');
+            insert into photo_link (photo_id, entity_id, role, sort_order) values ('p1', 'e1', 'cover', 0);
+            insert into photo_link (photo_id, memory_id, role, sort_order) values ('p1', 'm1', 'cover', 0);
+            """)
+    }
+    let tables = ["session", "segment", "entity", "person", "memory", "moment_entity", "photo", "photo_link"]
+    func counts() throws -> [Int] {
+        try queue.read { db in try tables.map { try Int.fetchOne(db, sql: "select count(*) from \($0)") ?? -1 } }
+    }
+    let before = try counts()
+    try Migrations.migrator.migrate(queue)
+    #expect(try counts() == before, "no row is lost")
+    #expect(try queue.read { try String?.fetchAll($0, sql: "select origin from photo_link") } == [nil, nil], "every old link has no origin")
+    #expect(try queue.read { try String.fetchAll($0, sql: "select identifier from grdb_migrations order by rowid") }.last == "v16")
 }

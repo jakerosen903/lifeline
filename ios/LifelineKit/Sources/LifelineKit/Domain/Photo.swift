@@ -70,6 +70,10 @@ public enum PhotoSubject: Sendable, Hashable { case entity(EntityID), memory(Mem
 
 public enum PhotoRole: String, Codable, Sendable { case cover, attached }
 
+/// Who made a link to a page. `story`: a photo story put the photo on the page of a person it names.
+/// Nil (no origin) is every other link: the owner's tap, and every link made before v16. An owner's tap never writes `story`.
+public enum PhotoLinkOrigin: String, Sendable, Codable { case story }
+
 /// A photo as one subject holds it.
 public struct PlacedPhoto: Sendable, Equatable, Identifiable {
     public var photo: Photo
