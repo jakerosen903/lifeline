@@ -44,3 +44,10 @@ Pre-flight: Task 6 needs a column that Task 1 owns: Task 1 text now carries it (
 - Checked: the Task 1 minor (static `link` refusing a declined pair) was closed in Task 2 (`aStoryLinkToADeclinedPageWritesNothing`).
 - Task 7: dispatched from bdd5fa1 while Task 5 was in review (independent files). Task 6 waits for Task 7 (one simulator, one implementer at a time).
 - Task 7: built at fc39a09 (base 5041ae9), in review. Task 6 dispatched from fc39a09 in parallel with that review (different files).
+- Task 7: review: spec gap, one Important: "Add a photo" stays enabled while photos are added, so a second pick runs alongside the first (two images in memory, order interleaved; against decision 17 and spec part 4 item 2).
+- Task 7: Ruling: "Add a photo" is disabled while the shelf is adding, on the three pages — simplest, and the owner sees the count running — cost if wrong: the owner waits for a pick to end before the next. Fix round waits for Task 6 (the simulator and the worktree are in use).
+- Task 7: accepted: no `PhotoShelf.add(files:)`; items are added one at a time between `beginAdding(count:)` / `finishedOne()` / `endAdding()` (a file list would hold every temporary copy at once). Accepted: `PhotoAddBatch`. The reviewer found no crash path in `PhotoAddingLine`; the stale-build explanation holds; the full UI run must start from a clean build.
+- Task 7: minor (deferred): `PhotoShelf` comment on `adds` is wrong and its "outside a pick" branch is nearly dead.
+- Task 7: minor (deferred): the failure line is lost when the owner leaves the page during a pick (the adds still finish). Known small item.
+- Task 7: minor (deferred): device check has no line for the app going to the background during a pick.
+- Task 7: minor (deferred): with no shelf, failures use the one-photo text; no UI test for "{k} photos could not be added."; `-uiTesting-pickPhotos` splits on a comma.
