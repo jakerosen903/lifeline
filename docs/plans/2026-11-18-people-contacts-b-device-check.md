@@ -13,6 +13,10 @@ Do these on a real iPhone with real contacts, because the simulator cannot show 
 - [ ] 9. Make a backup, then restore it on this phone. The linked rows still resolve.
 - [ ] 10. With the photo card build (PR #31): drag another photo in front of the contact's picture. It stays first after the next launch.
 - [ ] 11. Largest text size and VoiceOver on the linked row, the suggestion card and the contact search.
+- [ ] 12. With access already given, record a story with a new name that fits one contact. Before Keep, tap the chip "Assumed · new, from your contacts". The sheet opens with that contact selected, first, with "In your contacts · my guess". Tap "Done" with no change. The chip shows the contact's name with no mark. Keep. The person is linked to that contact.
+- [ ] 13. With access already given, record a second story with a new name that fits one contact. Keep the card. Open the person's page at once, before you relaunch the app. The page shows the contact's picture.
+- [ ] 14. On a linked person's page, remove the contact's picture. Relaunch the app, then change the contact in the Contacts app. The picture does not come back. Unlink, then link the same contact again. The picture comes back.
+- [ ] 15. Link a person to a company contact that has no person name. Check the name the row shows.
 
 ## Also look at
 

@@ -4,7 +4,7 @@ One entry per decision. Newest first. Status is Decided, Open, or Superseded.
 
 ## 2026-11-19 · PC-b: a person can be linked to a contact — decisions and rulings made while building
 
-**Status:** Decided by the builder and the controller. The owner must confirm plan decisions 4, 5, 6 and 8, and the new copy and identifier listed at the end. The owner can overrule each one. Source: `docs/plans/2026-11-18-people-contacts-b.md`, ledger `.superpowers/sdd/2026-11-18-people-contacts-b/rulings.md` (PB1 to PB53). Narrows `docs/specs/2026-11-18-people-contacts.md` in five places, each marked in the spec.
+**Status:** Decided by the builder and the controller. The owner must confirm plan decisions 4, 5, 6 and 8, and the new copy and identifier listed at the end. The owner can overrule each one. Source: `docs/plans/2026-11-18-people-contacts-b.md`, ledger `.superpowers/sdd/2026-11-18-people-contacts-b/rulings.md` (PB1 to PB66). Narrows `docs/specs/2026-11-18-people-contacts.md` in five places, each marked in the spec.
 
 **Decision.** The plan's ten decisions:
 
@@ -62,17 +62,32 @@ The sheet and the page:
 - PB50: the held-contact sentence and the row's error sentences show in the page's one pinned message slot.
 - PB48: an open page reads its row again when a check finishes and when the app becomes active.
 - PB40: a contact with an empty full name cannot make a person. A move to it is refused, and the sheet and the search leave it out.
+- PB55: the person's page opens its contacts search with `.sheet(item:)`. The item carries the map of who holds each linked contact. Why: a sheet reads `@State` as of the row's last render, so "In a story as {name}" was missing.
+- PB57: a waiting card's chip for a person Keep will make from a contact opens the sheet on that contact. The contact row is first and selected, with the line "In your contacts · my guess". "Done" with no change stores that contact. Keep then makes the person from it as the owner's answer, with no mark.
+- PB62: when "Done" is refused because the person or the contact is not found, the sheet says "That person is not here any more." The stale sentence shows only when a row changed since the sheet opened.
+
+The fix wave (final review):
+
+- PB58: after Keep and after "Same story", the app copies the contact's picture for each person of that memory who has a contact and no copy. Before, the picture came at the next launch.
+- PB59 and PB60: a contact's picture that the owner removed from a person's page stays removed. The app keeps the removal as a row of `contact_declined`, with `picture:` and the contact's identifier. There is no new table and no migration. Only `ContactPictureRemoval.swift` reads and writes this row. The copy of the picture respects it. Unlink and a link to another contact clear it. A contact that the system merges keeps it under the new identifier. The page writes the row before the photo goes, and only when the photo is the app's copy.
+- PB61: when the owner's stored choice and a guess on one card reach one planned person, the person is the owner's choice and not a guess. Two plans that join a person keep the guess only when both guessed.
+- PB63: a waiting card's chips read again when a check ends and when the owner gives access.
+- PB64: the look again after access marks the recording's `new` detail links as guesses too. It links nothing when no `new` mention link is left.
+- PB65: the full-name key set of `CNContactFormatter` also asks for the organization name and the contact type, the two sorting names and the display name order. The app asks for no other key.
 
 Tests:
 
 - PB45: under `-uiTesting`, the search shows a plain "Share another contact" button with `contacts.accessButton`, because XCUITest cannot drive the system button.
 - PB29: `-uiTesting-contacts <full|limited|notAsked|denied>` scripts the contacts. With no argument the access is "not asked" and the script answers a request with "denied".
+- PB56: `-uiTesting-seedContactLink`, after `-uiTesting-seedPeople`, links Lena to the invented card "Robyn Okafor" before the first screen. With `-uiTesting-contacts notAsked` this is a person with a contact while access was never asked.
 
 **Why.** Each ruling closes a case the plan left open. The contact's name never reaches the model and nothing the owner said or typed is replaced, so the app errs toward keeping what the owner gave and toward doing less when it cannot tell.
 
-**Costs.** PB34: after a restore on a new phone with limited access, the owner links again by hand. PB36 and PB38: the prompt can come one recording later. PB42: one rare older link cannot go to "Someone new"; the owner picks a person. PB44: after the first yes in the sheet, the fitting contacts show as rows only the next time the sheet opens. A hyphenated name such as "Anne-Marie" is one word in the search, so "marie" does not find it.
+**Costs.** PB34: after a restore on a new phone with limited access, the owner links again by hand. PB36 and PB38: the prompt can come one recording later. PB42: one rare older link cannot go to "Someone new"; the owner picks a person. PB44: after the first yes in the sheet, the fitting contacts show as rows only the next time the sheet opens. A hyphenated name such as "Anne-Marie" is one word in the search, so "marie" does not find it. PB59: an owner who wants a removed contact picture back must unlink and link again, or add the picture by hand.
 
-**The owner must confirm.** Plan decisions 4, 5, 6 and 8. The new copy and identifiers that the approved plan does not hold: "Allow contacts" (PB51), "In a story as {name}" (PB44) and the identifier `who.settings` on the sheet's Settings row. The copy of the usage string, the chip lines and the row texts is a draft.
+**Known limits.** A contact message on a person's page (for example "{name} is already linked to this contact.") uses the one message slot. When it arrives inside a move's 6 seconds, it replaces the move's Undo offer. The owner can change the move again in the sheet.
+
+**The owner must confirm.** Plan decisions 4, 5, 6 and 8. The new copy and identifiers that the approved plan does not hold: "Allow contacts" (PB51), "In a story as {name}" (PB44), "In your contacts · my guess" (PB57), "That person is not here any more." (PB62) and the identifier `who.settings` on the sheet's Settings row. The copy of the usage string, the chip lines and the row texts is a draft.
 
 ## 2026-11-18 · PC-a: rulings made while building people and contacts
 
