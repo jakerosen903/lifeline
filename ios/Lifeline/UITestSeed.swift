@@ -347,10 +347,13 @@ private struct SeedSession {
 
 extension UITestSeed {
     /// The scripted phone's contacts, invented. Tests that need more cards add them here.
+    /// - "Robyn Okafor" goes by "Robin", so she fits the guessed "Robin" of `-uiTesting-seedGuesses` (a contact row in its sheet).
+    /// - "Dara Quinn" is the one contact that fits "Dara" of `-uiTesting-followUps`, so Keep makes her from the contact.
     static let contactCards: [ContactCard] = [
         ContactCard(identifier: "ui-contact-vale", fullName: "Robyn Vale", givenName: "Robyn", familyName: "Vale", nickname: "", hasPicture: true),
         ContactCard(identifier: "ui-contact-reyes", fullName: "Tomas Reyes", givenName: "Tomas", familyName: "Reyes", nickname: "", hasPicture: false),
-        ContactCard(identifier: "ui-contact-okafor", fullName: "Robyn Okafor", givenName: "Robyn", familyName: "Okafor", nickname: "", hasPicture: false),
+        ContactCard(identifier: "ui-contact-okafor", fullName: "Robyn Okafor", givenName: "Robyn", familyName: "Okafor", nickname: "Robin", hasPicture: false),
+        ContactCard(identifier: "ui-contact-quinn", fullName: "Dara Quinn", givenName: "Dara", familyName: "Quinn", nickname: "", hasPicture: false),
     ]
 
     /// The colour of each card's generated picture, for the cards with `hasPicture`.
