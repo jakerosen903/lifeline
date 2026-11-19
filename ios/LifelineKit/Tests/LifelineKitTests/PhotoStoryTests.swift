@@ -1002,8 +1002,13 @@ private func personID(_ entity: EntityID) -> PersonID { PersonID(rawValue: entit
 
 // MARK: - Done and Edit (spec part 3)
 
-private func shown(_ card: PhotoStoryCard, keeping kept: Set<EntityID> = []) -> [String] {
+private func shown(_ card: PhotoStoryCard, keeping kept: [PhotoStoryCard.Page] = []) -> [String] {
     card.shownPageGroups(keeping: kept).flatMap(\.pages).map(\.title)
+}
+
+/// The page the card shows for this entity, as the view model keeps it when the owner taps it.
+private func page(_ card: PhotoStoryCard, _ entity: Entity) throws -> PhotoStoryCard.Page {
+    try #require(pages(card).first { $0.id == entity.id })
 }
 
 @Test func aNewStoryStartsOpen() throws {
@@ -1030,20 +1035,56 @@ private func shown(_ card: PhotoStoryCard, keeping kept: Set<EntityID> = []) -> 
     #expect(result.shownPagesLine == nil, "done shows no line")
 }
 
-@Test func doneKeepsAPageTheOwnerJustEmptied() {
+@Test func doneKeepsAPageTheOwnerJustEmptied() throws {
     let m = memory("The picnic"), maya = entity("Maya"), dad = entity("Dad")
+    let before = card(memories: [m], linked: [m.id: [maya, dad]], pagesWithPhoto: [maya, dad], pagesDone: true)
     let result = card(memories: [m], linked: [m.id: [maya, dad]], pagesWithPhoto: [maya], pagesDone: true)
-    #expect(shown(result, keeping: [dad.id]) == ["Dad", "Maya"], "the emptied chip stays, in its place")
-    #expect(result.shownPageGroups(keeping: [dad.id]).flatMap(\.pages).map(\.isChosen) == [false, true], "and shows it is empty")
-    #expect(!result.showsNoOtherPageSentence(keeping: [dad.id]))
+    let kept = [try page(before, dad)]
+    #expect(shown(result, keeping: kept) == ["Dad", "Maya"], "the emptied chip stays, in its place")
+    #expect(result.shownPageGroups(keeping: kept).flatMap(\.pages).map(\.isChosen) == [false, true], "and shows it is empty")
+    #expect(!result.showsNoOtherPageSentence(keeping: kept))
 }
 
-@Test func doneWithNoChosenPageShowsTheSentence() {
+/// Dad is listed only because his page holds the photo: once it is off, the card has no Dad. Kept, he comes back, empty.
+@Test func doneKeepsAPageThatOnlyHeldThePhoto() throws {
+    let m = memory("The picnic"), maya = entity("Maya"), dad = entity("Dad")
+    let before = card(memories: [m], linked: [m.id: [maya]], pagesWithPhoto: [dad], pagesDone: true)
+    let kept = [try page(before, dad)]
+    let after = card(memories: [m], linked: [m.id: [maya]], pagesDone: true)
+    #expect(!pages(after).contains { $0.id == dad.id }, "the card itself no longer lists Dad")
+    #expect(shown(after, keeping: kept) == ["Dad"], "the chip stays under the finger")
+    #expect(after.shownPageGroups(keeping: kept).flatMap(\.pages).map(\.isChosen) == [false], "empty")
+    #expect(after.shownPageGroups(keeping: kept).flatMap(\.pages).map(\.stateValue) == ["not added"])
+    #expect(!after.showsNoOtherPageSentence(keeping: kept), "no sentence while Dad is kept")
+    #expect(after.showsNoOtherPageSentence(keeping: []), "the next Done says the photo is on no other page")
+}
+
+@Test func aKeptPageMissingFromTheCardKeepsItsPlace() throws {
+    let m = memory("The picnic"), amy = entity("Amy"), zoe = entity("Zoe"), dad = entity("Dad")
+    let beach = entity("The beach", type: .place)
+    let before = card(memories: [m], linked: [m.id: [amy, zoe]], pagesWithPhoto: [amy, zoe, dad, beach], pagesDone: true)
+    let kept = [try page(before, beach), try page(before, dad)]
+    let after = card(memories: [m], linked: [m.id: [amy, zoe]], pagesWithPhoto: [amy, zoe], pagesDone: true)
+    let groups = after.shownPageGroups(keeping: kept)
+    #expect(groups.map(\.type) == [.person, .place], "a group that is gone comes back, in its order")
+    #expect(groups.flatMap(\.pages).map(\.title) == ["Amy", "Dad", "Zoe", "The beach"], "in the place the card listed it")
+    #expect(after.shownPageGroups(keeping: kept.reversed()) == groups, "the same place whatever the order of the kept pages")
+    #expect(groups.flatMap(\.pages).map(\.isChosen) == [true, false, true, false])
+}
+
+@Test func openDoesNotBringBackAMissingKeptPage() throws {
+    let m = memory("The picnic"), maya = entity("Maya"), dad = entity("Dad")
+    let before = card(memories: [m], linked: [m.id: [maya]], pagesWithPhoto: [dad], pagesDone: true)
+    let open = card(memories: [m], linked: [m.id: [maya]])
+    #expect(open.shownPageGroups(keeping: [try page(before, dad)]) == open.pageGroups)
+}
+
+@Test func doneWithNoChosenPageShowsTheSentence() throws {
     let m = memory("The picnic"), maya = entity("Maya")
     let done = card(memories: [m], linked: [m.id: [maya]], pagesDone: true)
     #expect(done.shownPageGroups(keeping: []).isEmpty)
     #expect(done.showsNoOtherPageSentence(keeping: []))
-    #expect(!done.showsNoOtherPageSentence(keeping: [maya.id]), "a kept chip is still on screen")
+    #expect(!done.showsNoOtherPageSentence(keeping: [try page(done, maya)]), "a kept chip is still on screen")
     #expect(!card(memories: [m], linked: [m.id: [maya]]).showsNoOtherPageSentence(keeping: []), "open shows the chips instead")
     #expect(PhotoStoryCard.noOtherPageSentence == "This photo is on no other page.")
     #expect(PhotoStoryCard.doneTitle == "Done")

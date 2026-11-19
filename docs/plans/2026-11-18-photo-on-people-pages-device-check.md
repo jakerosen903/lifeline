@@ -40,11 +40,12 @@ Run this on the iPhone with the build of parts 1 and 2. Tick each line. Say what
 22. [ ] Tap “Edit”. Every chip must show again, filled or empty, with the line. The button must read “Done”.
 23. [ ] Tap “Done”. Close the app from the app switcher. Open the app and the same story. The part must still be done.
 24. [ ] Tap “Done” on the landing. Leave the landing. Open the session's page of the same story. The part must be done there too.
-25. [ ] With the part done, tap a filled chip. The chip must go to an outline and stay on screen, under your finger. Tap it again. It must fill. Tap it a third time. Tap “Edit”, then “Done”. The empty chip must be gone.
+25. [ ] With the part done, tap a filled chip. The chip must go to an outline and stay on screen, under your finger. Tap it again. It must fill. Tap it a third time. It must go to an outline again and stay on screen. Tap “Edit”, then “Done”. The empty chip must be gone.
 26. [ ] Take the photo off every page with the chips, then tap “Done”. The part must read “This photo is on no other page.” and show “Edit”.
 27. [ ] With the part open, take the last chip the story chose off. The line changes to “Tap to add. Tap again to take it off.” No chip must move.
 28. [ ] Turn on VoiceOver. “Done” and “Edit” must each read as a button. After a tap on “Done”, swipe to “Edit” and tap it. Each chip must read as before: “added by this story”, “added” or “not added”.
 29. [ ] Set the largest text size (Accessibility, Larger Text, the largest step). Open the card. “Done” and “Edit” must each be reachable by scrolling, and must not be cut off.
+30. [ ] Open a person's page that has a photo. Open the photo and tap “Tell its story”. Tell a story that does not name that person, and keep the moment. On the card, the person's chip must be filled. Tap “Done”. Tap the person's chip. The chip must go to an outline and stay on screen, under your finger. Tap “Edit”. The person's chip must be gone, because the person is not in the story and the page no longer holds the photo.
 
 ## Known small items
 
@@ -71,3 +72,4 @@ These were found in the reviews and deferred, or are open for the owner. None bl
 - Undo of a move restores a story link to a page the owner hid after the move.
 - `PersonMoveReceipt.photoPages` is `public var`. It must be `public internal(set)`.
 - No test pins what `only:` is for (the moved moment also names a person who lacks the photo).
+- After a name move on the session's page, the notice with “Undo” can sit below the screen for its 6 seconds. Scroll down to reach it.

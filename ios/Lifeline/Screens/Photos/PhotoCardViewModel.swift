@@ -29,9 +29,12 @@ final class PhotoCardViewModel {
     private var seen: Set<MemoryID> = []
     /// Pages whose tap is still being written: a second tap on the same chip waits for the first to land.
     private var toggling: Set<EntityID> = []
-    /// Pages the owner emptied while the pages part is done: they stay on screen, empty, so a chip never disappears under the
-    /// finger (plan decision 16). Not stored: "Edit" or "Done" clears it, and leaving the screen drops it with the view model.
-    private(set) var keptPages: Set<EntityID> = []
+    /// Pages the owner emptied while the pages part is done, as the card showed them at the tap: they stay on screen, empty,
+    /// so a chip never disappears under the finger (plan decision 16), also a page the card lists only while it holds the
+    /// photo. Not stored: "Edit" or "Done" clears it, and leaving the screen drops it with the view model.
+    private var kept: [EntityID: PhotoStoryCard.Page] = [:]
+    /// For `PhotoStoryCard.shownPageGroups(keeping:)`, which puts them in the card's order.
+    var keptPages: [PhotoStoryCard.Page] { Array(kept.values) }
     /// Called after each action, once the card has read the store again: the screen around the card reads its own rows
     /// again, so a memory opened from them shows the date the card just wrote.
     @ObservationIgnored var onAction: () -> Void = {}
@@ -67,7 +70,7 @@ final class PhotoCardViewModel {
         defer { toggling.remove(page.id) }
         if page.isChosen {
             // Kept before the write: the card read after it must already show the empty chip.
-            if card?.pagesDone == true { keptPages.insert(page.id) }
+            if card?.pagesDone == true { kept[page.id] = page }
             await perform("Could not take the photo off this page") { try await deps.photos.remove(photo, from: .entity(page.id)) }
         } else {
             run("Could not add the photo to this page") { try reader.addToPage(photo, page.id) }
@@ -84,7 +87,7 @@ final class PhotoCardViewModel {
         run(done ? "Could not hide the other pages" : "Could not show every page") {
             try reader.setPagesDone(done, for: session)
             // After the write: a failed "Edit" leaves the part done, with its emptied chips still on screen.
-            keptPages = []
+            kept = [:]
         }
     }
 

@@ -473,13 +473,18 @@ final class PhotoCardUITests: XCTestCase {
 
         // The notice's Undo lasts six seconds, so the first move is undone at once and the card is read after; the
         // second move is read after. A card that misses either refresh shows the wrong count.
+        // The taller card ("Done") can leave the notice below the record bar. The notice lasts six seconds, so a quick drag
+        // with no momentum brings it up, rather than a swipe that waits for the list to settle; at most twice, only while the
+        // notice is below the bar. The check reads one frame: `isHittable` calls a button below the screen hittable, and
+        // `waitHittable` takes too long here. The bar's top is read before the move, for the same reason.
+        let barTop = app.buttons["home.start"].frame.minY
         moveMayaToSomeoneNew(app, on: kept)
         let undo = app.buttons["notice.undo"]
-        // The taller card ("Done") leaves the notice below the screen. The notice lasts six seconds, so one quick drag with
-        // no momentum brings it up at once, rather than a swipe that waits for the list to settle.
-        let from = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.8))
-        from.press(forDuration: 0.05, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.3)),
-                   withVelocity: .fast, thenHoldForDuration: 0.1)
+        for _ in 0..<2 where !undo.exists || undo.frame.midY >= barTop {
+            let from = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.8))
+            from.press(forDuration: 0.05, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.3)),
+                       withVelocity: .fast, thenHoldForDuration: 0.1)
+        }
         XCTAssertTrue(app.waitHittable(undo, timeout: 5), "the move offers Undo")
         undo.tap()
         XCTAssertTrue(undo.waitForNonExistence(timeout: 5), "the move is undone")

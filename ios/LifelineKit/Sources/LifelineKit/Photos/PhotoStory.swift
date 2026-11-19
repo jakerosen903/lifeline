@@ -130,7 +130,12 @@ public enum PhotoStory {
 
     /// The owner first, then by title, then by id.
     private static func inListOrder(_ a: Entity, _ b: Entity, owner: EntityID?) -> Bool {
-        if (a.id == owner) != (b.id == owner) { return a.id == owner }
+        inListOrder(a, isOwner: a.id == owner, b, isOwner: b.id == owner)
+    }
+
+    /// The one order of a group's chips, for the card and for a kept page put back (`shownPageGroups(keeping:)`).
+    static func inListOrder(_ a: Entity, isOwner aIsOwner: Bool, _ b: Entity, isOwner bIsOwner: Bool) -> Bool {
+        if aIsOwner != bIsOwner { return aIsOwner }
         let byTitle = a.title.localizedCaseInsensitiveCompare(b.title)
         return byTitle == .orderedSame ? a.id.rawValue < b.id.rawValue : byTitle == .orderedAscending
     }
@@ -149,18 +154,28 @@ extension PhotoStoryCard {
     /// The line under the heading: `pagesLine` while the part is open, nil while it is done.
     public var shownPagesLine: String? { pagesDone ? nil : pagesLine }
 
-    /// What the pages part shows. `kept`: pages the owner emptied while the part is done; they stay on screen.
-    /// Open: every group. Done: the chosen pages and the kept ones, in their places; a group left with no page goes.
-    public func shownPageGroups(keeping kept: Set<EntityID>) -> [PageGroup] {
+    /// What the pages part shows. `kept`: the pages the owner emptied while the part is done, as the card showed them at the
+    /// tap; they stay on screen. Open: every group. Done: the chosen pages and the kept ones. A kept page the card no longer
+    /// lists (it was listed only because it held the photo) comes back empty, in its group and in the card's order, so its
+    /// place does not change between reads. A group left with no page goes.
+    public func shownPageGroups(keeping kept: [Page]) -> [PageGroup] {
         guard pagesDone else { return pageGroups }
-        return pageGroups.compactMap { group in
-            let shown = group.pages.filter { $0.isChosen || kept.contains($0.id) }
-            return shown.isEmpty ? nil : PageGroup(type: group.type, pages: shown)
+        let keptIDs = Set(kept.map(\.id))
+        let listed = Set(pageGroups.flatMap { $0.pages.map(\.id) })
+        var missing: [EntityID: Page] = [:]
+        for page in kept where !listed.contains(page.id) {
+            missing[page.id] = Page(entity: page.entity, isChosen: false, isOwner: page.isOwner, byStory: false)
+        }
+        return EntityType.allCases.compactMap { type in
+            let fromCard = pageGroups.first { $0.type == type }?.pages.filter { $0.isChosen || keptIDs.contains($0.id) } ?? []
+            let shown = (fromCard + missing.values.filter { $0.entity.type == type })
+                .sorted { PhotoStory.inListOrder($0.entity, isOwner: $0.isOwner, $1.entity, isOwner: $1.isOwner) }
+            return shown.isEmpty ? nil : PageGroup(type: type, pages: shown)
         }
     }
 
     /// Done, and no page is chosen or kept. A function, not a property: the kept pages live in the view model.
-    public func showsNoOtherPageSentence(keeping kept: Set<EntityID>) -> Bool {
+    public func showsNoOtherPageSentence(keeping kept: [Page]) -> Bool {
         pagesDone && shownPageGroups(keeping: kept).isEmpty
     }
 }

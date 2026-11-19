@@ -10,7 +10,7 @@ import SwiftUI
 struct PhotoCardPages: View {
     let card: PhotoStoryCard
     /// Pages emptied while the part is done (`PhotoCardViewModel.keptPages`).
-    let kept: Set<EntityID>
+    let kept: [PhotoStoryCard.Page]
     let onToggle: (PhotoStoryCard.Page) -> Void
     let onDone: () -> Void
     let onEdit: () -> Void
