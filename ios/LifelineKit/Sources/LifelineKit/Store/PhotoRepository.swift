@@ -270,7 +270,7 @@ public struct PhotoRepository: Sendable {
     /// Inside the Keep write, after the memory's links are stored. Puts the photo on the page of each person the memory
     /// names, with origin `story`. Skips the owner, a hidden entity, a page that holds the photo, and a declined pair.
     /// Returns the entities it linked, in the order the memory's links were written.
-    /// Every relation counts: a fact about Dad names Dad as a moment that mentions him does.
+    /// Every relation counts, by ruling: a kept fact about a person in a photo story (`detail`) also places the photo.
     @discardableResult
     static func linkToPeoplePages(_ photo: PhotoID, namedBy memory: MemoryID, in db: Database) throws -> [EntityID] {
         let people = try String.fetchAll(db, sql: """
