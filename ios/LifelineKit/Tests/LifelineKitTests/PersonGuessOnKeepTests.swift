@@ -907,3 +907,63 @@ extension Env {
                                        into: here.memory.id)
     #expect(try env.byHandle(here.memory.id).map(\.personHandle) == ["p1", "p2"], "the same recording keeps its handles")
 }
+
+// Fix round 1: the owner's answer for one handle takes that person from every other handle of the same said name,
+// whatever the order of the handles, and the preview shows what Keep writes.
+extension Env {
+    /// Each link by handle as (handle, person, origin), and the preview's chips the same way; a chip for a person Keep
+    /// makes has no person yet, so a new person compares as nil.
+    func keepAndPreview(_ card: Candidate) throws -> (kept: [MomentEntity], chips: [PreviewChip]) {
+        let chips = try linkActions.preview(card)
+        let kept = try actions.acceptMemory(card, joinStory: false)
+        return (try byHandle(kept.memory.id), chips)
+    }
+}
+
+private func expectPreviewMatches(_ chips: [PreviewChip], _ links: [MomentEntity], madeByKeep: Set<EntityID>) {
+    #expect(chips.map(\.handle) == links.map(\.personHandle))
+    #expect(chips.map(\.origin) == links.map(\.origin))
+    #expect(chips.map { $0.person.map { EntityID(rawValue: $0.rawValue) } } == links.map { madeByKeep.contains($0.entityID) ? nil : $0.entityID })
+}
+
+@Test func anOwnersChoiceForOneHandleIsTakenFromTheOtherInEitherOrder() throws {
+    for chosen in ["p2", "p1"] {
+        let env = try Env()
+        let robyn = try env.store.people.insertPerson(displayName: "Robyn")
+        let card = try env.handleCard("Robyn and Robyn painted the fence", people: [handled("p1", "Robyn"), handled("p2", "Robyn")])
+        try env.storeChoice("person", saidName: "Robyn", handle: chosen, person: robyn.id, on: card.id)
+        let (links, chips) = try env.keepAndPreview(card)
+        #expect(links.map(\.personHandle) == ["p1", "p2"], "each handle keeps its own link")
+        let mine = try #require(links.first { $0.personHandle == chosen }), other = try #require(links.first { $0.personHandle != chosen })
+        #expect(mine.entityID == robyn.entityID && mine.origin == .confirmed)
+        #expect(other.entityID != robyn.entityID && other.origin == .new, "the other Robyn is a new person, not the one the owner chose")
+        expectPreviewMatches(chips, links, madeByKeep: [other.entityID])
+    }
+}
+
+@Test func anOwnersChoiceOfAContactAPersonHoldsIsTakenToo() throws {
+    let env = try Env(contacts: [vale])
+    let robyn = try env.store.people.insertPerson(displayName: "Robyn")
+    try env.db.writer.write { try $0.execute(sql: "update person set contact_identifier = ? where id = ?", arguments: [vale.identifier, robyn.id.rawValue]) }
+    let card = try env.handleCard("Robyn and Robyn painted the fence", people: [handled("p1", "Robyn"), handled("p2", "Robyn")])
+    try env.db.writer.write { db in
+        try db.execute(sql: "insert into candidate_person_choice (candidate_id, said_name, choice, contact_identifier) values (?, ?, 'contact', ?)",
+                       arguments: [card.id.rawValue, ChoiceKey.text(saidName: "Robyn", handle: "p2"), vale.identifier])
+    }
+    let (links, chips) = try env.keepAndPreview(card)
+    #expect(links.map(\.personHandle) == ["p1", "p2"])
+    #expect(links.last?.entityID == robyn.entityID && links.last?.origin == .confirmed)
+    #expect(links.first?.entityID != robyn.entityID && links.first?.origin == .new)
+    expectPreviewMatches(chips, links, madeByKeep: [try #require(links.first).entityID])
+}
+
+@Test func twoHandlesTheOwnerSettlesToOnePersonShareOneLink() throws {
+    let env = try Env()
+    let robyn = try env.store.people.insertPerson(displayName: "Robyn")
+    let card = try env.handleCard("Robyn and Robyn painted the fence", people: [handled("p1", "Robyn"), handled("p2", "Robyn")])
+    for handle in ["p1", "p2"] { try env.storeChoice("person", saidName: "Robyn", handle: handle, person: robyn.id, on: card.id) }
+    let (links, chips) = try env.keepAndPreview(card)
+    #expect(links.count == 1)
+    #expect(links.first?.entityID == robyn.entityID && links.first?.origin == .confirmed && links.first?.personHandle == "p1")
+    expectPreviewMatches(chips, links, madeByKeep: [])
+}

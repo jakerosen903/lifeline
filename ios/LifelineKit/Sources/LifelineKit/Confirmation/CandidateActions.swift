@@ -217,6 +217,7 @@ public struct CandidateActions: Sendable {
     /// the preview. One `HandlePlan` runs through every row, so a handle is decided once (D8).
     func tellingEdges(of out: MemoryOut, card: Candidate, continuations: [Candidate], for memory: MemoryID) throws -> Edges {
         var handles = HandlePlan()
+        handles.telling = ([out] + continuations.compactMap(CandidatePayload.memory)).flatMap(\.handlePeople)
         var edges = try edges(of: out, for: memory, segment: card.segmentID, card: card.id, handles: &handles)
         for row in continuations {
             if let o = CandidatePayload.memory(row) { edges.merge(try self.edges(of: o, for: memory, segment: row.segmentID, card: card.id, handles: &handles)) }

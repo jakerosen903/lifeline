@@ -50,6 +50,9 @@ extension CandidateActions {
             var contact: String?
         }
         var entries: [Entry] = []
+        /// Every handle of the telling (the card's and each continuation row's), so the owner's stored answers are
+        /// known before any guess runs, whatever the order of the handles.
+        var telling: [PersonOut] = []
         func entry(_ handle: String) -> Entry? { entries.first { $0.handle == handle } }
     }
 
@@ -83,10 +86,13 @@ extension CandidateActions {
         } else if let earlier = inputs.handleLinks.first(where: { $0.handle == person.handle }) {
             link = GuessedLink(person: earlier.person, origin: Self.carried(earlier.origin), aliases: [])
         } else {
-            // Two handles of one said name are two people: what the others hold is taken, a planned person's contact too.
+            // Two handles of one said name are two people: what the others hold is taken, a planned person's contact too,
+            // and what the owner chose for another handle of the telling, decided yet or not.
             let others = handles.entries.filter { $0.handle != person.handle && $0.saidKey == key }
-            let taken = Set(inputs.handleLinks.filter { $0.handle != person.handle && $0.saidKey == key }.map(\.person) + others.compactMap(\.link?.person))
-            let takenContacts = Set(others.compactMap(\.contact))
+            let chosen = Self.ownersChoices(otherThan: person.handle, saidKey: key, in: handles.telling, inputs)
+            let taken = Set(inputs.handleLinks.filter { $0.handle != person.handle && $0.saidKey == key }.map(\.person)
+                            + others.compactMap(\.link?.person) + chosen.persons)
+            let takenContacts = Set(others.compactMap(\.contact) + chosen.contacts)
             var free = inputs
             free.contacts = inputs.contacts.filter { !takenContacts.contains($0.identifier) }
             let result = PersonGuess.guess(said, people: inputs.known, contacts: free.contacts,
@@ -96,6 +102,23 @@ extension CandidateActions {
         let contact = link.flatMap { link in plan.persons.first { $0.id == link.person }?.contactIdentifier }
         handles.entries.append(.init(handle: person.handle, saidKey: key, link: link, contact: contact))
         return link
+    }
+
+    /// The persons and contacts the owner's stored answers give the other handles of the telling with this said key.
+    /// A contact a person holds is that person; a contact no one holds will be a person made from it.
+    static func ownersChoices(otherThan handle: String, saidKey key: String, in telling: [PersonOut],
+                              _ inputs: GuessInputs) -> (persons: [PersonID], contacts: [String]) {
+        var persons: [PersonID] = [], contacts: [String] = []
+        for other in telling where other.handle != handle && SaidName.key(other.saidName) == key {
+            switch inputs.choice(ChoiceKey.text(saidName: other.saidName, handle: other.handle))?.choice {
+            case .person(let id)?: persons.append(id)
+            case .contact(let identifier)?:
+                if let holder = inputs.known.first(where: { $0.contactIdentifier == identifier }) { persons.append(holder.id) }
+                else { contacts.append(identifier) }
+            case .newPerson?, nil: break
+            }
+        }
+        return (persons, contacts)
     }
 
     /// Decision 7: a handle keeps its person, but not the owner's answer. `said` and `new` stay; anything else is the
