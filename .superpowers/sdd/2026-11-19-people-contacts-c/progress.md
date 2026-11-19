@@ -37,3 +37,5 @@ The owner said "Yes, build both" (PC-d, then PC-c) on 2026-11-19, without a revi
 - Open for the owner (older behaviour, R34, not from this plan): a held page (its person is gone and the notice is up) cannot scroll, because the whole list is disabled.
 - Task 7: complete (commits 4088763..5d02819, review clean). Ruling C10.
 - Task 7: minor (deferred): the picker test compares a set, so a duplicate row would pass; a negative `reveal` in the Undo test can pass for a wrong reason; the Cancel and refusal tests do not look at the other person's page; three test helpers are copied between files; the Priya helper's short slow drags are tuned to this simulator.
+- Task 8 (docs): complete (commit 8f89344).
+- Final whole-branch review (a7e6a61..8f89344): ready with fixes. No Critical; no data-loss path and no new path to the model found. Important I1 (handles in a merge untested, C2's cost understated), I2 (a refused Undo of a merge shows a line that does not apply). Minor M1 to M8. One fix wave dispatched (`fix-wave-brief.md`): I1 (tests and docs), I2, M1, M2, M4, M6, M7, M8. Parked by ruling: the behaviour behind I1 (C11), M3, M5.
