@@ -42,8 +42,8 @@ final class EntityViewModel {
     /// A person's moments that are here by a guess, keyed by memory. Empty on any other page and on the owner's.
     /// A memory with a guessed mention and a guessed detail shows the mention link.
     private(set) var guessed: [MemoryID: PersonLink] = [:]
-    /// The contacts people hold, read with `guessed`: a held contact is not free for a new name (PB1).
-    private var heldContacts: Set<String> = []
+    /// What each guessed moment's "New" line says about the contacts, worked out with `guessed` (PB1).
+    private(set) var contactsSeen: [MemoryID: PersonChipLine.ContactsSeen] = [:]
     /// "Changed to {name}." with Undo, after the sheet moved a moment off this page.
     let personMove: PersonMoveUndo
     let player = SegmentPlayer()
@@ -107,7 +107,7 @@ final class EntityViewModel {
                                   birthYear: birth?.year, currentYear: CivilDate.today().year)
             }
             guessed = isOwner || entity.type != .person ? [:] : PersonLink.guesses(among: try store.personLinks.links(to: PersonID(rawValue: entity.id.rawValue)))
-            heldContacts = guessed.isEmpty ? [] : deps.heldContactIdentifiers()
+            contactsSeen = Self.contactsSeen(for: guessed, deps: deps)
             tags = try store.tags.tags(of: .entity, entity.id.rawValue)
             if let span = try store.entities.spans(of: entity.id).first, let segment = try store.sessions.fetchSegment(span.segmentID),
                let session = try store.sessions.fetch(segment.sessionID) {
@@ -124,9 +124,12 @@ final class EntityViewModel {
 
     // MARK: - Guessed moments
 
-    /// What a guessed moment's line says about the contacts for its said name.
-    func contactsSeen(saidName: String?) -> PersonChipLine.ContactsSeen {
-        deps.contactsSeen(saidName: saidName, held: heldContacts)
+    /// Only a `new` link's line names the contacts; the held identifiers are read only when there is one.
+    private static func contactsSeen(for guessed: [MemoryID: PersonLink], deps: Dependencies) -> [MemoryID: PersonChipLine.ContactsSeen] {
+        let fresh = guessed.filter { $0.value.origin == .new }
+        guard !fresh.isEmpty else { return [:] }
+        let held = deps.heldContactIdentifiers()
+        return fresh.mapValues { deps.contactsSeen(saidName: $0.saidName, held: held) }
     }
 
     /// "Yes, this {name}": settles that one link. The mark goes at once; there is no notice.

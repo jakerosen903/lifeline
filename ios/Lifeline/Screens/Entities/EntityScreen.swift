@@ -265,7 +265,7 @@ struct EntityScreen: View {
                     VStack(alignment: .leading, spacing: 4) {
                         label()
                         if let line = PersonChipLine.text(origin: link.origin, saidName: link.saidName, fromContact: link.personFromContact,
-                                                          contacts: viewModel.contactsSeen(saidName: link.saidName)) {
+                                                          contacts: viewModel.contactsSeen[memory.id] ?? .none) {
                             Text(line).font(.footnote).foregroundStyle(Theme.ochreText)
                                 .fixedSize(horizontal: false, vertical: true)
                         }

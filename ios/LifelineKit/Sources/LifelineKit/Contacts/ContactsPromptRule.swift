@@ -4,7 +4,9 @@ import Foundation
 public enum ContactsPromptRule {
     /// The app asks once, and only when the system has no answer yet. It asks on the landing of the recording
     /// whose first kept moment names a person: before that, the prompt has no reason the owner can see.
-    public static func shouldAsk(access: ContactsAccess, askedBefore: Bool, keptPeopleInSession: Int) -> Bool {
-        access == .notAsked && !askedBefore && keptPeopleInSession > 0
+    /// `landingIsQuiet` is false when the recording was heavy or a serious disclosure showed: no system dialog
+    /// follows that, and the next quiet landing asks instead (PB36).
+    public static func shouldAsk(access: ContactsAccess, askedBefore: Bool, keptPeopleInSession: Int, landingIsQuiet: Bool) -> Bool {
+        access == .notAsked && !askedBefore && keptPeopleInSession > 0 && landingIsQuiet
     }
 }

@@ -76,8 +76,9 @@ struct LandingScreen: View {
             }
         }
         .interactiveDismissDisabled()
-        // The contacts prompt shows over the landing, never before it: on appear, or when a kept moment first names a person.
-        .task(id: viewModel.keptPeople) { await viewModel.askForContactsIfDue() }
+        // The contacts prompt shows over the landing, never before it: on appear, when a kept moment first names a person,
+        // or when sorting ends and the landing is known to be quiet (PB36).
+        .task(id: "\(viewModel.keptPeople)|\(viewModel.isQuietForContacts)") { await viewModel.askForContactsIfDue() }
         // Moments kept on the review page hold the photo now; the poll may have stopped, so read again.
         .onChange(of: reviewing) { if !reviewing { viewModel.refresh() } }
         .onChange(of: viewModel.finished) { if let another = viewModel.finished { onClose(another) } }

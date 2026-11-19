@@ -2,8 +2,8 @@ import Foundation
 import LifelineKit
 
 /// The one system prompt for contacts (spec, "Access"), and what follows a yes on a recording's landing
-/// (plan decision 7). The app asks once: "asked before" is kept in `UserDefaults`, set as the prompt shows,
-/// so a kill while the prompt is up does not ask again. `-uiTesting` clears it at launch.
+/// (plan decision 7). The app asks once: "asked before" is kept in `UserDefaults`, set once the system answers,
+/// so a force-quit while the prompt is up lets the app ask again (PB37). `-uiTesting` clears it at launch.
 @MainActor
 struct ContactsAccessPrompt {
     nonisolated static let askedKey = "contacts.accessPromptShown"
@@ -12,16 +12,18 @@ struct ContactsAccessPrompt {
 
     private var askedBefore: Bool { UserDefaults.standard.bool(forKey: Self.askedKey) }
 
-    /// The landing's question: may it ask now? `keptPeopleInSession` is `PersonLinkRepository.keptPeopleCount(in:)`.
-    func shouldAsk(keptPeopleInSession: Int) -> Bool {
-        ContactsPromptRule.shouldAsk(access: deps.contacts.access(), askedBefore: askedBefore, keptPeopleInSession: keptPeopleInSession)
+    /// The landing's question: may it ask now? `keptPeopleInSession` is `PersonLinkRepository.keptPeopleCount(in:)`;
+    /// `landingIsQuiet` is false after a heavy recording or a serious disclosure (PB36).
+    func shouldAsk(keptPeopleInSession: Int, landingIsQuiet: Bool) -> Bool {
+        ContactsPromptRule.shouldAsk(access: deps.contacts.access(), askedBefore: askedBefore,
+                                     keptPeopleInSession: keptPeopleInSession, landingIsQuiet: landingIsQuiet)
     }
 
     /// Shows the system prompt (the system shows it only while it has no answer) and, on full or limited access,
     /// reads the contacts into the cache. Returns the access the owner gave.
     func ask() async -> ContactsAccess {
-        UserDefaults.standard.set(true, forKey: Self.askedKey)
         let access = await deps.contacts.requestAccess()
+        UserDefaults.standard.set(true, forKey: Self.askedKey)
         guard access == .full || access == .limited else { return access }
         await deps.contactsCache.refresh(from: deps.contacts)
         return access
@@ -38,10 +40,12 @@ struct ContactsAccessPrompt {
         await Task.detached(priority: .userInitiated) {
             do {
                 let result = try await links.reguess(session: session, contacts: contacts)
+                // A picture that cannot be read or stored is dropped here: the next check copies a missing picture (PB16).
                 for person in result.linkedPeople { try? await links.copyPicture(for: person) }
                 print("[contacts] after access: \(result.changedLinks) links to \(result.linkedPeople.count) people")
             } catch {
-                print("[contacts] the look again after access failed: \(error)")
+                // The error's type only: its text could carry a contact's name (PB37).
+                print("[contacts] the look again after access failed: \(type(of: error))")
             }
         }.value
         return true

@@ -124,11 +124,15 @@ final class LandingViewModel: Identifiable {
 
     // MARK: - Contacts (spec, "Access")
 
-    /// The one system prompt, on the landing of the recording whose kept moments first name a person. On a yes the
+    /// The one system prompt, on the landing of the recording whose kept moments first name a person, unless the
+    /// recording was heavy or a serious disclosure showed (PB36): then the next quiet landing asks. On a yes the
     /// app looks at this recording's new people again (plan decision 7), then the chips and the guess line read again.
+    /// Not heavy, no serious disclosure, and sorting done: a flag from a segment still sorting could make it heavy.
+    var isQuietForContacts: Bool { !heavy && !presentDanger && stillSorting == nil }
+
     func askForContactsIfDue() async {
         let prompt = ContactsAccessPrompt(deps: deps)
-        guard !askingForContacts, prompt.shouldAsk(keptPeopleInSession: keptPeople) else { return }
+        guard !askingForContacts, prompt.shouldAsk(keptPeopleInSession: keptPeople, landingIsQuiet: isQuietForContacts) else { return }
         askingForContacts = true
         if await prompt.askOnLanding(session: session.id) { refresh() }
     }
