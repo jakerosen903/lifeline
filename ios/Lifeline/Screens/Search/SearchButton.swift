@@ -16,13 +16,17 @@ private struct SearchButtonModifier: ViewModifier {
         content
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button("Search", systemImage: "magnifyingglass") { isSearching = true }
-                        .labelStyle(.iconOnly)
-                        .frame(minWidth: 44, minHeight: 44)
-                        .contentShape(Rectangle())
-                        .accessibilityIdentifier("shell.search")
+                    Button { isSearching = true } label: {
+                        Label("Search", systemImage: "magnifyingglass")
+                            .labelStyle(.iconOnly)
+                            .frame(minWidth: 44, minHeight: 44)
+                            .contentShape(Rectangle())
+                    }
+                    // The bar's own button style draws a 36-point glass button; plain keeps the 44-point label as the button.
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("shell.search")
                 }
             }
-            .navigationDestination(isPresented: $isSearching) { SearchScreen(deps: deps) }
+            .navigationDestination(isPresented: $isSearching) { SearchScreen(deps: deps) { isSearching = false } }
     }
 }

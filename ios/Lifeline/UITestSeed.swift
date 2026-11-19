@@ -227,9 +227,9 @@ enum UITestSeed {
         guard try profile.owner() == nil else { return }
         guard var seed = try people(store: store, profile: profile, sessions: sessions) else { return }
         _ = try store.people.insertPerson(displayName: "Zoë")
-        if let lena = try store.entities.find(type: .person, title: "Lena") {
-            try store.people.addAlias("Linny", to: PersonID(rawValue: lena.id.rawValue))
-        }
+        // The alias test needs Lena: a family seed without her must stop here, not pass with no alias.
+        guard let lena = try store.entities.find(type: .person, title: "Lena") else { preconditionFailure("the family seed has Lena") }
+        try store.people.addAlias("Linny", to: PersonID(rawValue: lena.id.rawValue))
         _ = try store.entities.insert(type: .thing, title: "Dad's Volvo")
         _ = try store.entities.insert(type: .place, title: "São Paulo")
         try seed.keep("The long drive", kind: .event, year: 2004, links: [],
