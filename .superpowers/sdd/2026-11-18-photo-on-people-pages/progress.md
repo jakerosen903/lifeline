@@ -52,3 +52,11 @@ Pre-flight: Task 6 needs a column that Task 1 owns: Task 1 text now carries it (
 - Task 7: minor (deferred): device check has no line for the app going to the background during a pick.
 - Task 7: minor (deferred): with no shelf, failures use the one-photo text; no UI test for "{k} photos could not be added."; `-uiTesting-pickPhotos` splits on a comma.
 - Task 6: built at 7880143 (base 3530a38). DONE_WITH_CONCERNS: the card is about 90 pt taller, so three existing UI tests gained a scroll step or a weaker precondition (listed in the report); `showsNoOtherPageSentence` is a function `(keeping:)`; a page that holds the photo with no kept memory naming it still leaves the list when emptied; the Undo notice after a name move can sit below the screen. Sent to review as built.
+- Task 6: review of 3530a38..7880143: spec ❌ in one case, one Important: a page that only holds the photo (no kept memory names it) leaves `pageGroups` when emptied in the done state, so its chip disappears under the finger (Part 3 point 6).
+- Task 6: Ruling: `keeping:` widens from ids to `Page` values, so the kit puts back an empty copy of a kept page that left `pageGroups` — the spec says "must not disappear" and the id-only interface was the plan's defect — cost if wrong: one signature and one view-model field. The open state keeps today's behaviour (not in the spec).
+- Task 6: fix round 1 also takes Minor 2 (drag only until Undo is hittable) and Minor 5 (device-check line 25's missing result) and adds the off-screen Undo notice to the device check's known small items.
+- Task 6: minor (deferred): `testTheCardKeepsItsLayoutAfterEachChoice` precondition is now "in the tree", not "on screen": the card (about 740 pt) no longer fits. Open for the owner.
+- Task 6: minor (deferred): after a name move on the session's page the Undo notice can sit below the screen for its 6 seconds. Open for the owner.
+- Task 6: minor (deferred): `card(for:)` reads the session row a second time for one flag.
+- Task 6: cannot verify from diff: the line-height reservation was in the brief (Task 5's open item) — controller confirms; `keptPages` drops when the screen is left (a new view model per visit) and the done state after a kill — device check lines 23 and 25.
+- Task 6: fix round 1 queued behind the Task 7 fix (one writer at a time in the worktree).
