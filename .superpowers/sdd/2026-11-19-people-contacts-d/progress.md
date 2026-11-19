@@ -40,3 +40,5 @@ The owner said "Yes, build both" (PC-d, then PC-c) on 2026-11-19, without a revi
 - Task 7: complete (commits 09f7087..61f3fd3, review clean). Open: the comparison is NOT run (no key in the build environment); the doc gives the owner the command; about 140 model calls, not 60. Rulings D26, D27.
 - Task 7: minor (deferred): the handle assertion checks the pipeline, not the model; `HandleTally.says` does not join "the other Robyn" to a handle named "Robyn"; `people_refs` is checked against the recording so far also for `v6`.
 - Task 7 review, out of its diff, Important: a person named in a segment that gives no memory card does not reach the next segment's `recordingPeople`. Ruling D25: Task 7b, with the comparison's table written row by row.
+- Task 7b: complete (commits e87ea6d..a5e22b6, review clean). Ruling D28.
+- Task 7b: minor (deferred): a carried mention can add a relation phrase ("my roommate") as a second said name of a handle; a force unwrap in the rank sort.
