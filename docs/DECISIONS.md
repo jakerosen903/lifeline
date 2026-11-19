@@ -220,6 +220,74 @@ Rulings made while building:
 3. **The opening swap.** When the person swaps the opening, the photo stays under a scene question. The spec keeps alternates. The owner must say if this is wrong.
 4. **A photo-dated memory reads as a guess on summaries.** The memory page shows a plain day. The entity page span and the life strip show “around 2019”. Plan decision 6 makes the date settled but not “as said”. Cost of a fix: one line in `readsAsSaid`.
 
+## 2026-11-18 · PC-a: rulings made while building people and contacts
+
+**Status:** Decided by the builder, except R13, which the controller made and the owner must confirm. The owner can overrule each one. Source: `docs/plans/2026-11-18-people-contacts.md`, ledger `.superpowers/sdd/2026-11-18-people-contacts/rulings.md` (R1 to R39). Narrows two statements of the entry below and of the spec.
+
+**Decision.**
+
+Schema:
+
+- R36: the migration is named `v15`. This branch registers no `v14`. Why: the unmerged photo branches register their own `v14`, and GRDB records a migration by name, so a device that ran one `v14` would skip the other. GRDB runs each unapplied id in registration order, so the gap is harmless.
+
+Matching and origins:
+
+- R7: with a said name, only the name picks candidates. The relation part of "Priya, my mom" never picks a candidate. Rule 2 never fires when a name was said. Rule 3 needs exactly one candidate whose full name equals the said name.
+- R12 and R13: every write that meets an existing link keeps the stronger origin, and no origin is the weakest. An older link with no origin takes the guess's origin when a retelling or a merge reaches it, and shows the mark when that is `assumed`. An older link nothing touches has no mark. Keep never settles a guess to `confirmed`. This narrows "Links older than this feature show no mark" below and in the spec. Why: a guess that reaches an old link is still a guess (principle 5).
+- R8: a stored choice applied on Keep saves both halves of the said name as aliases, as settle does. A guess with origin `said` saves only the relation half. A group phrase is never saved.
+- R9: a stored choice matches the whole said ref. "Robin" and "my roommate, Robin" are two keys.
+- R14: a person made by a stored "Someone new" choice is not an empty guess. A later move never removes them.
+- R15: an alias saved before this change that is a group phrase no longer links on Keep. The phrase asks again in each story.
+- R10: until PC-b, a guessed contact cannot occur. A stored `contact` choice makes a new person with origin `confirmed`.
+- R38: a fact linked by a person id that the model picked takes the origin of the mention link that reached the same person in that memory. With no such mention, it takes `assumed`. A move also takes a detail of the old person from each memory whose mention is in the move. Why: spec step 2 says a model-supplied person id is still `assumed`.
+- R11: after a serious disclosure no person mention counts as carried. The name goes to the People queue.
+
+Moves and Undo:
+
+- R19 and R23: a detail moves only with a whole answer. A fact whose own mention is in the move always takes its detail along.
+- R20 and R24: an empty guess is a person made by a guess, with nothing that refers to them. A move clears the target's guess flag.
+- R39: a move removes a guessed person only when the owner has not edited them: the name is still as said, no dates are stated, and the person is not hidden or kept from the AI. A rename on the person's page clears the guess flag, as the rename in People does. Why: spec "Moving a name", point 6, "no name the owner gave".
+- R21, R26 and R27: Undo is refused as stale when rows it would restore or change moved on since, for example a rename or a deleted memory. The refusal shows its sentence for 6 seconds, with no Undo.
+- R25: a settle that changed nothing records nothing, so its Undo is not refused.
+- R29: "Done" with the choice unchanged settles an `assumed` or `new` link. On `said`, `confirmed` or no origin it writes nothing.
+- R34: when a move removes the person whose page is open, the page stays up with its content disabled and the notice "Changed to {name}." with Undo. It closes when the notice ends. A successful Undo brings the page back.
+
+Cards and chips:
+
+- R30: a card that waits shows a person chip only for each preview. A said name that Keep will not link has no chip there. A group phrase keeps its own "Who's this?" card.
+- R37 (replaces the dead end in R30): a name marked "Not a person" on a waiting card keeps a quiet chip with the said name. The chip has no line and no mark. A tap opens the sheet with "Not a person" selected. Why: the sheet says "You can change this again at any time", and that must be true.
+- R31: the move notice uses the slot each host already has. A refused Undo shows in the same place.
+- R17: an `assumed` link with no said name still shows the word "Assumed".
+- R18: link reads return hidden memories too. Each view filters them.
+
+Test seeds:
+
+- R35: `-uiTesting-seedGuesses` seeds Priya, made by a guess, for R34's held page. `-uiTesting-guessesLanding` leaves the latest landing open. The follow-ups fixture gained the group phrase "for our parents".
+
+Plan decision 8: a name no memory carries keeps the old "Who's this?" card with its four choices in this PR. The owner decides later whether it goes.
+
+**Why.** Each ruling closes a case the plan left open. A hidden guess breaks principle 5, so each ruling errs toward showing the guess and toward a recoverable change.
+
+**Costs.** R13 puts a mark on an old link a retelling reaches, and the owner may see marks on old stories. R34 keeps a deleted person's page open for a few seconds. Two cards for one name exist until PC-b.
+
+## 2026-11-18 · People are backed by contacts, and every guess about a name shows
+
+**Status:** Decided. Source: the owner's brainstorm of 2026-11-18, four approved screens (`docs/design/PC1_Assumed.dc.html` to `PC4_NoContact.dc.html`) and the owner's approval of `docs/specs/2026-11-18-people-contacts.md`. Supersedes the line "`contact_identifier` is deferred; no Contacts framework in V1" in the first spec.
+
+**Decision.** A person can hold one contact, and a contact one person. A person needs no contact, and the app works with full, limited or no contacts access. A link between a memory and a person records how it was made: `assumed`, `said`, `confirmed` or `new`. A link the app chose from a name alone shows a dashed ochre outline and the word "Assumed" until the owner settles it. Keep does not settle it.
+
+- A name said with a relation phrase that one person holds ("Danielle, my sister") is not a guess.
+- A guess teaches the app no name. An alias is saved only from the owner's own words or choice.
+- One answer carries inside one recording only.
+- The contact's picture is the person's first picture when the person has none.
+- Nothing from a contact goes to the model.
+- Two people can be merged, by a drag on People or by a button, with a confirm and Undo.
+- The extractor will give each person in a recording a handle, so two people with one name stay apart (step 2, its own plan).
+
+**Why.** On first use a story about a roommate was filed under a friend with the same spoken name, with no sign of a guess and no way to change it. A guess shown as a fact breaks principle 5. A contact gives a real person one identity across stories.
+
+**Costs.** Marks are common, because every bare name is a guess. Links older than this feature show no mark, so an old wrong link looks settled until the owner changes it. A name the app does not know becomes a person on Keep, so a misheard name is a person until the owner removes or merges it. The extractor does not see a contact's full name.
+
 ## 2026-11-16 · S6a: rulings made while building the spine
 
 **Status:** Decided by the builder. The owner can overrule each one. Source: `docs/plans/2026-11-16-timeline-spine.md`, ledger `.superpowers/sdd/2026-11-16-timeline-spine/rulings.md`.

@@ -52,3 +52,17 @@ import Testing
     #expect(try env.store.entities.links(of: fact.id).map(\.link.relation) == [.mention], "a moment names the house instead")
     #expect(throws: CandidateActions.Error.wrongKind) { try actions.moveDetail(fact.id, to: shed.id) }
 }
+
+// M8: the owner placed the detail by hand, so a person's detail is `confirmed`; a thing's has no origin.
+@Test func moveDetailToAPersonIsConfirmed() throws {
+    var env = try PairEnv()
+    let fact = try env.memory("She grew tomatoes on the balcony", vector: [1, 0, 0])
+    try env.store.memories.setKind(fact.id, .fact)
+    let actions = CandidateActions(store: env.store)
+    let ines = try env.store.people.insertPerson(displayName: "Ines")
+    let shed = try env.store.entities.insert(type: .thing, title: "the shed")
+    try actions.moveDetail(fact.id, to: ines.entityID)
+    #expect(try env.store.entities.links(of: fact.id).map(\.link.origin) == [.confirmed])
+    try actions.moveDetail(fact.id, to: shed.id)
+    #expect(try env.store.entities.links(of: fact.id).map(\.link.origin) == [nil], "origin is for person links only")
+}

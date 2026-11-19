@@ -44,6 +44,7 @@ public struct PeopleRepository: Sendable {
     /// The person whose display name or any alias equals `text`, ignoring case and outer
     /// whitespace. A phrase with a role and a name ("my mom, Marcel") matches on either part.
     /// Never the owner: the owner is the speaker, not someone a story mentions (audit F10).
+    /// Only for a name the owner types; no extraction path may call it (it picks one person with no mark).
     public func findPerson(matching text: String) throws -> Person? {
         for part in Self.parts(of: text) {
             if let person = try findPerson(exactly: part) { return person }
@@ -81,16 +82,23 @@ public struct PeopleRepository: Sendable {
     }
 
     /// Changes the display name and keeps the old spelling as an alias, so a transcript that
-    /// repeats the old spelling still links.
+    /// repeats the old spelling still links. A name the owner typed makes the person theirs: no
+    /// longer a guess a move may remove.
     public func rename(_ person: PersonID, to newName: String) throws {
         let name = newName.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !name.isEmpty else { throw Error.emptyName }
-        try db.writer.write { db in
-            guard let old = try String.fetchOne(db, sql: "select title from entity where id = ?", arguments: [person.rawValue]) else { return }
-            try db.execute(sql: "update entity set title = ? where id = ?", arguments: [name, person.rawValue])
-            try Self.insertAlias(old, person, db)
-            try Self.insertAlias(name, person, db)
-        }
+        try db.writer.write { db in try Self.rename(person, to: name, in: db) }
+    }
+
+    /// The one rename of a person, for People and for the person's page (`EntityRepository.rename`).
+    /// `name` is already trimmed and not empty.
+    static func rename(_ person: PersonID, to name: String, in db: Database) throws {
+        guard let old = try String.fetchOne(db, sql: "select title from entity where id = ?", arguments: [person.rawValue]) else { return }
+        try db.execute(sql: "update entity set title = ? where id = ?", arguments: [name, person.rawValue])
+        try db.execute(sql: "update person set created_by_guess = 0, name_origin = ? where id = ?",
+                       arguments: [NameOrigin.typed.rawValue, person.rawValue])
+        try insertAlias(old, person, db)
+        try insertAlias(name, person, db)
     }
 
     /// Inserts a person and the alias equal to their name.
@@ -105,9 +113,9 @@ public struct PeopleRepository: Sendable {
     }
 
     /// For a name the person typed or chose themselves: the person it names, and the owner when
-    /// it is one of the owner's names. A name the extractor found goes through `findPerson`,
-    /// which never returns the owner. Without this, typing your own name would make a second
-    /// person with it.
+    /// it is one of the owner's names. A name the extractor found never comes here or to
+    /// `findPerson`: it goes through `PersonGuess` on Keep. Without this, typing your own name
+    /// would make a second person with it.
     public func findPersonOrOwner(matching text: String) throws -> Person? {
         if let person = try findPerson(matching: text) { return person }
         guard try ownerNames().isOwner(text) else { return nil }
@@ -133,7 +141,7 @@ public struct PeopleRepository: Sendable {
 
     /// No-op when the person already has this alias (case-insensitive).
     public func addAlias(_ text: String, to person: PersonID) throws {
-        try db.writer.write { db in try Self.insertAlias(text, person, db) }
+        try db.writer.write { db in _ = try Self.insertAlias(text, person, db) }
     }
 
     public func insertMention(_ mention: Mention) throws {
@@ -211,12 +219,15 @@ public struct PeopleRepository: Sendable {
         Place(try EntityRepository(db).insert(type: .place, title: nameText))
     }
 
-    static func insertAlias(_ text: String, _ person: PersonID, _ db: Database) throws {
+    /// True when the alias is new; false when the person already had it or the text is empty.
+    @discardableResult
+    static func insertAlias(_ text: String, _ person: PersonID, _ db: Database) throws -> Bool {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return }
+        guard !trimmed.isEmpty else { return false }
         let exists = try Alias.fetchOne(db, sql: "select * from alias where person_id = ? and lower(trim(text)) = ?",
                                         arguments: [person.rawValue, normalize(trimmed)]) != nil
         if !exists { try Alias(personID: person, text: trimmed).insert(db) }
+        return !exists
     }
 
     public static func normalize(_ text: String) -> String {

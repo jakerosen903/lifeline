@@ -115,12 +115,16 @@ public struct MemoryPerson: Codable, Sendable, Equatable {
     public var personID: PersonID
     /// The owner's phrase for the person in this memory ("my sister").
     public var roleText: String?
+    /// How the owner's link to this person was made; nil when not known.
+    public var origin: LinkOrigin?
 
-    public init(memoryID: MemoryID, personID: PersonID, roleText: String?) {
-        self.memoryID = memoryID; self.personID = personID; self.roleText = roleText
+    public init(memoryID: MemoryID, personID: PersonID, roleText: String?, origin: LinkOrigin? = nil) {
+        self.memoryID = memoryID; self.personID = personID; self.roleText = roleText; self.origin = origin
     }
 
-    public var link: MomentEntity { MomentEntity(memoryID: memoryID, entityID: EntityID(rawValue: personID.rawValue), relation: .mention, roleText: roleText) }
+    public var link: MomentEntity {
+        MomentEntity(memoryID: memoryID, entityID: EntityID(rawValue: personID.rawValue), relation: .mention, roleText: roleText, origin: origin)
+    }
 }
 
 /// A place as a memory shows it: an entity of type place (M7). Its id is the entity's id.

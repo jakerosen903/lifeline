@@ -171,8 +171,10 @@ private func fact(people: [String] = [], about: String? = nil) -> MemoryOut {
     let card = StoreFixtures.candidate(segs[0].id, payload: try CandidatePayload.encode(out))
     try env.store.candidates.insert(card)
     let kept = try env.actions.acceptMemory(card, joinStory: false)
-    #expect(kept.newMentions.map(\.text) == ["Maya"], "only the name the app does not know is asked about")
-    #expect(try env.store.people.people().count == 1, "no second person with the owner's name")
+    // Task 3: Maya, whom the app does not know, becomes a person marked new; the owner's name makes nobody.
+    #expect(kept.newMentions.isEmpty)
+    #expect(try env.store.memories.people(of: kept.memory.id).map(\.displayName) == ["Maya"])
+    #expect(try env.store.people.people().filter { $0.displayName == "Jordan" }.count == 1, "no second person with the owner's name")
 }
 
 // MARK: - The stored title of a fact, feeling or goal

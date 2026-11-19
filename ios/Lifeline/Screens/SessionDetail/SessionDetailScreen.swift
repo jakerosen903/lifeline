@@ -107,7 +107,7 @@ struct SessionDetailScreen: View {
         .navigationDestination(item: Binding(get: { viewModel.openedEntity }, set: { viewModel.openedEntity = $0 })) { entity in
             EntityScreen(viewModel: EntityViewModel(entity: entity, deps: viewModel.deps)) { viewModel.refresh() }
         }
-        .sheet(item: Binding(get: { viewModel.changing }, set: { viewModel.changing = $0 })) { memory in
+        .sheet(item: Binding(get: { viewModel.changing }, set: { viewModel.changing = $0 }), onDismiss: { viewModel.cards.peopleChanged() }) { memory in
             ChangeSheet(memory: memory, deps: viewModel.deps) { viewModel.refresh() }
         }
     }

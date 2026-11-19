@@ -150,8 +150,8 @@ public actor ScriptedVoiceSession: VoiceSession {
 
     /// One long line for the follow-up chips fixture (`ScriptedExtractionService.followUpOutput`).
     public static let followUpScript: [SegmentTranscript] = [
-        SegmentTranscript(range: MsRange(start: 0, end: 4_000), text: "my cousin Dara and I mended the garden gate",
-                          words: words("my cousin Dara and I mended the garden gate", from: 0, to: 4_000)),
+        SegmentTranscript(range: MsRange(start: 0, end: 5_000), text: "my cousin Dara and I mended the garden gate for our parents",
+                          words: words("my cousin Dara and I mended the garden gate for our parents", from: 0, to: 5_000)),
     ]
 
     private static func words(_ text: String, from start: Int, to end: Int) -> [TranscribedWord] {

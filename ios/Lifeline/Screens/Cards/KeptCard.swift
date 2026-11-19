@@ -2,10 +2,12 @@ import LifelineKit
 import SwiftUI
 
 /// A memory after Keep, while its follow-ups are still open: "Kept" with a checkmark, the title
-/// on one line, one chip per follow-up in emitted order, and "Done". A person chip asks "Who's
+/// on one line, the people Keep linked, one chip per follow-up in emitted order, and "Done". A person chip asks "Who's
 /// this?" in a sheet; a choice closes it and checks the chip.
 struct KeptCardView: View {
     let kept: KeptCard
+    /// "With" and the people Keep linked; a chip opens the "Who is this?" sheet.
+    var people: PersonChipRow? = nil
     /// Chips answered with "Not any of these".
     var declined: Set<String> = []
     let peopleChoices: (String) -> [Person]
@@ -29,6 +31,7 @@ struct KeptCardView: View {
                 .font(.system(.title3, design: .serif).weight(.semibold))
                 .foregroundStyle(Theme.ink)
                 .lineLimit(1)
+            if let people { people }
             FlowLayout(spacing: 6) {
                 ForEach(kept.followUps) { followUp in
                     FollowUpChip(followUp: followUp, answered: kept.answered.contains(followUp.id), declined: declined.contains(followUp.id),
