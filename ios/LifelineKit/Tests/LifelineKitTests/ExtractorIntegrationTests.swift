@@ -87,8 +87,9 @@ struct ExtractorIntegrationTests {
 
     // MARK: - What must hold for every version
 
-    /// Every shown field is copied from the transcript. A person's said name may come from an earlier
-    /// segment of the recording (D17), so it is checked against the recording so far. Returns the number of shown cards.
+    /// Every shown field is copied from the transcript. On a card with handles a person's said name may come from an
+    /// earlier segment of the recording (D17), so it is checked against the recording so far; on a card with none
+    /// (`v6`) against the segment alone, as before PC-d. Returns the number of shown cards.
     static func expectShownFieldsAreTheOwnersWords(_ run: Run, label: String) throws -> Int {
         var shown = 0
         for (position, segment) in run.segments.enumerated() {
@@ -98,7 +99,8 @@ struct ExtractorIntegrationTests {
                 shown += 1
                 if let m = CandidatePayload.memory(candidate) {
                     #expect(OutputValidator.contains(haystack, m.quote), "\(label) quote: \(m.quote)")
-                    for p in m.peopleRefs { #expect(OutputValidator.contains(recordingSoFar, p), "\(label) people_ref: \(p)") }
+                    let names = m.handlePeople.isEmpty ? haystack : recordingSoFar
+                    for p in m.peopleRefs { #expect(OutputValidator.contains(names, p), "\(label) people_ref: \(p)") }
                     if let place = m.placeText { #expect(OutputValidator.contains(haystack, place), "\(label) place: \(place)") }
                     for a in m.anchors { #expect(OutputValidator.contains(haystack, a.phrase), "\(label) anchor: \(a.phrase)") }
                     #expect(m.title.split(whereSeparator: \.isWhitespace).count <= 8, "\(label) title: \(m.title)")
@@ -113,7 +115,7 @@ struct ExtractorIntegrationTests {
         return shown
     }
 
-    /// Every handle of a stored memory names a person of that output's `people` or of the recording so far (D17).
+    /// Every handle of a stored memory names a person of that output's `people` or of the recording's other segments (D17, D30).
     static func expectEveryMemoryHandleNamesAKnownPerson(_ run: Run, label: String) throws {
         for segment in run.segments {
             let session = segment.sessionID
