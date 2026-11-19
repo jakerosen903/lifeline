@@ -577,7 +577,8 @@ extension Env {
     let tables = ["person", "entity", "moment_entity", "alias"]
     let counts = try tables.map { table in try env.db.writer.read { try Int.fetchOne($0, sql: "select count(*) from \(table)") ?? 0 } }
     let chip = try #require(try env.linkActions.preview(card).first)
-    #expect(chip == PreviewChip(saidName: "Robyn", name: "Robyn Vale", origin: .assumed, person: nil, fromContact: true))
+    #expect(chip == PreviewChip(saidName: "Robyn", name: "Robyn Vale", origin: .assumed, person: nil, fromContact: true, contactIdentifier: "c-vale"),
+            "the chip names the contact Keep will link, so the sheet can open on it (I-1)")
     #expect(try tables.map { table in try env.db.writer.read { try Int.fetchOne($0, sql: "select count(*) from \(table)") ?? 0 } } == counts,
             "the preview writes nothing")
 

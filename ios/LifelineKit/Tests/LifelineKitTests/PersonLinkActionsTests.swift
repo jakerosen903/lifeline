@@ -793,7 +793,8 @@ private let haleCard = ContactCard(identifier: "c-hale", fullName: " Robin Hale 
     let stored = try env.db.writer.read { try Row.fetchOne($0, sql: "select choice, person_id, contact_identifier from candidate_person_choice") }
     #expect(stored?["choice"] == "contact" && stored?["contact_identifier"] == "c-hale")
     #expect((stored?["person_id"] as String?) == nil)
-    #expect(try env.actions.preview(card) == [PreviewChip(saidName: "my roommate, Robin", name: "Robin Hale", origin: .confirmed, person: nil)],
+    #expect(try env.actions.preview(card) == [PreviewChip(saidName: "my roommate, Robin", name: "Robin Hale", origin: .confirmed, person: nil,
+                                                                contactIdentifier: "c-hale")],
             "the contact's name, with no mark")
 
     let memory = try env.keep.acceptMemory(card, joinStory: false).memory

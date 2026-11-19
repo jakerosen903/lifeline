@@ -79,6 +79,15 @@ public struct WhoIsThisOptions: Sendable, Equatable {
         return out
     }
 
+    /// The options for a waiting card whose chip is a person Keep will make from `card`: that contact is the current
+    /// choice, first and marked as the app's guess, and listed once (I-1). Draft copy, for the owner's sign-off.
+    public func withCurrentContact(_ card: ContactCard) -> WhoIsThisOptions {
+        var out = self
+        out.rows.removeAll { $0.target == .contact(card) }
+        out.rows.insert(Row(target: .contact(card), title: card.keptName, line: "In your contacts \u{00B7} my guess", isCurrent: true), at: 0)
+        return out
+    }
+
     /// The contacts whose full name, given name or nickname is the said name's name part, each once, by full name.
     /// A contact with no full name has nothing to name a person by (a move to it is refused), so it is left out.
     private static func fits(_ saidName: String, in contacts: [ContactCard]) -> [ContactCard] {

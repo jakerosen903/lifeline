@@ -50,11 +50,15 @@ public struct PreviewChip: Sendable, Equatable, Identifiable {
     public var isNotAPerson: Bool
     /// Keep will make the person from a contact, or did in this recording (`PersonLink.personFromContact`).
     public var fromContact: Bool
+    /// The contact Keep will make the person from, when Keep makes a person (`person` nil). The sheet opens on it,
+    /// so "Done" with nothing changed keeps that contact (I-1). Nil for a person on file or a person with no contact.
+    public var contactIdentifier: String?
     public var id: String { SaidName.key(saidName) }
 
-    public init(saidName: String, name: String, origin: LinkOrigin, person: PersonID?, fromContact: Bool = false) {
+    public init(saidName: String, name: String, origin: LinkOrigin, person: PersonID?, fromContact: Bool = false,
+                contactIdentifier: String? = nil) {
         self.saidName = saidName; self.name = name; self.origin = origin; self.person = person
-        self.isNotAPerson = false; self.fromContact = fromContact
+        self.isNotAPerson = false; self.fromContact = fromContact; self.contactIdentifier = contactIdentifier
     }
 
     /// The chip shows the said name with no line and no mark: the owner's own answer (`confirmed`).
@@ -117,7 +121,8 @@ public struct PersonLinkActions: Sendable {
             guard let origin = link.origin else { return nil }
             let said = link.roleText ?? ""
             if let new = planned[link.personID] {
-                return PreviewChip(saidName: said, name: new.displayName, origin: origin, person: nil, fromContact: new.isGuessFromContact)
+                return PreviewChip(saidName: said, name: new.displayName, origin: origin, person: nil, fromContact: new.isGuessFromContact,
+                                   contactIdentifier: new.contactIdentifier)
             }
             guard let person = try store.people.person(id: link.personID) else { return nil }
             // As `PersonLink.personFromContact`: only in the recording of the person's first link (PB11).

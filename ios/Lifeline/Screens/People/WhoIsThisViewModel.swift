@@ -84,6 +84,13 @@ final class WhoIsThisViewModel {
             // A contact chosen before: the sheet opens on it, so "Done" does not quietly replace it with "Someone new".
             built = built.adding(chosen, heldBy: nil)
             selected = .contact(chosen)
+        } else if case .waiting(_, let chip) = source, chip.person == nil, let identifier = chip.contactIdentifier,
+                  let guessed = cards.first(where: { $0.identifier == identifier }) {
+            // Keep would make the person from this contact (rules 3 and 5): the sheet opens on it, so "Done" with
+            // nothing changed keeps the contact rather than "Someone new" (I-1). A contact gone from the cache since
+            // the chip was made falls to "Someone new", as Keep would then.
+            built = built.withCurrentContact(guessed)
+            selected = .contact(guessed)
         } else {
             selected = current.map { .person($0) } ?? .someoneNew
         }

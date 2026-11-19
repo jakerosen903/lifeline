@@ -133,3 +133,14 @@ private let brandt = card("c-brandt", "Tove Brandt", given: "Tove")
     let held = o.adding(okafor, heldBy: "Robin Okafor")
     #expect(held.rows[1].line == "In a story as Robin Okafor")
 }
+
+// I-1 (fix wave): a waiting card whose chip is the app's guess from a contact opens on that contact, first and marked.
+@Test func theContactKeepWouldLinkIsTheCurrentChoice() {
+    let o = build(current: nil, candidates: [robyn.id], people: [(robyn, 3)], contacts: [hale, okafor])
+    let guessed = o.withCurrentContact(okafor)
+    #expect(guessed.rows.map(\.target) == [.contact(okafor), .person(robyn.id), .contact(hale)], "first, and listed once")
+    #expect(guessed.rows[0].isCurrent)
+    #expect(guessed.rows[0].line == "In your contacts \u{00B7} my guess")
+    #expect(guessed.rows.dropFirst().allSatisfy { !$0.isCurrent })
+    #expect(o.withCurrentContact(brandt).rows.first?.target == .contact(brandt), "a contact that does not fit by name is still the guess")
+}
