@@ -55,6 +55,9 @@ struct SearchSnippetTests {
     @Test func lineBreaksAndRepeatedSpacesAreKeptAsSaid() {
         #expect(SearchSnippet.around("an old\n harmonica", query: "harmonica")?.text == "\u{201C}an old\n harmonica\u{201D}")
     }
+    @Test func aJoinedWordIsMarkedWhole() {
+        #expect(SearchSnippet.around("we met her in-law at the lake", query: "law")?.parts.filter(\.isMatch).map(\.text) == ["in-law"])
+    }
     @Test func theQueryIsCutAtItsLimit() {
         let query = "harmonica " + String(repeating: "x", count: SearchFold.maxQueryLength)
         #expect(SearchSnippet.around("a harmonica", query: query)?.parts.filter(\.isMatch).map(\.text) == ["harmonica"])
@@ -73,6 +76,15 @@ struct SearchSnippetTests {
     }
     @Test func aMomentFoundInItsQuoteShowsTheWords() {
         #expect(SearchSnippet.line(for: momentByQuote, query: "night")?.text == "\u{201C}we drove all night\u{201D}")
+    }
+    @Test func theLineCentresOnAWordTheTitleDoesNotShow() throws {
+        // "long" is in the heading; "harmonica" is why the memory was found, and is outside a window centred on "long".
+        let hit = SearchResults.MemoryHit(
+            memory: Self.memory("The long drive", kind: .event, quote: "we drove all night"), match: .text,
+            matchedText: "long ago one two three four five six seven eight nine harmonica in the car")
+        let line = try #require(SearchSnippet.line(for: hit, query: "long harmonica"))
+        #expect(line.parts.filter(\.isMatch).map(\.text) == ["harmonica"])
+        #expect(line.text == "\u{201C}…four five six seven eight nine harmonica in the car\u{201D}")
     }
     @Test func aFactWhoseQuoteHoldsOnlySomeQueryWordsShowsTheWords() {
         #expect(SearchSnippet.line(for: factBeyond, query: "sit classroom") != nil)

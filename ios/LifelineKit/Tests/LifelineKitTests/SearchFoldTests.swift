@@ -10,6 +10,7 @@ struct SearchFoldTests {
     @Test func anApostropheJoinsAndOtherMarksSplit() {
         #expect(SearchFold.fold("Dad's Volvo") == "dads volvo")
         #expect(SearchFold.fold("Dad\u{2019}s Volvo") == "dads volvo", "a curly apostrophe")
+        #expect(SearchFold.fold("Dad\u{FF07}s") == "dads", "a full-width apostrophe")
         #expect(SearchFold.fold("St. Louis") == "st louis")
         #expect(SearchFold.fold("tree-house, 1999!") == "tree house 1999")
         #expect(SearchFold.fold("  the\n lake \t") == "the lake")

@@ -4,6 +4,8 @@ extension ExtractionStore {
     /// What search may find (decision 6): every visible person, place, thing and idea but the owner, and every told,
     /// visible memory with the words of its tellings. A fixed number of statements, whatever the archive's size.
     /// Nothing hidden, no floating stand-in and no word outside a memory's own spans enters the index.
+    /// The reads are not one snapshot, but every race fails closed: the visible lists are the spine, so a row hidden
+    /// between two reads drops out instead of showing.
     public func searchIndex() throws -> SearchIndex {
         let ownerEntity = try profile.owner()?.entityID
         let aliases = try people.allAliases()

@@ -19,12 +19,14 @@ public struct SearchSnippet: Sendable, Equatable {
 
     private static let openQuote = "\u{201C}", closeQuote = "\u{201D}", cut = "…"
 
-    /// Nil when no word of `text` starts with a query word.
-    public static func around(_ text: String, query: String) -> SearchSnippet? {
+    /// Nil when no word of `text` starts with a query word. The window centres on the first word that starts with
+    /// one of `centredOn` (folded query words) when there is one, else on the first match. Every match in it is marked.
+    public static func around(_ text: String, query: String, centredOn preferred: [String] = []) -> SearchSnippet? {
         let queryWords = SearchFold.queryWords(query)
         guard !queryWords.isEmpty else { return nil }
         let tokens = tokens(of: text)
-        guard let first = tokens.firstIndex(where: { isMatch($0, queryWords) }) else { return nil }
+        guard let first = tokens.firstIndex(where: { isMatch($0, preferred) }) ?? tokens.firstIndex(where: { isMatch($0, queryWords) })
+        else { return nil }
 
         let start = max(0, first - wordsBefore)
         let end = min(tokens.count - 1, first + wordsAfter)
@@ -53,10 +55,13 @@ public struct SearchSnippet: Sendable, Equatable {
     }
 
     /// Nil for a title match, and for a fact, feeling or goal whose quote holds every query word (decision 13).
+    /// It centres on a query word the heading's title does not show, so the line shows why the memory was found.
     public static func line(for hit: SearchResults.MemoryHit, query: String) -> SearchSnippet? {
         guard hit.match == .text, let matchedText = hit.matchedText else { return nil }
         if !hit.memory.isMoment, quoteHoldsEveryWord(of: hit.memory, query: query) { return nil }
-        return around(matchedText, query: query)
+        // As in `Search`: a fact's, a feeling's or a goal's stored title is not searched, so it shows no query word.
+        let titleWords = hit.memory.isMoment ? SearchFold.words(hit.memory.title) : []
+        return around(matchedText, query: query, centredOn: Search.unshown(SearchFold.queryWords(query), by: titleWords))
     }
 
     // MARK: - Private

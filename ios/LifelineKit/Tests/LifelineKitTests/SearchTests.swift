@@ -90,6 +90,13 @@ struct SearchTests {
         #expect(found.memories.allSatisfy { $0.match < .text }, "no memory by its words")
         #expect(Search.run("a", in: ordered)?.memories.isEmpty == true, "\"a harmonica\" is a telling, not a name")
     }
+    @Test func severalOneCharacterWordsSearchNamesOnly() throws {
+        // "Halfdated one" has the telling "a bell": "a b" must not search the words said.
+        #expect(Search.run("a b", in: ordered)?.memories.isEmpty == true)
+        let found = try #require(Search.run("a b", in: index))
+        #expect(found.memories.allSatisfy { $0.match < .text }, "no memory by its words")
+        #expect(Search.run("a bell", in: ordered)?.memories.map(\.memory.title) == ["Halfdated one"], "one longer word searches the words")
+    }
 
     // MARK: - Matching
 
@@ -138,6 +145,19 @@ struct SearchTests {
         #expect(hit.memory.title == "The long drive" && hit.match == .text)
         #expect(hit.matchedText == "he kept an old harmonica in the glove box")
     }
+    @Test func aMomentOfKindOtherIsFoundByItsTitle() throws {
+        let fair = SearchIndex(memories: [Self.memory("The county fair", kind: .other, tellings: ["we won a ribbon"])])
+        let hit = try #require(Search.run("county", in: fair)?.memories.first)
+        #expect(hit.memory.title == "The county fair" && hit.match == .titleWords)
+    }
+    @Test func aFeelingOrAGoalIsFoundByItsQuoteNeverItsStoredTitle() throws {
+        for kind in [MemoryKind.feeling, .goal] {
+            let told = SearchIndex(memories: [Self.memory("Stored title words", kind: kind, quote: "I wanted to see the ocean")])
+            #expect(Search.run("stored", in: told)?.memories.isEmpty == true, "\(kind): the stored title is not searched")
+            let hit = try #require(Search.run("ocean", in: told)?.memories.first)
+            #expect(hit.match == .text && hit.matchedText == "I wanted to see the ocean", "\(kind)")
+        }
+    }
     @Test func aRetoldMemoryShowsOnce() {
         #expect(Search.run("harmonica", in: index)?.memories.filter { $0.memory.title == "The long drive" }.count == 1)
     }
@@ -146,6 +166,13 @@ struct SearchTests {
         #expect(found.memories.map(\.memory.title) == ["The long drive"])
         #expect(found.memories.first?.matchedText == "he kept an old harmonica in the glove box")
     }
+    @Test func theWordsShownAreTheOnesTheTitleDoesNotShow() throws {
+        // "long" is in the title and in the first telling; only the second telling shows why the memory was found.
+        let drive = SearchIndex(memories: [Self.memory("The long drive", quote: "we drove all night",
+                                                       tellings: ["it was a long way", "he played the harmonica"])])
+        let hit = try #require(Search.run("long harmonica", in: drive)?.memories.first)
+        #expect(hit.match == .text && hit.matchedText == "he played the harmonica")
+    }
     @Test func aTitleMatchHasNoMatchedText() {
         #expect(Search.run("kite", in: index)?.memories.first?.matchedText == nil)
     }
@@ -153,6 +180,22 @@ struct SearchTests {
         let twice = SearchIndex(entities: index.entities + index.entities, memories: index.memories + index.memories)
         #expect(Search.run("sasha", in: twice)?.people.count == 1)
         #expect(Search.run("harmonica", in: twice)?.memories.count == 1)
+    }
+
+    // MARK: - The index
+
+    @Test func anEntryIsFoldedOnceWhenItIsMade() {
+        // `Search.run` reads these words; every test above runs on them.
+        let person = Self.entry("Zoë", type: .person, aliases: ["Dad's Volvo", "SÃO"])
+        #expect(person.titleWords == SearchFold.words("Zoë"))
+        #expect(person.aliasWords == ["Dad's Volvo", "SÃO"].map(SearchFold.words))
+        let tellings = ["he kept an old harmonica", "the harmonica was out of tune"]
+        let moment = Self.memory("The long drive", quote: "we drove all night", tellings: tellings)
+        #expect(moment.titleWords == SearchFold.words("The long drive"))
+        #expect(moment.textWords == (["we drove all night"] + tellings).map(SearchFold.words), "the quote first, then each telling")
+        let fact = Self.memory("Took things apart", kind: .fact, quote: "I dismantled radios")
+        #expect(fact.titleWords.isEmpty, "a fact's stored title is never searched")
+        #expect(fact.textWords == [SearchFold.words("I dismantled radios")])
     }
 
     // MARK: - Order
@@ -202,6 +245,15 @@ struct SearchTests {
         #expect(SearchResults.memoriesHeading == "Memories")
         let found = try #require(Search.run("dad", in: index))
         #expect(found.people.count == 1 && found.things.count == 1, "Dad and Dad's Volvo, each in its group")
+    }
+    @Test func everyMomentFoundByItsWordsHasALineOfThem() {
+        // A fact whose quote holds every word shows none: its heading is the quote (decision 13).
+        let queries = ["harmonica", "harmonica glove", "drive harmonica", "long harmonica", "tune", "float", "father", "rope", "cake", "night", "wind", "learned float"]
+        for query in queries {
+            for hit in Search.run(query, in: index)?.memories ?? [] where hit.match == .text && hit.memory.isMoment {
+                #expect(SearchSnippet.line(for: hit, query: query) != nil, "\(query): \(hit.memory.title)")
+            }
+        }
     }
     @Test func anIdeaIsFoundInItsGroup() {
         #expect(Search.run("saying yes", in: index)?.ideas.map(\.summary.entity.title) == ["Saying yes to things"])

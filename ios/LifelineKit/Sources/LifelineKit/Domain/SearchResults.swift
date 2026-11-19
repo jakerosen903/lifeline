@@ -32,7 +32,9 @@ public struct SearchResults: Sendable, Equatable {
     public struct MemoryHit: Sendable, Equatable, Identifiable {
         public var memory: Memory
         public var match: SearchMatch
-        /// The text the match was found in: the quote, or the first telling that holds every query word. Nil for a title match.
+        /// The text that shows why the memory was found, for a `.text` match: the quote when it holds every query word,
+        /// else the first telling that does, else the first telling, then the quote, that holds a query word the title
+        /// does not show (`Search.matchedText`). Nil for a title match.
         public var matchedText: String?
 
         public init(memory: Memory, match: SearchMatch, matchedText: String? = nil) {

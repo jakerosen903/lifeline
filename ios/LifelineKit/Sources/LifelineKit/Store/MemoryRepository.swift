@@ -610,7 +610,9 @@ public struct MemoryRepository: Sendable {
     /// and a continuation span is a telling of its own.
     public func tellingWords() throws -> [MemoryID: [String]] {
         try db.writer.read { db in
-            let rows = try Row.fetchAll(db, sql: """
+            // The words of one segment do not overlap in time, so the time bounds take exactly the span's words.
+            // A cursor, not fetchAll: the word table is the archive's largest, and its rows are not held at once.
+            let rows = try Row.fetchCursor(db, sql: """
                 select ms.memory_id, ms."order", w.text
                 from memory_span ms
                 join memory m on m.id = ms.memory_id
@@ -624,7 +626,7 @@ public struct MemoryRepository: Sendable {
                 guard let current else { return }
                 out[MemoryID(rawValue: current.memory), default: []].append(current.words.joined(separator: " "))
             }
-            for row in rows {
+            while let row = try rows.next() {
                 let memory: String = row["memory_id"], order: Int = row["order"], text: String = row["text"]
                 if let held = current, held.memory == memory, held.order == order {
                     current?.words.append(text)

@@ -12,6 +12,11 @@ public enum Search {
             order: index
         )
     }
+
+    /// The folded query words that start no word of the title: the words the text under a heading must show.
+    static func unshown(_ queryWords: [String], by titleWords: [String]) -> [String] {
+        queryWords.filter { word in !titleWords.contains { $0.hasPrefix(word) } }
+    }
 }
 
 // MARK: - The query
@@ -21,7 +26,7 @@ private struct WordQuery {
     let words: [String]
     /// The words with one space between: a title that equals or starts with it ranks first.
     let phrase: String
-    /// One character searches names only (decision 9).
+    /// A query of one-character words searches names only (decision 9): "a b" would match nearly every telling.
     let searchesText: Bool
 
     init?(_ query: String) {
@@ -29,7 +34,7 @@ private struct WordQuery {
         guard !words.isEmpty else { return nil }
         self.words = words
         phrase = words.joined(separator: " ")
-        searchesText = !(words.count == 1 && words[0].count == 1)
+        searchesText = words.contains { $0.count > 1 }
     }
 
     /// Every query word starts some word of `candidates`.
@@ -37,10 +42,6 @@ private struct WordQuery {
         words.allSatisfy { word in candidates.contains { $0.hasPrefix(word) } }
     }
 
-    /// Some query word starts some word of `candidates`.
-    func touches(_ candidates: [String]) -> Bool {
-        words.contains { word in candidates.contains { $0.hasPrefix(word) } }
-    }
 
     func titleMatch(_ titleWords: [String]) -> SearchMatch? {
         let title = titleWords.joined(separator: " ")
@@ -59,39 +60,40 @@ private extension Search {
     }
 
     static func entityHit(_ entry: SearchIndex.EntityEntry, _ query: WordQuery) -> SearchResults.EntityHit? {
-        if let match = query.titleMatch(SearchFold.words(entry.summary.entity.title)) {
+        if let match = query.titleMatch(entry.titleWords) {
             return .init(summary: entry.summary, match: match)
         }
-        if let alias = entry.aliases.first(where: { query.isCoveredBy(SearchFold.words($0)) }) {
-            return .init(summary: entry.summary, match: .alias, matchedAlias: alias)
+        if let i = entry.aliasWords.firstIndex(where: query.isCoveredBy) {
+            return .init(summary: entry.summary, match: .alias, matchedAlias: entry.aliases[i])
         }
         return nil
     }
 
     static func memoryHit(_ entry: SearchIndex.MemoryEntry, _ query: WordQuery) -> SearchResults.MemoryHit? {
         let memory = entry.memory
-        // A fact, a feeling or a goal has a stored title the person never said: it is not searched.
-        let titleWords = memory.isMoment ? SearchFold.words(memory.title) : []
-        if memory.isMoment, let match = query.titleMatch(titleWords) {
+        // A fact, a feeling or a goal has a stored title the person never said: `titleWords` is empty.
+        if memory.isMoment, let match = query.titleMatch(entry.titleWords) {
             return .init(memory: memory, match: match)
         }
         guard query.searchesText else { return nil }
 
-        let texts = [memory.summaryQuote] + entry.tellings
-        let textWords = texts.map(SearchFold.words)
         // The words may be split between the title and the text.
-        guard query.isCoveredBy(titleWords + textWords.flatMap { $0 }) else { return nil }
-        return .init(memory: memory, match: .text, matchedText: matchedText(texts, textWords, query))
+        guard query.isCoveredBy(entry.titleWords + entry.textWords.flatMap { $0 }) else { return nil }
+        return .init(memory: memory, match: .text, matchedText: matchedText(entry, query))
     }
 
-    /// The quote when it holds every query word, else the first telling that does, else the first
-    /// telling that holds any, else the quote when it holds any. `texts[0]` is the quote.
-    static func matchedText(_ texts: [String], _ words: [[String]], _ query: WordQuery) -> String? {
+    /// The text that shows why the memory was found: the quote when it holds every query word, else the first
+    /// telling that does, else the first telling, then the quote, that holds a query word the title does not show.
+    /// A text hit always has such a word in some text, so the nil is not reached for a hit.
+    static func matchedText(_ entry: SearchIndex.MemoryEntry, _ query: WordQuery) -> String? {
+        let texts = entry.texts, words = entry.textWords
         if query.isCoveredBy(words[0]) { return texts[0] }
         let tellings = Array(texts.indices.dropFirst())
         if let i = tellings.first(where: { query.isCoveredBy(words[$0]) }) { return texts[i] }
-        if let i = tellings.first(where: { query.touches(words[$0]) }) { return texts[i] }
-        return query.touches(words[0]) ? texts[0] : nil
+        let unshown = Search.unshown(query.words, by: entry.titleWords)
+        let touchesUnshown: (Int) -> Bool = { i in unshown.contains { word in words[i].contains { $0.hasPrefix(word) } } }
+        if let i = tellings.first(where: touchesUnshown) { return texts[i] }
+        return touchesUnshown(0) ? texts[0] : nil
     }
 }
 
@@ -103,6 +105,7 @@ private extension SearchResults {
             let hits = entities.filter { $0.summary.entity.type == type }
             // `mostTold` is a total order (moments, title, id); position in it breaks ties inside a match.
             let position = Dictionary(PeopleSort.mostTold.sorted(hits.map(\.summary)).enumerated().map { ($1.id, $0) }, uniquingKeysWith: { first, _ in first })
+            // `sorted` is a permutation of these hits, so every hit has a position: the unwrap cannot fail.
             return hits.sorted { ($0.match, position[$0.id]!) < ($1.match, position[$1.id]!) }
         }
         self.init(people: group(.person), places: group(.place), things: group(.thing), ideas: group(.idea),
@@ -126,6 +129,7 @@ private extension SearchResults {
             stripped.append(copy)
         }
         let position = Dictionary(EntityPage.ordered(stripped, toldAt: toldAt).enumerated().map { ($1.id, $0) }, uniquingKeysWith: { first, _ in first })
+        // `ordered` is a permutation of `stripped`, one memory for each hit: the unwrap cannot fail.
         return hits.sorted { ($0.match, position[$0.id]!) < ($1.match, position[$1.id]!) }
     }
 }

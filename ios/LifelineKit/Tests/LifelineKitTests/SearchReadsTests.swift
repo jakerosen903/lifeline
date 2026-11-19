@@ -35,9 +35,9 @@ private struct Fixture {
 
     /// A kept memory, from a card of its own, whose span covers these words of the segment.
     @discardableResult
-    static func tell(_ title: String, words: ClosedRange<Int>, in segment: Segment, store: ExtractionStore) throws -> Memory {
+    static func tell(_ title: String, words: ClosedRange<Int>, in segment: Segment, ordinal: Int = 0, store: ExtractionStore) throws -> Memory {
         let rows = try store.sessions.words(in: segment.id)
-        let candidate = StoreFixtures.candidate(segment.id)
+        let candidate = StoreFixtures.candidate(segment.id, ordinal: ordinal)
         try store.candidates.insert(candidate)
         var memory = StoreFixtures.memory(from: candidate.id, title: title)
         memory.summaryQuote = title
@@ -47,8 +47,8 @@ private struct Fixture {
         return memory
     }
 
-    func tell(_ title: String, words: ClosedRange<Int>, in segment: Segment) throws -> Memory {
-        try Self.tell(title, words: words, in: segment, store: store)
+    func tell(_ title: String, words: ClosedRange<Int>, in segment: Segment, ordinal: Int = 0) throws -> Memory {
+        try Self.tell(title, words: words, in: segment, ordinal: ordinal, store: store)
     }
 
     func titles(_ type: EntityType, in index: SearchIndex) -> [String] {
@@ -116,7 +116,21 @@ private struct Fixture {
     let f = try Fixture()
     let (_, segments) = try StoreFixtures.session(in: f.store.sessions, segments: ["the accordion in the attic"])
     try f.store.candidates.insert(StoreFixtures.candidate(segments[0].id))
+    // A stand-in's span covers "accordion", but a stand-in was never kept: its words are not read.
+    let rows = try f.store.sessions.words(in: segments[0].id)
+    let standIn = try f.store.memories.insertFloating(title: "Attic", segment: segments[0].id, startMs: rows[0].startMs, endMs: rows[4].endMs)
+    #expect(try f.store.memories.tellingWords()[standIn.id] == nil)
     #expect(Search.run("accordion", in: try f.store.searchIndex())?.isEmpty == true, "decision 18")
+}
+
+@Test func twoKeptMemoriesOnDisjointSpansOfOneSegmentKeepTheirOwnWords() throws {
+    let f = try Fixture()
+    let (_, segments) = try StoreFixtures.session(in: f.store.sessions, segments: ["we dug a canal behind the shed then we flew a red kite"])
+    let canal = try f.tell("The canal", words: 0...6, in: segments[0])
+    let kite = try f.tell("The kite", words: 7...12, in: segments[0], ordinal: 1)
+    let index = try f.store.searchIndex()
+    #expect(index.memories.first { $0.memory.id == canal.id }?.tellings == ["we dug a canal behind the shed"])
+    #expect(index.memories.first { $0.memory.id == kite.id }?.tellings == ["then we flew a red kite"])
 }
 
 @Test func aSpanWithNoWordRowsAddsNothing() throws {
