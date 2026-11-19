@@ -22,11 +22,17 @@ private struct SearchButtonModifier: ViewModifier {
                             .frame(minWidth: 44, minHeight: 44)
                             .contentShape(Rectangle())
                     }
-                    // The bar's own button style draws a 36-point glass button; plain keeps the 44-point label as the button.
-                    .buttonStyle(.plain)
+                    .buttonStyle(ToolbarGlyphStyle())
                     .accessibilityIdentifier("shell.search")
                 }
             }
             .navigationDestination(isPresented: $isSearching) { SearchScreen(deps: deps) { isSearching = false } }
+    }
+}
+
+/// The bar's own style draws a 36-point glass button; this keeps the 44-point label, the app's olive and a pressed look.
+private struct ToolbarGlyphStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label.foregroundStyle(Theme.oliveText).opacity(configuration.isPressed ? 0.4 : 1)
     }
 }

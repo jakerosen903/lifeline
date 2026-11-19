@@ -15,8 +15,8 @@ struct SearchScreen: View {
     /// It becomes active once, when the screen is first pushed. When the person closes it, search closes (ruling R5).
     @State private var isActive = false
     @State private var hasActivated = false
-    /// The query whose "nothing found" was last announced: each query is announced once (decision 26).
-    @State private var announcedQuery: String?
+    /// From the moment the person closes the search until the pop, or until the field is tapped again.
+    @State private var isClosing = false
     /// Pops search off its tab's stack.
     let close: () -> Void
 
@@ -49,15 +49,27 @@ struct SearchScreen: View {
         // Outside `searchable`, so the field reads them: names get "corrected" (decision 19).
         .autocorrectionDisabled()
         .textInputAutocapitalization(.never)
+        // A row hidden or deleted in another tab still shows here until this read returns: a known cost, not filtered.
         .onAppear {
             isVisible = true
             viewModel.refresh()
             if !hasActivated { hasActivated = true; isActive = true }
         }
-        .onDisappear { isVisible = false }
-        // "Close" ends the search, and the search is the whole screen: one tap leads back to the tab.
-        .onChange(of: isActive) { _, active in if !active && hasActivated { closeAfterTheBarSettles() } }
-        .onChange(of: viewModel.results) { announceNothingFound() }
+        .onDisappear { isVisible = false; isClosing = false }
+        // "Close" ends the search, and the search is the whole screen: one tap leads back to the tab (ruling R5).
+        .onChange(of: isActive) { wasActive, active in isClosing = wasActive && !active }
+        // A pop asked for while the bar redraws is dropped (iOS 26.3 simulator, after Return: 50 ms too soon, 500 ms works).
+        // SwiftUI cancels this wait when the field is tapped again (isClosing changes) or the screen leaves.
+        .task(id: isClosing) {
+            guard isClosing else { return }
+            do { try await Task.sleep(for: Self.barTransition) } catch { return }
+            // A cover sends no onDisappear: never pop search out from under a session.
+            if isClosing, isVisible, home?.presented == nil { close() }
+        }
+        // VoiceOver hears "Nothing found" once, on entering the empty state, not on each letter typed after (decision 26).
+        .onChange(of: viewModel.results?.isEmpty == true) { _, foundNothing in
+            if foundNothing { AccessibilityNotification.Announcement("Nothing found").post() }
+        }
         // A session started from this tab lands under a cover; when it closes, read what it added.
         .onChange(of: home?.coverClosings) { if isVisible { viewModel.refresh() } }
     }
@@ -77,16 +89,7 @@ struct SearchScreen: View {
         }
     }
 
-    /// After Return, "Close" turns the search off at once, and a pop asked for while the bar redraws is dropped
-    /// (seen in the iOS 26.3 simulator: 50 ms is too soon, 500 ms works). So the pop waits for the bar.
-    /// A field tapped again in the meantime, or a screen already left, keeps the screen as it is.
-    private func closeAfterTheBarSettles() {
-        Task {
-            try? await Task.sleep(for: Self.barTransition)
-            if !isActive && isVisible { close() }
-        }
-    }
-
+    /// The wait before the pop, so the pop is not dropped while the bar redraws.
     private static let barTransition = Duration.milliseconds(500)
 
     /// Memories found by their title or by the words said, in life order (decision 12), after the entity groups.
@@ -114,13 +117,6 @@ struct SearchScreen: View {
                 .font(.footnote).foregroundStyle(Theme.secondaryText)
         }
         .listRowBackground(Color.clear)
-    }
-
-    /// VoiceOver hears "Nothing found" once for each query that finds nothing, not again when the same query is read again.
-    private func announceNothingFound() {
-        guard viewModel.results?.isEmpty == true, announcedQuery != viewModel.query else { return }
-        announcedQuery = viewModel.query
-        AccessibilityNotification.Announcement("Nothing found").post()
     }
 
     private func line(_ text: String, identifier: String) -> some View {
