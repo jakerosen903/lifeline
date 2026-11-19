@@ -93,7 +93,7 @@ extension PhotoRepository {
   - `PhotoRepositoryTests.deletingAPersonDeletesItsDeclines` and `deletingAPhotoDeletesItsDeclines` (cascade).
   - `BackupTests`: a backup made with a `story` link and a decline restores both.
 - [ ] **Step 2:** Run the new tests; expected FAIL (no column, no table, no function).
-- [ ] **Step 3:** Implement. The `v16` block: `alter table photo_link add column origin text`; create `photo_page_declined`.
+- [ ] **Step 3:** Implement. The `v16` block: `alter table photo_link add column origin text`; create `photo_page_declined`; add `session.photo_pages_done` (boolean, not null, default 0; decision 15). `Session` gains `photoPagesDone: Bool` (default false) with its record coding. The migration test also asserts that every existing session row has `photo_pages_done = 0`.
 - [ ] **Step 4:** `swift test`; guards. Expected: pass.
 - [ ] **Step 5:** Commit "Store which photo link a story made and which page the owner took a photo off".
 

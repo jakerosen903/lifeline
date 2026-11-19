@@ -2,7 +2,7 @@
 
 Status: approved by the owner on 2026-11-18, with approach A (the stored fact, one migration) and the calls in "Calls made without the owner" as written. The owner can still overrule each call. Plan: `docs/plans/2026-11-18-photo-on-people-pages.md`.
 
-Parts 3 and 4 were added on 2026-11-18 after the approval, from the owner's next notes from the phone. They are a draft until the owner approves them.
+Parts 3 and 4 were added on 2026-11-18 after the approval, from the owner's next notes from the phone. The owner approved them on 2026-11-18.
 
 Changes: `docs/specs/2026-11-18-photo-card-key-photo.md` (the photo card). It reverses one rule of that spec: "a page link is always the person's tap".
 
