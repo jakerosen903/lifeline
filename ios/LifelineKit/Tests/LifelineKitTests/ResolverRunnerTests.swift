@@ -114,14 +114,15 @@ private struct Env {
     #expect(try env.store.curiosity.open().isEmpty, "no question about a story already told")
 }
 
-@Test func chapterRangesFollowPlacedMembers() throws {
+@Test func aChapterRangeDoesNotFollowItsMembers() throws {
     let env = try Env()
     let memory = try env.accept("The blue door", anchors: [AnchorOut(phrase: "I was six", relation: .age, targetText: nil, value: nil)], ordinal: 0)
     let chapter = try env.actions.createChapter(title: "Childhood", containing: memory.id)
     #expect(try env.store.chapters.chapter(id: chapter.id)?.range == .unplaced)
     try env.birthday("1986-05-10")
     _ = try env.runner.run()
-    #expect(try env.store.chapters.chapter(id: chapter.id)?.range.earliest?.iso == "1992-05-10", "the chapter follows its member")
+    #expect(try env.store.memories.fetch(memory.id)?.range.earliest?.iso == "1992-05-10", "the member is placed")
+    #expect(try env.store.chapters.chapter(id: chapter.id)?.range == .unplaced, "the chapter does not follow its member: its range holds stated years only")
 }
 
 @Test func floatingTargetIsReplacedWhenTheRealMemoryArrives() throws {
@@ -147,6 +148,50 @@ private struct Env {
     _ = try env.runner.run()
     #expect(try env.store.memories.fetch(memory.id)?.range == .stated(year: 1998))
     #expect(try env.store.memories.anchors(of: memory.id).first?.resolved == true, "a stated memory keeps its anchor flags, like a confirmed one")
+}
+
+// A chapter anchors a "during" phrase by its stated years, else by the span of its moments.
+// The span is read for the run and never stored on the chapter.
+
+private func duringBoston(_ env: Env, members: [(String, Int)]) throws -> (chapter: Chapter, later: Memory) {
+    let chapter = try env.store.chapters.insertChapter(title: "The Boston years")
+    for (i, member) in members.enumerated() {
+        let memory = try env.accept(member.0, anchors: [], ordinal: i)
+        try env.store.memories.updateRange(memory.id, .year(member.1, origin: .stated, evidence: "in \(member.1)"))
+        try env.store.chapters.assign(memory: memory.id, toChapter: chapter.id)
+    }
+    let later = try env.accept("The snow day", anchors: [AnchorOut(phrase: "during the Boston years", relation: .during, targetText: "The Boston years", value: nil)], ordinal: members.count)
+    return (chapter, later)
+}
+
+@Test func aChapterWithNoStatedYearsAnchorsFromItsMembers() throws {
+    let env = try Env()
+    let (chapter, later) = try duringBoston(env, members: [("The first flat", 2008), ("The last flat", 2012)])
+    try env.runner.run()
+    let range = try #require(try env.store.memories.fetch(later.id)?.range)
+    #expect(range.isPlaced && range.earliest!.iso >= "2008-01-01" && range.latest!.iso <= "2012-12-31")
+    #expect(try env.store.chapters.chapter(id: chapter.id)?.range == .unplaced, "the member span is never stored on the chapter")
+}
+
+@Test func aChapterWithStatedYearsAnchorsFromThem() throws {
+    let env = try Env()
+    let (chapter, later) = try duringBoston(env, members: [("The first flat", 2008), ("The last flat", 2012)])
+    try env.store.chapters.setRange(chapter.id, TimeRange(earliest: CivilDate(iso: "1995-01-01"), latest: CivilDate(iso: "1996-12-31"), likelyStart: nil, likelyEnd: nil,
+                                                         granularity: .year, origin: .stated, evidenceText: "1995 to 1996"))
+    try env.runner.run()
+    let range = try #require(try env.store.memories.fetch(later.id)?.range)
+    #expect(range.isPlaced && range.earliest!.iso >= "1995-01-01" && range.latest!.iso <= "1996-12-31")
+}
+
+@Test func aFactMemberDoesNotCountInTheAnchorRange() throws {
+    let env = try Env()
+    let (chapter, later) = try duringBoston(env, members: [("The first flat", 2008), ("The last flat", 2012), ("Born in Ohio", 1970)])
+    let fact = try #require(try env.store.memories.allMemories().first { $0.title == "Born in Ohio" })
+    try env.store.memories.setKind(fact.id, .fact)
+    #expect(try env.store.memories.moments(inChapter: chapter.id).count == 2, "the fact is a member but not a moment")
+    try env.runner.run()
+    let range = try #require(try env.store.memories.fetch(later.id)?.range)
+    #expect(range.isPlaced && range.earliest!.iso >= "2008-01-01", "the 1970 fact does not widen the span")
 }
 
 // MARK: - A date from a photo (photo story)

@@ -50,11 +50,13 @@ public struct MemoryRepository: Sendable {
     }
 
     /// Removes a memory and, by cascade, its spans, people, places and anchors.
-    /// The memory and everything hanging off it (cascade). A story left with no member goes too.
+    /// The memory and everything hanging off it (cascade). A story left with no member goes too,
+    /// and so does an untitled chapter left with nothing in it.
     public func delete(_ id: MemoryID) throws {
         try db.writer.write { db in
             _ = try Memory.deleteOne(db, key: id.rawValue)
             try db.execute(sql: Self.deleteEmptyStoriesSQL)
+            try db.execute(sql: ChapterRepository.deleteEmptyUntitledSQL)
         }
     }
 
@@ -259,7 +261,7 @@ public struct MemoryRepository: Sendable {
             // The link a merge added goes in the same write; the photo row stays (its session still points at it).
             if let photo { _ = try PhotoRepository.removeLink(photo.id, from: .memory(photo.from), in: db) }
             // Every memory row first, so a pair between two restored memories finds both.
-            for snapshot in snapshots { try snapshot.memory.save(db) }
+            for snapshot in snapshots { try Self.restorable(snapshot.memory, in: db).save(db) }
             for snapshot in snapshots { try Self.restore(snapshot, in: db) }
             if let candidate {
                 try db.execute(sql: "update candidate set status = ? where id = ?", arguments: [candidate.status.rawValue, candidate.id.rawValue])
@@ -274,9 +276,18 @@ public struct MemoryRepository: Sendable {
         }
     }
 
+    /// The memory as the snapshot has it, with no chapter when that chapter was removed since:
+    /// its tag cannot point at a row that is gone.
+    private static func restorable(_ memory: Memory, in db: Database) throws -> Memory {
+        guard let chapter = memory.chapterID, try !Chapter.exists(db, key: chapter.rawValue) else { return memory }
+        var freed = memory
+        freed.chapterID = nil
+        return freed
+    }
+
     private static func restore(_ snapshot: Snapshot, in db: Database) throws {
             let id = snapshot.memory.id.rawValue
-            try snapshot.memory.save(db)
+            try restorable(snapshot.memory, in: db).save(db)
             for table in ["memory_span", "moment_entity", "anchor", "collection_memory"] {
                 try db.execute(sql: "delete from \(table) where memory_id = ?", arguments: [id])
             }
@@ -544,17 +555,16 @@ public struct MemoryRepository: Sendable {
         }
     }
 
-    /// The memory's range and the range of the chapter it sits in change in one write, so the chapter is never stale.
-    /// With `ifCurrently`, the write happens only while the stored range is still that one: an offer drawn against an older
-    /// range must not replace a newer one. Returns false when the memory is gone or its range has changed.
+    /// The memory's range, in one write. A chapter's range holds stated years only (S6c), so no chapter changes with it.
+    /// With a range in `ifCurrently`, the write happens only while the stored range is still that one: an offer drawn against
+    /// an older range must not replace a newer one. Returns false when the memory is gone or its range has changed.
     @discardableResult
-    public func updateRange(_ id: MemoryID, _ range: TimeRange, ifCurrently expected: TimeRange? = nil, refreshingChapter: Bool) throws -> Bool {
+    public func updateRange(_ id: MemoryID, _ range: TimeRange, ifCurrently expected: TimeRange?) throws -> Bool {
         try db.writer.write { db in
             guard var memory = try Memory.fetchOne(db, key: id.rawValue) else { return false }
             if let expected, memory.range != expected { return false }
             memory.range = range
             try memory.update(db)
-            if refreshingChapter { try Self.refreshChapterRange(ofMemory: id, in: db) }
             return true
         }
     }
@@ -569,7 +579,7 @@ public struct MemoryRepository: Sendable {
         }
     }
 
-    /// One write. Each change happens only while the stored range equals `ifCurrently`, and refreshes that memory's chapter.
+    /// One write. Each change happens only while the stored range equals `ifCurrently`. The memory's chapter does not change (S6c).
     /// Returns the memories it changed, in the order given. A memory that is gone is skipped.
     @discardableResult
     public func updateRanges(_ changes: [RangeChange]) throws -> [MemoryID] {
@@ -580,7 +590,6 @@ public struct MemoryRepository: Sendable {
                 guard var memory = try Memory.fetchOne(db, key: change.memory.rawValue), memory.range == change.ifCurrently else { continue }
                 memory.range = change.range
                 try memory.update(db)
-                try Self.refreshChapterRange(ofMemory: change.memory, in: db)
                 changed.append(change.memory)
             }
             return changed
@@ -637,8 +646,8 @@ public struct MemoryRepository: Sendable {
         try (includingHidden ? allMemories() : visibleMemories()).filter { !$0.isMoment && !$0.isFloating }
     }
 
-    /// The kind, and the chapter's derived range with it, in one write: a fact leaves the range,
-    /// a moment joins it, and a kill between the two can never leave the chapter stale (M7).
+    /// The kind, the detail links and the story place in one write, so a kill between them
+    /// leaves nothing half changed (M7). A chapter's range holds stated years only and does not move.
     /// The receipt holds what the change took away (a story place, detail links) for `undoKind`.
     @discardableResult
     public func setKind(_ id: MemoryID, _ kind: MemoryKind) throws -> KindReceipt {
@@ -646,7 +655,6 @@ public struct MemoryRepository: Sendable {
             let from = try MemoryKind(rawValue: String.fetchOne(db, sql: "select kind from memory where id = ?", arguments: [id.rawValue]) ?? "") ?? .event
             var receipt = KindReceipt(memory: id, from: from, to: kind, story: nil, details: [])
             try db.execute(sql: "update memory set kind = ? where id = ?", arguments: [kind.rawValue, id.rawValue])
-            try Self.refreshChapterRange(ofMemory: id, in: db)
             if kind.isMoment {
                 // A moment names what it was about; it is no longer a standing statement (M7).
                 let rows = try MomentEntity.filter(Column("memory_id") == id.rawValue).fetchAll(db)
@@ -670,7 +678,7 @@ public struct MemoryRepository: Sendable {
         }
     }
 
-    /// Puts a kind change back, in one write: the kind, the chapter range, the detail links a
+    /// Puts a kind change back, in one write: the kind, the detail links a
     /// moment turned into mentions, and the story place a fact, feeling or goal gave up (with
     /// the story itself when it was deleted for being empty). Stale once the kind moved again.
     public func undoKind(_ receipt: KindReceipt) throws {
@@ -679,7 +687,6 @@ public struct MemoryRepository: Sendable {
                 throw CandidateActions.Error.stale
             }
             try db.execute(sql: "update memory set kind = ? where id = ?", arguments: [receipt.from.rawValue, receipt.memory.rawValue])
-            try Self.refreshChapterRange(ofMemory: receipt.memory, in: db)
             for entity in receipt.details {
                 if receipt.alsoMentioned.contains(entity) {
                     try db.execute(sql: """
@@ -699,15 +706,6 @@ public struct MemoryRepository: Sendable {
                 try membership.moment.insert(db)
             }
         }
-    }
-
-    /// Recomputes the range of the chapter a memory sits in from its placed moments.
-    static func refreshChapterRange(ofMemory id: MemoryID, in db: Database) throws {
-        guard let chapterID = try String.fetchOne(db, sql: "select chapter_id from memory where id = ?", arguments: [id.rawValue]),
-              var chapter = try Chapter.fetchOne(db, key: chapterID) else { return }
-        let members = try Memory.filter(Column("chapter_id") == chapterID).fetchAll(db).filter(\.isMoment)
-        chapter.range = ChapterRepository.span(over: members.map(\.range))
-        try chapter.update(db)
     }
 
     /// Memories with no range at all.

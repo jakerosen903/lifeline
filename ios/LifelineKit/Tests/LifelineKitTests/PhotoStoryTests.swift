@@ -390,12 +390,13 @@ private struct StoryFixture {
     #expect(try f.store.photos.photos(of: .entity(maya.id)).map(\.role) == [.cover, .attached])
 }
 
-@Test func usingTheDateMovesTheMemorysChapterWithIt() throws {
+@Test func usingTheDateDoesNotDateTheMemorysChapter() throws {
     let f = try StoryFixture()
     let kept = try CandidateActions(store: f.store).acceptMemory(try f.pendingCard()).memory
     let chapter = try CandidateActions(store: f.store).createChapter(title: "Summers", containing: kept.id)
     try f.reader.useDate(day(2019, 7, 14), for: [kept])
-    #expect(try f.store.chapters.chapter(id: chapter.id)?.range.earliest == day(2019, 7, 14))
+    #expect(try f.store.memories.fetch(kept.id)?.range == .fromPhoto(day(2019, 7, 14)))
+    #expect(try f.store.chapters.chapter(id: chapter.id)?.range == .unplaced, "a chapter's range holds stated years only (S6c)")
 }
 
 /// The card was drawn, then the date changed elsewhere (the person set it, or the resolver placed it). The offer is stale:
@@ -423,9 +424,9 @@ private final class WriteCounter: @unchecked Sendable {
     let chapter = try CandidateActions(store: f.store).createChapter(title: "Summers", containing: kept.id)
     let counter = WriteCounter()
     try f.db.writer.write { db in db.trace { counter.note($0.expandedDescription) } }
-    try f.store.memories.updateRange(kept.id, .fromPhoto(day(2019, 7, 14)), refreshingChapter: true)
-    #expect(counter.count == 1, "the memory and its chapter change in one transaction")
-    #expect(try f.store.chapters.chapter(id: chapter.id)?.range.earliest == day(2019, 7, 14))
+    #expect(try f.store.memories.updateRange(kept.id, .fromPhoto(day(2019, 7, 14)), ifCurrently: nil))
+    #expect(counter.count == 1, "the date is one transaction")
+    #expect(try f.store.chapters.chapter(id: chapter.id)?.range == .unplaced, "the chapter keeps its own range (S6c)")
 }
 
 @Test func usingTheDateRePlacesAMemoryThatPointsAtIt() throws {
@@ -491,7 +492,7 @@ private struct TwoMemories {
     #expect(changed == [t.a.id, t.b.id])
     #expect(counter.count == 1)
     #expect(try t.range(t.a) == .fromPhoto(d) && t.range(t.b) == .fromPhoto(d))
-    #expect(try t.chapterEarliest() == d)
+    #expect(try t.chapterEarliest() == nil, "a chapter's range holds stated years only (S6c)")
 }
 
 @Test func updateRangesSkipsAMemoryWhoseRangeChanged() throws {
@@ -551,10 +552,11 @@ private struct TwoMemories {
     #expect(try t.range(t.a) == .unplaced)
 }
 
-@Test func undoDateMovesTheChapterBack() throws {
+/// A chapter's range holds stated years only (S6c): neither the date tap nor Undo writes it.
+@Test func theDateTapAndUndoLeaveTheChapterAlone() throws {
     let t = try TwoMemories()
     let changes = try t.f.reader.useDate(d, for: [t.a])
-    #expect(try t.chapterEarliest() == d)
+    #expect(try t.chapterEarliest() == nil)
     try t.f.reader.undoDate(changes)
     #expect(try t.chapterEarliest() == nil)
 }

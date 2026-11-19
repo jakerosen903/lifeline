@@ -70,7 +70,7 @@ private struct Env {
     let childhood = try env.chapters.insertChapter(title: "Childhood")
     let college = try env.chapters.insertChapter(title: nil)
     #expect(try env.chapters.chapters().map(\.order) == [0, 1])
-    try env.chapters.setRange(childhood.id, .year(1998, origin: .derived, evidence: nil))
+    try env.chapters.setRange(childhood.id, .stated(year: 1998))
     #expect(try env.chapters.chapters()[0].range.earliest?.year == 1998)
     let m = try env.memory("Yosemite")
     try env.chapters.assign(memory: m.id, toChapter: childhood.id)

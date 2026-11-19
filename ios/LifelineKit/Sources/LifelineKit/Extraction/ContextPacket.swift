@@ -119,7 +119,7 @@ public enum ContextPacketBuilder {
             memoryEntries.append(.init(id: memory.id.rawValue, title: memory.title, rangeText: memory.range.isPlaced ? memory.range.displayText : nil))
         }
         let chapterEntries = chapters.map {
-            ContextPacket.ChapterEntry(id: $0.id.rawValue, title: $0.title ?? "untitled", rangeText: $0.range.isPlaced ? $0.range.displayText : nil)
+            ContextPacket.ChapterEntry(id: $0.id.rawValue, title: $0.title ?? "untitled", rangeText: $0.statedYears?.displayText)
         }
         // Exclude from AI covers what was built from the memory, not only the memory's own entry.
         let questions = curiosity

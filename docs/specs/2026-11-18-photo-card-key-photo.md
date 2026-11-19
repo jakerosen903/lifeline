@@ -131,7 +131,7 @@ No change. It shows on the session's page only, and it asks first.
 - No migration. `photo_link.sort_order` and `role` exist.
 - New in the kit:
   - `PhotoRepository.reorder(_ photos: [PhotoID], of subject: PhotoSubject)`: one write; sets `sort_order` from the array and the cover to the first. It ignores an id that the page does not hold. A photo of the page that is not in the array goes to the end.
-  - `MemoryRepository.updateRanges`: one write for several memories, each with its `ifCurrently` check and its chapter refresh. It returns the memories that it changed.
+  - `MemoryRepository.updateRanges`: one write for several memories, each with its `ifCurrently` check. The write does not change the memory's chapter (S6c of 2026-11-18). It returns the memories that it changed.
   - `PhotoStory.card` returns the pages in groups with a chosen flag, and one date offer with the memories that can take it.
   - `PhotoStoryReader.useDate` takes the date and several memories, and returns the old range of each memory that it changed. It replaces today's `useDate(_ offer:)`. `PhotoStoryReader.undoDate` takes those ranges back.
 - `PhotoStory.offersDate(_:for:)` loses the band rule.

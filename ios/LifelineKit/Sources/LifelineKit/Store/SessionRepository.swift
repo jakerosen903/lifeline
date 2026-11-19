@@ -155,6 +155,7 @@ extension SessionRepository {
             }
             _ = try Session.deleteOne(db, key: id.rawValue)
             try db.execute(sql: MemoryRepository.deleteEmptyStoriesSQL)
+            try db.execute(sql: ChapterRepository.deleteEmptyUntitledSQL)   // after the stories: a chapter a story held may be free now
         }
     }
 }
