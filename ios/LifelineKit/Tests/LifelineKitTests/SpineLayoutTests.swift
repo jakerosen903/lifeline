@@ -231,3 +231,28 @@ private func storyStop(_ members: [TimeRange]) -> SpineLayout.Stop {
     #expect(result[1].gapAbove?.years == 1, "2000 to 2001, as if the half-open range were not there")
     #expect(result[1].showsYears)
 }
+
+// Task 1 of the timeline card: the margin's years as numbers.
+
+@Test func aStopCarriesItsYearsAsNumbers() throws {
+    #expect(stops([.stated(year: 2001)])[0].yearSpan == 2001...2001)
+    #expect(stops([.stated(between: 2008, and: 2010)])[0].yearSpan == 2008...2010)
+    let birth = try #require(CivilDate(year: 1990, month: 6, day: 15))
+    let guess = Resolver.ageRange(.years(from: 9, to: 9), birth: birth, config: .default, evidence: "when I was 9")
+    #expect(stops([guess])[0].yearSpan == 1999...2000)
+}
+
+@Test func aConfirmedRelationHasNoYearSpan() {
+    let relation = TimeRange.span(.firstOfYear(2002), .lastOfYear(2004), granularity: .year, origin: .confirmed, evidence: "before Graduation (2004)")
+    #expect(stops([relation])[0].yearSpan == nil)
+}
+
+@Test func yearSpanAgreesWithTheMarginText() {
+    let relation = TimeRange.span(.firstOfYear(2002), .lastOfYear(2004), granularity: .year, origin: .confirmed, evidence: "before Graduation (2004)")
+    let result = stops([.stated(year: 1999), .stated(around: 2001), .stated(between: 2008, and: 2010), relation])
+    #expect(result.count == 4)
+    #expect(result.compactMap(\.yearSpan).count == 3, "the relation has none")
+    for stop in result {
+        if let span = stop.yearSpan { #expect(stop.years.hasPrefix(String(span.lowerBound))) }
+    }
+}
