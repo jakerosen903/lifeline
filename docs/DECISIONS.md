@@ -2,6 +2,48 @@
 
 One entry per decision. Newest first. Status is Decided, Open, or Superseded.
 
+## 2026-11-19 · PC-d: the extractor tells people apart — decisions and rulings made while building
+
+**Status:** Decided by the builder and the controller. The owner approved the plan on 2026-11-19 ("Yes, build both") without a review of each decision. The owner can overrule each one. The prompt `v8` is built and is not the default. Source: `docs/plans/2026-11-19-people-contacts-d.md`, ledger `.superpowers/sdd/2026-11-19-people-contacts-d/rulings.md` (D1 to D27). Narrows `docs/specs/2026-11-18-people-contacts.md`, section "Step 2", and the lines on the group and on details, each marked in the spec.
+
+**Decision.** The plan's ten decisions, as built:
+
+1. The prompt `v8` is written from `v6`. It does not depend on the unmerged `v7`.
+2. `v8` is not the default. The default stays `v6` until the owner reads the comparison and says yes.
+3. The comparison runs on the owner's Mac with the owner's Anthropic key, on invented stories. It does not run in CI. It makes about 140 model calls, not the 60 the plan said.
+4. A memory card stores its people. After validation the app writes each handle with its said name, relation phrase and person id into the card. Keep reads the card only. A `v6` card has no handles and works by said name.
+5. `people_refs` stays in the card. The app fills it with the said name of each handle.
+6. The model's person id is used only inside rule 4 of `PersonGuess`. It picks one of the persons rule 4 already has. The link stays `assumed`. An id that the packet of that call does not hold is cleared.
+7. A handle that the recording already linked keeps its person. The origin is the earlier link's origin when that is `said` or `new`, and `assumed` in every other case.
+8. A stored choice before Keep is keyed by the said name and the handle (said name, U+001F, handle). No migration.
+9. The contact re-guess after access and the follow-up chips stay on the said name. The people of a separated telling moved to the handle (D16).
+10. The schema is not versioned, so it changed for every version. `v6` gained one line: return `people` empty and `person_handles` empty.
+
+Rulings, by range:
+
+- D1 to D8 (Tasks 1 to 3): the output types, the packet and the card. D1 keeps the init argument `likelyAliasOfPersonID` with a default of nil; the schema and the prompt drop the key, and the decoder ignores it. D5: the model never gets a person id for a person the packet did not show. D7: the owner is never a person, also by handle.
+- D9 to D15 (Task 4): Keep by handle. D10: two new people with one name stay two. D11: "Same story" into another recording writes no handle. D12: a handle with several kept links follows the newest one.
+- D16 to D21 (Task 5): the group is the handle. **D16** reverses the part of plan decision 9 that left `separateTelling` on the said name: two handles of one name in one memory would otherwise move both or neither. D18: a link with no handle groups only with links with no handle of the same said name.
+- **D17** (Task 4b, added): a handle of the recording so far is valid in `person_handles` and `about_ref` without a `people` entry in that output. The plan's validator rule rejected "She was always late" about a person named one segment earlier. The card stores the recording's entry with its first said name.
+- **D22** (with Task 6): a handle in `about_ref` is always also one of that memory's people. The `v8` prompt says so, and `HandleResolve` adds the handle when the model left it out.
+- D23 and D24 (Task 4b): the recording's entries go on memories only, and Keep follows a handle also for a fact with no people of its own.
+- **D25** (Task 7b, added): `recordingPeople` also reads the person mentions of earlier segments that carry a handle. A short segment that only names a person ("Ottilie.") left the next segment's "she" with no handle. The comparison writes each table row as it is made, so a failed run keeps the rows.
+- D26 and D27 (Task 7): the test stories and how the comparison runs.
+
+**Why.** A said name cannot tell two people with one name apart, and cannot join one person said under two names. The model reads the story, so it gives the handles. The app still decides who each handle is, and every guess stays marked (principles 1 and 5).
+
+**Known limits.**
+
+- A wrong handle from the model joins or splits people. "Someone else…" repairs a wrong join. A wrong split needs the merge of PC-c.
+- A card dismissed before a later segment is extracted takes its handles with it. The later segment does not see them.
+- Old recordings do not change. Links made before `v8` have no handle and group by said name.
+
+**Open for the owner.**
+
+- The comparison has not run: the build environment has no key. The command is in `docs/experiments/2026-11-19-extractor-v8-handles.md`.
+- `v8` is not the default. The switch waits for the owner's yes on the comparison's table.
+- The Task 6 UI tests are built and not run. The ledger says the simulator was held by the PR #35 suite. To run: `PeopleGuessUITests` (with the new `testTwoPeopleWithOneNameGetTwoChips`), `PeopleContactsUITests`, `LandingUITests`, `ExtractionUITests`, `FollowUpUITests`, `EntityPageUITests`, `KindsUITests`, `InterviewerUITests`.
+
 ## 2026-11-19 · PC-b: a person can be linked to a contact — decisions and rulings made while building
 
 **Status:** Decided by the builder and the controller. The owner must confirm plan decisions 4, 5, 6 and 8, and the new copy and identifier listed at the end. The owner can overrule each one. Source: `docs/plans/2026-11-18-people-contacts-b.md`, ledger `.superpowers/sdd/2026-11-18-people-contacts-b/rulings.md` (PB1 to PB67). Narrows `docs/specs/2026-11-18-people-contacts.md` in five places, each marked in the spec.

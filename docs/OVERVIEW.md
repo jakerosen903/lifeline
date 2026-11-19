@@ -116,7 +116,9 @@ Each link between a memory and a person stores an origin: `assumed`, `said`, `co
 
 An `assumed` link shows a dashed outline and the word "Assumed" until the person settles it with "Done" or changes it. A guess teaches the app no name. The app saves an alias only from the person's own words or choice. An older link shows no mark until a later retelling or a merge reaches it. Then it takes the guess's origin, and shows the mark when that is `assumed`. Keep never weakens an origin.
 
-A person chip on a card, on the landing, on the memory page and on the person's page opens the "Who is this?" sheet. A name marked "Not a person" on a card that waits keeps a quiet chip, so the sheet opens again before Keep. A change can move all the moments of one recording, with the checkbox on, or one moment. A change shows "Changed to {name}." with Undo for 6 seconds. One answer carries inside one recording only. A name no memory carries keeps the old "Who's this?" card with its four choices.
+**Handles (PC-d, prompt `v8`, built and not yet the default).** The extractor gives each person in a recording a handle, such as "p1". One handle is one person inside one recording. A memory names its people by handle. The context packet carries the handles of the recording so far, with their said names, so a handle holds across segments. Keep guesses by handle. A handle that the recording already linked keeps its person. Two handles of one name are never the same person: the second takes the next candidate, or a new person. The model's person id can only pick between the persons that rule 4 already has. Every guess is still marked. A recording made before `v8` has no handles, and its links group by said name.
+
+A person chip on a card, on the landing, on the memory page and on the person's page opens the "Who is this?" sheet. A name marked "Not a person" on a card that waits keeps a quiet chip, so the sheet opens again before Keep. A change can move all the moments of one recording, with the checkbox on, or one moment. With handles, "all the moments of one recording" means the links of that handle, so "Yes, this Robyn" settles one Robyn and not every Robyn of the recording. A change shows "Changed to {name}." with Undo for 6 seconds. One answer carries inside one recording only. A name no memory carries keeps the old "Who's this?" card with its four choices.
 
 ### People and contacts
 
@@ -196,7 +198,7 @@ The voice session is a protocol. On `main`, the app ships `ListenOnlyVoiceSessio
 
 A sorting worker reads pending segments from the store. Finishing a session must not wait for the worker. The worker starts at launch, when the person saves a key, when the app returns to the foreground, and on Try again.
 
-For each segment the worker builds a context packet. The packet holds the profile text, the people and their aliases, the chapters, related earlier moments, the pending cards of the session, and the stories. The packet has a ceiling of 6,000 tokens. When the packet is too large, the builder removes whole entries from the least relevant section first. It never removes the profile text.
+For each segment the worker builds a context packet. The packet holds the profile text, the people and their aliases, the chapters, related earlier moments, the pending cards of the session, and the stories. It also holds the people of the recording so far, by handle (PC-d). A card from `v6` gives no handle, so with `v6` this section is empty. The packet has a ceiling of 6,000 tokens. When the packet is too large, the builder removes whole entries from the least relevant section first. It never removes the profile text.
 
 The worker sends the segment and the packet to the extractor. The default model is `claude-opus-5-5` at low effort, with a strict JSON schema. The prompt is versioned (extractor v6). Each candidate records the prompt version. A new version adds candidates. It never edits a kept memory.
 

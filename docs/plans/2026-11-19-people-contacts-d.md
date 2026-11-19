@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Status:** Draft. The owner must approve it, with the plan decisions below, before work starts.
+**Status:** Approved by the owner on 2026-11-19 ("Yes, build both"), without a review of each decision. Each decision stays open to an overrule.
 
 **Goal:** Two people with one name in one recording become two people, and one person said under two names becomes one. The extractor gives each person in a recording a handle, and the app groups and guesses by that handle.
 
@@ -304,4 +304,11 @@ The four stories are the spec's: two people with one name in one recording; one 
 
 ## What changed while building
 
-(Empty until work starts.)
+The full record is the ledger: `.superpowers/sdd/2026-11-19-people-contacts-d/rulings.md` (D1 to D27) and `progress.md`.
+
+- **Task 4b was added (ruling D17).** The validator rule of Task 1 rejected a memory that names a handle of an earlier segment with no `people` entry in its own output. That is the case a handle exists for ("She was always late"). Now a handle of the recording so far is valid in `person_handles` and `about_ref`. The card stores the recording's entry, with its first said name.
+- **Task 7b was added (ruling D25).** A person named in a segment that gives no memory card did not reach the next segment's `recordingPeople`. Now `recordingPeople` also reads the person mentions of earlier segments that carry a handle. The comparison also writes each table row as it is made, so a failed run keeps the rows.
+- **D22.** A handle in `about_ref` is always also one of that memory's people. The `v8` prompt says so. `HandleResolve` adds the handle to the memory's `personHandles` when the model left it out.
+- **D16 reverses part of decision 9.** `separateTelling` finds a telling's people by handle when the links have handles. Two handles of one name in one memory would otherwise move both or neither. The contact re-guess and the follow-up chips stay on the said name.
+- **D1 keeps the init argument.** `MentionOut.init` keeps `likelyAliasOfPersonID`, with a default of nil. The schema and the prompt drop the key, and the decoder ignores it. Task 1 planned to remove the argument.
+- **The comparison makes about 140 model calls, not 60** (decision 3): 23 segments, 2 versions, 3 runs. It has not run: the build environment has no key.

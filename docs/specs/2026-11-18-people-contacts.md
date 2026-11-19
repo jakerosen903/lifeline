@@ -179,7 +179,7 @@ The sheet opens from a person chip. It shows:
 
 - An answer applies to the tapped link. With the checkbox on, it applies to every link in the group.
 - **Step 1:** the group is the links in the same recording with the same said name, by the comparison in "Candidates".
-- **Step 2:** the group is the links in the same recording with the same extractor handle.
+- **Step 2:** the group is the links in the same recording with the same extractor handle. (narrowed 2026-11-19, PC-d ruling D18) A link with no handle groups only with the links with no handle of the same said name.
 - An answer never carries to another recording. A said name in a later recording is a new guess.
 
 ### "Yes, this Robyn" and "Someone else…" (PC3)
@@ -191,7 +191,7 @@ The sheet opens from a person chip. It shows:
 When the owner changes the person, the app must do all of this in one transaction:
 
 1. **The link moves.** The row for the old person goes. A row for the new person is written with the same `role_text` and origin `confirmed`. When the new person already has a link to that memory, that link stays and its origin becomes `confirmed`.
-2. **Details move with it.** A fact, feeling or goal of the same recording that is a detail of the old person, and whose card names the same said name or handle, becomes a detail of the new person. A detail the owner placed by hand does not move.
+2. **Details move with it.** A fact, feeling or goal of the same recording that is a detail of the old person, and whose card names the same said name or handle, becomes a detail of the new person. A detail the owner placed by hand does not move. (narrowed 2026-11-19, PC-d ruling D19) A link with a handle also takes a detail whose mention has no handle, by the said name.
 3. **Photos do not move.** A photo belongs to a person's page or to a memory. It does not belong to a link.
 4. **The first telling follows.** When the old person's first telling came from a moved moment, the old person takes the first telling of their oldest remaining moment. The new person takes one only when they have none.
 5. **Names.** The said name and its relation phrase become aliases of the new person. The old person keeps their aliases; the owner removes one on that person's page, as today.
@@ -280,13 +280,21 @@ At the same check, for each person with no contact, the app looks for contacts w
 
 ## Step 2: the extractor tells people apart
 
+Status: built on branch `people-contacts-d` (plan `docs/plans/2026-11-19-people-contacts-d.md`) with the prompt `v8`. `v8` is not the default prompt. The default stays `v6` until the owner reads the comparison in `docs/experiments/2026-11-19-extractor-v8-handles.md` and says yes. The comparison has not run yet.
+
 - The extractor returns, for each recording, the people it found. Each has a handle, the said name, the relation phrase when one was said, and the id of a person from the packet only when the story's own words point to that person.
-- A memory names its people by handle, not by text.
-- The packet carries the handles of the earlier segments of the same recording, so a handle holds across segments.
-- The person id replaces today's `likely_alias_of_person_id` on a mention.
-- The app treats the handle as the group. The app treats the person id as one more input to `PersonGuess`: it decides the choice in rule 4, and the link is still `assumed`.
+- A memory names its people by handle, not by text. (narrowed 2026-11-19, PC-d plan decision 5) The output keeps `people_refs`. The model leaves it empty. After validation the app fills it with the said name of each handle, and stores each handle's person on the memory card. So every part of the app that reads a said name works as before.
+- A handle of the recording so far is valid in a memory's `person_handles` and in `about_ref` without a `people` entry in that segment's output. The card then stores the recording's entry, and the chip shows the name said earlier in the recording. (narrowed 2026-11-19, PC-d ruling D17)
+- A handle in `about_ref` is always also one of that memory's people. When the model leaves it out of `person_handles`, the app adds it. (narrowed 2026-11-19, PC-d ruling D22)
+- The packet carries the handles of the earlier segments of the same recording, so a handle holds across segments. (narrowed 2026-11-19, PC-d ruling D25) The recording's handles come from the memory cards of earlier segments and from the person mentions of earlier segments that carry a handle. A dismissed card or mention adds nothing.
+- The person id replaces today's `likely_alias_of_person_id` on a mention. (narrowed 2026-11-19, PC-d plan decision 6 and ruling D1) As built, `likely_alias_of_person_id` left the schema and the prompt, and the decoder ignores it. The person id is on the `people` entry, not on the mention. A person mention carries the `handle` of its person.
+- The app treats the handle as the group. The app treats the person id as one more input to `PersonGuess`: it decides the choice in rule 4, and the link is still `assumed`. (narrowed 2026-11-19, PC-d plan decision 6) The person id is used only inside rule 4. When it names one of the persons that rule 4 already has, that person is chosen in place of the most recently linked one. An id that names no candidate of rule 4 has no effect. An id that the packet of that call does not hold is cleared.
+- A handle that the recording already linked keeps its person. A later card with that handle takes the same person. (narrowed 2026-11-19, PC-d plan decision 7 and ruling D12) The origin is the earlier link's origin when that is `said` or `new`, and `assumed` in every other case. A `confirmed` earlier link gives `assumed`: the owner confirmed that card, not this one. When the handle has several kept links, the newest link decides.
+- A stored choice before Keep is keyed by the said name and the handle. (narrowed 2026-11-19, PC-d plan decision 8) For a card with handles, `candidate_person_choice.said_name` holds the normalized said name, the separator U+001F and the handle. So two people with one name on one card keep two answers. A card with no handle keys by the said name alone, as before.
 - Two handles with one said name become two guesses. The second is never assumed to be the first. It takes the next candidate in order. With no other candidate it is a new person (rule 7).
 - Two handles that the owner settles to one person in one memory share that memory's one link.
+- A handle has no meaning in another recording. "Same story" into a memory of another recording writes no handle on the link. (narrowed 2026-11-19, PC-d ruling D11)
+- A telling that is separated finds its people by handle when the links have handles (`MergeActions.separateTelling`). Two handles of one name in one memory are two links with one said name, so the said name would move both or neither. This applies only to a telling in the memory's own recording. (narrowed 2026-11-19, PC-d rulings D16 and D20; D16 reverses the part of plan decision 9 that left this on the said name)
 - The extractor can be wrong in both directions. "Someone else…" and merge repair it.
 - This is a new prompt version. It needs test stories: two people with one name in one recording, one person under two names, a name with no other words, and a known name with a new relation phrase.
 
