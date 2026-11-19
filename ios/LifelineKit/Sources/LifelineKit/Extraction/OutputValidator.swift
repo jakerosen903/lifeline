@@ -34,7 +34,7 @@ public enum OutputValidator {
     public static func validate(_ output: ExtractorOutput, segmentText: String, words: [String],
                                 recordingHandles: Set<String> = []) -> Validated {
         let haystack = tokens(segmentText)
-        let people = validPeople(output.people, haystack: haystack)
+        let people = validPeople(output.people, haystack: haystack, mentionRefs: Set(output.mentions.compactMap(\.ref)))
         let handles = Set(people.map(\.handle)).union(recordingHandles)
         var result = Validated(accepted: [], rejected: [], flags: output.flags, people: people)
 
@@ -60,13 +60,18 @@ public enum OutputValidator {
     }
 
     /// The people a memory may name: the first entry of each handle, with a said name copied from
-    /// the segment. A blank handle cannot be named, so it is dropped too. A memory that names a
-    /// dropped person is rejected in `problem(with:)`: its people would otherwise be unknown.
-    private static func validPeople(_ people: [PersonOut], haystack: [String]) -> [PersonOut] {
+    /// the segment. A blank handle cannot be named, so it is dropped too, and so is a handle equal to a
+    /// mention's `ref` of the same output: handles and mention refs are two spaces (D15). A memory that
+    /// names a dropped person is rejected in `problem(with:)`: its people would otherwise be unknown.
+    /// A relation phrase that is not the segment's words is dropped; the person stays.
+    private static func validPeople(_ people: [PersonOut], haystack: [String], mentionRefs: Set<String>) -> [PersonOut] {
         var seen: Set<String> = []
-        return people.filter { person in
-            guard !person.handle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, seen.insert(person.handle).inserted else { return false }
-            return contains(haystack, person.saidName)
+        return people.compactMap { person in
+            guard !person.handle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, !mentionRefs.contains(person.handle),
+                  seen.insert(person.handle).inserted, contains(haystack, person.saidName) else { return nil }
+            var kept = person
+            if let relation = person.relationText, !contains(haystack, relation) { kept.relationText = nil }
+            return kept
         }
     }
 

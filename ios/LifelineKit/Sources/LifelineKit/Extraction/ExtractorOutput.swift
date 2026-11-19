@@ -55,7 +55,7 @@ public struct PersonOut: Codable, Sendable, Equatable {
 
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
-        handle = try c.decode(String.self, forKey: .handle)
+        handle = try c.decode(String.self, forKey: .handle).trimmingCharacters(in: .whitespacesAndNewlines)
         saidName = try c.decode(String.self, forKey: .saidName)
         relationText = try c.decodeNonEmpty(forKey: .relationText)
         personID = try c.decodeNonEmpty(forKey: .personID)
@@ -193,7 +193,8 @@ public struct MemoryOut: Codable, Sendable, Equatable {
         quote = try c.decode(String.self, forKey: .quote)
         segmentSpan = try c.decode(WordSpan.self, forKey: .segmentSpan)
         peopleRefs = try c.decode([String].self, forKey: .peopleRefs)
-        personHandles = try c.decodeIfPresent([String].self, forKey: .personHandles) ?? []
+        // Trimmed as a mention's handle is: handles are compared exactly everywhere else.
+        personHandles = (try c.decodeIfPresent([String].self, forKey: .personHandles) ?? []).map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
         handlePeople = try c.decodeIfPresent([PersonOut].self, forKey: .handlePeople) ?? []
         placeText = try c.decodeIfPresent(String.self, forKey: .placeText)
         anchors = try c.decode([AnchorOut].self, forKey: .anchors)

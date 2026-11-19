@@ -66,3 +66,12 @@ private func memoryJSON(_ extra: String) -> Data {
     let again = try JSONDecoder().decode(MemoryOut.self, from: try JSONEncoder().encode(memory))
     #expect(again == memory && again.personHandles == ["p1"])
 }
+
+// Final review M8: a handle compares exactly elsewhere, so the decoder trims it, as it trims a mention's handle.
+@Test func handlesAreTrimmedAtDecode() throws {
+    let person = try JSONDecoder().decode(PersonOut.self, from: Data(#"{"handle":" p1 ","said_name":"Robyn"}"#.utf8))
+    #expect(person.handle == "p1")
+    let memory = try JSONDecoder().decode(MemoryOut.self, from: memoryJSON(#","person_handles":[" p1","p2 "],"about_ref":" p1 ""#))
+    #expect(memory.personHandles == ["p1", "p2"])
+    #expect(memory.aboutRef == "p1", "about_ref was already trimmed at decode, so every reader compares it trimmed")
+}

@@ -160,3 +160,22 @@ private let lateMemory = handled("m1", quote: "She was always late", span: WordS
     #expect(v.accepted.isEmpty)
     #expect(v.rejected.map(\.reason) == ["person_handles not in people: p1"])
 }
+
+// Final review M3: a handle and a mention ref are two spaces (D15), so a handle equal to a mention ref is no handle.
+@Test func aPersonWhoseHandleIsAMentionRefIsDroppedWithItsMemory() {
+    var out = peopleOutput([work, PersonOut(handle: "t1", saidName: "Robyn", relationText: "my cousin", personID: nil)],
+                           [cake, handled("m2", quote: "sang all night", span: WordSpan(startWord: 12, endWord: 14), handles: ["t1"])])
+    out.mentions = [MentionOut(text: "the cake", kind: .thing, confidence: 0.9, ref: "t1")]
+    let v = OutputValidator.validate(out, segmentText: robyns, words: robynWords)
+    #expect(v.people == [work])
+    #expect(v.accepted.contains(.memory(cake)))
+    #expect(v.rejected.map(\.reason) == ["person_handles not in people: t1"])
+}
+
+// Final review M8: a relation phrase is the owner's words too.
+@Test func aRelationPhraseNotInTheSegmentIsDropped() {
+    let invented = PersonOut(handle: "p2", saidName: "Robyn", relationText: "my sister", personID: nil)
+    let v = OutputValidator.validate(peopleOutput([work, invented], [cake, song]), segmentText: robyns, words: robynWords)
+    #expect(v.people == [work, PersonOut(handle: "p2", saidName: "Robyn", relationText: nil, personID: nil)])
+    #expect(v.accepted == [.memory(cake), .memory(song)], "the person stays; only the invented phrase goes")
+}
