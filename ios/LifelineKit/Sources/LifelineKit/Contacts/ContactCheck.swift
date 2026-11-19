@@ -5,11 +5,12 @@ import Synchronization
 /// "A contact that changes", "A contact that appears later (PC4)", "When the guess is made").
 extension ContactLinkActions {
     /// Runs at launch and when the system says contacts changed. Reads only the linked identifiers; reads all contacts
-    /// once, only when an identifier does not resolve. Without access it changes nothing: the app cannot tell a deleted
+    /// once, only under full access and only when an identifier does not resolve. Without access it changes nothing: the app cannot tell a deleted
     /// contact from one it may not see (Review Focus 4). A failed read of the cards throws before anything is written;
     /// a picture that cannot be read or stored is skipped, and the next check tries again (PB16).
     public func check() async throws {
-        switch directory.access() {
+        let access = directory.access()
+        switch access {
         case .notAsked, .denied: return
         case .full, .limited: break
         }
@@ -26,6 +27,12 @@ extension ContactLinkActions {
             }
         }
         guard !missing.isEmpty else { return }
+        // Under limited access the app sees only the shared contacts, so a card with the kept name may be a namesake
+        // and the contact may only be unshared: the person keeps everything and shows as missing (PB34).
+        guard access == .full else {
+            for (person, stored) in missing { try store.people.markContactMissing(person.id, from: stored) }
+            return
+        }
         let visible = try await directory.all()
         var held = Set(try store.people.linkedPersons().compactMap(\.contactIdentifier))
         for (person, stored) in missing {
@@ -105,7 +112,7 @@ extension ContactLinkActions {
     /// Plan decision 7: after access is given on a recording's landing, a look again at that recording only. For each
     /// person the app made there from a said name (`created_by_guess`, `name_origin` said, no contact) with a `new`
     /// link: the guess runs again for that link's said name, against the other people on file and `contacts`. When it
-    /// picks one contact (rule 5, or rule 3's contact), the app links the person to it and the person's `new` links in
+    /// picks one contact (rule 5, or rule 3's contact) that the owner has not declined for that person (PB35), the app links the person to it and the person's `new` links in
     /// the session become `assumed`. Returns the links changed and the people linked. Pictures are not read here: the
     /// caller copies them for `linkedPeople`.
     @discardableResult

@@ -51,6 +51,8 @@ private final class Fixture: @unchecked Sendable {
     func person(_ id: PersonID) throws -> Person { try #require(try store.people.person(id: id)) }
     func photos(of person: PersonID) throws -> [PlacedPhoto] { try store.photos.photos(of: .entity(EntityID(rawValue: person.rawValue))) }
     func file(_ photo: Photo) -> Bool { FileManager.default.fileExists(atPath: library.url(for: photo).path) }
+    /// Rows changed on the one connection since it opened: a check that writes nothing leaves it as it was.
+    func changes() throws -> Int { try db.writer.read { $0.totalChangesCount } }
     func photoRows() throws -> Int { try db.writer.read { try Int.fetchOne($0, sql: "select count(*) from photo") ?? 0 } }
 
     func setNameOrigin(_ origin: NameOrigin, _ id: PersonID, guess: Bool = false) async throws {
@@ -218,6 +220,33 @@ private final class Fixture: @unchecked Sendable {
     #expect(try f.dump() == before)
 }
 
+@Test func aCheckWithNothingChangedWritesNothing() async throws {
+    let f = try Fixture(keepContacts: [vale])
+    f.directory.pictures = ["c-vale": try f.picture("old", rgb: 0x3366AA)]
+    _ = try f.keptSession([("Robyn painted the fence", ["Robyn"])])
+    let tomas = try f.store.people.insertPerson(displayName: "Tomas")
+    try await f.actions.link(tomas.id, to: reyes)
+    try await f.actions.check()   // copies the picture of the person Keep made
+    let changes = try f.changes()
+    try await f.actions.check()
+    #expect(try f.changes() == changes)
+    f.directory.cards = [reyes]
+    try await f.actions.check()   // Robyn Vale is missing now
+    let afterMissing = try f.changes()
+    try await f.actions.check()
+    #expect(try f.changes() == afterMissing, "a person already missing is not written again")
+}
+
+@Test func theKeptContactNameIsTrimmed() async throws {
+    let f = try Fixture()
+    let robin = try f.store.people.insertPerson(displayName: "Robin")
+    try await f.actions.link(robin.id, to: card("c-vale", " Robyn", "Vale "))
+    #expect(try f.person(robin.id).contactName == "Robyn Vale")
+    f.directory.cards = [card("c-vale", "  Robyn", "Vale-Ortiz  "), reyes]
+    try await f.actions.check()
+    #expect(try f.person(robin.id).contactName == "Robyn Vale-Ortiz")
+}
+
 @Test func aNewPictureThatIsAlreadyAnotherStoredPhotoChangesNothing() async throws {
     let f = try Fixture()
     f.directory.pictures = ["c-vale": try f.picture("old", rgb: 0x3366AA)]
@@ -313,6 +342,48 @@ private final class Fixture: @unchecked Sendable {
     #expect(linked.contactIdentifier == "c-vale-new" && linked.contactState == "linked" && linked.contactName == "robyn  vale")
     #expect(linked.contactPhotoID == copy && copy != nil, "the same picture stays the copy")
     #expect(f.directory.allReads == 1)
+}
+
+// PB34: under full access the re-link is silent; a different picture then follows the "new picture" rule.
+@Test func aReLinkByNameUnderFullAccessReplacesTheCopyWhenThePictureDiffers() async throws {
+    let f = try Fixture()
+    f.directory.pictures = ["c-vale": try f.picture("vale", rgb: 0x3366AA)]
+    let robin = try f.store.people.insertPerson(displayName: "Robin")
+    try await f.actions.link(robin.id, to: vale)
+    let oldCopy = try #require(try f.person(robin.id).contactPhotoID)
+
+    f.directory.cards = [card("c-vale-new", "Robyn", "Vale"), reyes]
+    f.directory.pictures = ["c-vale-new": try f.picture("other", rgb: 0x22AA22)]
+    try await f.actions.check()
+
+    let linked = try f.person(robin.id)
+    #expect(linked.contactIdentifier == "c-vale-new" && linked.contactState == "linked")
+    let newCopy = try #require(linked.contactPhotoID)
+    #expect(try newCopy != oldCopy && f.photos(of: robin.id).map(\.id) == [newCopy])
+    #expect(try f.store.photos.photo(id: oldCopy) == nil)
+}
+
+// PB34: under limited access a contact that is no longer shared is missing, even when a shared namesake fits.
+@Test func underLimitedAccessAMissingContactIsNotReLinkedByName() async throws {
+    let f = try Fixture()
+    f.directory.pictures = ["c-vale": try f.picture("vale", rgb: 0x3366AA)]
+    let robin = try f.store.people.insertPerson(displayName: "Robin")
+    try await f.actions.link(robin.id, to: vale)
+    let copy = try #require(try f.person(robin.id).contactPhotoID)
+    let before = try f.dump()
+
+    f.directory.currentAccess = .limited
+    f.directory.cards = [card("c-namesake", "Robyn", "Vale"), reyes]
+    f.directory.pictures = ["c-namesake": try f.picture("namesake", rgb: 0x22AA22)]
+    try await f.actions.check()
+
+    let person = try f.person(robin.id)
+    #expect(person.contactState == "missing")
+    #expect(person.contactIdentifier == "c-vale" && person.contactName == "Robyn Vale" && person.contactPhotoID == copy)
+    #expect(try f.photos(of: robin.id).map(\.id) == [copy], "the app's copy stays the first photo")
+    let changed = try f.dump().filter { !before.contains($0) }
+    #expect(changed.count == 1 && changed[0].contains("missing"), "only the state changes")
+    #expect(f.directory.allReads == 0, "no name match, so all contacts are not read")
 }
 
 @Test(arguments: [0, 2])
@@ -480,6 +551,17 @@ func withoutAccessTheCheckChangesNothing(access: ContactsAccess) async throws {
     let before = try f.dump()
     let twin = card("c-twin", "Robyn", "Okafor")
     #expect(try await f.actions.reguess(session: session, contacts: [vale.forGuess, twin.forGuess]).changedLinks == 0)
+    #expect(try f.dump() == before)
+}
+
+@Test func reguessLeavesAContactTheOwnerDeclinedForThatPerson() async throws {
+    let f = try Fixture()
+    let (session, memories) = try f.keptSession([("Robyn painted the fence", ["Robyn"])])
+    let robyn = try f.onlyPerson(memories[0])
+    try f.actions.decline(vale, for: robyn)
+    let before = try f.dump()
+    let result = try await f.actions.reguess(session: session, contacts: [vale.forGuess])
+    #expect(result.changedLinks == 0 && result.linkedPeople.isEmpty)
     #expect(try f.dump() == before)
 }
 

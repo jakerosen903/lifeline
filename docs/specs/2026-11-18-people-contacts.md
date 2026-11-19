@@ -139,7 +139,7 @@ Every person chip opens the sheet, with or without a mark. A wrong link with no 
 - **A choice before Keep.** When the owner uses the sheet on a card that waits, the app stores the choice with the card (table `candidate_person_choice`). Keep applies it with origin `confirmed`.
 - **On Keep.** The app runs `PersonGuess` for each said name of that card, creates the persons that rules 3 and 5 to 7 call for, and writes the links with their origins, in the same transaction as the memory.
 - **A name no memory carries.** A person the story names with no moment or detail about them gets no Keep. It keeps today's card, and the card opens the sheet. No person exists until the owner answers.
-- **Access given after a guess.** When the owner allows contacts on the landing, the app runs `PersonGuess` once more for the links of that recording whose origin is `assumed` or `new`. It runs for no other recording.
+- **Access given after a guess.** When the owner allows contacts on the landing, the app runs `PersonGuess` once more for the links of that recording whose origin is `new` and whose person the app made and nobody edited. A link with origin `assumed` does not change. The app does not link a contact that the owner declined for that person. It runs for no other recording. (Narrowed 2026-11-18, PC-b plan decision 7.)
 
 ### What changes from today
 

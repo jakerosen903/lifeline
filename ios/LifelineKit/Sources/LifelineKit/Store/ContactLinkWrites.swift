@@ -27,7 +27,7 @@ extension PeopleRepository {
             }
             // The name and `name_origin` stay: a person on file keeps their name (spec, "The person's name").
             try db.execute(sql: "update person set contact_identifier = ?, contact_name = ?, contact_state = ? where id = ?",
-                           arguments: [card.identifier, card.fullName, Person.contactLinked, id.rawValue])
+                           arguments: [card.identifier, card.keptName, Person.contactLinked, id.rawValue])
             if clearingGuess {
                 try db.execute(sql: "update person set created_by_guess = 0 where id = ?", arguments: [id.rawValue])
             }
@@ -89,9 +89,12 @@ extension PeopleRepository {
                 try Self.markContactMissing(id, from: stored, in: db)
                 return .missing
             }
-            try db.execute(sql: "update person set contact_identifier = ?, contact_name = ?, contact_state = ? where id = ?",
-                           arguments: [card.identifier, card.fullName, Person.contactLinked, id.rawValue])
-            let name = card.fullName.trimmingCharacters(in: .whitespacesAndNewlines)
+            let name = card.keptName
+            // Nothing changed: nothing is written, so a check of an unchanged contact is free at every launch.
+            if card.identifier != stored || person.contactName != name || person.contactState != Person.contactLinked {
+                try db.execute(sql: "update person set contact_identifier = ?, contact_name = ?, contact_state = ? where id = ?",
+                               arguments: [card.identifier, name, Person.contactLinked, id.rawValue])
+            }
             // A contact with no name keeps the person's name: a page never loses its title.
             if person.nameOrigin == .contact, !name.isEmpty, name != person.displayName {
                 try db.execute(sql: "update entity set title = ? where id = ?", arguments: [name, person.entityID.rawValue])
@@ -147,7 +150,7 @@ extension PeopleRepository {
     /// and each of the person's `new` mention links in `session` becomes `assumed`. The said name, and the name the
     /// person was made with, stay as aliases: they are the owner's words and the model's name for them (PB10).
     /// One transaction. Returns the links changed: 0 when the person is no longer the app's untouched guess with
-    /// no contact, or another person holds the contact.
+    /// no contact, another person holds the contact, or the owner declined it for this person.
     func linkFromReguess(_ id: PersonID, to contact: PersonGuess.Contact, saidName: String, in session: SessionID) throws -> Int {
         let name = contact.fullName.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !name.isEmpty else { return 0 }
@@ -155,7 +158,10 @@ extension PeopleRepository {
             guard let person = try Person.fetchOne(db, sql: Person.selectSQL + "where person.id = ?", arguments: [id.rawValue]),
                   !person.isOwner, person.createdByGuess, person.nameOrigin == .said, person.contactIdentifier == nil,
                   try Bool.fetchOne(db, sql: "select exists (select 1 from person where contact_identifier = ?)",
-                                    arguments: [contact.identifier]) == false else { return 0 }
+                                    arguments: [contact.identifier]) == false,
+                  // "No, someone else" is kept (PB35).
+                  try Bool.fetchOne(db, sql: "select exists (select 1 from contact_declined where person_id = ? and contact_identifier = ?)",
+                                    arguments: [id.rawValue, contact.identifier]) == false else { return 0 }
             try Self.insertAlias(person.displayName, id, db)
             try Self.insertAlias(saidName, id, db)
             try db.execute(sql: "update entity set title = ? where id = ?", arguments: [name, person.entityID.rawValue])
@@ -171,6 +177,11 @@ extension PeopleRepository {
             return db.changesCount
         }
     }
+}
+
+extension ContactCard {
+    /// The contact's full name as the app keeps it in `contact_name`: trimmed, as Keep keeps it.
+    var keptName: String { fullName.trimmingCharacters(in: .whitespacesAndNewlines) }
 }
 
 extension PersonLinkRepository {
