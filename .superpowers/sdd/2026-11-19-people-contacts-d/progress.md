@@ -21,3 +21,4 @@ The owner said "Yes, build both" (PC-d, then PC-c) on 2026-11-19, without a revi
 ## Progress
 
 - Task 1: complete (commits 699757b..1fdbd7d, review clean). Minor, parked for the final review: a handle is compared untrimmed; `schemaStaysUnderTheUnionLimit` still asserts 12 (count is 11); a mention's `handle` is not checked against `people` (Task 3 must tolerate an unknown one); the app target was not built in Task 1 (build it by Task 4).
+- Task 2: complete (commits c7b0c3d..bd9bf18, review clean). Minor, parked for the final review: the continuation test covers the superseded status only, not the "continues" marker; a first person id that the packet filter cuts hides a later valid one (D5). A second timing flake seen once under load: `CascadeVoiceSessionTests.interruptionClosesOpenSegment`.
