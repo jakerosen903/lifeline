@@ -63,6 +63,15 @@ public enum PersonChipLine {
     /// The notice when Undo is refused because a row the move left changed since.
     public static let staleUndo = "That changed since. Open the name to change it again."
 
+    /// The sheet's sentence when "Done" is refused: `stale` when a row changed since the sheet opened; `notFound` when
+    /// the person or the contact the change needs is not there (PB42, PB40). Draft copy for `notFound`, for the owner's sign-off.
+    public static func refusal(_ error: PersonLinkActions.Error) -> String {
+        switch error {
+        case .stale: staleUndo
+        case .notFound: "That person is not here any more."
+        }
+    }
+
     /// The notice when Undo failed for any other reason. The error's own text never reaches the person.
     public static let failedUndo = "Could not undo that."
 

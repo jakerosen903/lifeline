@@ -35,6 +35,12 @@ import Testing
     #expect(PersonChipLine.failedUndo == "Could not undo that.")
 }
 
+// M-2 (fix wave): a refused change says what happened. Nothing changed for `notFound`, so it is not the stale sentence.
+@Test func aRefusedChangeSaysWhy() {
+    #expect(PersonChipLine.refusal(.stale) == "That changed since. Open the name to change it again.")
+    #expect(PersonChipLine.refusal(.notFound) == "That person is not here any more.")
+}
+
 @Test func theConfirmButtonUsesTheFirstWordOfTheName() {
     #expect(PersonChipLine.confirmLabel(name: "Robyn Vale") == "Yes, this Robyn")
     #expect(PersonChipLine.confirmLabel(name: "Robyn") == "Yes, this Robyn")

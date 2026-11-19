@@ -155,8 +155,8 @@ final class WhoIsThisViewModel {
                 try actions.choose(selected, for: chip.saidName, on: candidate.id)
                 return .stored
             }
-        } catch is PersonLinkActions.Error {
-            return .failed(PersonChipLine.staleUndo)
+        } catch let refused as PersonLinkActions.Error {
+            return .failed(PersonChipLine.refusal(refused))
         } catch {
             return .failed("Could not change this.")
         }
