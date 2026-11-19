@@ -972,6 +972,20 @@ private func personID(_ entity: EntityID) -> PersonID { PersonID(rawValue: entit
     #expect(try f.page(maya).isEmpty, "the story's link to Maya goes with Undo")
 }
 
+/// A story never places the photo on a hidden page (plan decision 7), and Undo is no way around it (final review F3).
+@Test func undoDoesNotPutThePhotoOnAPageHiddenAfterTheMove() throws {
+    let f = try StoryFixture()
+    let dad = try f.person("Dad"), maya = try f.person("Maya")
+    let kept = try f.keep(try f.pendingCard(people: ["Dad"]))
+    let receipt = try f.actions.move(try f.nameLink(kept, dad), to: .person(personID(maya)), wholeGroup: false)
+    #expect(receipt.photoPages?.removed == [dad])
+    try f.store.entities.setHidden(dad, true)
+    try f.actions.undo(receipt)
+    #expect(try f.page(dad).isEmpty, "Dad's page is hidden")
+    #expect(try !f.store.photos.isDeclined(f.subject.id, on: dad), "no decline: the owner did not take it off")
+    #expect(try f.page(maya).isEmpty, "the story's link to Maya goes with Undo")
+}
+
 /// Fix round 1: one photo can be the subject of two sessions. A story link stays while any memory that holds the photo names the person.
 @Test func aMoveLeavesTheLinkWhileAnotherStoryOfTheSamePhotoNamesThePerson() throws {
     let f = try StoryFixture()
@@ -1057,6 +1071,21 @@ private func page(_ card: PhotoStoryCard, _ entity: Entity) throws -> PhotoStory
     #expect(after.shownPageGroups(keeping: kept).flatMap(\.pages).map(\.stateValue) == ["not added"])
     #expect(!after.showsNoOtherPageSentence(keeping: kept), "no sentence while Dad is kept")
     #expect(after.showsNoOtherPageSentence(keeping: []), "the next Done says the photo is on no other page")
+}
+
+/// A story started from Dad's page whose kept moment names nobody: Dad is the card's only page, listed because his page
+/// holds the photo. Once it is off, the card lists no page, and the part must stay while Dad is kept (final review F1).
+@Test func thePagesPartStaysWhileItsOnlyPageIsKept() throws {
+    let m = memory("The picnic"), dad = entity("Dad")
+    let before = card(memories: [m], pagesWithPhoto: [dad], pagesDone: true)
+    let kept = [try page(before, dad)]
+    let after = card(memories: [m], pagesDone: true)
+    #expect(after.pageGroups.isEmpty, "the card itself lists no page")
+    #expect(after.showsPagesPart(keeping: kept), "chip, sentence and Edit stay under the finger")
+    #expect(!after.showsPagesPart(keeping: []), "the next read has nothing to show")
+    #expect(before.showsPagesPart(keeping: []))
+    #expect(card(memories: [m], pagesWithPhoto: [dad]).showsPagesPart(keeping: []), "open shows a listed page")
+    #expect(!card(memories: [m]).showsPagesPart(keeping: []), "no page, no part")
 }
 
 @Test func aKeptPageMissingFromTheCardKeepsItsPlace() throws {

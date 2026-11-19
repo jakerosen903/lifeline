@@ -65,6 +65,11 @@ public struct PhotoRepository: Sendable {
                           arguments: [photo.rawValue, entity.rawValue]) ?? false
     }
 
+    /// A missing entity counts as not hidden: the caller checks that it exists.
+    private static func isHidden(_ entity: EntityID, in db: Database) throws -> Bool {
+        try Bool.fetchOne(db, sql: "select hidden_from_timeline from entity where id = ?", arguments: [entity.rawValue]) ?? false
+    }
+
     public func fileNames() throws -> Set<String> {
         try db.writer.read { Set(try String.fetchAll($0, sql: "select file_name from photo")) }
     }
@@ -347,11 +352,12 @@ public struct PhotoRepository: Sendable {
     }
 
     /// True when this call wrote the link; false when the subject already held the photo, whatever its origin.
-    /// A `story` link to an entity the owner took the photo off is refused here, so no caller can forget the decline.
-    /// An owner's link (no origin) is never refused.
+    /// A `story` link to an entity the owner took the photo off, or to a hidden entity (plan decision 7), is refused here,
+    /// so no caller (a Keep, the Undo of a move) can forget either. An owner's link (no origin) is never refused.
     @discardableResult
     static func link(_ photo: PhotoID, to subject: PhotoSubject, origin: PhotoLinkOrigin? = nil, in db: Database) throws -> Bool {
-        if origin == .story, case .entity(let entity) = subject, try isDeclined(photo, on: entity, in: db) { return false }
+        if origin == .story, case .entity(let entity) = subject,
+           try isDeclined(photo, on: entity, in: db) || isHidden(entity, in: db) { return false }
         let (column, value) = subject.key
         let linked = try Int.fetchOne(db, sql: "select count(*) from photo_link where \(column) = ? and photo_id = ?",
                                       arguments: [value, photo.rawValue]) ?? 0

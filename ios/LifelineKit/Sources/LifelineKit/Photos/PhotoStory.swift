@@ -174,6 +174,12 @@ extension PhotoStoryCard {
         }
     }
 
+    /// The card draws the pages part (chips, line or sentence, Done or Edit). A kept page counts: when it was the card's
+    /// only page, the part must stay so its chip does not disappear under the finger.
+    public func showsPagesPart(keeping kept: [Page]) -> Bool {
+        !pageGroups.isEmpty || !shownPageGroups(keeping: kept).isEmpty
+    }
+
     /// Done, and no page is chosen or kept. A function, not a property: the kept pages live in the view model.
     public func showsNoOtherPageSentence(keeping kept: [Page]) -> Bool {
         pagesDone && shownPageGroups(keeping: kept).isEmpty

@@ -32,7 +32,7 @@ struct PhotoCard: View {
         if let card = viewModel.card {
             VStack(alignment: .leading, spacing: 16) {
                 photoAndMoments(card)
-                if !card.pageGroups.isEmpty {
+                if card.showsPagesPart(keeping: viewModel.keptPages) {
                     PhotoCardPages(card: card, kept: viewModel.keptPages, onToggle: { page in Task { await viewModel.toggle(page) } },
                                    onDone: { viewModel.donePages() }, onEdit: { viewModel.editPages() })
                 }
