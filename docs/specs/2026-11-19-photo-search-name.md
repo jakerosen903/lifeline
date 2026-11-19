@@ -81,6 +81,15 @@ The headers do not say how the picker behaves. One short trial on a phone or a s
 
 If answer 2 or 3 is bad, the spec changes before the build. The possible changes: use the given name only, or take approach B.
 
+### Result of the trial on the simulator (2026-11-19)
+
+The trial ran on the iPhone 18 Pro simulator with iOS 27.2. A throwaway change gave a fixed text to the picker of "Add a photo". The change is not in the branch.
+
+- Question 4: yes. The multi-photo picker opens with the text in its search field.
+- Question 2: with no match the picker shows "No Results" and "There were no results. Try a new search." The search field has a clear button, and a close button is next to it. One tap shows the library again. So the third anti-goal holds, but the first screen the owner sees is empty.
+- The text "Sam O'Neil" showed as "Sam ONeil". The apostrophe was removed. The trial does not show where.
+- Questions 1 and 3: not answered. The simulator's library has six stock photos and no named person. The word "flowers" found nothing there, so the simulator does not index its photos for search. A phone with iOS 27 and named people in Photos must answer these two questions.
+
 ## Edge cases
 
 - The owner renames the person: the next picker uses the new name, or the contact's name when a contact is linked.
