@@ -14,7 +14,7 @@
 
 **Not this plan:** PC-d (extractor handles). A merge of two places or two things by drag (spec call 2 is open: the owner said "two things").
 
-**Worktree and branch:** `.claude/worktrees/people-contacts-16241d`. A new branch `claude/people-contacts-c`, cut from the tip of `claude/people-contacts-b` (`3fd6728`). Task 1 merges `origin/main` into it. Never push. Never open a PR without the owner's word. No AI attribution in a commit.
+**Worktree and branch:** `.claude/worktrees/people-contacts-16241d`. A new branch `people-contacts-c`, cut from `people-contacts-b` (`8c882a9`, PR #35). That commit already holds `main`'s photo order and migration `v16`, so **Task 1 is only "cut the branch"**: its merge of `origin/main` is not needed, `PhotoRepository.writeOrder` is already visible inside the kit, and `photo_page_declined` is a real table (decisions 8 and 9 need no hand-made table in tests). (revised 2026-11-19, after PR #35 opened) No AI attribution in a commit or in PR text.
 
 ---
 
