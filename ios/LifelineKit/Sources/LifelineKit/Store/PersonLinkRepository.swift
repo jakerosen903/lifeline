@@ -71,6 +71,7 @@ public struct PersonLinkRepository: Sendable {
 
     /// The handle links of the kept memories of `segment`'s recording (the session of each memory's first span),
     /// newest memory first. A handle means one person inside one recording only, so no other recording is read.
+    /// "Newest" is the memory's `created_at`, not the time of the owner's last move (D12, final review M6).
     func handleLinks(inSessionOf segment: SegmentID) throws -> [HandleLink] {
         try db.writer.read { db in
             try Row.fetchAll(db, sql: """
