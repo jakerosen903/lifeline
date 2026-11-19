@@ -24,3 +24,10 @@ Pre-flight: Task 6 needs a column that Task 1 owns: Task 1 text now carries it (
 - Task 3: process deviation recorded: tests were written after the code; the failing run was a compile error. The reviewer's mutation check found the tests fail on wrong behavior.
 - Task 3: minor (deferred): `stateValue` trusts `byStory` without `isChosen` (only `PhotoStory.card` builds pages).
 - Task 3: complete (commits 62ca0d7..5aca2f1, approved).
+- Task 4: built at 8a22002 (base 84abc4b). Review: spec ok; one Important, plan-mandated.
+- Task 4: Ruling: the move removes the first person's story link only when NO memory that holds the photo names that person now, in any session — the plan said "no memory of that session", but one photo can be the subject of two stories, and the spec forbids removing a link another story placed; `letGo` already keeps story links while another session points at the photo — cost if wrong: a photo stays on a page a little longer. The same guard applies to Undo's removal of an added link (the reviewer's Minor 1): one rule, one function.
+- Task 4: accepted: `only:` on `linkToPeoplePages` (a move adds to the new person only; a plain call would backfill other people, against decision 14).
+- Task 4: minor (deferred): Undo restores a story link to a page the owner hid after the move.
+- Task 4: minor (deferred): a restored link goes last; a photo that was the key photo is not the key photo after Undo when the page gained another photo. Open for the owner.
+- Task 4: minor (deferred): `photoPages` is `public var`; make it `public internal(set)`.
+- Task 4: minor (deferred): no test pins what `only:` is for (the moved moment also names a person who lacks the photo).
