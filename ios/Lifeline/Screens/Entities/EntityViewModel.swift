@@ -48,6 +48,8 @@ final class EntityViewModel {
     let contact: PersonContactViewModel
     /// "Same as another person…": the picker and the confirm. The page's person is the one that goes (plan decision 2).
     let merge: PersonMergeViewModel
+    /// True when a contact another person holds was picked and the pair may merge: the page opens the confirm alone.
+    private(set) var asksSamePerson = false
     let player = SegmentPlayer()
     let deps: Dependencies
 
@@ -64,6 +66,7 @@ final class EntityViewModel {
         contact.onChanged = { [weak self] in self?.refresh() }
         contact.onMessage = { [weak self] in self?.personMove.say($0) }
         contact.onClearMessage = { [weak self] in self?.personMove.clearMessage() }
+        contact.onHeldByAnother = { [weak self] in self?.contactHeld(by: $0) }
     }
 
     /// True while the first picture is the copy the app took from the contact: it says "picture from your contacts".
@@ -164,6 +167,17 @@ final class EntityViewModel {
         personMove.offer("Merged into \(receipt.stayingName).") { try actions.undo(receipt) }
         refresh()
     }
+
+    /// The contact picked on this page is held by `holder`. Nothing is linked: the page's person would join the holder,
+    /// who keeps the contact (plan decision 4). A pair that may merge opens the confirm; a refused one says why
+    /// ("They are linked to two different contacts." when this person has a contact of their own).
+    func contactHeld(by holder: PersonID) {
+        merge.openConfirm(PersonID(rawValue: entity.id.rawValue), into: holder)
+        if merge.preview != nil { asksSamePerson = true } else { mergeRefused() }
+    }
+
+    /// The page opened the confirm that `asksSamePerson` asked for.
+    func samePersonAsked() { asksSamePerson = false }
 
     /// A refusal from the picker or the confirm, in the page's message slot. Nothing opens.
     func mergeRefused() {

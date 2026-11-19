@@ -17,8 +17,10 @@ final class PersonMergeViewModel {
 
     private let actions: PersonMergeActions
     private let store: ExtractionStore
-    /// Every person's key photo, read when the picker opens.
+    /// Every person's key photo, read when the sheet opens.
     private var covers: [EntityID: Photo] = [:]
+    /// True from the tap on "Merge" until the next pair: a second tap merges nothing.
+    private var isMerging = false
 
     init(deps: Dependencies) {
         actions = deps.personMergeActions()
@@ -30,14 +32,23 @@ final class PersonMergeViewModel {
     func openPicker(for person: PersonID) {
         preview = nil
         refusal = nil
+        isMerging = false
         others = (try? actions.others(than: person)) ?? []
-        covers = (try? store.photos.covers(type: .person)) ?? [:]
+        readCovers()
+    }
+
+    /// The sheet without the picker (a contact another person holds): reads the faces, then checks the pair.
+    func openConfirm(_ leaving: PersonID, into staying: PersonID) {
+        others = []
+        readCovers()
+        ask(leaving, into: staying)
     }
 
     /// Runs the refusals before the owner is asked: sets `preview` for a pair that may merge, `refusal` otherwise.
     func ask(_ leaving: PersonID, into staying: PersonID) {
         preview = nil
         refusal = nil
+        isMerging = false
         do {
             preview = try actions.check(leaving, into: staying)
         } catch {
@@ -48,14 +59,21 @@ final class PersonMergeViewModel {
     /// Merges the previewed pair. Nil, with `refusal` set, when the write refused or failed (the refusals run again
     /// inside the write: a row can change between the confirm and the tap).
     func merge() -> PersonMergeReceipt? {
-        guard let preview else { return nil }
-        self.preview = nil
+        // `preview` stays set, so the confirm keeps its content while the sheet closes; `isMerging` stops a second
+        // tap. The next `ask` or `openPicker` clears both.
+        guard let preview, !isMerging else { return nil }
+        isMerging = true
         do {
             return try actions.merge(preview.leaving.id, into: preview.staying.id)
         } catch {
             refusal = Self.sentence(for: error)
             return nil
         }
+    }
+
+    /// The picker was tapped with no person that goes (the read at the tap failed, or the person is gone).
+    func leavingIsGone() {
+        refusal = PersonChipLine.refusal(.notFound)
     }
 
     /// Hands the refusal to the host once, so a later dismiss does not show it again.
@@ -65,6 +83,11 @@ final class PersonMergeViewModel {
     }
 
     func cover(of person: PersonID) -> Photo? { covers[EntityID(rawValue: person.rawValue)] }
+
+    /// A failed read shows initials in place of the faces.
+    private func readCovers() {
+        covers = (try? store.photos.covers(type: .person)) ?? [:]
+    }
 
     /// The plan's copy. The picker never lists the person themself or the owner, so those refusals mean the rows
     /// changed under the sheet: they read as "not here any more". Any other failure is the page's usual save line.

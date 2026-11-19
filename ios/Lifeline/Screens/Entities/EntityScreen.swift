@@ -28,11 +28,13 @@ struct EntityScreen: View {
         let id: String
         let model: WhoIsThisViewModel
     }
-    /// The open "Same as another person…" sheet, with the person that goes, read at the tap.
+    /// The open "Same as another person…" sheet, with the person that goes, read at the tap. Without `picker` it opens
+    /// on the confirm: a contact another person holds was picked.
     @State private var merging: Merging?
     private struct Merging: Identifiable {
         let id = UUID()
         let leaving: Person?
+        var picker = true
     }
     /// The photo open in the viewer.
     @State private var viewing: PlacedPhoto?
@@ -217,11 +219,16 @@ struct EntityScreen: View {
             }
         }
         .sheet(item: $merging, onDismiss: { viewModel.mergeRefused() }) { merging in
-            PersonMergeSheet(viewModel: viewModel.merge, leaving: merging.leaving, picker: true) { receipt in
+            PersonMergeSheet(viewModel: viewModel.merge, leaving: merging.leaving, picker: merging.picker) { receipt in
                 self.merging = nil
                 viewModel.merged(receipt)
                 onChange()
             }
+        }
+        .onChange(of: viewModel.asksSamePerson) {
+            guard viewModel.asksSamePerson else { return }
+            viewModel.samePersonAsked()
+            merging = Merging(leaving: nil, picker: false)
         }
         .onAppear { isVisible = true; viewModel.refresh() }
         // The check can follow a rename and copy or replace the picture: the whole page reads again, not only the row.

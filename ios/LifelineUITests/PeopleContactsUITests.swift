@@ -172,8 +172,9 @@ final class PeopleContactsUITests: XCTestCase {
         XCTAssertTrue(waitGone(app.any("entity.contact.suggestion"), timeout: 5), "the suggestion goes")
     }
 
-    /// 7: one contact belongs to one person; the refusal names who holds it, and nothing changes.
-    func testAContactAnotherPersonHoldsIsRefused() {
+    /// 7: one contact belongs to one person. A contact Tomas holds, picked on Danielle's page, asks "Same person?"
+    /// (Danielle joins Tomas, plan decision 4); "Cancel" changes nothing.
+    func testAContactAnotherPersonHoldsAsksSamePerson() {
         let app = XCUIApplication.launchWithGuesses(["-uiTesting-contacts", "full"])
         linkTomasFromTheSuggestion(app)
         app.navigationBars.buttons.element(boundBy: 0).tap()
@@ -182,10 +183,20 @@ final class PeopleContactsUITests: XCTestCase {
         let held = result(app, "Tomas Reyes. In a story as Tomas")
         XCTAssertTrue(held.waitForExistence(timeout: 5), "the search says who holds the contact")
         held.tap()
-        XCTAssertTrue(text(app, containing: "Tomas is already linked to this contact.").waitForExistence(timeout: 10), "the refusal sentence shows")
+        XCTAssertTrue(app.any("merge.confirm").waitForExistence(timeout: 10), "the pick asks Same person?")
+        XCTAssertTrue(app.staticTexts["Same person?"].exists)
+        XCTAssertEqual(app.staticTexts["merge.confirm.text"].label,
+                       "Danielle joins Tomas. Every story, name and photo moves to Tomas.", "the holder stays")
+        app.buttons["merge.confirm.cancel"].tap()
+        XCTAssertTrue(waitGone(app.any("merge.confirm"), timeout: 5), "Cancel closes the sheet")
         XCTAssertTrue(rowText(app, "Not linked to a contact").exists, "Danielle is still not linked")
+        XCTAssertFalse(app.staticTexts["person.notice"].exists, "nothing merged")
 
         app.navigationBars.buttons.element(boundBy: 0).tap()
+        for name in ["Danielle", "Tomas"] {
+            let row = app.buttons.matching(identifier: "entities.row").matching(NSPredicate(format: "label == %@", name)).firstMatch
+            XCTAssertTrue(row.waitForExistence(timeout: 5), "\(name) is still on the grid")
+        }
         openPage(app, "Tomas")
         XCTAssertTrue(rowText(app, "Linked to Tomas Reyes in your contacts").exists, "Tomas keeps the contact")
     }

@@ -83,9 +83,10 @@ struct PersonMergeSheet: View {
         .accessibilityIdentifier("merge.picker.person")
     }
 
-    /// The picked person stays (plan decision 2). A refused pair closes the sheet; the host says why.
+    /// The picked person stays (plan decision 2). A refused pair, or no person that goes, closes the sheet; the host
+    /// says why.
     private func pick(_ staying: Person) {
-        guard let leaving else { return }
+        guard let leaving else { viewModel.leavingIsGone(); dismiss(); return }
         viewModel.ask(leaving.id, into: staying.id)
         if viewModel.preview != nil { confirming = true } else { dismiss() }
     }
