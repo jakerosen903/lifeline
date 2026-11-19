@@ -210,7 +210,8 @@ The seed `-uiTesting-seedSpine` has Jordan, born 1990, moments in 1999 (inferred
 - Carried from S6b (R8): `CardSource` does not keep the strip. The card builds it again when the rows on screen change. A later task must keep it until the moments change.
 - Carried from S6b (R8): `screenArea` is `@State` on `TimelineScreen`. A change of the list's frame redraws the screen's body. A later task must decide if it moves out of the screen's state.
 - Carried from S6b (R8): at the accessibility sizes the "During" line is always two lines tall, also when the names fit on one line. A later task must decide if it can shrink to one line.
-- Carried from S6b (R8): the "During" line and the slack use the height of a reference line in the names' font. A chapter name that is taller than that line can be cut, and the card can then change height by more than the slack. A later task must measure the names themselves.
+- Carried from S6b (R8): the "During" line and the slack use the height of a reference line in the names' font. A chapter name that is taller than that line can be cut. The names are in an overlay, so they cannot change the card's height, and the slack still holds. A later task must measure the names themselves.
+- Carried from S6b: `testHidingTheLastRowTakesItsYearsOutOfTheFrame` does not check that the label ends "to 2010." before the hide. A later task must add that check, so that a short scroll cannot pass the test.
 - Carried from S6b: `LifeStripAxis.frameBox` has three edge cases and no unit test, because the app target has no unit tests. A later task must move the rule to the kit or add a test target.
 - Carried from S6b: the card's margin is 16 points and the rows' margin is 12. A later task must pick one.
 - Carried from S6b: `CivilDate.today().year` is a default in two places. A later task must keep it in one place.
