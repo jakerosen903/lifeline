@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Status:** Draft. The owner has not approved this plan. Do not build before the owner approves it.
+**Status:** Approved by the owner on 2026-11-18, with the ten plan decisions as written. Each decision stays open to an overrule.
 
 **Goal:** The owner can link a person to one of their contacts, and the app can do it for a new name that fits exactly one contact. A linked person shows the contact's name and picture. The link stays correct when the contact changes. The app works with full, limited or no access to contacts.
 
