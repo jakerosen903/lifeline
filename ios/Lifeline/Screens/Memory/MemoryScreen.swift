@@ -153,8 +153,9 @@ struct MemoryScreen: View {
         .toolbar {
             Button("Change…") { changing = true }.accessibilityIdentifier("memory.change")
             Menu {
-                Button("Add a photo", systemImage: "photo") { viewModel.clearPhotoError(); addingPhoto = true }
-                    .accessibilityIdentifier("memory.addPhoto")
+                AddPhotoButton(isAdding: viewModel.shelf.isAdding, identifier: "memory.addPhoto") {
+                    viewModel.clearPhotoError(); addingPhoto = true
+                }
             } label: { Image(systemName: "ellipsis.circle") }
                 .accessibilityLabel("More")
                 .accessibilityIdentifier("memory.more")

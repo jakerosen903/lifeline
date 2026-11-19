@@ -53,6 +53,9 @@ struct Dependencies {
     var pickPhotoList: [String]? = nil
     /// The files "Add a photo" adds without the picker: the list, else the one file; nil shows the picker.
     var addPhotoPaths: [String]? { pickPhotoList ?? pickPhotoPath.map { [$0] } }
+    /// Under `-uiTesting-slowPhotoFile`: each of those files waits three seconds before it is added, as an iCloud
+    /// download can, so a test can see the page while photos are added.
+    var addPhotoDelay: Duration? = nil
     /// The photo library for "Tell a story about a photo": PhotoKit in the app, generated photos under `-uiTesting`.
     var photoPickSource: any PhotoPickSource = LibraryPhotoPickSource()
     /// Under `-uiTesting-restoreFrom <path>`: Restore stages this file without the picker.
@@ -297,6 +300,7 @@ struct Dependencies {
         if let i = args.firstIndex(of: "-uiTesting-restoreFrom"), i + 1 < args.count { deps.restoreFromPath = args[i + 1] }
         deps.exportWithoutShareSheet = true
         if let i = args.firstIndex(of: "-uiTesting-pickPhoto"), i + 1 < args.count { deps.pickPhotoPath = args[i + 1] }
+        if args.contains("-uiTesting-slowPhotoFile") { deps.addPhotoDelay = .seconds(3) }
         if let i = args.firstIndex(of: "-uiTesting-pickPhotos"), i + 1 < args.count {
             deps.pickPhotoList = args[i + 1].split(separator: ",").map(String.init)
         }

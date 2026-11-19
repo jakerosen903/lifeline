@@ -332,6 +332,33 @@ final class PhotosUITests: XCTestCase {
         XCTAssertFalse(app.any("photo.error").exists, "the second is no failure")
     }
 
+    /// Each file waits three seconds (`-uiTesting-slowPhotoFile`), so the page is seen while the photos are added.
+    @MainActor
+    func testAddAPhotoWaitsWhilePhotosAreAdded() throws {
+        let app = XCUIApplication.launchWithPeople(try pickPhotos(["photo-orange", "photo-green"]) + ["-uiTesting-slowPhotoFile"])
+        app.openEntityPage("Lena")
+        app.addPhotoFromMenu("entity.more", "entity.addPhoto")
+        XCTAssertTrue(app.any("photo.adding").waitForExistence(timeout: 5), "the photos are being added")
+        app.buttons["entity.more"].tap()
+        let add = app.buttons["entity.addPhoto"]
+        XCTAssertTrue(add.waitForExistence(timeout: 5), "Add a photo stays in the menu")
+        XCTAssertFalse(add.isEnabled, "a second pick cannot start while photos are added")
+        XCTAssertEqual(add.label, "Add a photo")
+        closeMenu(app)
+        XCTAssertTrue(waitForAbsence(app.any("photo.adding"), timeout: 30), "both photos are done")
+        XCTAssertTrue(app.staticTexts["Photos"].waitForExistence(timeout: 5), "both photos were added")
+        app.buttons["entity.more"].tap()
+        XCTAssertTrue(app.waitHittable(add, timeout: 5))
+        XCTAssertTrue(add.isEnabled, "Add a photo works again once the photos are added")
+    }
+
+    /// A tap away from the menu closes it and does nothing else. Lena's page is empty there: she has no moment.
+    @MainActor
+    private func closeMenu(_ app: XCUIApplication) {
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.55)).tap()
+        XCTAssertTrue(app.waitHittable(app.buttons["entity.more"], timeout: 5), "the menu closed")
+    }
+
     /// `-uiTesting-pickPhotos` with a fresh copy of each fixture, in this order.
     @MainActor
     private func pickPhotos(_ names: [String]) throws -> [String] {

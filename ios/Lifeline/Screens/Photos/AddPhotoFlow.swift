@@ -11,7 +11,8 @@ extension View {
     /// files go to `onFile` at once, in order.
     func addPhotoFlow(isPresented: Binding<Bool>, deps: Dependencies, shelf: PhotoShelf?, onFile: @escaping (URL, String?) async -> Void,
                       onError: @escaping (String) -> Void) -> some View {
-        modifier(AddPhotoFlow(isPresented: isPresented, pickPhotoPaths: deps.addPhotoPaths, shelf: shelf, onFile: onFile, onError: onError))
+        modifier(AddPhotoFlow(isPresented: isPresented, pickPhotoPaths: deps.addPhotoPaths, pickPhotoDelay: deps.addPhotoDelay, shelf: shelf,
+                              onFile: onFile, onError: onError))
     }
 }
 
@@ -25,6 +26,8 @@ struct AddPhotoFlow: ViewModifier {
 
     @Binding var isPresented: Bool
     let pickPhotoPaths: [String]?
+    /// UI tests only: the wait before each of those files is added.
+    let pickPhotoDelay: Duration?
     let shelf: PhotoShelf?
     let onFile: (URL, String?) async -> Void
     let onError: (String) -> Void
@@ -43,7 +46,13 @@ struct AddPhotoFlow: ViewModifier {
                 guard presented else { return }
                 isPresented = false
                 let files = pickPhotoPaths.map { URL(fileURLWithPath: $0) }
-                Task { await addEach(files) { file in await onFile(file, nil) } }
+                let delay = pickPhotoDelay
+                Task {
+                    await addEach(files) { file in
+                        if let delay { try? await Task.sleep(for: delay) }
+                        await onFile(file, nil)
+                    }
+                }
             }
         } else {
             content

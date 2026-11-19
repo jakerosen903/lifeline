@@ -150,8 +150,9 @@ struct EntityScreen: View {
         .toolbar {
             Menu {
                 if hasPhotos {
-                    Button("Add a photo", systemImage: "photo") { viewModel.clearPhotoError(); addingPhoto = true }
-                        .accessibilityIdentifier("entity.addPhoto")
+                    AddPhotoButton(isAdding: viewModel.shelf.isAdding, identifier: "entity.addPhoto") {
+                        viewModel.clearPhotoError(); addingPhoto = true
+                    }
                 }
                 Button("Change the name", systemImage: "pencil") { draftTitle = viewModel.entity.title; renaming = true }
                     .accessibilityIdentifier("entity.rename")
