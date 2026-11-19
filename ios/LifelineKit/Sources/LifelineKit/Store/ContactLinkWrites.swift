@@ -36,24 +36,28 @@ extension PeopleRepository {
     }
 
     /// Clears the identifier, the kept name, the state and `contact_photo_id`. The copied picture stays as an
-    /// ordinary photo of the person; the person, moments and aliases are not touched. No contact: nothing changes.
+    /// ordinary photo of the person; the person, moments and aliases are not touched. The owner acted, so the
+    /// person is no longer a guess a move may remove (PB19). No contact: nothing changes.
     func unlinkContact(_ id: PersonID) throws {
         try db.writer.write { db in
             guard try Person.exists(db, key: id.rawValue) else { throw ContactLinkActions.Error.notFound }
             try db.execute(sql: """
-                update person set contact_identifier = null, contact_name = null, contact_state = null, contact_photo_id = null
+                update person set contact_identifier = null, contact_name = null, contact_state = null, contact_photo_id = null,
+                    created_by_guess = 0
                 where id = ? and (contact_identifier is not null or contact_photo_id is not null)
                 """, arguments: [id.rawValue])
         }
     }
 
+    /// Thrown inside the copy's transaction when the person no longer holds the contact, or has a copy now,
+    /// so the photo row and its link roll back with it.
+    struct ContactChangedDuringCopy: Swift.Error {}
+
     /// Records `photo` as the app's copy of the contact's picture, only while the person is still linked to
-    /// `identifier` and has no copy. False when either changed while the picture was being copied.
-    func recordContactPhoto(_ photo: PhotoID, for id: PersonID, identifier: String) throws -> Bool {
-        try db.writer.write { db in
-            try db.execute(sql: "update person set contact_photo_id = ? where id = ? and contact_identifier = ? and contact_photo_id is null",
-                           arguments: [photo.rawValue, id.rawValue, identifier])
-            return db.changesCount > 0
-        }
+    /// `identifier` and has no copy. Runs in the transaction that inserts the photo (`PhotoLibrary.addRecordingNew`).
+    static func recordContactPhoto(_ photo: PhotoID, for id: PersonID, identifier: String, in db: Database) throws {
+        try db.execute(sql: "update person set contact_photo_id = ? where id = ? and contact_identifier = ? and contact_photo_id is null",
+                       arguments: [photo.rawValue, id.rawValue, identifier])
+        if db.changesCount == 0 { throw ContactChangedDuringCopy() }
     }
 }

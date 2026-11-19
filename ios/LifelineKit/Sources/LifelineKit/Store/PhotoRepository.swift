@@ -82,9 +82,15 @@ public struct PhotoRepository: Sendable {
 
     /// One transaction: the row, then its link. The first photo on a subject is its cover (decision 8).
     public func insert(_ photo: Photo, linkingTo subject: PhotoSubject) throws {
+        try insert(photo, linkingTo: subject, alsoWriting: { _ in })
+    }
+
+    /// `insert(_:linkingTo:)`, and `alsoWriting` in the same transaction. When it throws, nothing is written.
+    func insert(_ photo: Photo, linkingTo subject: PhotoSubject, alsoWriting: (Database) throws -> Void) throws {
         try db.writer.write { db in
             try photo.insert(db)
             try Self.link(photo.id, to: subject, in: db)
+            try alsoWriting(db)
         }
     }
 

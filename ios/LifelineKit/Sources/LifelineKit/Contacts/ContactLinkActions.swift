@@ -1,4 +1,5 @@
 import Foundation
+import GRDB
 
 /// A person and a contact: link, unlink, and the copy of the contact's picture (spec, "Linking and
 /// unlinking" and "The picture"). One contact belongs to one person.
@@ -14,13 +15,16 @@ public struct ContactLinkActions: Sendable {
     private let directory: any ContactsDirectory
     /// Where `copyPicture` makes its fresh folder for the picture's bytes. A test passes its own.
     private let scratch: URL
+    /// Runs in the copy's transaction after the photo row and link, before the record. A test throws here.
+    private let beforeRecord: @Sendable () throws -> Void
 
     public init(store: ExtractionStore, photos: PhotoLibrary, directory: any ContactsDirectory) {
         self.init(store: store, photos: photos, directory: directory, scratch: FileManager.default.temporaryDirectory)
     }
 
-    init(store: ExtractionStore, photos: PhotoLibrary, directory: any ContactsDirectory, scratch: URL) {
-        self.store = store; self.photos = photos; self.directory = directory; self.scratch = scratch
+    init(store: ExtractionStore, photos: PhotoLibrary, directory: any ContactsDirectory, scratch: URL,
+         beforeRecord: @escaping @Sendable () throws -> Void = {}) {
+        self.store = store; self.photos = photos; self.directory = directory; self.scratch = scratch; self.beforeRecord = beforeRecord
     }
 
     /// The owner links the person to `card`, then the picture is copied. The person keeps their name and
@@ -58,12 +62,16 @@ public struct ContactLinkActions: Sendable {
         defer { try? FileManager.default.removeItem(at: folder) }
         let file = folder.appending(path: "picture")
         try data.write(to: file)
-        let subject = PhotoSubject.entity(person.entityID)
-        let added = try await photos.addNotingNew(fileAt: file, assetLocalID: nil, to: subject)
-        guard added.isNew else { return }
-        // The contact changed, or another copy was recorded, while this one was made: the app keeps only what it records.
-        if try !store.people.recordContactPhoto(added.photo.id, for: id, identifier: identifier) {
-            try await photos.remove(added.photo.id, from: subject)
+        // The row, its link and `contact_photo_id` are one transaction, so a kill never leaves the copy looking like
+        // the owner's photo. A contact that changed during the copy rolls the photo back: the app keeps only what it records.
+        let beforeRecord = self.beforeRecord
+        do {
+            _ = try await photos.addRecordingNew(fileAt: file, to: .entity(person.entityID)) { db, photo in
+                try beforeRecord()
+                try PeopleRepository.recordContactPhoto(photo, for: id, identifier: identifier, in: db)
+            }
+        } catch is PeopleRepository.ContactChangedDuringCopy {
+            return
         }
     }
 }

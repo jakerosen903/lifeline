@@ -262,7 +262,7 @@ extension PersonLinkRepository {
         let contactPhoto = try person.contactPhotoID.flatMap { photo in
             try Row.fetchOne(db, sql: "select role, sort_order from photo_link where entity_id = ? and photo_id = ?",
                              arguments: [entity.id.rawValue, photo.rawValue]).map { row in
-                PersonMoveReceipt.ContactPhotoLink(photo: photo, role: PhotoRole(rawValue: row["role"]) ?? .attached, sortOrder: row["sort_order"])
+                PersonMoveReceipt.ContactPhotoLink(photo: photo, role: row["role"], sortOrder: row["sort_order"])
             }
         }
         _ = try Entity.deleteOne(db, key: entity.id.rawValue)   // the person, aliases, spans and photo links go by cascade
@@ -316,7 +316,7 @@ extension PersonLinkRepository {
             for alias in r.removedAliases { try alias.insert(db) }
             if copyKept, let link = r.removedContactPhoto {
                 try db.execute(sql: "insert into photo_link (photo_id, entity_id, role, sort_order) values (?, ?, ?, ?)",
-                               arguments: [link.photo.rawValue, entity.id.rawValue, link.role.rawValue, link.sortOrder])
+                               arguments: [link.photo.rawValue, entity.id.rawValue, link.role, link.sortOrder])
             }
         }
         try db.execute(sql: "delete from entity_span where entity_id in (\(touchedIDs.map { _ in "?" }.joined(separator: ",")))",

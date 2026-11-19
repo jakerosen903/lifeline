@@ -1,5 +1,7 @@
 import Foundation
 import GRDB
+import ImageIO
+import UniformTypeIdentifiers
 import Testing
 @testable import LifelineKit
 
@@ -233,6 +235,82 @@ private final class Fixture: @unchecked Sendable {
     #expect(try f.dump() == unlinked, "no contact, nothing to copy")
 }
 
+@Test func anOldCopyThatAMemoryAlsoHoldsSurvivesALinkToAnotherContact() async throws {
+    let f = try Fixture()
+    f.directory.pictures = ["c-vale": try f.picture("vale", rgb: 0x3366AA), "c-reyes": try f.picture("reyes", rgb: 0xAA6633)]
+    let robin = try f.store.people.insertPerson(displayName: "Robin")
+    let (_, segments) = try StoreFixtures.session(in: f.store.sessions, segments: ["the fence"])
+    let fence = try StoreFixtures.memory(in: f.store.memories, candidates: f.store.candidates, segment: segments[0].id, title: "The fence")
+    try await f.actions.link(robin.id, to: vale)
+    let oldCopyID = try #require(try f.person(robin.id).contactPhotoID)
+    try f.store.photos.link(oldCopyID, to: .memory(fence.id))
+
+    try await f.actions.link(robin.id, to: reyes)
+    let newCopy = try #require(try f.person(robin.id).contactPhotoID)
+    #expect(try f.photos(of: robin.id).map(\.id) == [newCopy], "the old copy leaves the person")
+    let oldCopy = try #require(try f.store.photos.photo(id: oldCopyID), "the memory still holds it")
+    #expect(f.file(oldCopy))
+    #expect(try f.store.photos.photos(of: .memory(fence.id)).map(\.id) == [oldCopyID])
+}
+
+// MARK: - Picture formats
+
+/// A small image in `type` (PNG or HEIC); nil when this host cannot write that type.
+private func pictureData(as type: UTType) throws -> Data? {
+    guard let space = CGColorSpace(name: CGColorSpace.sRGB),
+          let context = CGContext(data: nil, width: 32, height: 32, bitsPerComponent: 8, bytesPerRow: 0, space: space,
+                                  bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return nil }
+    context.setFillColor(red: 0.2, green: 0.4, blue: 0.7, alpha: 1)
+    context.fill(CGRect(x: 0, y: 0, width: 32, height: 32))
+    guard let image = context.makeImage() else { return nil }
+    let data = NSMutableData()
+    guard let destination = CGImageDestinationCreateWithData(data, type.identifier as CFString, 1, nil) else { return nil }
+    CGImageDestinationAddImage(destination, image, nil)
+    guard CGImageDestinationFinalize(destination) else { return nil }
+    return data as Data
+}
+
+@Test(arguments: [UTType.png, UTType.heic])
+func aPictureInAnyImageFormatIsCopied(_ type: UTType) async throws {
+    let f = try Fixture()
+    let data = try #require(try pictureData(as: type), "this host cannot write \(type.identifier)")
+    f.directory.pictures = ["c-vale": data]
+    let robin = try f.store.people.insertPerson(displayName: "Robin")
+    try await f.actions.link(robin.id, to: vale)
+    let copy = try #require(try f.person(robin.id).contactPhotoID)
+    #expect(try f.photos(of: robin.id).map(\.id) == [copy])
+    let stored = try #require(try f.store.photos.photo(id: copy))
+    #expect(f.file(stored))
+}
+
+// MARK: - One transaction for the copy
+
+private struct InjectedFailure: Error {}
+
+@Test func aFailureBetweenThePhotoAndItsRecordLeavesNothingAndASecondCopyCompletes() async throws {
+    let f = try Fixture()
+    f.directory.pictures = ["c-vale": try f.picture("vale", rgb: 0x3366AA)]
+    let robin = try f.store.people.insertPerson(displayName: "Robin")
+    try await f.db.writer.write { db in
+        try db.execute(sql: "update person set contact_identifier = 'c-vale', contact_name = 'Robyn Vale', contact_state = 'linked' where id = ?",
+                       arguments: [robin.id.rawValue])
+    }
+    let failing = ContactLinkActions(store: f.store, photos: f.library, directory: f.directory, scratch: f.scratch,
+                                     beforeRecord: { throw InjectedFailure() })
+    await #expect(throws: InjectedFailure.self) { try await failing.copyPicture(for: robin.id) }
+    let rows = try await f.db.writer.read { db in
+        [try Int.fetchOne(db, sql: "select count(*) from photo"), try Int.fetchOne(db, sql: "select count(*) from photo_link")]
+    }
+    #expect(rows == [0, 0], "no photo row and no link")
+    #expect(try f.person(robin.id).contactPhotoID == nil)
+    let folder = try PhotoLocation.directory(under: f.root)
+    #expect(try FileManager.default.contentsOfDirectory(atPath: folder.path).filter { $0.hasSuffix(".jpg") }.isEmpty, "no file")
+
+    try await f.actions.copyPicture(for: robin.id)
+    let copy = try #require(try f.person(robin.id).contactPhotoID, "the second copy is recorded as the app's")
+    #expect(try f.photos(of: robin.id).map(\.id) == [copy])
+}
+
 // MARK: - Unlink
 
 @Test func unlinkKeepsThePersonTheirMomentsNamesAndPicture() async throws {
@@ -242,7 +320,7 @@ private final class Fixture: @unchecked Sendable {
     let robyn = try f.onlyPerson(moment)
     try await f.actions.copyPicture(for: robyn)
     let made = try f.person(robyn)
-    #expect(made.nameOrigin == .contact && made.contactIdentifier == "c-vale")
+    #expect(made.nameOrigin == .contact && made.contactIdentifier == "c-vale" && made.createdByGuess)
     let copy = try #require(made.contactPhotoID)
     let aliases = try f.store.people.aliasesOldestFirst(of: robyn)
 
@@ -250,6 +328,7 @@ private final class Fixture: @unchecked Sendable {
     let unlinked = try f.person(robyn)
     #expect(unlinked.contactIdentifier == nil && unlinked.contactName == nil && unlinked.contactState == nil && unlinked.contactPhotoID == nil)
     #expect(unlinked.displayName == "Robyn Vale" && unlinked.nameOrigin == .contact, "the name stays")
+    #expect(!unlinked.createdByGuess, "the owner acted: no longer a guess a move may remove (PB19)")
     #expect(try f.photos(of: robyn).map(\.id) == [copy], "the picture stays as an ordinary photo")
     #expect(try f.store.people.aliasesOldestFirst(of: robyn) == aliases)
     #expect(try f.onlyPerson(moment) == robyn)

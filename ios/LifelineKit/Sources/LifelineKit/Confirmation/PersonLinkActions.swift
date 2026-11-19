@@ -27,9 +27,10 @@ public struct PersonMoveReceipt: Sendable, Equatable {
         var id: PersonID; var name: String; var origin: NameOrigin?
     }
 
-    /// The contact's copied picture as the removed person's page held it.
+    /// The contact's copied picture as the removed person's page held it. The role is the stored text, kept
+    /// as it was, so Undo writes back exactly what the move took away.
     struct ContactPhotoLink: Sendable, Equatable {
-        var photo: PhotoID; var role: PhotoRole; var sortOrder: Int
+        var photo: PhotoID; var role: String; var sortOrder: Int
     }
 
     init(before: [MomentEntity], after: [MomentEntity], removedPerson: Person?, addedAliases: [Alias], createdPerson: PersonID?, newName: String,
