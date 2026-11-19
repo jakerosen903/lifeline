@@ -128,7 +128,7 @@ public actor ExtractionQueue {
                 response = try await service.extract(request)
                 if Self.isBlank(response.output) { throw ExtractionError.badOutput("blank answer") }
             }
-            // A handle of the recording so far may be named with no `people` entry in this answer (D17).
+            // A handle of another segment of the recording may be named with no `people` entry in this answer (D17).
             let recording = request.packet.recordingPeople
             let recordingHandles = Set(recording.map(\.handle))
             var validated = OutputValidator.validate(response.output, segmentText: segment.text, words: words, recordingHandles: recordingHandles)
@@ -182,8 +182,8 @@ public actor ExtractionQueue {
             .sorted { Self.isNamed($0, in: recentText) && !Self.isNamed($1, in: recentText) }
         // This session's cards still waiting, except this segment's own, so a continuation can name one (M5).
         let pending = try store.candidates.pending(in: session).filter { $0.kind == .memory && $0.segmentID != segment.id }
-        // The handles found so far in this recording, so the same person keeps one handle (PC-d).
-        let handlePeople = try store.candidates.handlePeople(inSession: session, before: segment.id)
+        // The handles found in the other segments of this recording, so the same person keeps one handle (PC-d, D30).
+        let handlePeople = try store.candidates.handlePeople(inSession: session, except: segment.id)
         var storyIDs: [StoryID] = []
         var stories: [(Story, [Memory])] = []
         for memory in related + memories {

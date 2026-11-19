@@ -754,3 +754,18 @@ private func handleOutput(quote: String, span: WordSpan, continues: CandidateID?
     #expect(payload.handlePeople == [robynP1] && payload.peopleRefs == ["Robyn"], "the said name of the earlier segment")
     #expect(payload.aboutRef == "p1")
 }
+
+// MARK: - Final review I4 (D30): the packet holds the handles of every other segment of the recording
+
+@Test func aRetriedMiddleSegmentSeesTheHandlesOfTheSegmentsAroundIt() async throws {
+    let env = try Env(texts: ["Robyn moved in that fall", "she cooked every night", "Theo came by later"])
+    try handleCard(env.segments[0].id, [PersonOut(handle: "p1", saidName: "Robyn", relationText: nil, personID: nil)], in: env.store)
+    try handleCard(env.segments[2].id, [PersonOut(handle: "p2", saidName: "Theo", relationText: nil, personID: nil)], in: env.store)
+    env.service.push(.success(ExtractorOutput(memories: [], mentions: [], flags: .none)))
+    let queue = env.queue()
+    let events = await queue.events
+    await queue.enqueue(env.segments[1].id)
+    _ = await collect(events, count: 1)
+    let packet = try #require(env.service.requests.first?.packet)
+    #expect(packet.recordingPeople.map(\.handle) == ["p1", "p2"], "a later segment's p2 is taken, so segment 2 cannot mint it again")
+}

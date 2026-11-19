@@ -184,19 +184,20 @@ public struct CandidateRepository: Sendable {
         }
     }
 
-    /// The people the extractor found in this session's segments before `segment` (PC-d): first
-    /// every person of a handle that a memory card names, then every person of a handle that only a
-    /// person mention gives (D25). Within that, the order said. Waiting and kept rows count. A
-    /// dismissed row does not, and neither does a continuation row (its "continues" marker): its
-    /// people join the earlier card. A mention gives its text as the said name and no person id.
-    public func handlePeople(inSession session: SessionID, before segment: SegmentID) throws -> [PersonOut] {
+    /// The people the extractor found in this session's segments other than `segment`, earlier and later (PC-d, D30):
+    /// a segment extracted again after a later one must not mint a handle the later one already used. First every
+    /// person of a handle that a memory card names, then every person of a handle that only a person mention gives
+    /// (D25). Within that, by segment index and ordinal. Waiting and kept rows count. A dismissed row does not, and
+    /// neither does a continuation row (its "continues" marker): its people join the earlier card. A mention gives its
+    /// text as the said name and no person id.
+    public func handlePeople(inSession session: SessionID, except segment: SegmentID) throws -> [PersonOut] {
         let rows = try db.writer.read { db in
             try Candidate.fetchAll(db, sql: """
                 select candidate.* from candidate
                 join segment on segment.id = candidate.segment_id
                 where segment.session_id = ? and candidate.status in ('pending', 'accepted')
                   and ((candidate.kind = 'memory' and candidate.rejection is null) or candidate.kind = 'person')
-                  and segment."index" < (select "index" from segment where id = ? and session_id = ?)
+                  and segment."index" <> (select "index" from segment where id = ? and session_id = ?)
                 order by segment."index", candidate.ordinal
                 """, arguments: [session.rawValue, segment.rawValue, session.rawValue])
         }

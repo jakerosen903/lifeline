@@ -117,7 +117,7 @@ struct ExtractorIntegrationTests {
     static func expectEveryMemoryHandleNamesAKnownPerson(_ run: Run, label: String) throws {
         for segment in run.segments {
             let session = segment.sessionID
-            let recording = Set(try run.store.candidates.handlePeople(inSession: session, before: segment.id).map(\.handle))
+            let recording = Set(try run.store.candidates.handlePeople(inSession: session, except: segment.id).map(\.handle))
             for memory in try keptRows(of: segment, in: run).compactMap(CandidatePayload.memory) {
                 let known = recording.union(memory.handlePeople.map(\.handle))
                 #expect(Set(memory.personHandles).isSubset(of: known), "\(label) handles \(memory.personHandles), known \(known.sorted())")

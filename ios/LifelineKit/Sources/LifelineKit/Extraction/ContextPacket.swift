@@ -58,7 +58,7 @@ public struct ContextPacket: Codable, Sendable, Equatable {
         public init(id: String, type: String, title: String, detail: String?) { self.id = id; self.type = type; self.title = title; self.detail = detail }
     }
 
-    /// One person found so far in this recording, under the handle the extractor gave them (PC-d).
+    /// One person found in another segment of this recording, earlier or later (D30), under the handle the extractor gave them (PC-d).
     /// Only what the owner said: the said names, the relation phrase, and the id of a person
     /// this packet already lists. Nothing from a contact.
     public struct RecordingPerson: Codable, Sendable, Equatable {
