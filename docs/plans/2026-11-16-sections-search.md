@@ -10,7 +10,7 @@
 
 **Spec:** `docs/specs/2026-11-15-five-sections.md`, sections "Shell" (the search tab and the record bar), "Build order" (step 8), "Non-goals and anti-goals", "Appearance and accessibility" and "Left to the builder" (group or rank). The umbrella plan `docs/plans/2026-11-15-sections.md`, "Ship order" and "Rules for the order". `docs/DECISIONS.md`, entries of 2026-11-15 (five tabs and search) and 2026-11-16 (photos: no search result uses a photo yet). `docs/PRINCIPLES.md`, "Session arc and emotional safety" (what Hide and Exclude mean). Mock-up: `docs/design/Sections.html` has one note only ("Search is the round button beside the tabs and covers every section"). It has no search screen. Read all of these before Task 1.
 
-**Worktree and branch:** `/Users/jakerosen/dev/lifeline/lifeline-search`, branch `sections-search`, based on `origin/main` (`a1638c3`, which holds S1 to S4). Work only there.
+**Worktree and branch:** `/Users/jakerosen/dev/lifeline/lifeline-search`, branch `sections-search`, based on `origin/main` (`42eb2bd`, which holds S1 to S4, S6a to S6c, the photo story, the photo card and the launch repair). Work only there. The plan was written on 2026-11-16 and corrected against that base on 2026-11-19; the corrections are in the tasks.
 
 ---
 
@@ -21,8 +21,8 @@ The spec leaves these open. Each one is decided here so the owner can overrule i
 1. **The engine is a scan in Swift, not SQLite FTS5.** The app builds an in-memory index when the search tab appears, and scans it on each change of the query. FTS5 is available: the GRDB 7.11.1 package manifest defines `SQLITE_ENABLE_FTS5`. This plan does not use it, for four reasons.
    - **Size.** The tables hold tens to hundreds of rows. A scan answers in less than one frame. An index on disk gives nothing the person can see.
    - **Delete must mean delete.** FTS5 keeps the terms of a deleted row in its segments until a merge. The app promises that Delete removes the content and everything derived from it. A second copy of the person's words on disk is a second thing to remove, to back up and to restore.
-   - **The searched text is derived from three tables.** A memory's words are the `word` rows inside its `memory_span` bounds, and a trim moves those bounds. FTS5 needs triggers on `memory`, `entity`, `alias`, `memory_span` and `word`, or a rebuild at launch. A trigger's `DELETE FROM` trips the destructive-migration guard in `.github/scripts/pr_guards.py`. A rebuild at launch is the scan with more parts.
-   - **Migrations and copies.** FTS5 needs a migration. Places already expects v14, and the first PR to merge keeps its number. A copy from an older build must rebuild the index after restore, and the launch repair (`ArchiveRepair`) must run before it.
+   - **The searched text is derived from three tables.** A memory's words are the `word` rows inside its `memory_span` bounds, and a trim moves those bounds. FTS5 needs triggers on `memory`, `entity`, `alias`, `memory_span` and `word`, or a rebuild at launch. A trigger is one more thing a migration must carry and a restore must rebuild. A rebuild at launch is the scan with more parts.
+   - **Migrations and copies.** FTS5 needs a migration. The next free number is v15, and the first PR to merge keeps its number. A copy from an older build must rebuild the index after restore, and the launch repair (`ArchiveRepair`) must run before it.
    Cost: every word of every kept memory is read when the tab appears. Device checklist item 7 measures it. If the archive outgrows the scan, FTS5 can replace `Search.run` behind the same `SearchResults` with no change to the views.
 2. **No migration.** S5 reads only. `Migrations.swift` and `MigrationsTests.swift` do not change. Backup, restore and the launch repair do not change.
 3. **What is searched.** Five kinds, as the spec lists them.
@@ -41,11 +41,11 @@ The spec leaves these open. Each one is decided here so the owner can overrule i
 9. **A query of one character searches titles and aliases only.** One letter starts too many spoken words to be useful. One character can be a whole name in some scripts, so it still searches names.
 10. **A long query is cut at 200 characters before folding.** The rest is ignored. An empty query, and a query that folds to nothing ("…", "!!"), show the opening state, not "nothing found".
 11. **Results are grouped by kind, not ranked together.** The groups show in this order: "People", "Places", "Things", "What you think", "Memories". A group with no result does not show. Why: a name match and a word match have no honest common score; the entity groups are short and the memory group can be long; a heading for each kind gives VoiceOver a route. "What you think" is the heading the You tab already uses for ideas.
-12. **Order inside a group.** By match first: the title equals the query; the title starts with the query; every query word starts a title word; an alias matches (people); the text matches (memories). Then, for people, places, things and ideas: most moments first, then title, then id. For memories: life order, as `EntityPage.ordered` sorts (by the start of the range, and by when it was told with no range), then id. An item shows once, at its best match. There is no cap on a group; the list is lazy.
+12. **Order inside a group.** By match first: the title equals the query; the title starts with the query; every query word starts a title word; an alias matches (people); the text matches (memories). Then, for people, places, things and ideas: most moments first, then title, then id. For memories: life order, as `EntityPage.ordered` sorts (by the start of the range, and by when it was told with no range), then id. A fact, a feeling or a goal sorts by when it was told only: its stored range shows on no screen (M7), so it must not set the order. An item shows once, at its best match. There is no cap on a group; the list is lazy.
 13. **What a result shows.**
     - A person: the face (the cover photo, or the letter tile, as `TileFace` draws it on People), the name, and the person's own words ("my sister"). When only an alias matched, the alias shows in place of the own words, so the person sees why the row is there.
     - A place, a thing, an idea: the title.
-    - A moment: the title. The date under it, from `TimeRange.displayText`, only when the memory is placed. An undated moment shows no date line and no "add a date" (P9).
+    - A moment: the title. The date under it, from `TimeRange.displayText`, only when the range is dated (`range.isDated`, as `EntityScreen` gates it; a half-open range reads "no date yet" and shows no line). An undated moment shows no date line and no "add a date" (P9).
     - A fact, a feeling or a goal: the cleaned quote in quotation marks (`MemoryLabel.heading`).
     - A memory found by its text: also one line of the person's words around the first match, in quotation marks, as said, not cleaned (`SearchSnippet`). The matched words are semibold. A fact, feeling or goal whose quote holds every query word shows no second line: the heading already shows the words.
     - No row shows a count, a people chip, a place or a "check this" tag.
@@ -75,13 +75,13 @@ The spec leaves these open. Each one is decided here so the owner can overrule i
 - **The mock-up has no search screen.** `Sections.html` says only that search is the round button beside the tabs. Decisions 11, 13, 20 and 21 are this plan's design. The owner must look at the Task 7 screenshots.
 - **The system owns the search tab's chrome.** On iOS 26 a tab with `role: .search` is drawn apart from the others, and the field's place is the system's choice. How the bottom accessory (the record bar) sits with the field and the keyboard is not documented well enough to plan. Task 5 verifies it in the simulator. If the system does not show the accessory on the search tab at all, stop and ask the owner. Do not draw a second bar.
 - **Words in no kept memory are not found.** A story told a minute ago is found only after its card is kept. The recording is in Sessions. Search over session transcripts is a possible later step ("After S5").
-- **Stories, chapters and collections are not found by their titles.** The spec lists five kinds and none of these. A story and a collection have no page to open. The Timeline plan (S6) is changing chapters.
+- **Stories, chapters and collections are not found by their titles.** The spec lists five kinds and none of these. A story and a collection have no page to open. A chapter has a sheet since S6c; it is left out by choice, to keep S5 to the spec's five kinds ("After S5").
 - **A year is not a date to search.** "1999" finds a title or a spoken "1999". It does not find a memory by its range.
 - **No tolerance for spelling.** "treehouse" does not find "tree house". The speech-to-text spelling of a name is what is stored, and it can be wrong. Renaming the person or place fixes the title.
 - **Scripts without spaces.** Word-start matching finds only the start of a run in Chinese or Japanese text. The app's copy and speech are English today.
 - **Dictation into the field is the system's.** The app adds no microphone to the field. The system keyboard's own dictation follows the phone's settings.
 - **Other worktrees.** Other branches add launch arguments in `Dependencies.swift` and seeds in `UITestSeed.swift`. Expect a small merge conflict in both files. Keep both sides.
-- **Its own simulator.** UI tests time out when two builds use one simulator. Create one for this worktree: `xcrun simctl create "Lifeline Search" "iPhone 17 Pro"`. Pass its id to `-destination`. Do not use `88EC5B09-3A30-4544-8145-F5246BB99AEE`.
+- **Its own simulator.** UI tests time out when two builds use one simulator. This worktree has one: "Lifeline Search", iPhone 17 Pro on iOS 26.3, id `5CF768C4-64CD-40BE-9518-B61491B6FD70`. Use it in every `-destination`. Use no other simulator.
 - **Dark and increased-contrast values** still have no PR. S5 adds no colour value.
 
 ### Where the spec did not fit the code
@@ -97,7 +97,7 @@ The spec leaves these open. Each one is decided here so the owner can overrule i
 ## Global Constraints
 
 - Deployment target iOS 26.0. Swift 6 with complete strict concurrency. Verify `Tab(value:role:content:)` with `.search`, `searchable(text:placement:prompt:)` and `tabViewSearchActivation(_:)` against the current SwiftUI documentation before use. Do not rely on memory for their signatures.
-- No migration. No file under `Store/` changes except the new `SearchReads.swift`. S5 writes no row.
+- No migration. S5 writes no row. Store changes are read-only additions: the new `SearchReads.swift`, and two new public reads on existing repositories (Task 4), because each repository keeps its database private. New `Domain/` enums have no raw string values (the schema guard in `.github/scripts/pr_guards.py` reads `= "` as a stored value).
 - **Privacy.** No network call. No model call. No embedding. New code must not log, print or persist the query, a title, a quote or a word: no `print`, `Logger`, `os_log`, `NSLog`, `UserDefaults`, `@AppStorage`, `@SceneStorage` or file write. An error message must not hold the query. Each task ends with `git grep -nE "print\(|Logger|os_log|NSLog|URLSession|UserDefaults|AppStorage|SceneStorage" -- <the task's new files>`, which must print nothing.
 - Hidden rows are never results (decision 6). Nothing inferred shows as fact (non-negotiable 3, P5).
 - No count, no queue, no "add" control, no empty frame on the search tab (P9).
@@ -108,8 +108,8 @@ The spec leaves these open. Each one is decided here so the owner can overrule i
 - Text colours: `Theme.ink`, `Theme.secondaryText`, `Theme.oliveText`, `Theme.ochreText`. Headings use `sectionHeadingStyle()`. Every text colour reaches 4.5:1 on its surface. A match is marked by weight, never by colour alone. No new colour value.
 - Every control is at least 44 by 44 points, with the frame and `contentShape` inside the link's label. Text uses text styles (footnote or larger), so it follows Dynamic Type. Rows wrap; nothing is cut at the largest accessibility size.
 - Keep these accessibility identifiers: `home.start`, `home.more`, `home.settleIn`, `tab.timeline`, `tab.people`, `tab.places`, `tab.things`, `tab.you`, `entities.row`, `entity.title`, `entity.more`, `entity.rename`, `memory.range`, `memory.change`. New ones: `tab.search`, `search.prompt`, `search.heading`, `search.result`, `search.none`, `search.error`.
-- Kit tests: `cd ios/LifelineKit && swift test`. They run in full at every task.
-- UI tests: `cd ios && xcodegen generate && xcodebuild test -project Lifeline.xcodeproj -scheme Lifeline -destination 'id=<the "Lifeline Search" simulator id>' -only-testing:LifelineUITests/<Class>`. Each task names the classes it runs. The task report gives the verbatim `Executed N tests, with M failures` line for each class. The whole UI suite runs once, by the controller, after the final review's fixes. No task runs it.
+- Kit tests: `cd ios/LifelineKit && swift test`. They run in full at every task. `ExtractionQueueTests.drainGivesUpAtItsDeadline` and `SegmentPlayerTests.playStartsAtRangeStartAndStopsAtRangeEnd` are timing tests that can fail when the machine is busy; run a failed one alone before you call it a failure.
+- UI tests: `cd ios && xcodegen generate && xcodebuild test -project Lifeline.xcodeproj -scheme Lifeline -destination 'platform=iOS Simulator,id=5CF768C4-64CD-40BE-9518-B61491B6FD70' -only-testing:LifelineUITests/<Class>`. Each task names the classes it runs. The task report gives the verbatim `Executed N tests, with M failures` line for each class. The whole UI suite runs once, by the controller, after the final review's fixes. No task runs it.
 - Real TDD: each new test is seen failing before the code that makes it pass.
 - No test's assertion is weakened. No existing test asserts behaviour this plan changes: `ShellUITests.testFiveLabeledTabs` names the five tabs and still passes.
 - Fixtures are invented; never a real person's words, names or places.
@@ -239,7 +239,7 @@ public struct SearchResults: Sendable, Equatable {
         public var id: MemoryID { get }
         /// `MemoryLabel.heading(for:)`.
         public var heading: String { get }
-        /// `range.displayText` for a placed moment. Nil for an undated moment and for a fact, feeling or goal.
+        /// `range.displayText` when `memory.isMoment && memory.range.isDated`. Nil for an undated or half-dated moment and for a fact, feeling or goal.
         public var dateText: String? { get }
     }
     public var people: [EntityHit]; public var places: [EntityHit]; public var things: [EntityHit]; public var ideas: [EntityHit]
@@ -357,6 +357,14 @@ Fixtures are built in the test file with invented people (Maya "my sister", Dad,
 @Test func anUndatedMomentHasNoDateLine() {
     #expect(Search.run("undated", in: ordered)?.memories.first?.dateText == nil)
 }
+@Test func aHalfDatedMomentHasNoDateLine() {
+    // a moment whose range has `earliest` only: `displayText` is "no date yet"
+    #expect(Search.run("halfdated", in: ordered)?.memories.first?.dateText == nil)
+}
+@Test func aFactsHiddenRangeDoesNotSetItsPlace() {
+    // two text matches: a fact with a stored range of 1990, told last; a moment dated 1999
+    #expect(Search.run("harmonica", in: factAndMoment)?.memories.map(\.memory.kind) == [.event, .fact])
+}
 @Test func aFactHasNoDateLine() {
     #expect(Search.run("radios", in: index)?.memories.first?.dateText == nil, "a fact's stored range is not shown (M7)")
 }
@@ -368,7 +376,7 @@ Fixtures are built in the test file with invented people (Maya "my sister", Dad,
 ```
 
 - [ ] **Step 2: Run `swift test --filter "SearchTests"`.** Expected: FAIL; `Search` does not exist.
-- [ ] **Step 3: Implement.** `Search.run` folds each entry once per call (the index is small; no cache). A memory's title is searched only when `memory.isMoment`. Its text is the quote, then each telling. With one query word of one character, skip every text. The match of a memory is the best of: title equals, title starts, every word starts a title word, else `.text` when every query word starts a word in the title or the text taken together. `matchedText` is the quote when it holds every query word, else the first telling that does, else the first telling that holds any. Sorting uses the keys of decision 12, ending on the id, so equal items never swap. `Search.run` does not filter hidden rows: the index never holds them (Task 4), and `SearchIndex` built by a test says what it holds.
+- [ ] **Step 3: Implement.** `Search.run` folds each entry once per call (the index is small; no cache). A memory's title is searched only when `memory.isMoment`. Its text is the quote, then each telling. With one query word of one character, skip every text. The match of a memory is the best of: title equals, title starts, every word starts a title word, else `.text` when every query word starts a word in the title or the text taken together. `matchedText` is the quote when it holds every query word, else the first telling that does, else the first telling that holds any. Sorting uses the keys of decision 12, ending on the id, so equal items never swap. For entities, `PeopleSort.mostTold.sorted` (`PeopleGrid.swift`) already sorts by moments, then title, then id; reuse it inside one match level. For memories, pass a fact, feeling or goal to the order with no range (told-at only), and add the id as the last key: `EntityPage.ordered` ends on `createdAt`. `EntitySummary`'s init is `init(entity:ownWords:momentRanges:span:)`; `momentCount` is computed from `momentRanges`. `Search.run` does not filter hidden rows: the index never holds them (Task 4), and `SearchIndex` built by a test says what it holds.
 - [ ] **Step 4: Run `swift test`.** Expected: PASS. Run the privacy grep on the new files.
 - [ ] **Step 5: Commit** — `Kit: search an index by word starts, grouped by kind and ordered by match`
 
@@ -442,7 +450,8 @@ public struct SearchSnippet: Sendable, Equatable {
 ### Task 4: Store — the index in a fixed number of reads
 
 **Files:**
-- Create: `ios/LifelineKit/Sources/LifelineKit/Store/SearchReads.swift` (an extension of `ExtractionStore`, as `PortraitReads.swift` is)
+- Create: `ios/LifelineKit/Sources/LifelineKit/Store/SearchReads.swift` (an extension of `ExtractionStore`, as `PortraitReads.swift` is; it calls public repository reads only, because `ExtractionStore` has no database of its own)
+- Modify: `ios/LifelineKit/Sources/LifelineKit/Store/PeopleRepository.swift` (add the read `allAliases()`), `ios/LifelineKit/Sources/LifelineKit/Store/MemoryRepository.swift` (add the read `tellingWords()`)
 - Test: create `ios/LifelineKit/Tests/LifelineKitTests/SearchReadsTests.swift`
 
 **Interfaces:**
@@ -457,7 +466,22 @@ extension ExtractionStore {
 }
 ```
 
-The reads: `summaries(type:)` for the four types; one statement for every alias (`alias` joined to `person` on `entity_id`); `visibleMemories()`; one statement for the words of every span, in order:
+New public reads, each one statement:
+
+```swift
+extension PeopleRepository {   // or in the type's body
+    /// Every alias of every person who is not the owner and whose entity is not hidden, by the person's entity.
+    public func allAliases() throws -> [EntityID: [String]]
+}
+extension MemoryRepository {
+    /// The words of each telling of each told, visible memory, as said, joined with one space, first telling first.
+    public func tellingWords() throws -> [MemoryID: [String]]
+}
+```
+
+`allAliases` joins `alias` to `person` on `person.id = alias.person_id` and to `entity` on `entity.id = person.entity_id`, with `person.is_owner = 0` and `entity.hidden_from_timeline = 0`, ordered by `alias.text`. `insertPerson` writes an alias equal to the name, and `rename` keeps the old spelling. `searchIndex()` drops an alias whose `SearchFold.fold` equals the fold of the title; an old spelling stays, so the old name still finds the person.
+
+The reads of `searchIndex()`: `summaries(type:)` for the four types (it includes the owner; remove the owner by `profile.owner()?.entityID`); `people.allAliases()`; `visibleMemories()` with `isFloating` rows dropped (so it agrees with the SQL below); `memories.firstTellings(kinds: Set(MemoryKind.allCases))` for `toldAt` (it exists; `Telling.toldAt` is the session's `started_at`); and `memories.tellingWords()`, whose statement is:
 
 ```sql
 select ms.memory_id, ms."order", w.text
@@ -468,7 +492,7 @@ where m.hidden_from_timeline = 0 and m.created_from_candidate_id is not null
 order by ms.memory_id, ms."order", w."index"
 ```
 
-and one statement for the first telling's `session.started_at` of each memory. A continuation span (`continues_order` set) is its own entry in `tellings`.
+A continuation span (`continues_order` set) is its own entry in `tellings`.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -479,7 +503,7 @@ Each test uses `ExtractionStore(try AppDatabase.inMemory())` and `StoreFixtures`
     // Maya (alias "May"), a place, a thing, an idea, and the moment "The long drive" told with word rows
     let index = try store.searchIndex()
     #expect(Set(index.entities.map(\.summary.entity.title)) == ["Maya", "Alder Street", "Dad's Volvo", "Saying yes to things"])
-    #expect(index.entities.first { $0.summary.entity.title == "Maya" }?.aliases == ["May"])
+    #expect(index.entities.first { $0.summary.entity.title == "Maya" }?.aliases == ["May"], "the alias equal to the name is dropped")
     #expect(index.memories.map(\.memory.title) == ["The long drive"])
     #expect(index.memories.first?.tellings == ["he kept an old harmonica in the glove box"])
     #expect(index.memories.first?.toldAt == session.startedAt)
@@ -533,6 +557,18 @@ Each test uses `ExtractionStore(try AppDatabase.inMemory())` and `StoreFixtures`
     #expect(try store.searchIndex().memories.isEmpty)
     // second store: deleteSession removes its memories and their words
 }
+@Test func aRenamedPersonIsStillFoundByTheOldName() throws {
+    // rename Maya to "Maya Okafor": the alias "Maya" stays, and its fold differs from the title's
+    #expect(try store.searchIndex().entities.first { $0.summary.entity.id == maya.id }?.aliases.contains("Maya") == true)
+}
+@Test func aHiddenPersonsAliasesAreNotRead() throws {
+    try store.entities.setHidden(maya.id, true)
+    #expect(try store.people.allAliases()[maya.id] == nil)
+}
+@Test func aPhotoStoryMemoryIsInTheIndex() throws {
+    // a memory kept from a photo story has a candidate like any other; the photo is only a link
+    #expect(try store.searchIndex().memories.contains { $0.memory.id == photoMemory.id })
+}
 @Test func anEmptyArchiveGivesAnEmptyIndex() throws {
     #expect(try ExtractionStore(try AppDatabase.inMemory()).searchIndex() == .empty)
 }
@@ -543,14 +579,14 @@ Each test uses `ExtractionStore(try AppDatabase.inMemory())` and `StoreFixtures`
 ```
 
 - [ ] **Step 2: Run `swift test --filter SearchReads`.** Expected: FAIL; `searchIndex` does not exist.
-- [ ] **Step 3: Implement.** Join a telling's words with one space. Remove the owner by `profile.owner()?.entityID`. Drop `isFloating` memories. Do not read `segment.text`: it holds words outside the span.
+- [ ] **Step 3: Implement.** `StatementCounter` is private to `EntityBatchReadsTests.swift`; copy it into the new test file. `StoreFixtures` words are 500 ms apart and last 400 ms. Join a telling's words with one space. Remove the owner by `profile.owner()?.entityID`. Drop `isFloating` memories. Do not read `segment.text`: it holds words outside the span.
 - [ ] **Step 4: Run `swift test`.** Expected: PASS. Run the privacy grep.
 - [ ] **Step 5: Commit** — `Store: the search index reads only what the app shows, in a fixed number of statements`
 
 ### Task 5: App — the search tab, names and the record bar
 
 **Files:**
-- Modify: `ios/Lifeline/Screens/Shell/AppTab.swift` (case `search`, `static let sections`), `ios/Lifeline/Screens/Shell/SectionsScreen.swift` (the search tab after the five)
+- Modify: `ios/Lifeline/Screens/Shell/AppTab.swift` (case `search`, `static let sections`, and the new case in the `title` and `systemImage` switches), `ios/Lifeline/Screens/Shell/SectionsScreen.swift` (the search tab after the five; `root(of:)` gets `case .search: SearchScreen(deps: deps)`)
 - Create: `ios/Lifeline/Screens/Search/SearchViewModel.swift`, `ios/Lifeline/Screens/Search/SearchScreen.swift`, `ios/Lifeline/Screens/Search/SearchEntityRow.swift`
 - Modify: `ios/Lifeline/Dependencies.swift` (one line: `-uiTesting-seedSearch`), `ios/Lifeline/UITestSeed.swift` (`writeSearch`, and an optional `words:` on `SeedSession.keep`)
 - Modify: `ios/LifelineUITests/UITestHelpers.swift` (`launchWithSearch`, `openSearch`, `search(_:)`, `searchResult(_:)`)
@@ -559,11 +595,12 @@ Each test uses `ExtractionStore(try AppDatabase.inMemory())` and `StoreFixtures`
 **Interfaces:**
 - Consumes: Task 2 `Search.run`, `SearchResults`; Task 4 `ExtractionStore.searchIndex()`; `PhotoRepository.covers(type:)`, `TileFace`, `EntityScreen`, `EntityViewModel`, `HomeViewModel.coverClosings`, `sectionHeadingStyle()`, `linenBackground()`.
 - Produces:
-  - `AppTab.search`, title "Search", symbol `magnifyingglass`, identifier `tab.search`. `AppTab.sections: [AppTab]` is the five sections in order; `SectionsScreen`'s `ForEach` uses it. After the `ForEach`: `Tab(value: AppTab.search, role: .search) { NavigationStack { SearchScreen(deps: deps) } }`. `home.tabChanged()` still runs on every tab change.
+  - `AppTab.search`, title "Search", symbol `magnifyingglass`, identifier `tab.search`. `AppTab.sections: [AppTab]` is the five sections in order; `SectionsScreen`'s `ForEach` uses it. After the `ForEach`: `Tab(value: AppTab.search, role: .search) { NavigationStack { SearchScreen(deps: deps) }.safeAreaInset(edge: .bottom, spacing: 0) { ShellNoticeBar(notice: model.notice) } }.accessibilityIdentifier(AppTab.search.accessibilityIdentifier)`: the same notice bar and identifier every other tab carries. The `photoStart` sheet, the cover and `.environment(home)` are on the `TabView` and need no change. `home.tabChanged()` still runs on every tab change.
   - `@MainActor @Observable final class SearchViewModel`: `init(deps: Dependencies)` (no read); `var query: String` (each change runs the search); `private(set) var results: SearchResults?`; `private(set) var covers: [EntityID: Photo]`; `private(set) var isLoaded: Bool`; `private(set) var error: String?`; `func refresh()`. `refresh()` reads `searchIndex()` and `photos.covers(type: .person)` in a detached task, then sets the index on the main actor and runs the query again. A newer `refresh()` wins over an older one. The view model holds no matching rule: it calls `Search.run(query, in: index)`.
-  - `SearchScreen(deps: Dependencies)`: owns the view model in `@State`. `.searchable(text: $viewModel.query, prompt: "Memories, people, places, things")` with `.autocorrectionDisabled()` and `.textInputAutocapitalization(.never)`. `.navigationTitle("Search")`. It calls `refresh()` on appear and when `home.coverClosings` changes while it is visible. States: not loaded or `results == nil`, the opening line (`search.prompt`); `error`, the error line (`search.error`); otherwise a `List` of sections in decision 11's order, each with a header (`search.heading`, `.accessibilityAddTraits(.isHeader)`). Task 5 draws the four entity groups. Task 6 adds "Memories" and "Nothing found".
-  - `SearchEntityRow(hit: SearchResults.EntityHit, cover: Photo?, deps: Dependencies, onChange: () -> Void)`: a `NavigationLink` to `EntityScreen(viewModel: EntityViewModel(entity: hit.summary.entity, deps: deps), onChange: onChange)`. A person shows `TileFace` at 44 points, the title (headline, serif, `Theme.ink`) and `hit.secondLine` (footnote, `Theme.secondaryText`). A place, thing or idea shows the title only. `frame(minHeight: 44)` and `contentShape` are inside the label. One accessibility element: label the title, value `hit.secondLine ?? ""`. Identifier `search.result`. The face is hidden from accessibility, as on People.
-  - `UITestSeed.writeSearch(store:profile:sessions:)`, under `-uiTesting-seedSearch`: the family from `people(…)`, then, all invented:
+  - `SearchScreen(deps: Dependencies)`: owns the view model in `@State`. `.searchable(text: $viewModel.query, prompt: "Memories, people, places, things")` with `.autocorrectionDisabled()` and `.textInputAutocapitalization(.never)`. `.navigationTitle("Search")`. It calls `refresh()` on appear and when `home.coverClosings` changes while it is visible (`.onChange(of: home?.coverClosings) { if isVisible { … } }`, as other screens do). The list uses `linenBackground()` with `.scrollContentBackground(.hidden)`; `sectionHeadingStyle()` already adds the header trait. States: not loaded or `results == nil`, the opening line (`search.prompt`); `error`, the error line (`search.error`); otherwise a `List` of sections in decision 11's order, each with a header (`search.heading`, `.accessibilityAddTraits(.isHeader)`). Task 5 draws the four entity groups. Task 6 adds "Memories" and "Nothing found".
+  - `SearchEntityRow(hit: SearchResults.EntityHit, cover: Photo?, deps: Dependencies, onChange: () -> Void)`: a `NavigationLink` to `EntityScreen(viewModel: EntityViewModel(entity: hit.summary.entity, deps: deps), onChange: onChange)`. A person shows `TileFace(summary:cover:cache:letterFont:)` with `cache: deps.photoImages` in a 44 point frame, the title (headline, serif, `Theme.ink`) and `hit.secondLine` (footnote, `Theme.secondaryText`). A place, thing or idea shows the title only. `frame(minHeight: 44)` and `contentShape` are inside the label. One accessibility element: label the title, value `hit.secondLine ?? ""`. Identifier `search.result`. The face is hidden from accessibility, as on People.
+  - `SeedSession.keep` gains `words: [String] = []` (today it writes `words: []` and has no such parameter; `links:` has no default, so pass `links: []`). With words, it writes `Word` rows timed inside the segment's own window and sets `segment.text` to them. It has no hide or exclude parameter: call `store.memories.setHidden(id, true)` and `setExcluded(id, true)` after `keep`. `people(…)` returns no id for Lena: find her by title, then `store.people.addAlias("Linny", to: PersonID(rawValue: lena.rawValue))`. Wire the seed as one line after `-uiTesting-seedSpine` in `Dependencies.swift`.
+  - `UITestSeed.writeSearch(store:profile:sessions:)`, under `-uiTesting-seedSearch`: it returns at once when `try profile.owner() != nil` (checked before `people(…)`, which saves the profile first). Then the family from `people(…)` (owner Jordan; Maya "my sister", Dad "my dad", Sam "my roommate", Lena; Alder Street; "Saying yes to things"; five moments, 1999 to 2012), then, all invented:
     - person "Zoë" (no moment); person "Lena" gets the alias "Linny";
     - thing "Dad's Volvo"; place "São Paulo";
     - moment "The long drive", 2004, with `word` rows for "we drove all night and he kept an old harmonica in the glove box";
@@ -605,7 +642,7 @@ final class SearchUITests: XCTestCase {
         maya.tap()
         XCTAssertTrue(app.staticTexts["entity.title"].waitForExistence(timeout: 5))
         XCTAssertEqual(app.staticTexts["entity.title"].label, "Maya")
-        XCTAssertEqual(app.buttons["home.start"].label, "Tell a story about Maya", "the bar names the page (decision 16)")
+        XCTAssertTrue(app.waitForLabel(app.buttons["home.start"], "Tell a story about Maya"), "the bar names the page (decision 16)")
         app.navigationBars.buttons.firstMatch.tap()
         XCTAssertTrue(app.searchResult("Maya").waitForExistence(timeout: 5), "back returns to the results")
         XCTAssertEqual(app.searchFields.firstMatch.value as? String, "maya")
@@ -665,7 +702,7 @@ final class SearchUITests: XCTestCase {
 }
 ```
 
-`clearSearch()` and `dismissSearchKeyboard()` are helpers in `UITestHelpers.swift`. The seed under `-uiTesting-db` must not write twice: `writeSearch` returns at once when the profile already has an owner.
+`clearSearch()` and `dismissSearchKeyboard()` are helpers in `UITestHelpers.swift`. The bar's label is set as the page appears: move `ShellUITests`' private `waitForLabel` to `UITestHelpers.swift` and wait with it before each assertion on `home.start`'s label after a navigation. The seed under `-uiTesting-db` must not write twice: `writeSearch` returns at once when the profile already has an owner.
 
 - [ ] **Step 3: Run `-only-testing:LifelineUITests/SearchUITests`.** Expected: FAIL; there is no search tab.
 - [ ] **Step 4: Build the tab, the view model, the screen and the row as the Interfaces block says.** Run `xcodegen generate` after adding files. Use the system search tab and field; draw no custom field. Then check in the simulator, and record in the task report, each of these: where the field shows; whether the record bar shows on the search tab with the field idle, with the field active, and with the keyboard up; whether the tab bar and the bar return when the keyboard goes. If the bar does not show on the search tab with the field idle, stop and ask the owner (see "Limits").
@@ -772,7 +809,10 @@ func testAMemoryRowReadsInFullAtTheLargestText() {
 }
 ```
 
-`renameEntity(to:)` and `deleteTimelineMemory(_:)` are helpers in `UITestHelpers.swift`, built from the steps `EntityPageUITests` and `YouUITests` already use.
+`renameEntity(to:)` and `deleteTimelineMemory(_:)` are new helpers in `UITestHelpers.swift`; no test has either today.
+
+- `renameEntity(to:)`: tap `buttons["entity.more"]`, then `buttons["entity.rename"]`, then `textFields["entity.renameField"]`; clear the field (it holds the title), type the new name, tap `buttons["Save"]`.
+- `deleteTimelineMemory(_:)`: `openTab("Timeline")`; find `buttons.matching(identifier: "timeline.memory")` whose label begins with the title; bring it on screen with `scrollIntoView(_:)` and keep its middle above `buttons["home.start"]` (as `PhotoCardUITests.openMemory` does: a row under the bar counts as hittable); pick the `row.more` whose `midY` is the row's (as `TimelineCardUITests` does); tap `buttons["row.delete"]`; tap `buttons["row.confirmDelete"].firstMatch` (the iOS 26 dialog lists it twice).
 
 - [ ] **Step 2: Run `-only-testing:LifelineUITests/SearchUITests`.** Expected: FAIL; no memory is a result.
 - [ ] **Step 3: Implement as the Interfaces block says.**
@@ -783,7 +823,7 @@ func testAMemoryRowReadsInFullAtTheLargestText() {
 
 **Files:**
 - Modify: `docs/OVERVIEW.md` ("The shape of the app" paragraph; "Designed, not built" if search is listed there)
-- Modify: `docs/DECISIONS.md` (one entry for S5, dated the day it is written: decisions 1, 3, 4, 6, 7, 11, 18, 19 and 21, each with its cost)
+- Modify: `docs/DECISIONS.md` (one entry for S5, dated the day it is written, in the shape of the newest entry, "2026-11-18 · S6b": Status with the source plan and the ledger `.superpowers/sdd/2026-11-16-sections-search/rulings.md`, Decision as a numbered list, "Rulings made while building", Why, Consequences, Known costs. It covers decisions 1, 3, 4, 6, 7, 11, 18, 19, 21 and 23, each with its cost, and says that decision 23 supersedes the S4 line "no search result uses a photo yet". Text the person reads says "key photo", never "cover".)
 - Create: `docs/plans/2026-11-16-sections-search-device-check.md`
 - Create: `docs/screenshots/sections-search/before-tabs.png`, `after-opening.png`, `after-names.png`, `after-memories.png`, `after-nothing-found.png`, `after-page-from-search.png`, `after-largest-text.png`
 
@@ -812,7 +852,7 @@ func testAMemoryRowReadsInFullAtTheLargestText() {
 
 - **Owner's calls from use.** Whether "Memories" must show above the names. Whether the search tab needs "Show hidden". Whether a result must show who and where.
 - **Words in no kept memory.** Search over session transcripts needs a spec section: a result would open the session, not a memory, and a dismissed card's words would be found.
-- **Stories, chapters and tags.** S6c gives a chapter a sheet. A story or a chapter title can be a result once it has a page to open.
+- **Stories, chapters and tags.** A chapter has a sheet since S6c, so a chapter's name can be a result that opens it. A story title can be a result once it has a page to open.
 - **Scale.** If device checklist item 7 fails on a large archive, cache the index between appearances and rebuild it on `coverClosings`, or move to FTS5 behind `Search.run` with its own migration and a delete that purges the index.
 - S7 (Things) and S8 (Places) change the Things and Places tabs. A search result opens `EntityScreen` and does not depend on either.
 - The dark and increased-contrast colour values still have no PR assigned.
