@@ -759,3 +759,16 @@ private func declineCount(in db: AppDatabase) throws -> Int {
     #expect(try f.photos.unlink(a.id, from: .entity(dad.id)) == a)
     #expect(try declineCount(in: f.db) == 0)
 }
+
+@Test func aStoryLinkToADeclinedPageWritesNothing() throws {
+    let f = try Fixture(), maya = try f.person("Maya"), dad = try f.person("Dad")
+    let a = photo("a")
+    try f.photos.insert(a, linkingTo: .entity(dad.id)); try f.photos.link(a.id, to: .entity(maya.id))
+    _ = try f.photos.unlink(a.id, from: .entity(maya.id))
+    let wrote = try f.db.writer.write { try PhotoRepository.link(a.id, to: .entity(maya.id), origin: .story, in: $0) }
+    #expect(!wrote, "the write itself refuses a page the owner took the photo off")
+    #expect(try !f.photos.isLinked(a.id, to: .entity(maya.id)))
+    #expect(try f.photos.isDeclined(a.id, on: maya.id))
+    // An owner's link (no origin) is never refused.
+    #expect(try f.db.writer.write { try PhotoRepository.link(a.id, to: .entity(maya.id), in: $0) })
+}

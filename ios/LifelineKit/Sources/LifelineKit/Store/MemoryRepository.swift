@@ -33,8 +33,11 @@ public struct MemoryRepository: Sendable {
             for anchor in anchors { try anchor.insert(db) }
             if let candidate {
                 try db.execute(sql: "update candidate set status = ? where id = ?", arguments: [CandidateStatus.accepted.rawValue, candidate.rawValue])
-                // Kept from a card, so told: a floating memory (no card) is not.
-                try PhotoRepository.linkSubjectPhoto(ofSegment: spans[0].segmentID, to: memory.id, in: db)
+                // Kept from a card, so told: a floating memory (no card) is not. The photo also goes on the pages
+                // of the people the memory names, in this write, so a kill leaves both or neither.
+                if let photo = try PhotoRepository.linkSubjectPhoto(ofSegment: spans[0].segmentID, to: memory.id, in: db) {
+                    try PhotoRepository.linkToPeoplePages(photo, namedBy: memory.id, in: db)
+                }
             }
             try Self.accept(continuations, in: db)
             if let story {

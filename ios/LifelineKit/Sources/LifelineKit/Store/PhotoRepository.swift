@@ -57,10 +57,12 @@ public struct PhotoRepository: Sendable {
 
     /// True when the owner took this photo off this page. A story does not put it back.
     public func isDeclined(_ photo: PhotoID, on entity: EntityID) throws -> Bool {
-        try db.writer.read { db in
-            try Bool.fetchOne(db, sql: "select exists (select 1 from photo_page_declined where photo_id = ? and entity_id = ?)",
-                              arguments: [photo.rawValue, entity.rawValue]) ?? false
-        }
+        try db.writer.read { try Self.isDeclined(photo, on: entity, in: $0) }
+    }
+
+    private static func isDeclined(_ photo: PhotoID, on entity: EntityID, in db: Database) throws -> Bool {
+        try Bool.fetchOne(db, sql: "select exists (select 1 from photo_page_declined where photo_id = ? and entity_id = ?)",
+                          arguments: [photo.rawValue, entity.rawValue]) ?? false
     }
 
     public func fileNames() throws -> Set<String> {
@@ -202,14 +204,25 @@ public struct PhotoRepository: Sendable {
         }
     }
 
-    /// One transaction. The session stops pointing at its photo; when the photo then has no link and no other
+    /// One transaction. The session stops pointing at its photo. When no other session points at it, the page links
+    /// a story made go too (plan decision 9); the owner's links stay. When the photo then has no link and no other
     /// session, its row is deleted and returned so the caller deletes the file.
     public func letGo(of session: SessionID) throws -> Photo? {
         try db.writer.write { db in
             guard let photo = try Self.subjectPhoto(of: session, in: db) else { return nil }
             try db.execute(sql: "update session set subject_photo_id = null where id = ?", arguments: [session.rawValue])
+            let pointedAt = try Bool.fetchOne(db, sql: "select exists (select 1 from session where subject_photo_id = ?)",
+                                              arguments: [photo.id.rawValue]) ?? false
+            if !pointedAt { try Self.removeStoryLinks(of: photo.id, in: db) }
             return try Self.deleteIfHomeless(photo.id, in: db)
         }
+    }
+
+    /// Removes each page link a story made for the photo. No decline is recorded: the owner did not take it off one page.
+    private static func removeStoryLinks(of photo: PhotoID, in db: Database) throws {
+        let pages = try String.fetchAll(db, sql: "select entity_id from photo_link where photo_id = ? and entity_id is not null and origin = ?",
+                                        arguments: [photo.rawValue, PhotoLinkOrigin.story.rawValue])
+        for page in pages { _ = try removeLink(photo, from: .entity(EntityID(rawValue: page)), in: db) }
     }
 
     /// Deletes every photo row with no link and no session that points at it; returns them.
@@ -254,10 +267,31 @@ public struct PhotoRepository: Sendable {
             """, arguments: [segment.rawValue]).map(PhotoID.init(rawValue:))
     }
 
+    /// Inside the Keep write, after the memory's links are stored. Puts the photo on the page of each person the memory
+    /// names, with origin `story`. Skips the owner, a hidden entity, a page that holds the photo, and a declined pair.
+    /// Returns the entities it linked, in the order the memory's links were written.
+    /// Every relation counts: a fact about Dad names Dad as a moment that mentions him does.
+    @discardableResult
+    static func linkToPeoplePages(_ photo: PhotoID, namedBy memory: MemoryID, in db: Database) throws -> [EntityID] {
+        let people = try String.fetchAll(db, sql: """
+            select moment_entity.entity_id from moment_entity
+            join entity on entity.id = moment_entity.entity_id
+            where moment_entity.memory_id = ? and entity.type = ? and entity.hidden_from_timeline = 0
+              and entity.id not in (select entity_id from person where is_owner = 1 and entity_id is not null)
+            group by moment_entity.entity_id
+            order by min(moment_entity.rowid)
+            """, arguments: [memory.rawValue, EntityType.person.rawValue]).map(EntityID.init(rawValue:))
+        var linked: [EntityID] = []
+        for person in people where try link(photo, to: .entity(person), origin: .story, in: db) { linked.append(person) }
+        return linked
+    }
+
     /// True when this call wrote the link; false when the subject already held the photo, whatever its origin.
-    /// It reads no decline: a caller that writes `story` checks `photo_page_declined` first.
+    /// A `story` link to an entity the owner took the photo off is refused here, so no caller can forget the decline.
+    /// An owner's link (no origin) is never refused.
     @discardableResult
     static func link(_ photo: PhotoID, to subject: PhotoSubject, origin: PhotoLinkOrigin? = nil, in db: Database) throws -> Bool {
+        if origin == .story, case .entity(let entity) = subject, try isDeclined(photo, on: entity, in: db) { return false }
         let (column, value) = subject.key
         let linked = try Int.fetchOne(db, sql: "select count(*) from photo_link where \(column) = ? and photo_id = ?",
                                       arguments: [value, photo.rawValue]) ?? 0
