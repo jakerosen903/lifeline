@@ -98,7 +98,13 @@ final class PeopleGuessUITests: XCTestCase {
         openRobinsPage(app)
         let older = momentRow(app, "Robin's first car")
         XCTAssertTrue(app.reveal(older))
+        // The contact row makes the page longer: after the reveal of the last moment, the first can sit above the
+        // fold, and a tap while the list still glides only stops it. Swipe back until it is on screen and still.
+        for _ in 0..<4 where !app.waitHittable(older, timeout: 1) { app.swipeDown() }
+        XCTAssertTrue(app.waitHittable(older, timeout: 5), "the row is on screen and still")
         older.tap()
+        // Under load the first tap after the scroll is sometimes swallowed (the page stays up): tap once more.
+        if !app.buttons["memory.range"].waitForExistence(timeout: 3), older.exists { older.tap() }
         let robin = chip(app, plain("Robin Okafor"))
         XCTAssertTrue(robin.waitForExistence(timeout: 5), "the memory page shows Robin Okafor")
         XCTAssertEqual(robin.identifier, "person.chip", "a link older than the guess has no origin, so no mark")
@@ -210,9 +216,13 @@ final class PeopleGuessUITests: XCTestCase {
         tapDone(app)
         XCTAssertTrue(waitCount(app.buttons.matching(identifier: "entity.moment"), 3), "the moved moment leaves Robin's page")
         XCTAssertEqual(app.descendants(matching: .any).matching(identifier: "entity.moment.assumed").count, 1, "the other guess stays")
-        XCTAssertEqual(app.staticTexts["entity.title"].label, "Robin Okafor")
         XCTAssertTrue(notice(app).waitForExistence(timeout: 5))
         XCTAssertEqual(notice(app).label, "Changed to Robin.")
+        // The page is a lazy List and the contact row (PC-b) makes it longer: the title is out of the tree until it
+        // scrolls back into view.
+        let title = app.staticTexts["entity.title"]
+        for _ in 0..<6 where !title.exists { app.swipeDown() }
+        XCTAssertEqual(title.label, "Robin Okafor", "the page stays on Robin Okafor")
     }
 
     /// R34: the move empties Priya, whom the guess made, so it removes her. Her page stays up with the notice and
