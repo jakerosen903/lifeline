@@ -32,3 +32,6 @@ The owner said "Yes, build both" (PC-d, then PC-c) on 2026-11-19, without a revi
 - Task 5: complete (commits 017742a..e658e00, review clean). Rulings D18 to D21.
 - Task 5: minor (deferred): separating a telling can drop a person that a staying telling also named under another handle (owner-settled across tellings); `about.ref == handle` compares the ref untrimmed in a move; the doc comment of `group(of:)` does not name the mixed case (R-5a).
 - Task 5 review, out of its diff, Important: a later segment that means a person of the recording without saying a name (a handle with no `people` entry) is rejected by the validator, or its fact gets no detail on Keep. Ruling D17: Task 4b, brief `task-4b-brief.md`.
+- Task 4b: complete (commits c858ef5..214e370, review clean). Rulings D22 to D24.
+- Task 4b: minor (deferred): no queue test for an output with `about_ref` only; the doc comment of `mayFollowAHandle` does not say why the wide gate is safe (D15).
+- Task 4b review, Minor that needs a ruling: a fact with only `about_ref` = a handle, kept before or without the card that named the person, gets no detail and no sign. Ruling D22; the change rides with Task 6.
