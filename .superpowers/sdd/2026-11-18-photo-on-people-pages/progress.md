@@ -80,3 +80,6 @@ Pre-flight: Task 6 needs a column that Task 1 owns: Task 1 text now carries it (
 - Owner's call: the Undo notice after a name move can sit below the screen for its 6 seconds; pin it above the record bar?
 - Owner's call: spec Part 4 lists "an idea", but an idea page has no "Add a photo" (from before this branch).
 - Closed by the final review: Task 5's card height change (reserved line), Task 5's missing UI test for a page that held the photo before the story, Task 1's static link refusing a declined pair.
+- Final fix wave: commits 55991d7..7a0ee5f (ef58fcb, fcf8dc5, 0a22820, 7a0ee5f). Kit 1416 (one known flake), PhotoCardUITests 33/0, PhotosUITests 28/0, guards pass. Re-review dispatched.
+- Final fix wave: concern: in `testAddAPhotoWaitsWhilePhotosAreAdded` a fresh query does not find `photo.adding` after the menu closes, so its last check proves little; "2 of 2" is checked in `testTheAddingLineCountsThePhotos`. F1 has a kit test and device-check line 34, no UI test (no seed).
+- Whole UI suite: started on 7a0ee5f from a clean build.
