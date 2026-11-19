@@ -202,9 +202,15 @@ The seed `-uiTesting-seedSpine` has Jordan, born 1990, moments in 1999 (inferred
 - The Things shelf and the Places menu use the computed periods (spec "Periods", rule 5).
 - Carried from S6c: no sheet states a chapter with no end; the period names above the life map truncate at the largest text; the 6-second Undo under VoiceOver.
 - Carried from S6a: the place on a row and the tap on a person or place; a softer gap label next to a guessed date.
-- Carried from S6b: the frame lags one short row at each edge of the list. A later task must give the top edge and the bottom edge their own slack.
+- Carried from S6b: the frame can lag by one row at each edge of the list. A later task must give the top edge and the bottom edge their own slack.
 - Carried from S6b: at the largest text size, the period label above an opened story is cut by a few points at the card's edge. A later task must scroll an opened story to clear the card.
 - Carried from S6b: no UI test opens a story to move the frame. A later task must add a dated story to a seed and test it.
+- Carried from S6b (R7): an open story's member rows do not move the frame. The story's own row decides. A later task must give each member row its own years and its own report, with its own test for the render loop.
+- Carried from S6b (R7): a confirmed relation's row has a tick and no years, so it does not move the frame. A later task must decide which years it gives the frame.
+- Carried from S6b (R8): `CardSource` does not keep the strip. The card builds it again when the rows on screen change. A later task must keep it until the moments change.
+- Carried from S6b (R8): `screenArea` is `@State` on `TimelineScreen`. A change of the list's frame redraws the screen's body. A later task must decide if it moves out of the screen's state.
+- Carried from S6b (R8): at the accessibility sizes the "During" line is always two lines tall, also when the names fit on one line. A later task must decide if it can shrink to one line.
+- Carried from S6b (R8): the "During" line and the slack use the height of a reference line in the names' font. A chapter name that is taller than that line can be cut, and the card can then change height by more than the slack. A later task must measure the names themselves.
 - Carried from S6b: `LifeStripAxis.frameBox` has three edge cases and no unit test, because the app target has no unit tests. A later task must move the rule to the kit or add a test target.
 - Carried from S6b: the card's margin is 16 points and the rows' margin is 12. A later task must pick one.
 - Carried from S6b: `CivilDate.today().year` is a default in two places. A later task must keep it in one place.
