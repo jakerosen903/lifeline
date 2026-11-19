@@ -28,7 +28,11 @@ public struct CandidateRepository: Sendable {
         /// The superseded row stored for it in this extraction.
         public var rowID: CandidateID
         public var span: ExtraSpan
-        public init(earlierID: CandidateID, rowID: CandidateID, span: ExtraSpan) { self.earlierID = earlierID; self.rowID = rowID; self.span = span }
+        /// The people the continuation's handles name (PC-d). The earlier card gains each handle it lacks.
+        public var people: [PersonOut]
+        public init(earlierID: CandidateID, rowID: CandidateID, span: ExtraSpan, people: [PersonOut] = []) {
+            self.earlierID = earlierID; self.rowID = rowID; self.span = span; self.people = people
+        }
     }
 
     /// Writes every candidate of one extraction, marks the segment extracted, and grows each
@@ -49,6 +53,11 @@ public struct CandidateRepository: Sendable {
                     if let earlier = try Candidate.fetchOne(db, key: continuation.earlierID.rawValue), earlier.status == .pending,
                        var out = CandidatePayload.memory(earlier) {
                         out.extraSpans.append(continuation.span)
+                        // A handle is one person in the recording: one already on the card is not added again.
+                        for person in continuation.people where !out.handlePeople.contains(where: { $0.handle == person.handle }) {
+                            out.handlePeople.append(person)
+                            if !out.personHandles.contains(person.handle) { out.personHandles.append(person.handle) }
+                        }
                         try db.execute(sql: "update candidate set payload = ? where id = ? and status = ?",
                                        arguments: [try CandidatePayload.encode(out), earlier.id.rawValue, CandidateStatus.pending.rawValue])
                         grown.insert(earlier.id)

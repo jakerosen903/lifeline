@@ -578,3 +578,73 @@ private let threeSegments = ["Robyn moved in that fall", "my roommate cooked eve
     let packet = try #require(try await packetOfLastSegment(env))
     #expect(packet.recordingPeople.isEmpty)
 }
+
+// MARK: - PC-d Task 3: the card stores its people
+
+private let robynP1 = PersonOut(handle: "p1", saidName: "Robyn", relationText: "my roommate", personID: nil)
+
+private func handleOutput(quote: String, span: WordSpan, continues: CandidateID? = nil, mentions: [MentionOut] = []) -> ExtractorOutput {
+    ExtractorOutput(people: [robynP1],
+                    memories: [MemoryOut(ref: "m1", kind: .event, title: "Robyn moved in", quote: quote, segmentSpan: span, peopleRefs: [],
+                                         placeText: nil, anchors: [], continuesCandidateID: continues?.rawValue, collectionHint: nil, chapterHint: nil,
+                                         confidence: 0.9, personHandles: ["p1"])],
+                    mentions: mentions, flags: .none)
+}
+
+@Test func theStoredCardHoldsThePeopleOfItsHandlesAndTheirSaidNames() async throws {
+    let env = try Env(texts: ["my roommate Robyn moved in that fall"], script: [.success(handleOutput(quote: "Robyn moved in", span: WordSpan(startWord: 2, endWord: 4)))])
+    let queue = env.queue()
+    let events = await queue.events
+    await queue.enqueue(env.segments[0].id)
+    let card = try #require(firstCard(await collect(events, count: 1)))
+    let payload = try #require(CandidatePayload.memory(card))
+    #expect(payload.handlePeople == [robynP1] && payload.peopleRefs == ["Robyn"])
+}
+
+@Test func aPersonMentionWithAHandleTheMemoryCarriesIsARecord() async throws {
+    let mention = MentionOut(text: "my roommate", kind: .person, confidence: 0.8, handle: "p1")
+    let output = handleOutput(quote: "Robyn moved in", span: WordSpan(startWord: 2, endWord: 4), mentions: [mention])
+    let env = try Env(texts: ["my roommate Robyn moved in that fall"], script: [.success(output)])
+    let queue = env.queue()
+    let events = await queue.events
+    await queue.enqueue(env.segments[0].id)
+    guard case .candidates(let shown, _)? = await collect(events, count: 1).first else { Issue.record("no event"); return }
+    #expect(shown.map(\.kind) == [.memory], "the person is on the memory card, not a card of its own")
+    #expect(try env.store.candidates.candidates(for: env.segments[0].id).first { $0.kind == .person }?.status == .accepted)
+    #expect(try env.store.people.mentions(in: env.segments[0].id).isEmpty)
+}
+
+// Review Focus 5: a continuation's people join the earlier card, once per handle.
+@Test func aContinuationAddsItsPeopleToTheEarlierCardOncePerHandle() async throws {
+    let texts = ["my roommate Robyn moved in that fall", "Robyn cooked every night"]
+    let env = try Env(texts: texts, script: [.success(handleOutput(quote: "Robyn moved in", span: WordSpan(startWord: 2, endWord: 4)))])
+    let queue = env.queue()
+    let events = await queue.events
+    await queue.enqueue(env.segments[0].id)
+    let a = try #require(firstCard(await collect(events, count: 1)))
+    env.service.push(.success(handleOutput(quote: "Robyn cooked every night", span: WordSpan(startWord: 0, endWord: 3), continues: a.id)))
+    await queue.enqueue(env.segments[1].id)
+    let again = try #require(firstCard(await collect(events, count: 1)))
+    #expect(again.id == a.id)
+    let payload = try #require(CandidatePayload.memory(again))
+    #expect(payload.handlePeople.map(\.handle) == ["p1"], "p1 is on the earlier card once")
+    #expect(payload.extraSpans.count == 1)
+}
+
+@Test func aContinuationWithANewHandleAddsThatPersonToTheEarlierCard() async throws {
+    let texts = ["my roommate Robyn moved in that fall", "Theo came by"]
+    let env = try Env(texts: texts, script: [.success(handleOutput(quote: "Robyn moved in", span: WordSpan(startWord: 2, endWord: 4)))])
+    let queue = env.queue()
+    let events = await queue.events
+    await queue.enqueue(env.segments[0].id)
+    let a = try #require(firstCard(await collect(events, count: 1)))
+    let theo = PersonOut(handle: "p2", saidName: "Theo", relationText: nil, personID: nil)
+    env.service.push(.success(ExtractorOutput(people: [theo],
+        memories: [MemoryOut(ref: "m2", kind: .event, title: "Theo came by", quote: "Theo came by", segmentSpan: WordSpan(startWord: 0, endWord: 2),
+                             peopleRefs: [], placeText: nil, anchors: [], continuesCandidateID: a.id.rawValue, collectionHint: nil, chapterHint: nil,
+                             confidence: 0.9, personHandles: ["p2"])], mentions: [], flags: .none)))
+    await queue.enqueue(env.segments[1].id)
+    let again = try #require(firstCard(await collect(events, count: 1)))
+    let payload = try #require(CandidatePayload.memory(again))
+    #expect(payload.handlePeople == [robynP1, theo] && payload.personHandles == ["p1", "p2"])
+}

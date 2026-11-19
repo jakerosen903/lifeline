@@ -133,6 +133,8 @@ public actor ExtractionQueue {
             validated = try store.people.ownerNames().removingOwner(from: validated)
             // An about_ref that names nothing the model was given is cleared; the memory is kept.
             validated = AboutRefCheck.cleared(validated, knownIDs: Set(request.packet.people.map(\.id) + request.packet.entities.map(\.id)))
+            // Each memory stores the people its handles name, and their said names as people refs (PC-d).
+            validated = HandleResolve.resolved(validated, knownPeople: Set(request.packet.people.map(\.id)))
             try mintStoryRefs(&validated)
             let shown = try storeCandidates(validated, segment: segmentID, version: response.version)
             lastFailure[segmentID] = nil
@@ -236,7 +238,8 @@ public actor ExtractionQueue {
                 c.status = .superseded
                 rows.append(c)
                 extended.append(.init(earlierID: earlier.id, rowID: c.id,
-                                      span: ExtraSpan(segmentID: segment.rawValue, startWord: memory.segmentSpan.startWord, endWord: memory.segmentSpan.endWord)))
+                                      span: ExtraSpan(segmentID: segment.rawValue, startWord: memory.segmentSpan.startWord, endWord: memory.segmentSpan.endWord),
+                                      people: memory.handlePeople))
                 rows += try hintRows(for: memory, keyedTo: earlier.id, row: row)
                 continue
             }
