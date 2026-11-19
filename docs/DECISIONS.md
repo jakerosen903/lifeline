@@ -2,6 +2,78 @@
 
 One entry per decision. Newest first. Status is Decided, Open, or Superseded.
 
+## 2026-11-19 · PC-b: a person can be linked to a contact — decisions and rulings made while building
+
+**Status:** Decided by the builder and the controller. The owner must confirm plan decisions 4, 5, 6 and 8, and the new copy and identifier listed at the end. The owner can overrule each one. Source: `docs/plans/2026-11-18-people-contacts-b.md`, ledger `.superpowers/sdd/2026-11-18-people-contacts-b/rulings.md` (PB1 to PB53). Narrows `docs/specs/2026-11-18-people-contacts.md` in five places, each marked in the spec.
+
+**Decision.** The plan's ten decisions:
+
+1. No migration. `v15` already has the columns and tables.
+2. The plan does not need the `photo-card` branch (PR #31). The contact's picture goes in with `PhotoLibrary.add`, and a new one replaces the old copy.
+3. The app reads contacts into a cache (`ContactsCache`), not on each guess. It fills the cache at launch, after access is given, and when the system says contacts changed.
+4. The forced merge waits for PC-c. When the owner picks a contact that another person holds, the app refuses and names the holder. Owner must confirm.
+5. A new person's line has three forms: "New · not in your contacts", "New · not linked yet", and "New" when the app cannot see contacts. The app works it out when it shows the chip and stores nothing. Owner must confirm.
+6. The system prompt shows by itself, once, on the landing of the first recording with a kept person. The other option is a line with a button. Owner must confirm.
+7. After access is given on the landing, the app looks again at that recording only, and links the people it made.
+8. The contact picker is the app's own list, built from `ContactsDirectory`, not Apple's picker. Under limited access it shows `ContactAccessButton`. Owner must confirm.
+9. Search matches the full name, given name, family name and nickname, on a prefix of any word.
+10. A changed picture is found by the photo store: when the store returns the person's copy, nothing changed.
+
+Privacy:
+
+- PB10 and PB14: no text that goes to a model may hold the name of a person whose `name_origin` is `contact`. One helper, `NameForModel`, gives the name for the model: the oldest alias, or nil. The context packet, the curiosity question and the interviewer's opening all use it. A person with no said name is left out of the packet and is not asked about. A rename of such a person saves no alias.
+- PB6: "the oldest alias" is the alias table's rowid order. The backup keeps rowids and the app never runs VACUUM.
+- PB37: no log line holds the text of an error from a contacts path. It logs the error's type only.
+
+A person made from a contact, and the empty guess:
+
+- PB2 and PB3: a person the app made from a contact on Keep, and nobody has settled, counts as an empty guess when a move leaves them with nothing. A contact the owner linked always keeps the person. Only an owner's action clears `created_by_guess`.
+- PB19: unlink is the owner's action, so it clears `created_by_guess`. An unlinked person is never removed as an empty guess.
+- PB12: the picture the app copied from a contact does not keep a person the app made from a guess. A picture the owner added does.
+- PB42: "Someone new" on a link with no said name uses the person's name for the model. With none, the move is refused. A contact's name never becomes a said name.
+- PB11: "Assumed · new, from your contacts" shows only on the links of the recording of that person's first link. A later guess to the same person reads "Assumed · you said “{name}”".
+- PB41: a stored `contact` choice on Keep links to the person who holds that contact. If no person holds it and the app still sees it, Keep makes a person from it. If the app does not see it any more, Keep makes a new person with the said name.
+
+The picture:
+
+- PB16 and PB20: the copy of a contact's picture is one transaction: the photo, its link to the person, and `contact_photo_id`. A copy that cannot be recorded rolls back. A failed picture never fails a link, and a later check fills it in.
+- PB24: "New picture" compares bytes. A picture whose bytes are any stored photo changes nothing, so the app never claims the owner's photo. The replacement is one transaction, and it runs only while the copy is the person's first photo.
+- PB18 and PB43: Undo of a move restores a person's copy and its link. A move that made a person does not count that copy's link as later work.
+
+The check:
+
+- PB22: the check reads the linked identifiers in one batch. An identifier with no card in the batch is read again alone, because the system returns unified cards. A failed batch read writes nothing.
+- PB23: when the card of a stored identifier has an identifier another person holds, this person shows as "missing" and nothing else changes.
+- PB34: under limited access the check never re-links a missing contact by name. It marks the person missing. Why: the app sees only the shared contacts, so a card with that name can be a namesake. Under full access the name re-link stays, for one exact and free match.
+- PB35: `reguess` never links a contact the owner declined for that person.
+- PB39: a check of unchanged contacts writes nothing.
+- PB32: one `ContactsCheck` actor runs the check at launch, from `RootView`'s first task, and on `CNContactStoreDidChange`. Runs never overlap.
+
+Access and the prompt:
+
+- PB29 and PB37: "asked before" is the `UserDefaults` key `contacts.accessPromptShown`. The app sets it after the system answers, so a force-quit while the prompt shows lets the app ask again.
+- PB36 and PB38: the landing asks only when it is quiet: the recording was not heavy, no serious disclosure showed, and sorting is done. Otherwise the prompt waits for the next landing that qualifies. Why: PRINCIPLES, safety.
+- PB51: for a person with a contact while access was never asked (only after a restore to a new phone), the button reads "Allow contacts" and shows the system prompt. "Allow contacts in Settings" shows for denied access only and opens Settings.
+
+The sheet and the page:
+
+- PB44: the sheet's contact rows are the fitting contacts, each once, after the people. A contact a person holds shows as that person's row. A contact picked in the search is added as the last row.
+- PB49: the contact row is a section right under the page's header. The no-access card takes the row's place there, not the foot of the page. The suggestion card sits under the row. A suggestion shows on the person's page only.
+- PB50: the held-contact sentence and the row's error sentences show in the page's one pinned message slot.
+- PB48: an open page reads its row again when a check finishes and when the app becomes active.
+- PB40: a contact with an empty full name cannot make a person. A move to it is refused, and the sheet and the search leave it out.
+
+Tests:
+
+- PB45: under `-uiTesting`, the search shows a plain "Share another contact" button with `contacts.accessButton`, because XCUITest cannot drive the system button.
+- PB29: `-uiTesting-contacts <full|limited|notAsked|denied>` scripts the contacts. With no argument the access is "not asked" and the script answers a request with "denied".
+
+**Why.** Each ruling closes a case the plan left open. The contact's name never reaches the model and nothing the owner said or typed is replaced, so the app errs toward keeping what the owner gave and toward doing less when it cannot tell.
+
+**Costs.** PB34: after a restore on a new phone with limited access, the owner links again by hand. PB36 and PB38: the prompt can come one recording later. PB42: one rare older link cannot go to "Someone new"; the owner picks a person. PB44: after the first yes in the sheet, the fitting contacts show as rows only the next time the sheet opens. A hyphenated name such as "Anne-Marie" is one word in the search, so "marie" does not find it.
+
+**The owner must confirm.** Plan decisions 4, 5, 6 and 8. The new copy and identifiers that the approved plan does not hold: "Allow contacts" (PB51), "In a story as {name}" (PB44) and the identifier `who.settings` on the sheet's Settings row. The copy of the usage string, the chip lines and the row texts is a draft.
+
 ## 2026-11-18 · PC-a: rulings made while building people and contacts
 
 **Status:** Decided by the builder, except R13, which the controller made and the owner must confirm. The owner can overrule each one. Source: `docs/plans/2026-11-18-people-contacts.md`, ledger `.superpowers/sdd/2026-11-18-people-contacts/rulings.md` (R1 to R39). Narrows two statements of the entry below and of the spec.

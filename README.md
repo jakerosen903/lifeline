@@ -62,6 +62,7 @@ Other launch arguments you can add next to `-uiTesting` (see `ios/Lifeline/Depen
 - `-uiTesting-speaks`: the app speaks its lines out loud.
 - `-uiTesting-seedGuesses`: seed links that Keep guessed, to try the "Assumed" marks and the "Who is this?" sheet.
 - `-uiTesting-guessesLanding`: with `-uiTesting-seedGuesses`, leave the latest session's landing open at launch.
+- `-uiTesting-contacts <full|limited|notAsked|denied>`: script the contacts and the access to them, so the app never reads your real contacts. With no value, or an unknown one, the access is `notAsked` and a request for it is answered "denied". With `notAsked` named, a request is answered "full".
 
 ### Live mode and the API key
 

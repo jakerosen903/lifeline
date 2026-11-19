@@ -129,7 +129,7 @@ The rules run in order. The first rule that applies decides.
 4. **A person on file fits.** The app assumes the person on file, not a contact that also fits. With two or more persons on file, the app assumes the one most recently linked to a kept memory. Origin `assumed`.
 5. **Exactly one contact fits and no person does.** The app creates a person linked to that contact and assumes it. The mark reads "Assumed · new, from your contacts". Origin `assumed`.
 6. **Two or more contacts fit and no person does.** The app creates a person with the said name and no contact. The line reads "New · not linked yet". The sheet lists the contacts. Origin `new`.
-7. **Nothing fits.** The app creates a person with the said name. The line reads "New · not in your contacts". This is not a guess about who the person is, so the outline is solid. Origin `new`.
+7. **Nothing fits.** The app creates a person with the said name. The line reads "New · not in your contacts". When the app cannot see contacts, the line reads "New". (narrowed 2026-11-19, PC-b plan decision 5) This is not a guess about who the person is, so the outline is solid. Origin `new`.
 
 Every person chip opens the sheet, with or without a mark. A wrong link with no mark is still one tap from the repair.
 
@@ -195,7 +195,7 @@ When the owner changes the person, the app must do all of this in one transactio
 3. **Photos do not move.** A photo belongs to a person's page or to a memory. It does not belong to a link.
 4. **The first telling follows.** When the old person's first telling came from a moved moment, the old person takes the first telling of their oldest remaining moment. The new person takes one only when they have none.
 5. **Names.** The said name and its relation phrase become aliases of the new person. The old person keeps their aliases; the owner removes one on that person's page, as today.
-6. **An empty guess goes.** When the old person was created by the app for this said name, and now has no moment, no detail, no photo, no contact and no name the owner gave, the app removes that person. Undo brings them back. A person the owner edited stays: a typed name, stated dates, hidden, or kept from the AI (R39).
+6. **An empty guess goes.** When the old person was created by the app for this said name, and now has no moment, no detail, no photo, no contact the owner linked and no name the owner gave, the app removes that person. A person the app made from a contact on Keep, and nobody settled, goes too. The picture the app copied from that contact does not keep them. (narrowed 2026-11-19, PC-b rulings PB2 and PB12) Undo brings them back. A person the owner edited stays: a typed name, stated dates, hidden, or kept from the AI (R39).
 7. **Undo.** The one message slot shows "Changed to {name}." with Undo for 6 seconds. Undo restores every row as it was. Undo is refused when a moved link changed in the meantime, as `unmerge` does today.
 
 A kill in the middle must leave either the old state or the new state.
@@ -211,7 +211,7 @@ Two entries can be one real person: "Robin" and "Robyn Vale".
 5. **What joins.** The person that stays takes every moment, detail, alias and photo of the other. Each link keeps its origin. The person that stays keeps their name. The photos keep one order: the staying person's photos first, with their key photo at the front, then the other person's.
 6. **Contacts.** When only one of the two has a contact, the result has it. When both have a contact and the contacts differ, the app must not merge. It says that they are linked to two different contacts.
 7. **Undo.** "Merged into {name}." with Undo for 6 seconds, in the one message slot. The receipt holds both persons as they were.
-8. **The forced case.** When the owner links a person to a contact that another person holds, the app asks "Same person?" for those two. The link is made only when the owner merges them.
+8. **The forced case.** When the owner links a person to a contact that another person holds, the app asks "Same person?" for those two. The link is made only when the owner merges them. Until the merge exists (PC-c), the app refuses the link and says who holds the contact. (narrowed 2026-11-19, PC-b plan decision 4)
 
 The motion is tuned on the device. This spec fixes the behaviour only.
 
@@ -220,7 +220,7 @@ The motion is tuned on the device. This spec fixes the behaviour only.
 ### Access
 
 - The design assumes the owner gives access. With limited or no access, the app still works with fewer suggestions.
-- The app asks once. It asks when the first kept moment names a person, on the landing of that recording. It also asks when the owner taps "Link to a contact" or "Search your contacts" before that.
+- The app asks once. It asks when the first kept moment names a person, on the landing of that recording. The landing must be quiet: the recording was not heavy, no serious disclosure showed and sorting is done. Otherwise the prompt waits for the next landing that qualifies. (narrowed 2026-11-19, PC-b rulings PB36 and PB38) It also asks when the owner taps "Link to a contact" or "Search your contacts" before that.
 - The system prompt shows the usage string. Draft: "Lifeline matches the names in your stories to your contacts. It reads names and pictures only, and they stay on this phone."
 - The app must not ask at first launch. A prompt before the first story has no reason the owner can see.
 
@@ -272,7 +272,7 @@ The app checks the linked contacts at launch and when the system posts `CNContac
 
 - **Renamed.** The kept name is updated. The person's name changes only when it came from the contact and the owner has not renamed the person.
 - **New picture.** When the person's key photo is still the copy the app took from the contact, the app replaces it with the new picture. In every other case the app does nothing.
-- **Deleted, or no longer shared.** The app cannot tell these apart under limited access. The person keeps everything, including the picture. The linked row reads "This contact is not in your contacts now" with "Link to a contact" and "Unlink". The app tries the name match from "The identifier" first.
+- **Deleted, or no longer shared.** The app cannot tell these apart under limited access. The person keeps everything, including the picture. The linked row reads "This contact is not in your contacts now" with "Link to a contact" and "Unlink". Under full access the app tries the name match from "The identifier" first. Under limited access the app does not try it, because a card with that name can be a namesake. (narrowed 2026-11-19, PC-b ruling PB34)
 
 ### A contact that appears later (PC4)
 

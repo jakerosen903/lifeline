@@ -351,3 +351,25 @@ The device check list, exact items:
 - **PC-c, merge:** the button, the confirm, Undo, then the drag. It also turns plan decision 4's refusal into "Same person?".
 - **PC-d, extractor handles.**
 - **Flagged for the owner:** decisions 4 (a held contact is refused until merge exists), 5 (the three "New" lines), 6 (the prompt shows by itself on the landing) and 8 (the app's own contact list, not Apple's picker).
+
+---
+
+## What changed while building
+
+The build moved away from this plan in these places. The tasks above are unchanged. The rulings are in `.superpowers/sdd/2026-11-18-people-contacts-b/rulings.md`, and the groups are in `docs/DECISIONS.md` (2026-11-19).
+
+- **Chip line "Assumed · new, from your contacts".** It shows only on the links of the recording of the person's first link. A later guess to the same person reads "Assumed · you said “{name}”". (PB11, PB15)
+- **The contact's picture and an empty guess.** The picture the app copied from a contact does not keep a person the app made from a guess. A picture the owner added does. (PB12, PB18, PB43)
+- **A person made from a contact.** A move that leaves such a person with nothing removes them, but a contact the owner linked always keeps the person. Only an owner's action clears `created_by_guess`, so unlink clears it. (PB2, PB3, PB19)
+- **Nothing from a contact goes to the model.** One helper, `NameForModel`, names a person for the packet, the curiosity question and the interviewer's opening. A person with no said name is left out. (PB10, PB14, PB42)
+- **The picture copy is one transaction**, and "New picture" compares bytes and runs only while the copy is first. (PB20, PB24)
+- **The check under limited access** never links a missing contact again by name. (PB34)
+- **The check writes nothing** when the contacts did not change. (PB39)
+- **A declined contact** is never linked by the look again after access. (PB35)
+- **The prompt** shows only on a quiet landing: not heavy, no serious disclosure and sorting done. The "asked" flag is set after the system answers. (PB36, PB37, PB38)
+- **Button copy.** For a person with a contact while access was never asked, the button reads "Allow contacts" and shows the system prompt. "Allow contacts in Settings" is for denied access. (PB46, PB51)
+- **Where the contact shows on a person's page.** The row is a section under the page's header, and the no-access card takes the row's place. (PB49)
+- **Messages.** The held-contact sentence and the row's error sentences show in the page's one pinned message slot. (PB50)
+- **The sheet.** A contact a person holds shows as that person's row. A contact picked in the search is added as the last row. New copy "In a story as {name}" and the identifier `who.settings` are not in the approved plan. (PB44, PB45)
+- **Stored `contact` choice on Keep.** When the app does not see the contact any more, Keep makes a new person with the said name. (PB41)
+- **UI tests.** The scripted contacts gained "Dara Quinn" and the nickname "Robin" for "Robyn Okafor". A test that needs "access never asked" opens the sheet from a person's page. (PB29, PB52, PB53)
