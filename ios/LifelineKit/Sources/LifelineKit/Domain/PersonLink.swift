@@ -18,6 +18,9 @@ public struct PersonLink: Sendable, Equatable, Identifiable {
 
     /// A guess the owner has not seen. It carries the ochre mark.
     public var isGuess: Bool { origin == .assumed }
+
+    /// The person is one Keep made from a contact and the owner has not yet stood behind (rules 3 and 5).
+    public var personFromContact: Bool { person.isGuessFromContact }
 }
 
 extension PersonLink {

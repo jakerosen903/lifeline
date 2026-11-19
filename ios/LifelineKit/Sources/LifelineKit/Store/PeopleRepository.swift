@@ -41,6 +41,12 @@ public struct PeopleRepository: Sendable {
         try db.writer.read { try Alias.filter(Column("person_id") == person.rawValue).order(Column("text")).fetchAll($0) }
     }
 
+    /// The aliases in the order they were saved. The alias table has an implicit rowid, which grows with
+    /// each insert and survives the backup (a page copy); the app never runs VACUUM, which could renumber it.
+    public func aliasesOldestFirst(of person: PersonID) throws -> [Alias] {
+        try db.writer.read { try Alias.filter(Column("person_id") == person.rawValue).order(Column.rowID).fetchAll($0) }
+    }
+
     /// The person whose display name or any alias equals `text`, ignoring case and outer
     /// whitespace. A phrase with a role and a name ("my mom, Marcel") matches on either part.
     /// Never the owner: the owner is the speaker, not someone a story mentions (audit F10).

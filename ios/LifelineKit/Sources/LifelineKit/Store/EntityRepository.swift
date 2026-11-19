@@ -180,6 +180,9 @@ public struct EntityRepository: Sendable {
         public var links: [MomentEntity] = []
         public var spans: [EntitySpan] = []
         public var tags: [EntityTag] = []
+        /// Aliases of planned persons beyond their own name: the said name of a person made from a
+        /// contact, whose display name is the contact's and never an alias.
+        public var aliases: [Alias] = []
         public var acceptingCandidate: CandidateID?
 
         public init() {}
@@ -203,6 +206,9 @@ public struct EntityRepository: Sendable {
             links += other.links.map { var l = $0; l.entityID = remap[l.entityID] ?? l.entityID; return l }
             spans += other.spans.map { var s = $0; s.entityID = remap[s.entityID] ?? s.entityID; return s }
             tags += other.tags.map { EntityTag(entityID: remap[$0.entityID] ?? $0.entityID, text: $0.text) }
+            aliases += other.aliases.map { alias in
+                Alias(personID: remap[EntityID(rawValue: alias.personID.rawValue)].map { PersonID(rawValue: $0.rawValue) } ?? alias.personID, text: alias.text)
+            }
             return remap
         }
     }
@@ -221,8 +227,10 @@ public struct EntityRepository: Sendable {
         for entity in write.entities where try !Entity.exists(db, key: entity.id.rawValue) { try entity.insert(db) }
         for person in write.persons where try !Person.exists(db, key: person.id.rawValue) {
             try person.insert(db)
-            try PeopleRepository.insertAlias(person.displayName, person.id, db)
+            // A contact's name is never saved as an alias: nothing from a contact goes to the model.
+            if person.nameOrigin != .contact { try PeopleRepository.insertAlias(person.displayName, person.id, db) }
         }
+        for alias in write.aliases { try PeopleRepository.insertAlias(alias.text, alias.personID, db) }
         for link in write.links { try link.insertKeepingStrongerOrigin(db) }
         for span in write.spans { try span.insertIgnoringDuplicate(db) }
         for tag in write.tags { try DomainTagRepository.tag(.entity, tag.entityID.rawValue, tag.text, in: db) }

@@ -8,11 +8,16 @@ import Testing
 
 private struct Env {
     let db: AppDatabase, store: ExtractionStore, keep: CandidateActions, actions: PersonLinkActions
-    init() throws {
+    /// `contacts` are what Keep's guess sees, as the contacts cache gives them.
+    init(contacts: [PersonGuess.Contact] = []) throws {
         db = try AppDatabase.inMemory()
         store = ExtractionStore(db)
-        keep = CandidateActions(store: store)
-        actions = PersonLinkActions(store: store)
+        var keep = CandidateActions(store: store)
+        keep.contactsForGuess = { contacts }
+        self.keep = keep
+        var actions = PersonLinkActions(store: store)
+        actions.contactsForGuess = { contacts }
+        self.actions = actions
     }
 
     func session(_ texts: [String]) throws -> [SegmentID] {
@@ -654,4 +659,63 @@ private struct Env {
     let created = try #require(try env.store.people.person(id: createdID))
     #expect(created.displayName == "Robin" && created.id != robin.id)
     #expect(try env.personRows(m).map(\.roleText) == [nil])
+}
+
+// PC-b Task 2, PB2: a person Keep made from a contact is the app's guess, so a move that leaves them
+// with nothing removes them, and Undo brings them back with their contact. A contact the owner linked keeps the person.
+private let valeContact = PersonGuess.Contact(identifier: "c-vale", fullName: "Robyn Vale", givenName: "Robyn", nickname: "")
+
+@Test func moveRemovesAnEmptyPersonKeepMadeFromAContactAndUndoRestoresThem() throws {
+    let env = try Env(contacts: [valeContact])
+    let robin = try env.store.people.insertPerson(displayName: "Robin")
+    let moment = try env.kept(in: try env.session(["Robyn painted the fence"])[0], people: ["Robyn"])
+    let made = try #require(try env.store.people.person(id: env.onlyPerson(moment)))
+    #expect(made.nameOrigin == .contact && made.createdByGuess && made.contactIdentifier == "c-vale")
+    let before = try env.dump()
+
+    let receipt = try env.actions.move(try env.link(moment), to: .person(robin.id), wholeGroup: false)
+    #expect(receipt.removedPerson?.id == made.id)
+    #expect(try env.store.people.person(id: made.id) == nil)
+
+    try env.actions.undo(receipt)
+    #expect(try env.dump() == before, "every row as it was")
+    let back = try #require(try env.store.people.person(id: made.id))
+    #expect(back.contactIdentifier == "c-vale" && back.contactName == "Robyn Vale" && back.contactState == "linked" && back.nameOrigin == .contact)
+    #expect(try env.store.people.aliasesOldestFirst(of: made.id).map(\.text) == ["Robyn"])
+}
+
+@Test func undoIsRefusedWhenAnotherPersonHoldsTheRemovedPersonsContact() throws {
+    let env = try Env(contacts: [valeContact])
+    let robin = try env.store.people.insertPerson(displayName: "Robin")
+    let moment = try env.kept(in: try env.session(["Robyn painted the fence"])[0], people: ["Robyn"])
+    let receipt = try env.actions.move(try env.link(moment), to: .person(robin.id), wholeGroup: false)
+    #expect(receipt.removedPerson != nil)
+    try env.db.writer.write { db in
+        try db.execute(sql: "update person set contact_identifier = 'c-vale', contact_name = 'Robyn Vale', contact_state = 'linked' where id = ?",
+                       arguments: [robin.id.rawValue])
+    }
+    #expect(throws: PersonLinkActions.Error.stale) { try env.actions.undo(receipt) }
+}
+
+@Test func aPersonWhoseContactTheOwnerLinkedIsNeverRemoved() throws {
+    let env = try Env(contacts: [valeContact])
+    let robin = try env.store.people.insertPerson(displayName: "Robin")
+
+    // A new name the owner then linked to a contact (the link clears the guess flag, PB3): stays.
+    let tomasMoment = try env.kept(in: try env.session(["Tomas painted the fence"])[0], people: ["Tomas"])
+    let tomas = try env.onlyPerson(tomasMoment)
+    try env.db.writer.write { db in
+        try db.execute(sql: """
+            update person set contact_identifier = 'c-tomas', contact_name = 'Tomas Reyes', contact_state = 'linked', created_by_guess = 0 where id = ?
+            """, arguments: [tomas.rawValue])
+    }
+    #expect(try env.actions.move(try env.link(tomasMoment), to: .person(robin.id), wholeGroup: false).removedPerson == nil)
+    #expect(try env.store.people.person(id: tomas) != nil)
+
+    // A person Keep made from a contact, whom the owner then confirmed: no longer a guess, stays.
+    let robynMoment = try env.kept(in: try env.session(["Robyn fixed the gate"])[0], people: ["Robyn"])
+    let robyn = try env.onlyPerson(robynMoment)
+    try env.actions.settle(try env.link(robynMoment), wholeGroup: false)
+    #expect(try env.actions.move(try env.link(robynMoment), to: .person(robin.id), wholeGroup: false).removedPerson == nil)
+    #expect(try env.store.people.person(id: robyn)?.contactIdentifier == "c-vale")
 }

@@ -15,8 +15,13 @@ struct PersonChipRow: View {
         let source: WhoIsThisViewModel.Source
         /// A waiting card's name the owner marked "Not a person": a quiet chip with the said name (R37).
         var isNotAPerson = false
+        /// The person is one Keep made, or will make, from a contact.
+        let fromContact: Bool
 
-        var line: String? { isNotAPerson ? nil : PersonChipLine.text(origin: origin, saidName: saidName) }
+        // PB1: `contacts: .none` until Task 5 passes what the contacts cache saw.
+        var line: String? {
+            isNotAPerson ? nil : PersonChipLine.text(origin: origin, saidName: saidName, fromContact: fromContact, contacts: .none)
+        }
         var accessibilityLabel: String {
             isNotAPerson ? PersonChipLine.notAPersonLabel(saidName: saidName ?? name)
                          : PersonChipLine.accessibilityLabel(name: name, origin: origin, saidName: saidName)
@@ -29,7 +34,7 @@ struct PersonChipRow: View {
         /// A kept memory's link. The owner's link has no mark and still opens the sheet.
         init(link: PersonLink) {
             id = link.id; name = link.person.displayName; person = link.person.id
-            origin = link.origin; saidName = link.saidName
+            origin = link.origin; saidName = link.saidName; fromContact = link.personFromContact
             source = .link(link)
         }
 
@@ -37,7 +42,7 @@ struct PersonChipRow: View {
         init(chip: PreviewChip, on candidate: Candidate) {
             id = "\(candidate.id.rawValue)|\(chip.id)|\(chip.person?.rawValue ?? chip.name)"
             name = chip.name; person = chip.person
-            origin = chip.origin; saidName = chip.saidName
+            origin = chip.origin; saidName = chip.saidName; fromContact = chip.fromContact
             source = .waiting(candidate: candidate, chip: chip)
             isNotAPerson = chip.isNotAPerson
         }

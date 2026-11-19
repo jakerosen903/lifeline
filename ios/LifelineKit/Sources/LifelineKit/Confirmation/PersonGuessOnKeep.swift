@@ -65,11 +65,41 @@ extension CandidateActions {
         switch result.choice {
         case .person(let id):
             return GuessedLink(person: id, origin: result.origin, aliases: result.origin == .said ? [said.relation].compactMap { $0 } : [])
-        // PC-b replaces `.contact` with a person linked to that contact (rules 3 and 5).
-        case .newPerson, .contact:
-            return plannedPerson(for: said, createdByGuess: true, card: inputs.card, plan: &plan)
-                .map { GuessedLink(person: $0, origin: .new, aliases: []) }
+        case .contact(let identifier):
+            // Rules 3 and 5: a person linked to the one contact that fits. The guess only picks a contact
+            // it was given, so the lookup cannot miss; if it ever did, a new person is the safe answer.
+            if let contact = inputs.contacts.first(where: { $0.identifier == identifier }),
+               let person = plannedPerson(from: contact, said: said, card: inputs.card, plan: &plan) {
+                return GuessedLink(person: person, origin: result.origin, aliases: [])
+            }
+            return newGuessedPerson(for: said, inputs, plan: &plan)
+        case .newPerson:
+            return newGuessedPerson(for: said, inputs, plan: &plan)
         }
+    }
+
+    /// Rules 6 and 7: a person with the said name and no contact, origin `new`.
+    private func newGuessedPerson(for said: SaidName, _ inputs: GuessInputs, plan: inout EntityRepository.Write) -> GuessedLink? {
+        plannedPerson(for: said, createdByGuess: true, card: inputs.card, plan: &plan).map { GuessedLink(person: $0, origin: .new, aliases: []) }
+    }
+
+    /// A new person linked to `contact`, planned once: a second ref in this card that reaches the same
+    /// contact reaches this person. The name is the contact's full name; the said name is the one alias
+    /// ("The person's name"), so the context packet has the owner's words for them. Keep is the app's
+    /// action, so the person is a guess (PB3). The picture is copied after Keep, outside this plan.
+    /// The guess never picks a contact a person holds, so the unique index is not reached here.
+    private func plannedPerson(from contact: PersonGuess.Contact, said: SaidName, card: CandidateID?, plan: inout EntityRepository.Write) -> PersonID? {
+        if let planned = plan.persons.first(where: { $0.contactIdentifier == contact.identifier }) { return planned.id }
+        let name = contact.fullName.trimmingCharacters(in: .whitespacesAndNewlines)
+        // A contact matches only by a said name, so one is always there; the guard keeps an empty one out.
+        guard let saidName = said.name?.trimmingCharacters(in: .whitespacesAndNewlines), !saidName.isEmpty, !name.isEmpty else { return nil }
+        let person = Person(id: .init(), displayName: name, notes: nil, isOwner: false, birthDate: nil, birthDateOrigin: nil,
+                            nameOrigin: .contact, createdByGuess: true, contactIdentifier: contact.identifier,
+                            contactName: name, contactState: Person.contactLinked)
+        plan.entities.append(Entity(id: person.entityID, type: .person, title: name, createdFromCandidateID: card))
+        plan.persons.append(person)
+        plan.aliases.append(Alias(personID: person.id, text: saidName))
+        return person.id
     }
 
     /// A new person for a said name, planned once: a second ref with the same name in this

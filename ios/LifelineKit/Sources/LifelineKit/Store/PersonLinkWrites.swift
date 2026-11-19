@@ -233,14 +233,15 @@ extension PersonLinkRepository {
 
     // MARK: - The empty guess
 
-    /// Deletes a person the guess made that nothing holds any more: no link, photo, contact, name the
-    /// owner gave, mention, choice, tag, curiosity or session subject. A person the owner edited
-    /// (a typed name, stated dates, hidden or kept from the AI) stays (R39). Returns what Undo needs.
+    /// Deletes a person the guess made that nothing holds any more: no link, photo, contact the owner
+    /// linked, name the owner gave, mention, choice, tag, curiosity or session subject. A person the owner
+    /// edited (a typed name, stated dates, hidden or kept from the AI) stays (R39). A person Keep made from
+    /// a contact is still the app's guess and may go with that contact (PB2). Returns what Undo needs.
     /// The pre-v10 link table is not checked: only v15 Keep makes a guessed person, and it never writes there.
     private static func removeIfEmptyGuess(_ id: PersonID, in db: Database) throws -> (person: Person, entity: Entity, aliases: [Alias])? {
         guard let person = try Person.fetchOne(db, sql: Person.selectSQL + "where person.id = ?", arguments: [id.rawValue]),
-              person.createdByGuess, !person.isOwner, person.contactIdentifier == nil, person.contactPhotoID == nil,
-              person.nameOrigin == .said,
+              person.createdByGuess, !person.isOwner, person.contactPhotoID == nil,
+              (person.nameOrigin == .said && person.contactIdentifier == nil) || person.isGuessFromContact,
               let entity = try Entity.fetchOne(db, key: person.entityID.rawValue),
               entity.range == .unplaced, !entity.hiddenFromTimeline, !entity.excludedFromAI else { return nil }
         let held = try Int.fetchOne(db, sql: """
@@ -251,7 +252,8 @@ extension PersonLinkRepository {
                  + (select count(*) from domain_tag where element_kind = 'entity' and element_id = :e)
             """, arguments: ["e": entity.id.rawValue, "p": id.rawValue]) ?? 1
         guard held == 0 else { return nil }
-        let aliases = try Alias.filter(Column("person_id") == id.rawValue).fetchAll(db)
+        // Oldest first, so Undo puts them back in the order the packet reads them.
+        let aliases = try Alias.filter(Column("person_id") == id.rawValue).order(Column.rowID).fetchAll(db)
         _ = try Entity.deleteOne(db, key: entity.id.rawValue)   // the person, aliases and spans go by cascade
         return (person, entity, aliases)
     }
@@ -281,6 +283,9 @@ extension PersonLinkRepository {
             touched.insert(removed.id)
             if try Entity.exists(db, key: removed.id.rawValue) { throw Error.stale }
         }
+        // One contact, one person: refuse before the unique index does, when another person holds the contact now.
+        if let contact = r.removedPerson?.contactIdentifier,
+           (try Int.fetchOne(db, sql: "select count(*) from person where contact_identifier = ?", arguments: [contact]) ?? 0) > 0 { throw Error.stale }
         if let created = r.createdPerson {
             touched.insert(EntityID(rawValue: created.rawValue))
             let links = try Int.fetchOne(db, sql: "select count(*) from moment_entity where entity_id = ?", arguments: [created.rawValue]) ?? 0

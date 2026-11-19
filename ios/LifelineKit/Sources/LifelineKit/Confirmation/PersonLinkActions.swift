@@ -39,10 +39,13 @@ public struct PreviewChip: Sendable, Equatable, Identifiable {
     public var saidName: String; public var name: String; public var origin: LinkOrigin; public var person: PersonID?
     /// The owner marked this name "Not a person": Keep links nothing, and the quiet chip reopens the sheet (R37).
     public var isNotAPerson: Bool
+    /// The person is, or Keep will make them, from a contact (`PersonLink.personFromContact`).
+    public var fromContact: Bool
     public var id: String { SaidName.key(saidName) }
 
-    public init(saidName: String, name: String, origin: LinkOrigin, person: PersonID?) {
-        self.saidName = saidName; self.name = name; self.origin = origin; self.person = person; self.isNotAPerson = false
+    public init(saidName: String, name: String, origin: LinkOrigin, person: PersonID?, fromContact: Bool = false) {
+        self.saidName = saidName; self.name = name; self.origin = origin; self.person = person
+        self.isNotAPerson = false; self.fromContact = fromContact
     }
 
     /// The chip shows the said name with no line and no mark: the owner's own answer (`confirmed`).
@@ -60,7 +63,7 @@ public struct PersonLinkActions: Sendable {
     public enum Target: Sendable, Equatable { case person(PersonID), someoneNew, notAPerson }
 
     private let store: ExtractionStore
-    /// The contacts Keep's guess may match against, so a preview shows what Keep will do. PC-b sets it.
+    /// The contacts Keep's guess may match against, so a preview shows what Keep will do.
     public var contactsForGuess: @Sendable () -> [PersonGuess.Contact] = { [] }
 
     public init(store: ExtractionStore) { self.store = store }
@@ -101,9 +104,11 @@ public struct PersonLinkActions: Sendable {
             // Keep's guess gives every person link its said name and an origin.
             guard let origin = link.origin else { return nil }
             let said = link.roleText ?? ""
-            if let new = planned[link.personID] { return PreviewChip(saidName: said, name: new.displayName, origin: origin, person: nil) }
+            if let new = planned[link.personID] {
+                return PreviewChip(saidName: said, name: new.displayName, origin: origin, person: nil, fromContact: new.isGuessFromContact)
+            }
             guard let person = try store.people.person(id: link.personID) else { return nil }
-            return PreviewChip(saidName: said, name: person.displayName, origin: origin, person: person.id)
+            return PreviewChip(saidName: said, name: person.displayName, origin: origin, person: person.id, fromContact: person.isGuessFromContact)
         }
         let refs = out.peopleRefs + (try store.candidates.continuations(of: candidate.id).compactMap(CandidatePayload.memory).flatMap(\.peopleRefs))
         return Self.withNotAPerson(linked, refs: refs, choices: try store.personLinks.choices(for: candidate.id))

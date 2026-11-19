@@ -3,13 +3,24 @@ import Foundation
 /// The words under a person chip and on the landing page. Pure text; the views choose the colour.
 /// The copy is a draft until the owner writes the final copy.
 public enum PersonChipLine {
-    /// nil for a link with no line (said, confirmed, older).
-    public static func text(origin: LinkOrigin?, saidName: String?) -> String? {
+    /// What the app saw of the contacts for a new name: `none` when it sees no contacts (no access, or
+    /// not asked yet), `noMatch` when none fits the said name, `someMatch` when one or more fit.
+    public enum ContactsSeen: Sendable { case none, noMatch, someMatch }
+
+    /// nil for a link with no line (said, confirmed, older). `fromContact` is a person Keep made from a
+    /// contact (`PersonLink.personFromContact`, `PreviewChip.fromContact`).
+    public static func text(origin: LinkOrigin?, saidName: String?, fromContact: Bool, contacts: ContactsSeen) -> String? {
         switch origin {
         case .assumed:
+            if fromContact { return "Assumed \u{00B7} new, from your contacts" }
             guard let said = clean(saidName) else { return "Assumed" }
             return "Assumed \u{00B7} you said \u{201C}\(said)\u{201D}"
-        case .new: return "New"
+        case .new:
+            switch contacts {
+            case .none: return "New"
+            case .noMatch: return "New \u{00B7} not in your contacts"
+            case .someMatch: return "New \u{00B7} not linked yet"
+            }
         case .said, .confirmed, nil: return nil
         }
     }

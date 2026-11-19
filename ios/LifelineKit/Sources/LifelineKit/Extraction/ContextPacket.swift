@@ -94,6 +94,7 @@ public struct ContextPacketLimits: Sendable, Equatable {
 public enum ContextPacketBuilder {
     public static let defaultBudgetTokens = 6000
 
+    /// `people` carry their aliases oldest first (`PeopleRepository.aliasesOldestFirst`).
     public static func build(segment: Segment, previous: [Segment], people: [(Person, [Alias])], memories: [Memory],
                              profileFreeText: String?, stage: String, limits: ContextPacketLimits = ContextPacketLimits(),
                              chapters: [Chapter] = [], curiosity: [CuriosityItem] = [], excludedMemoryIDs: Set<MemoryID> = [],
@@ -104,11 +105,8 @@ public enum ContextPacketBuilder {
         let window = earlier.suffix(limits.previousSegments).map(\.text)
         let entries = people
             .filter { !$0.0.isOwner }
+            .compactMap { personEntry($0.0, $0.1) }
             .prefix(limits.people)
-            .map { person, aliases in
-                ContextPacket.PersonEntry(id: person.id.rawValue, name: person.displayName,
-                                          aliases: aliases.map(\.text).filter { $0.caseInsensitiveCompare(person.displayName) != .orderedSame })
-            }
         // Related earlier memories lead, so the extractor sees what a retelling might belong to.
         var seen = Set<MemoryID>()
         var memoryEntries: [ContextPacket.MemoryEntry] = []
@@ -141,6 +139,21 @@ public enum ContextPacketBuilder {
                                    })
         trim(&packet, to: budgetTokens)
         return packet
+    }
+
+    /// One person as the model sees them: only names the owner said or typed. A person whose name came
+    /// from a contact goes by their oldest alias (`aliases` must come oldest first), never by the
+    /// contact's name; with no alias they are left out.
+    static func personEntry(_ person: Person, _ aliases: [Alias]) -> ContextPacket.PersonEntry? {
+        let name: String
+        if person.nameOrigin == .contact {
+            guard let oldest = aliases.first else { return nil }
+            name = oldest.text
+        } else {
+            name = person.displayName
+        }
+        return ContextPacket.PersonEntry(id: person.id.rawValue, name: name,
+                                         aliases: aliases.map(\.text).filter { $0.caseInsensitiveCompare(name) != .orderedSame })
     }
 
     /// Tokens as characters ÷ 4, never less than one.

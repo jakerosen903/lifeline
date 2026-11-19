@@ -264,7 +264,8 @@ struct EntityScreen: View {
                 NavigationLink { open(memory) } label: {
                     VStack(alignment: .leading, spacing: 4) {
                         label()
-                        if let line = PersonChipLine.text(origin: link.origin, saidName: link.saidName) {
+                        if let line = PersonChipLine.text(origin: link.origin, saidName: link.saidName,
+                                                          fromContact: link.personFromContact, contacts: .none) {   // PB1: Task 5 passes the cache's value
                             Text(line).font(.footnote).foregroundStyle(Theme.ochreText)
                                 .fixedSize(horizontal: false, vertical: true)
                         }
