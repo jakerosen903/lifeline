@@ -39,7 +39,9 @@ extension CandidateActions {
             let names = card.allEntityRefs.contains { Self.same($0.text, mention.text) }
             let about = mention.ref != nil && card.aboutRef == mention.ref && !memory.isMoment
             guard names || about else { continue }
-            plan.links.append(MomentEntity(memoryID: memory.id, entityID: entity.id, relation: about ? .detail : .mention, roleText: about ? nil : mention.text))
+            // "It's a person" is the owner's answer, so a person link is theirs: `confirmed`.
+            plan.links.append(MomentEntity(memoryID: memory.id, entityID: entity.id, relation: about ? .detail : .mention, roleText: about ? nil : mention.text,
+                                           origin: chosen == .person ? .confirmed : nil))
             if firstSpan == nil { firstSpan = try store.memories.spans(of: memory.id).first }
         }
         // Order 0 is ignored when the entity already has a first telling.

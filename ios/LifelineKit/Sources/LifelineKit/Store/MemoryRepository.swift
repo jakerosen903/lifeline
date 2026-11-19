@@ -25,9 +25,10 @@ public struct MemoryRepository: Sendable {
             try memory.insert(db)
             for span in spans { try span.insert(db) }
             try EntityRepository.apply(entities, in: db)
-            for person in people { try person.link.insertIgnoringDuplicate(db) }
+            // A retelling may name someone the memory already has: the stronger origin stays.
+            for person in people { try person.link.insertKeepingStrongerOrigin(db) }
             for place in places { try place.link.insertIgnoringDuplicate(db) }
-            for link in links { try link.insertIgnoringDuplicate(db) }
+            for link in links { try link.insertKeepingStrongerOrigin(db) }
             try EntityRepository.giveFirstTelling(toEntitiesOf: memory.id, span: spans[0], in: db)
             for anchor in anchors { try anchor.insert(db) }
             if let candidate {
@@ -42,7 +43,8 @@ public struct MemoryRepository: Sendable {
         }
     }
 
-    /// The cards that carried a telling on, marked accepted with it.
+    /// The cards that carried a telling on, marked accepted with it. Keep also passes the pending
+    /// person cards whose name it linked, so they close in the same transaction.
     static func accept(_ continuations: [CandidateID], in db: Database) throws {
         for id in continuations {
             try db.execute(sql: "update candidate set status = ? where id = ?", arguments: [CandidateStatus.accepted.rawValue, id.rawValue])
@@ -348,9 +350,10 @@ public struct MemoryRepository: Sendable {
                 try extra.insert(db)
             }
             try EntityRepository.apply(entities, in: db)
-            for person in people { try person.link.insertIgnoringDuplicate(db) }
+            // A retelling may name someone the memory already has: the stronger origin stays.
+            for person in people { try person.link.insertKeepingStrongerOrigin(db) }
             for place in places { try place.link.insertIgnoringDuplicate(db) }
-            for link in links { try link.insertIgnoringDuplicate(db) }
+            for link in links { try link.insertKeepingStrongerOrigin(db) }
             try EntityRepository.giveFirstTelling(toEntitiesOf: span.memoryID, span: span, in: db)
             for anchor in anchors { try anchor.insert(db) }
             try db.execute(sql: "update candidate set status = ? where id = ?", arguments: [CandidateStatus.accepted.rawValue, candidate.rawValue])
@@ -415,9 +418,10 @@ public struct MemoryRepository: Sendable {
             }
             // A link moves with its role text ("my sister"); a role the person typed is theirs to keep.
             for entity in moving.people.map(\.rawValue) + moving.places.map(\.rawValue) {
+                // The new memory has no links yet, so nothing collides; origin and handle move with the row (R6).
                 try db.execute(sql: """
-                    insert or ignore into moment_entity (memory_id, entity_id, relation, role_text)
-                    select ?, entity_id, relation, role_text from moment_entity where memory_id = ? and entity_id = ?
+                    insert or ignore into moment_entity (memory_id, entity_id, relation, role_text, origin, person_handle)
+                    select ?, entity_id, relation, role_text, origin, person_handle from moment_entity where memory_id = ? and entity_id = ?
                     """, arguments: [new.id.rawValue, memory.rawValue, entity])
                 try db.execute(sql: "delete from moment_entity where memory_id = ? and entity_id = ?", arguments: [memory.rawValue, entity])
             }
@@ -482,10 +486,11 @@ public struct MemoryRepository: Sendable {
                 moved.range = source.range
                 try moved.update(db, columns: ["earliest", "latest", "likely_start", "likely_end", "granularity", "origin", "evidence_text"])
             }
-            try db.execute(sql: """
-                insert or ignore into moment_entity (memory_id, entity_id, relation, role_text)
-                select ?, entity_id, relation, role_text from moment_entity where memory_id = ?
-                """, arguments: [target.id.rawValue, source.id.rawValue])
+            // A link both memories hold keeps the target's row and the stronger origin (R6).
+            for var link in try MomentEntity.filter(Column("memory_id") == source.id.rawValue).fetchAll(db) {
+                link.memoryID = target.id
+                try link.insertKeepingStrongerOrigin(db)
+            }
             try db.execute(sql: "update anchor set memory_id = ? where memory_id = ?", arguments: [target.id.rawValue, source.id.rawValue])
             let targetCollections = try Int.fetchOne(db, sql: "select count(*) from collection_memory where memory_id = ?", arguments: [target.id.rawValue]) ?? 0
             if targetCollections == 0 {
@@ -695,10 +700,11 @@ public struct MemoryRepository: Sendable {
                 let rows = try MomentEntity.filter(Column("memory_id") == id.rawValue).fetchAll(db)
                 receipt.details = rows.filter { $0.relation == .detail }.map(\.entityID)
                 receipt.alsoMentioned = Set(rows.filter { $0.relation == .mention }.map(\.entityID)).intersection(receipt.details)
-                try db.execute(sql: """
-                    insert or ignore into moment_entity (memory_id, entity_id, relation, role_text)
-                    select memory_id, entity_id, 'mention', role_text from moment_entity where memory_id = ? and relation = 'detail'
-                    """, arguments: [id.rawValue])
+                // A detail that is also a mention keeps the mention row and the stronger origin (R6).
+                for var link in rows where link.relation == .detail {
+                    link.relation = .mention
+                    try link.insertKeepingStrongerOrigin(db)
+                }
                 try db.execute(sql: "delete from moment_entity where memory_id = ? and relation = 'detail'", arguments: [id.rawValue])
             } else {
                 // Stories are for scenes. The place is remembered so an undo can give it back.
@@ -724,10 +730,12 @@ public struct MemoryRepository: Sendable {
             try db.execute(sql: "update memory set kind = ? where id = ?", arguments: [receipt.from.rawValue, receipt.memory.rawValue])
             for entity in receipt.details {
                 if receipt.alsoMentioned.contains(entity) {
-                    try db.execute(sql: """
-                        insert or ignore into moment_entity (memory_id, entity_id, relation, role_text)
-                        select memory_id, entity_id, 'detail', role_text from moment_entity where memory_id = ? and entity_id = ? and relation = 'mention'
-                        """, arguments: [receipt.memory.rawValue, entity.rawValue])
+                    let mentions = try MomentEntity.filter(Column("memory_id") == receipt.memory.rawValue && Column("entity_id") == entity.rawValue
+                                                           && Column("relation") == EntityRelation.mention.rawValue).fetchAll(db)
+                    for var link in mentions {
+                        link.relation = .detail
+                        try link.insertKeepingStrongerOrigin(db)
+                    }
                 } else {
                     try db.execute(sql: "update moment_entity set relation = 'detail' where memory_id = ? and entity_id = ? and relation = 'mention'",
                                    arguments: [receipt.memory.rawValue, entity.rawValue])
@@ -771,10 +779,11 @@ public struct MemoryRepository: Sendable {
         }
     }
 
-    /// Links a person to a memory; a second link to the same person is a no-op.
-    public func link(_ person: PersonID, to memory: MemoryID, roleText: String?) throws {
+    /// Links a person to a memory. The default origin is the owner's: every caller is an owner's
+    /// action (the Change sheet, an answer). A second link keeps its role text and the stronger origin.
+    public func link(_ person: PersonID, to memory: MemoryID, roleText: String?, origin: LinkOrigin? = .confirmed) throws {
         try db.writer.write { db in
-            try MemoryPerson(memoryID: memory, personID: person, roleText: roleText).link.insertIgnoringDuplicate(db)
+            try MemoryPerson(memoryID: memory, personID: person, roleText: roleText, origin: origin).link.insertKeepingStrongerOrigin(db)
         }
     }
 }
