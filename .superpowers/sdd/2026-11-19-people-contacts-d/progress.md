@@ -35,3 +35,5 @@ The owner said "Yes, build both" (PC-d, then PC-c) on 2026-11-19, without a revi
 - Task 4b: complete (commits c858ef5..214e370, review clean). Rulings D22 to D24.
 - Task 4b: minor (deferred): no queue test for an output with `about_ref` only; the doc comment of `mayFollowAHandle` does not say why the wide gate is safe (D15).
 - Task 4b review, Minor that needs a ruling: a fact with only `about_ref` = a handle, kept before or without the card that named the person, gets no detail and no sign. Ruling D22; the change rides with Task 6.
+- Task 6: complete (commits d5c0da8..09f7087, review clean; includes D22). Open: its UI tests are built and NOT run (the simulator was held by the PR #35 suite). To run: `PeopleGuessUITests` (with the new `testTwoPeopleWithOneNameGetTwoChips`), `PeopleContactsUITests`, `LandingUITests`, `ExtractionUITests`, `FollowUpUITests`, `EntityPageUITests`, `KindsUITests`, `InterviewerUITests`; watch for a changed origin or chip of an on-file person that the sample script names.
+- Task 6: minor (deferred): "the naming card is never kept" has no test of its own; no kit test that the scripted Maya card links an on-file Maya.
