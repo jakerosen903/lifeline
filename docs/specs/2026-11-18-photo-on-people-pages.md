@@ -1,6 +1,6 @@
 # A photo story's photo goes on the pages of its people
 
-Status: draft for the owner. Not approved. Nothing is built.
+Status: approved by the owner on 2026-11-18, with approach A (the stored fact, one migration) and the calls in "Calls made without the owner" as written. The owner can still overrule each call. Plan: `docs/plans/2026-11-18-photo-on-people-pages.md`.
 
 Changes: `docs/specs/2026-11-18-photo-card-key-photo.md` (the photo card). It reverses one rule of that spec: "a page link is always the person's tap".
 
