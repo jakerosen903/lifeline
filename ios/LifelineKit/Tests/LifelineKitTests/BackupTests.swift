@@ -452,6 +452,27 @@ private func stagedRestore() throws -> (target: Root, documents: URL) {
         #expect(try restored.turns(in: session) == [spoken])
     }
 
+    /// M10: a link's origin and a person's guess flag (v15) ride along with the whole file.
+    @Test func aLinkOriginAndAGuessFlagSurviveBackupAndRestore() throws {
+        let source = try Root(sessions: 1, memories: 1)
+        let memory = MemoryID(rawValue: try #require(try source.db.writer.read { try String.fetchOne($0, sql: "select id from memory") }))
+        let tomas = try source.store.people.insertPerson(displayName: "Tomas")
+        try source.db.writer.write { try $0.execute(sql: "update person set created_by_guess = 1, name_origin = 'said' where id = ?", arguments: [tomas.id.rawValue]) }
+        try source.store.entities.link(memory, tomas.entityID, relation: .mention, roleText: "Tomas", origin: .assumed)
+        let archive = source.url.appending(path: "people.lifeline")
+        _ = try Backup.export(root: source.url, appVersion: "1.0", to: archive, database: source.db)
+
+        let target = FileManager.default.temporaryDirectory.appending(path: "lifeline-restore-\(UUID().uuidString)")
+        _ = try AppDatabase.open(at: target.appending(path: "Lifeline/lifeline.sqlite"))
+        let documents = try docs()
+        _ = try Backup.stage(archive, root: target, appVersion: "1.0", safetyCopyDirectory: documents)
+        #expect(try Backup.applyPendingRestore(root: target, safetyCopyDirectory: documents))
+        let restored = ExtractionStore(try AppDatabase.open(at: target.appending(path: "Lifeline/lifeline.sqlite")))
+        let person = try #require(try restored.people.person(id: tomas.id))
+        #expect(person.createdByGuess && person.nameOrigin == .said)
+        #expect(try restored.entities.links(of: memory).filter { $0.entity.id == tomas.entityID }.map(\.link.origin) == [.assumed])
+    }
+
     @Test func exportCarriesThePhotosAndCountsThem() throws {
         let source = try Root(sessions: 1, memories: 1, photos: 2)
         let archive = source.url.appending(path: "photos.lifeline")

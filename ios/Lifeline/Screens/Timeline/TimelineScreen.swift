@@ -84,7 +84,7 @@ struct TimelineScreen: View {
             .sheet(isPresented: $showSettings, onDismiss: { viewModel.refresh() }) {
                 SettingsScreen(deps: viewModel.deps, isSessionLive: { viewModel.home.presented != nil })
             }
-            .sheet(item: Binding(get: { viewModel.changing }, set: { viewModel.changing = $0 })) { memory in
+            .sheet(item: Binding(get: { viewModel.changing }, set: { viewModel.changing = $0 }), onDismiss: { viewModel.cards.peopleChanged() }) { memory in
                 ChangeSheet(memory: memory, deps: viewModel.deps, includeHidden: viewModel.showHidden) { viewModel.refresh() }
             }
             .sheet(item: $dateTarget, onDismiss: { viewModel.refresh() }) { row in

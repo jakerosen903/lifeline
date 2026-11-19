@@ -8,9 +8,17 @@ public struct LandingRow: Equatable, Sendable, Identifiable {
     public var segmentID: SegmentID
     public var play: MsRange
     public var isKept: Bool
+    /// Where the row's people come from: the kept memory's links, or the waiting card's preview.
+    public var source: Source
 
-    public init(id: String, title: String, quote: String, segmentID: SegmentID, play: MsRange, isKept: Bool) {
+    public enum Source: Equatable, Sendable {
+        case memory(MemoryID)
+        case candidate(CandidateID)
+    }
+
+    public init(id: String, title: String, quote: String, segmentID: SegmentID, play: MsRange, isKept: Bool, source: Source) {
         self.id = id; self.title = title; self.quote = quote; self.segmentID = segmentID; self.play = play; self.isKept = isKept
+        self.source = source
     }
 }
 
@@ -31,13 +39,14 @@ public enum Landing {
                         // A retelling merged into an older memory is its own moment here, under the words it was kept with.
                         LandingRow(id: "memory:\(memory.id.rawValue):\(span.order)", title: span.order == 0 ? memory.title : (span.titleText ?? memory.title),
                                    quote: memory.summaryQuote,
-                                   segmentID: span.segmentID, play: MsRange(start: span.startMs, end: span.endMs), isKept: true)))
+                                   segmentID: span.segmentID, play: MsRange(start: span.startMs, end: span.endMs), isKept: true,
+                                   source: .memory(memory.id))))
         }
         for (candidate, out) in possible {
             guard let seg = index[candidate.segmentID] else { continue }
             all.append(((seg.index, seg.endMs + candidate.ordinal),   // after any kept span of the same moment
                         LandingRow(id: "candidate:\(candidate.id.rawValue)", title: out.title, quote: out.quote,
-                                   segmentID: seg.id, play: seg.range, isKept: false)))
+                                   segmentID: seg.id, play: seg.range, isKept: false, source: .candidate(candidate.id))))
         }
         let ordered = all.sorted { $0.order < $1.order }.map(\.row)
         return (Array(ordered.prefix(cap)), max(0, ordered.count - cap))

@@ -91,3 +91,14 @@ These supersede the matching Phase 1 screens. See `docs/DECISIONS.md`, entries d
 | KP1_KeyPhoto.dc.html | Key photo | The first photo is the key photo; drag a photo to the front to change it |
 
 Spec: `docs/specs/2026-11-18-photo-card-key-photo.md`.
+
+## People and contacts (2026-11-18)
+
+The owner approved these four screens on 2026-11-18. The wording on them is the designer's draft, not final copy. Spec: `docs/specs/2026-11-18-people-contacts.md`.
+
+| File | Screen | What it shows |
+| --- | --- | --- |
+| PC1_Assumed.dc.html | After a story: who the app assumed | Each guessed name has a dashed ochre outline and the word "Assumed". Keeping a moment does not settle a guess |
+| PC2_WhoIsThis.dc.html | Who is this? | One sheet: the guess, a matching contact, "Someone new", a contacts search, and a checkbox that moves the other moments of the same recording |
+| PC3_PersonLinked.dc.html | A person linked to a contact | The contact's picture as the first picture, "Linked to … in your contacts · Change", and a guessed moment that stays marked with a confirm and "Someone else…" |
+| PC4_NoContact.dc.html | A person with no contact | No contact is fine. "Link to a contact", a suggestion when a matching contact appears later, and the state with no contacts access |

@@ -57,10 +57,12 @@ struct MemoryScreen: View {
                     }
                 }
 
-                if viewModel.place != nil || !viewModel.people.isEmpty {
-                    Text([viewModel.place?.nameText, viewModel.people.isEmpty ? nil : "with " + viewModel.people.map(\.displayName).joined(separator: " and ")]
-                            .compactMap { $0 }.joined(separator: " · "))
-                        .font(.subheadline).foregroundStyle(Theme.secondaryText)
+                if let place = viewModel.place {
+                    Text(place.nameText).font(.subheadline).foregroundStyle(Theme.secondaryText)
+                }
+                PersonChipRow(items: viewModel.personLinks.map(PersonChipRow.Item.init(link:)), deps: deps) { outcome in
+                    viewModel.personSheetDone(outcome)
+                    if case .unchanged = outcome {} else { onChange() }
                 }
 
                 VStack(alignment: .leading, spacing: 10) {
@@ -167,6 +169,10 @@ struct MemoryScreen: View {
                         onTellStory: tellStory)
         }
         .photoErrorSlot(viewModel.photoError)
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            PersonMoveNoticeSlot(notice: viewModel.personMove) { if viewModel.undoPersonMove() { onChange() } }
+        }
+        .animation(.default, value: viewModel.personMove.text)
         .sheet(isPresented: $changing, onDismiss: { viewModel.refresh(); onChange() }) {
             ChangeSheet(memory: viewModel.memory, deps: deps) {}
         }

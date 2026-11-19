@@ -393,6 +393,41 @@ enum Migrations {
             }
             try db.create(index: "session_subject_photo", on: "session", columns: ["subject_photo_id"])
         }
+
+        // v15 (people and contacts): a link records how it was made; a person can be backed by a contact.
+        // Additive: no existing row or column changes. An old link has a nil origin.
+        m.registerMigration("v15") { db in
+            try db.alter(table: "person") { t in
+                t.add(column: "contact_identifier", .text)
+                t.add(column: "contact_name", .text)
+                t.add(column: "contact_state", .text)
+                t.add(column: "contact_photo_id", .text).references("photo", onDelete: .setNull)
+                t.add(column: "name_origin", .text)
+                t.add(column: "created_by_guess", .boolean).notNull().defaults(to: false)
+            }
+            // One contact belongs to one person.
+            try db.execute(sql: "create unique index person_contact_identifier on person (contact_identifier) where contact_identifier is not null")
+            try db.alter(table: "moment_entity") { t in
+                t.add(column: "origin", .text)
+                t.add(column: "person_handle", .text)
+            }
+            // A contact the owner said is not this person, so it is not offered again.
+            try db.create(table: "contact_declined") { t in
+                t.column("person_id", .text).notNull().references("person", onDelete: .cascade)
+                t.column("contact_identifier", .text).notNull()
+                t.primaryKey(["person_id", "contact_identifier"])
+            }
+            // The owner's answer for one said name on one card. `said_name` is stored normalized;
+            // `choice` is person, contact, new or not_a_person.
+            try db.create(table: "candidate_person_choice") { t in
+                t.column("candidate_id", .text).notNull().references("candidate", onDelete: .cascade)
+                t.column("said_name", .text).notNull()
+                t.column("choice", .text).notNull()
+                t.column("person_id", .text).references("person", onDelete: .cascade)
+                t.column("contact_identifier", .text)
+                t.primaryKey(["candidate_id", "said_name"])
+            }
+        }
         return m
     }
 }

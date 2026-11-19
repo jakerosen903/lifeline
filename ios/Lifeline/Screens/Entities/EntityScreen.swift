@@ -22,6 +22,12 @@ struct EntityScreen: View {
     /// The page an "Often with" chip opened.
     @State private var opened: Entity?
     @State private var addingPhoto = false
+    /// The open "Who is this?" sheet's model, made once at the tap (the page re-renders and must not re-read the people).
+    @State private var asking: Asking?
+    private struct Asking: Identifiable {
+        let id: String
+        let model: WhoIsThisViewModel
+    }
     /// The photo open in the viewer.
     @State private var viewing: PlacedPhoto?
     @Environment(\.dismiss) private var dismiss
@@ -134,6 +140,8 @@ struct EntityScreen: View {
             .onChange(of: viewModel.shelf.cover?.id) { withAnimation { proxy.scrollTo(Self.top, anchor: .top) } }
         }
         .scrollContentBackground(.hidden)
+        // The person is gone and the notice is still up: the page shows what it last read, and writes nothing.
+        .disabled(viewModel.isGone)
         .navigationDestination(item: $opened) { other in
             EntityScreen(viewModel: EntityViewModel(entity: other, deps: viewModel.deps), onChange: onChange)
         }
@@ -152,6 +160,7 @@ struct EntityScreen: View {
                         .accessibilityIdentifier("entity.addDates")
                 }
             } label: { Image(systemName: "ellipsis.circle") }
+                .disabled(viewModel.isGone)
                 .accessibilityIdentifier("entity.more")
         }
         .alert("Change the name", isPresented: $renaming) {
@@ -178,12 +187,23 @@ struct EntityScreen: View {
                         onTellStory: tellStory)
         }
         .photoErrorSlot(viewModel.photoError)
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            PersonMoveNoticeSlot(notice: viewModel.personMove) { if viewModel.undoPersonMove() { onChange() } }
+        }
+        .animation(.default, value: viewModel.personMove.text)
+        .sheet(item: $asking) { asking in
+            WhoIsThisSheet(viewModel: asking.model) { outcome in
+                self.asking = nil
+                viewModel.personSheetDone(outcome)
+                onChange()
+            }
+        }
         .onAppear { isVisible = true; viewModel.refresh() }
         .onDisappear { isVisible = false; viewModel.stop(); viewModel.clearPhotoError() }
         // A session started here lands under a cover; when it closes, read what it added.
         .onChange(of: home?.coverClosings) { if isVisible { viewModel.refresh() } }
         .sessionContext(viewModel.subject)
-        .onChange(of: viewModel.isGone) { if viewModel.isGone { onChange(); dismiss() } }
+        .onChange(of: viewModel.shouldClose) { if viewModel.shouldClose { onChange(); dismiss() } }
     }
 
     /// The header row's id, for the scroll back to the cover.
@@ -215,18 +235,17 @@ struct EntityScreen: View {
     /// Something said about it: the whole quote, cleaned for reading only (the stored words stay).
     private func detail(_ memory: Memory) -> some View {
         let quote = EntityPage.readableQuote(of: memory)
-        return NavigationLink { open(memory) } label: {
+        return guessable(memory, identifier: "entity.detail") {
             Text(quote).font(.system(.body, design: .serif)).foregroundStyle(Theme.ink)
                 .fixedSize(horizontal: false, vertical: true)
                 .accessibilityLabel(quote)
         }
-        .accessibilityIdentifier("entity.detail")
     }
 
     /// A moment: its date above its title, as on Timeline. A half-open range has no date to show.
     /// VoiceOver reads the title, then the date with its uncertainty ("around 1998").
     private func moment(_ memory: Memory) -> some View {
-        NavigationLink { open(memory) } label: {
+        guessable(memory, identifier: "entity.moment") {
             VStack(alignment: .leading, spacing: 2) {
                 if memory.range.isDated {
                     Text(memory.range.displayText).font(.footnote).foregroundStyle(Theme.ochreText)
@@ -237,7 +256,46 @@ struct EntityScreen: View {
             .accessibilityLabel(memory.title)
             .accessibilityValue(memory.range.isDated ? memory.range.displayText : "")
         }
-        .accessibilityIdentifier("entity.moment")
+    }
+
+    /// A row that opens its memory. When the person is here by a guess, the row is a card with the dashed
+    /// mark, the "Assumed" line and the two answers. Otherwise it is the plain row, unchanged (PC3).
+    @ViewBuilder private func guessable<Label: View>(_ memory: Memory, identifier: String, @ViewBuilder label: () -> Label) -> some View {
+        if let link = viewModel.guessed[memory.id] {
+            VStack(alignment: .leading, spacing: 10) {
+                NavigationLink { open(memory) } label: {
+                    VStack(alignment: .leading, spacing: 4) {
+                        label()
+                        if let line = PersonChipLine.text(origin: link.origin, saidName: link.saidName) {
+                            Text(line).font(.footnote).foregroundStyle(Theme.ochreText)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .accessibilityIdentifier(identifier)
+                VStack(alignment: .leading, spacing: 4) {
+                    Button(PersonChipLine.confirmLabel(name: link.person.displayName)) { viewModel.confirm(memory.id) }
+                        .buttonStyle(.borderedProminent).tint(Theme.oliveOnFill).controlSize(.large)
+                        .frame(minHeight: 44)
+                        .accessibilityIdentifier("entity.moment.confirm")
+                    Button("Someone else\u{2026}") {
+                        asking = Asking(id: link.id, model: WhoIsThisViewModel(source: .link(link), deps: viewModel.deps))
+                    }
+                    .buttonStyle(.bordered).tint(Theme.oliveOnFill).controlSize(.large)
+                    .frame(minHeight: 44)
+                    .accessibilityIdentifier("entity.moment.someoneElse")
+                }
+            }
+            .padding(14)
+            .assumedOutline()
+            // A container element: without it the identifier passes down and replaces the row's and the buttons' own.
+            .accessibilityElement(children: .contain)
+            .accessibilityIdentifier("entity.moment.assumed")
+        } else {
+            NavigationLink { open(memory) } label: { label() }
+                .accessibilityIdentifier(identifier)
+        }
     }
 
     /// An idea's line: its quote, and its date when it is a placed moment.

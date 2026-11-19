@@ -108,16 +108,18 @@ public struct ScriptedExtractionService: ExtractionService {
         return ExtractorOutput(memories: memories, mentions: mentions, flags: .none)
     }
 
-    /// The follow-up script: one memory that names a domain ("family"), a thing (the garden gate)
-    /// and a person (Dara), all referring to that memory, so Keep shows three chips on its card.
+    /// The follow-up script: one memory that names a domain ("family"), a thing (the garden gate), a person
+    /// (Dara) and a group phrase ("our parents"), all referring to that memory. Keep links the gate and Dara,
+    /// so its card shows Dara as a person chip and two follow-up chips: the domain and the group's question.
     static func followUpOutput(text: String, words: [String]) -> ExtractorOutput {
         let all = WordSpan(startWord: 0, endWord: max(0, words.count - 1))
         let memory = MemoryOut(ref: "m1", kind: .event, title: "Mending the garden gate", quote: text, segmentSpan: all,
-                               peopleRefs: ["Dara"], placeText: nil, anchors: [], collectionHint: nil, chapterHint: nil,
+                               peopleRefs: ["Dara", "our parents"], placeText: nil, anchors: [], collectionHint: nil, chapterHint: nil,
                                confidence: 0.9, entityRefs: [], aboutRef: "t1", domainHint: "family")
         return ExtractorOutput(memories: [memory], mentions: [
             MentionOut(text: "the garden gate", kind: .thing, likelyAliasOfPersonID: nil, confidence: 0.8, ref: "t1"),
             MentionOut(text: "Dara", kind: .person, likelyAliasOfPersonID: nil, confidence: 0.8, relationText: "my cousin"),
+            MentionOut(text: "our parents", kind: .person, likelyAliasOfPersonID: nil, confidence: 0.8),
         ], flags: .none)
     }
 }

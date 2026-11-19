@@ -40,13 +40,13 @@ extension CandidateActions {
                               order: try store.memories.nextSpanOrder(of: target), titleText: out.title, candidateID: candidate.id)
         // The card's edges and its continuations', as one telling (M5).
         let continuations = try store.candidates.continuations(of: candidate.id)
-        var edges = try edges(of: out, for: target, segment: candidate.segmentID)
-        for row in continuations { if let o = CandidatePayload.memory(row) { edges.merge(try self.edges(of: o, for: target, segment: row.segmentID)) } }
+        var edges = try edges(of: out, for: target, segment: candidate.segmentID, card: candidate.id)
+        for row in continuations { if let o = CandidatePayload.memory(row) { edges.merge(try self.edges(of: o, for: target, segment: row.segmentID, card: candidate.id)) } }
         // The owner named this moment before telling it; now they have told it.
         let promotion = targetMemory.isFloating ? (title: out.title, summaryQuote: out.quote) : nil
         let addedPhoto = try store.memories.mergeSpan(span, continuations: try continuationSpans(of: out, for: target), people: edges.people, places: edges.places, links: edges.links, entities: edges.entityWrite,
                                      anchors: edges.anchors, promotingStandIn: promotion, acceptingCandidate: candidate.id,
-                                     acceptingContinuations: continuations.map(\.id))
+                                     acceptingContinuations: continuations.map(\.id) + edges.carriedPersonCards)
         let newMentions = try finishEdges(edges, segment: candidate.segmentID)
         try reindex(target)
         _ = try ResolverRunner(store: store).run()
@@ -92,13 +92,14 @@ extension CandidateActions {
                               startMs: words[out.segmentSpan.startWord].startMs, endMs: words[out.segmentSpan.endWord].endMs,
                               order: 0, titleText: out.title, candidateID: candidate.id)
         let continuations = try store.candidates.continuations(of: candidate.id)
-        var edges = try edges(of: out, for: oldest.id, segment: candidate.segmentID)
-        for row in continuations { if let o = CandidatePayload.memory(row) { edges.merge(try self.edges(of: o, for: oldest.id, segment: row.segmentID)) } }
+        var edges = try edges(of: out, for: oldest.id, segment: candidate.segmentID, card: candidate.id)
+        for row in continuations { if let o = CandidatePayload.memory(row) { edges.merge(try self.edges(of: o, for: oldest.id, segment: row.segmentID, card: candidate.id)) } }
         let promotion = oldest.isFloating && later.isEmpty ? (title: out.title, summaryQuote: out.quote) : nil
         // The write says what it linked, after the folds: a photo a folded memory held is moved, not added.
         let addedPhoto = try store.memories.mergeGroup(sources: later, into: oldest, span: span, continuations: try continuationSpans(of: out, for: oldest.id),
                                       people: edges.people, places: edges.places, links: edges.links, entities: edges.entityWrite, anchors: edges.anchors,
-                                      promotingStandIn: promotion, acceptingCandidate: candidate.id, acceptingContinuations: continuations.map(\.id))
+                                      promotingStandIn: promotion, acceptingCandidate: candidate.id,
+                                      acceptingContinuations: continuations.map(\.id) + edges.carriedPersonCards)
         let newMentions = try finishEdges(edges, segment: candidate.segmentID)
         try reindex(oldest.id)
         _ = try ResolverRunner(store: store).run()
@@ -155,7 +156,7 @@ extension CandidateActions {
             leavingAnchors.contains(where: { $0.phrase == anchor.phrase && $0.relation == anchor.relation })
                 && !stayingAnchors.contains(where: { $0.phrase == anchor.phrase && $0.relation == anchor.relation })
         }.map(\.id)
-        let leavingPeople = try people(named: leaving.flatMap(\.peopleRefs)), stayingPeople = try people(named: staying.flatMap(\.peopleRefs))
+        let leavingPeople = try people(named: leaving.flatMap(\.peopleRefs), in: memory), stayingPeople = try people(named: staying.flatMap(\.peopleRefs), in: memory)
         let leavingPlaces = Set(leaving.compactMap(\.placeText).map { $0.lowercased() }), stayingPlaces = Set(staying.compactMap(\.placeText).map { $0.lowercased() })
         let places = try store.memories.places(of: memory)
             .filter { leavingPlaces.contains($0.nameText.lowercased()) && !stayingPlaces.contains($0.nameText.lowercased()) }.map(\.id)
@@ -178,8 +179,14 @@ extension CandidateActions {
         return [out] + (try store.candidates.continuations(of: card.id)).compactMap(CandidatePayload.memory)
     }
 
-    private func people(named refs: [String]) throws -> Set<PersonID> {
-        Set(try refs.compactMap { try store.people.findPerson(matching: $0)?.id })
+    /// The people this memory links by one of these said names: a link's `role_text` is the ref
+    /// that made it. No lookup by name, so a separated telling takes the person Keep chose. A
+    /// person a second ref also reached keeps the first ref's words and is found by those only.
+    private func people(named refs: [String], in memory: MemoryID) throws -> Set<PersonID> {
+        let keys = Set(refs.map(SaidName.key).filter { !$0.isEmpty })
+        return Set(try store.entities.links(of: memory).filter { entry in
+            entry.entity.type == .person && entry.link.relation == .mention && entry.link.roleText.map { keys.contains(SaidName.key($0)) } == true
+        }.map { PersonID(rawValue: $0.entity.id.rawValue) })
     }
 
     /// Puts both sides back. Refused when the target changed in any way since the merge (a

@@ -18,6 +18,12 @@ final class LandingViewModel: Identifiable {
     private(set) var stillSorting: String?
     private(set) var closingLine = ""
     private(set) var isFirst = false
+    /// "I made 2 guesses about who you meant.", for the whole session, or nil with none.
+    private(set) var guesses: String?
+    /// Each row's people: a kept memory's links, or what Keep will link for a card that waits.
+    private(set) var people: [LandingRow.ID: [PersonChipRow.Item]] = [:]
+    /// "Changed to {name}." with Undo, after the sheet moved a name.
+    let personMove: PersonMoveUndo
     private(set) var error: String?
     /// Set when the person chose; the screen closes. `true` means "Tell another".
     private(set) var finished: Bool?
@@ -34,6 +40,7 @@ final class LandingViewModel: Identifiable {
         weight = liveWeight
         self.deps = deps
         photoCard = PhotoCardViewModel(session: session.id, deps: deps, showsRemoveFromStory: false)
+        personMove = PersonMoveUndo(store: deps.extractionStore)
         refresh()
     }
 
@@ -64,6 +71,8 @@ final class LandingViewModel: Identifiable {
                 return (candidate, out)
             }
             (rows, more) = Landing.rows(kept: kept, possible: possible, segments: segments)
+            people = try chips(for: rows, possible: possible.map(\.0))
+            guesses = PersonChipLine.landingLine(guesses: try store.personLinks.guessCount(in: session.id))
             weight = liveWeight
                 || SessionWeight.of(candidates: try store.candidates.candidates(in: session.id))
                 || SessionWeight.of(log: (try? SessionArc.decode(session.stageLog)) ?? [])
@@ -77,6 +86,34 @@ final class LandingViewModel: Identifiable {
         } catch {
             self.error = error.localizedDescription
         }
+    }
+
+    private func chips(for rows: [LandingRow], possible: [Candidate]) throws -> [LandingRow.ID: [PersonChipRow.Item]] {
+        let store = deps.extractionStore
+        let preview = PersonLinkActions(store: store)
+        let waiting = Dictionary(possible.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        var chips: [LandingRow.ID: [PersonChipRow.Item]] = [:]
+        for row in rows {
+            switch row.source {
+            case .memory(let memory):
+                chips[row.id] = try store.personLinks.links(of: memory).map(PersonChipRow.Item.init(link:))
+            case .candidate(let id):
+                guard let candidate = waiting[id] else { continue }
+                chips[row.id] = try preview.preview(candidate).map { .init(chip: $0, on: candidate) }
+            }
+        }
+        return chips
+    }
+
+    /// What "Done" in the sheet did: the line and the chips are read again.
+    func personSheetDone(_ outcome: WhoIsThisViewModel.Outcome) {
+        if case .unchanged = outcome { return }
+        personMove.note(outcome)
+        refresh()
+    }
+
+    func undoPersonMove() {
+        if personMove.undo() { refresh() }
     }
 
     private func startPolling() {

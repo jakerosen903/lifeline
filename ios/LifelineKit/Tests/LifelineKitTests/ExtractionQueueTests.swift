@@ -11,7 +11,8 @@ private struct Env {
         store = ExtractionStore(candidates: CandidateRepository(db), sessions: sessions, people: PeopleRepository(db),
                                 memories: MemoryRepository(db), profile: ProfileRepository(db),
                                 chapters: ChapterRepository(db), curiosity: CuriosityRepository(db), embeddings: EmbeddingRepository(db),
-                                stories: StoryRepository(db), pairs: DuplicatePairRepository(db), entities: EntityRepository(db), tags: DomainTagRepository(db), photos: PhotoRepository(db))
+                                stories: StoryRepository(db), pairs: DuplicatePairRepository(db), entities: EntityRepository(db), tags: DomainTagRepository(db), photos: PhotoRepository(db),
+                                personLinks: PersonLinkRepository(db))
         (session, segments) = try StoreFixtures.session(in: sessions, segments: texts)
         service = FakeExtractionService(script)
         log = LogCollector()
@@ -177,7 +178,8 @@ private func collect(_ events: AsyncStream<ExtractionEvent>, count: Int, timeout
     #expect(try env.store.candidates.candidates(for: env.segments[0].id).first { $0.kind == .person }?.status == .accepted)
 }
 
-@Test func nameAMemoryCarriesStaysPendingUnderIt() async throws {
+// Task 3 (plan decision 5): a name a memory carries is a record; the kept card shows the person.
+@Test func nameAMemoryCarriesIsARecordTheKeptCardLinks() async throws {
     var output = gardenOutput(people: ["Maya"])
     output.mentions = [MentionOut(text: "maya", kind: .person, likelyAliasOfPersonID: nil, confidence: 0.8)]
     let env = try Env(texts: ["the garden had a pomegranate tree Maya climbed"], script: [.success(output)])
@@ -185,21 +187,24 @@ private func collect(_ events: AsyncStream<ExtractionEvent>, count: Int, timeout
     let events = await queue.events
     await queue.enqueue(env.segments[0].id)
     guard case .candidates(let shown, _)? = await collect(events, count: 1).first else { Issue.record("no event"); return }
-    #expect(shown.map(\.kind) == [.memory, .person], "the name rides along to be a chip on the kept card")
+    #expect(shown.map(\.kind) == [.memory], "Keep links the name; it is not a question of its own")
     #expect(try env.store.people.mentions(in: env.segments[0].id).isEmpty)
-    #expect(try env.store.candidates.pending(in: env.session).map(\.kind) == [.memory, .person])
+    #expect(try env.store.candidates.pending(in: env.session).map(\.kind) == [.memory])
+    #expect(try env.store.candidates.candidates(for: env.segments[0].id).first { $0.kind == .person }?.status == .accepted)
 }
 
-@Test func knownNameMentionIsResolvedWithoutACard() async throws {
+// Task 3: the app no longer answers a known name itself; nothing carries it, so it waits for the owner.
+@Test func aKnownNameNoMemoryCarriesStillWaitsForTheOwner() async throws {
     let env = try Env(texts: ["my sister Maya climbed it"], script: [.success(ExtractorOutput(memories: [], mentions: [MentionOut(text: "maya", kind: .person, likelyAliasOfPersonID: nil, confidence: 0.8)], flags: .none))])
     let maya = try env.store.people.insertPerson(displayName: "Maya")
     let queue = env.queue()
     let events = await queue.events
     await queue.enqueue(env.segments[0].id)
     guard case .candidates(let shown, _)? = await collect(events, count: 1).first else { Issue.record("no event"); return }
-    #expect(shown.isEmpty, "a name the app knows is not a question")
+    #expect(shown.isEmpty, "with no memory to wait under, it goes to the People queue")
     let mentions = try env.store.people.mentions(in: env.segments[0].id)
-    #expect(mentions.count == 1 && mentions[0].status == .resolved && mentions[0].personID == maya.id)
+    #expect(mentions.count == 1 && mentions[0].status == .unresolved && mentions[0].personID == nil)
+    #expect(try env.store.people.aliases(of: maya.id).map(\.text) == ["Maya"], "nothing was learned about Maya")
     #expect(try env.store.candidates.candidates(for: env.segments[0].id).first?.status == .accepted)
 }
 
@@ -360,7 +365,8 @@ private func firstCard(_ events: [ExtractionEvent]) -> Candidate? {
     let words = try env.store.sessions.words(in: env.segments[1].id)
     #expect(spans[1].startMs == words[0].startMs && spans[1].endMs == words[6].endMs)
     #expect(try env.store.memories.anchors(of: kept.memory.id).map(\.phrase) == ["in 1998"])
-    #expect(kept.newMentions.map(\.text) == ["Maya"])
+    #expect(kept.newMentions.isEmpty, "Task 3: Maya is a new person, not a mention")
+    #expect(try env.store.memories.people(of: kept.memory.id).map(\.displayName) == ["Maya"])
     #expect(try env.store.candidates.fetch(rows[0].id)?.status == .accepted)
 }
 
@@ -462,7 +468,8 @@ private func storied(_ refs: [(title: String, ref: String?, hint: String?)], quo
     #expect(CandidatePayload.memory(b)?.sameAsMemoryIDs == [kept.id.rawValue], "the telling's memory is named, so the card offers Same story")
 }
 
-@Test func aPersonNamedOnlyInAContinuationIsLinkedWhenResolved() async throws {
+// Task 3: Keep links a name the continuation says; it no longer waits for an answer.
+@Test func aPersonNamedOnlyInAContinuationIsLinkedOnKeep() async throws {
     let env = try Env(texts: ["the garden had a pomegranate tree", "my sister Maya climbed it in 1998 with Marcel"], script: [.success(gardenOutput())])
     let queue = env.queue()
     let events = await queue.events
@@ -473,7 +480,7 @@ private func storied(_ refs: [(title: String, ref: String?, hint: String?)], quo
     let again = try #require(firstCard(await collect(events, count: 1)))
     let actions = CandidateActions(store: env.store)
     let kept = try actions.acceptMemory(again)
-    let mention = try #require(kept.newMentions.first { $0.text == "Marcel" })
-    _ = try actions.resolveMention(mention.id, to: .new(displayName: "Marcel"))
+    #expect(kept.newMentions.isEmpty)
     #expect(try env.store.memories.people(of: kept.memory.id).map(\.displayName) == ["Marcel"])
+    #expect(try env.store.entities.links(of: kept.memory.id).filter { $0.entity.type == .person }.map(\.link.origin) == [.new])
 }

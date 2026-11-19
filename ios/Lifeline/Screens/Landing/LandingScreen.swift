@@ -21,6 +21,10 @@ struct LandingScreen: View {
                         .accessibilityIdentifier("landing.crisisLine")
                     }
                     Text(viewModel.headline).titleStyle().accessibilityIdentifier("landing.headline")
+                    if let guesses = viewModel.guesses {
+                        Text(guesses).font(.subheadline).foregroundStyle(Theme.secondaryText)
+                            .accessibilityIdentifier("landing.guesses")
+                    }
                     if !viewModel.rows.isEmpty {
                         Text(viewModel.isFirst && !viewModel.heavy ? "Here it is, in your voice." : "A few moments from today.")
                             .font(.system(.body, design: .serif)).foregroundStyle(Theme.secondaryText)
@@ -60,6 +64,10 @@ struct LandingScreen: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(24)
             }
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                PersonMoveNoticeSlot(notice: viewModel.personMove, onUndo: viewModel.undoPersonMove)
+            }
+            .animation(.default, value: viewModel.personMove.text)
             .linenBackground()
             .photoErrorSlot(viewModel.photoCard.error)
             .navigationBarTitleDisplayMode(.inline)
@@ -101,6 +109,8 @@ struct LandingScreen: View {
                     }
                 }
                 Text("“\(row.quote)”").font(.system(.subheadline, design: .serif)).foregroundStyle(Theme.secondaryText).lineLimit(3)
+                PersonChipRow(items: viewModel.people[row.id] ?? [], deps: viewModel.deps, onDone: viewModel.personSheetDone)
+                    .padding(.top, 6)
             }
         }
         .padding(14)
