@@ -23,3 +23,9 @@ The owner said "Yes, build both" (PC-d, then PC-c) on 2026-11-19, without a revi
 - Task 1: complete (commits 699757b..1fdbd7d, review clean). Minor, parked for the final review: a handle is compared untrimmed; `schemaStaysUnderTheUnionLimit` still asserts 12 (count is 11); a mention's `handle` is not checked against `people` (Task 3 must tolerate an unknown one); the app target was not built in Task 1 (build it by Task 4).
 - Task 2: complete (commits c7b0c3d..bd9bf18, review clean). Minor, parked for the final review: the continuation test covers the superseded status only, not the "continues" marker; a first person id that the packet filter cuts hides a later valid one (D5). A second timing flake seen once under load: `CascadeVoiceSessionTests.interruptionClosesOpenSegment`.
 - Task 3: complete (commits 08a49c9..d280ae9, review clean). Minor, parked for the final review: a continuation does not add a person id to a handle the earlier card already holds with none; no test for a continuation whose earlier card was kept. Carried to Task 4: Keep must take each handle once across a card and its continuation rows (D8).
+- Task 4: minor (deferred): no direct test that `taken` from the recording gives two cards' same-name handles two persons.
+- Task 4: minor (deferred): `handlesKept` drops the handles when the Same story target has no order-0 span.
+- Task 4: minor (deferred): two functions named `handleLink`, one with a double optional; the handle-to-entity mapping is copied twice; `carried` reads awkwardly.
+- Task 4: open for Task 5 or the final review: `separateTelling` finds a telling's people by said name, not by handle.
+- Task 4: fix round 1/5 (1 addressed, 0 open — a stored choice for one handle is taken from the other handles of that name, in either order; commits 2b82afd..702a408)
+- Task 4: complete (commits 2f83fca..702a408, review clean after one fix round). Rulings D9 to D16.
