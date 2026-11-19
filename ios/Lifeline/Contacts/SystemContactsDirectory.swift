@@ -12,8 +12,10 @@ struct SystemContactsDirectory: ContactsDirectory {
     /// The notice the system posts when contacts change while the app runs. The app observes it for the check.
     static let didChange = Notification.Name.CNContactStoreDidChange
 
-    /// Name fields only. The formatter's own descriptor names the keys it needs for a full name (prefix, given,
-    /// middle, family, suffix, their phonetic forms): name fields, nothing else.
+    /// Name fields only. The formatter's own descriptor names the keys it needs for a full name. Printed from the
+    /// macOS 27.2 SDK (2026-11-19): name prefix, given, middle, family, suffix, nickname, the two sorting names, the
+    /// display name order, and the organization name with the contact type (a company card is named by its
+    /// organization). No phone, email, address, note or date. Check it again on the device (device check).
     private static var nameKeys: [CNKeyDescriptor] {
         [CNContactFormatter.descriptorForRequiredKeys(for: .fullName),
          CNContactGivenNameKey as CNKeyDescriptor, CNContactFamilyNameKey as CNKeyDescriptor,
