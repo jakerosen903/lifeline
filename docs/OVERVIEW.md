@@ -133,6 +133,14 @@ A person can hold one contact, and a contact one person. A person needs no conta
 - **With limited access.** The app matches against the shared contacts. The search shows a button that shares one more contact.
 - **With no access.** The app matches against people on file only, and every guess is still marked. A person with a contact shows "Allow contacts" when the app never asked, and "Allow contacts in Settings" when access is denied. A person with no contact shows the card "Allow contacts in Settings" when access is denied.
 
+### Merging two people (PC-c)
+
+Two entries can be one real person, such as "Robin" and "Robyn Vale". The owner can merge them in two ways. On a person's page, "Same as another person…" opens a list of the other people, and the person the owner picks stays. On the People grid, the owner drags one face onto another, and the person dropped onto stays. At the largest text sizes the grid is a list with no drag, so the page's row is the way there. The owner is never merged.
+
+The app asks first. "Same person?" shows both names and both pictures, and nothing changes before "Merge". The person that stays takes every story, detail, name and photo of the other. Each link keeps its origin. The other person's name becomes a name of the person that stays, so a later story that says it finds the merged person. A name that came from a contact does not. The person that stays keeps their own name, and their own notes, birth date, detail line and dates where they have them. Hidden and kept from the AI stay on when either person had them, and the confirm says so. Their photos come first, with their key photo at the front, then the other person's. When only one of the two has a contact, the merged person has it. Two persons linked to two different contacts cannot be merged.
+
+"Merged into {name}." shows for 6 seconds with Undo. Undo puts every row back. Undo is refused, and says so, when one of the merged rows changed in the meantime. After the 6 seconds, or after a kill or a page left inside them, the merge stays. When the owner links a person to a contact that another person holds, the app asks "Same person?" for those two. "Merge" joins the page's person into the one that holds the contact.
+
 ### Every session lands
 
 A quick story is one prompt and ends when the person is done. Settling in is a conversation with a planned length, a wrap-up offer and an explicit “Keep going”. Either way the app owns the landing and keeps it light. A heavy moment brings the same landing early.

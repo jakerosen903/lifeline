@@ -202,16 +202,18 @@ A kill in the middle must leave either the old state or the new state.
 
 ## Merging two people
 
+Status: built on branch `people-contacts-c` (plan `docs/plans/2026-11-19-people-contacts-c.md`). The device check is `docs/plans/2026-11-19-people-contacts-c-device-check.md`. It has not run.
+
 Two entries can be one real person: "Robin" and "Robyn Vale".
 
-1. **Drag.** On the People grid, the owner drags one face onto another. The two tiles pull together into one.
-2. **A button.** A person's page has "Same as another person…" with a picker. VoiceOver and Switch Control use this path.
-3. **Confirm.** Both paths ask "Same person?" with both names and both pictures before anything changes. The person dropped onto is the one that stays.
-4. **Conflicts.** `EntityRepository.merge` refuses people today, so this is a new merge. Where both persons have a value (notes, birth date, the detail line, stated dates, the hidden and excluded flags), the staying person's value is kept. The other value is kept in the receipt for Undo and is not shown after it. Mentions that point at the other person point at the staying one. Declined contact suggestions of both are kept.
-5. **What joins.** The person that stays takes every moment, detail, alias and photo of the other. Each link keeps its origin. The person that stays keeps their name. The photos keep one order: the staying person's photos first, with their key photo at the front, then the other person's.
+1. **Drag.** On the People grid, the owner drags one face onto another. The two tiles pull together into one. (narrowed 2026-11-19, PC-c plan decision 10 and ruling C9) The person dropped onto stays. The drag carries the person's id as plain text with the prefix `lifeline-person:`, so the app declares no type. A drop of other text does nothing. The dragged tile shrinks toward the other tile and fades in 0.25 s. With Reduce Motion it only fades. At the largest text sizes the grid is a list, and the list has no drag. The button path is the way there.
+2. **A button.** A person's page has "Same as another person…" with a picker. VoiceOver and Switch Control use this path. The picker never lists the owner, and the grid takes no drop on or of the owner. (narrowed 2026-11-19, PC-c plan decision 5)
+3. **Confirm.** Both paths ask "Same person?" with both names and both pictures before anything changes. The person dropped onto is the one that stays. (narrowed 2026-11-19, PC-c plan decision 2) On the button path, the person the owner picks stays, and the page's person goes. After "Merge", the page shows "Merged into {name}." with Undo, reads only, and closes to the People grid when the line goes.
+4. **Conflicts.** `EntityRepository.merge` refuses people today, so this is a new merge. Where both persons have a value (notes, birth date, the detail line, stated dates), the staying person's value is kept. The other value is kept in the receipt for Undo and is not shown after it. (narrowed 2026-11-19, PC-c plan decision 1; this reverses the spec for the two flags) Hidden and kept-from-AI stay on: when either person is hidden, the result is hidden, and when either person is kept from the AI, the result is kept from the AI. The confirm says so in one line when it applies. (narrowed 2026-11-19, PC-c plan decision 3) The other person's name becomes an alias of the staying person, so a later story that says it finds the merged person. A name that came from a contact does not become an alias. (narrowed 2026-11-19, PC-c plan decision 6) A merge is the owner's act: the staying person's `created_by_guess` is cleared. Mentions that point at the other person point at the staying one. Declined contact suggestions of both are kept. (narrowed 2026-11-19, PC-c ruling C4) The staying person keeps no decline row that disagrees with what they hold: the decline of the contact they now hold goes, and so does the "taken off this page" row of a photo they now hold. When both persons link one memory and the staying link has no role text, it takes the leaving link's role text.
+5. **What joins.** The person that stays takes every moment, detail, alias and photo of the other. Each link keeps its origin. The person that stays keeps their name. The photos keep one order: the staying person's photos first, with their key photo at the front, then the other person's. (narrowed 2026-11-19, PC-c ruling C2) A link keeps its extractor handle. When both persons link one memory, one link stays, with the stronger origin. It is the staying person's row, with its handle. The other row goes into the receipt.
 6. **Contacts.** When only one of the two has a contact, the result has it. When both have a contact and the contacts differ, the app must not merge. It says that they are linked to two different contacts.
-7. **Undo.** "Merged into {name}." with Undo for 6 seconds, in the one message slot. The receipt holds both persons as they were.
-8. **The forced case.** When the owner links a person to a contact that another person holds, the app asks "Same person?" for those two. The link is made only when the owner merges them. Until the merge exists (PC-c), the app refuses the link and says who holds the contact. (narrowed 2026-11-19, PC-b plan decision 4)
+7. **Undo.** "Merged into {name}." with Undo for 6 seconds, in the one message slot. The receipt holds both persons as they were. (narrowed 2026-11-19, PC-c plan decision 7 and ruling C7) Undo lives in memory only. A kill inside the 6 seconds, or a page left inside them, keeps the merge. Undo restores every row, the legacy `memory_person` rows included. Undo is refused when a row the merge left has changed since.
+8. **The forced case.** When the owner links a person to a contact that another person holds, the app asks "Same person?" for those two. The link is made only when the owner merges them. Before PC-c, the app refused the link and said who held the contact (PC-b plan decision 4). (narrowed 2026-11-19, PC-c plan decision 4) On "Merge", the page's person joins the holder, and the holder keeps the contact. When the page's person has a contact of their own, the app refuses with "They are linked to two different contacts."
 
 The motion is tuned on the device. This spec fixes the behaviour only.
 
@@ -411,13 +413,13 @@ The owner approved the spec with these calls on 2026-11-18. No call was discusse
 **Read from the owner's messages, which may have been meant for another session:**
 
 1. **Every guess from a name alone is marked** (rules 3 to 5), because the name can be a new person. The other option: mark only when more than one candidate fits.
-2. **Drag to merge two people**, with a button path, a confirm and Undo. The owner's message said "two things". This spec covers people only; the owner must say whether places and things merge the same way.
+2. **Drag to merge two people**, with a button path, a confirm and Undo. The owner's message said "two things". This spec covers people only; the owner must say whether places and things merge the same way. PC-c built the drag for people only. This call stays open.
 3. **The extractor gives each person in a recording a handle** (step 2).
 
 **Not yet asked:**
 
 20. **Names the app saved before this feature count as the owner's words**, so "Danielle, my sister" trusts an old alias. A wrong old alias stays until the owner removes it.
-21. **In a merge, the staying person's value wins** where both have one (notes, birth date, detail line, dates, hidden and excluded).
+21. **In a merge, the staying person's value wins** where both have one (notes, birth date, detail line, dates). (narrowed 2026-11-19, PC-c plan decision 1) Hidden and excluded are not the staying person's value: when either person has one, the result has it.
 22. **A choice made in the sheet before Keep is stored with the card** and applied on Keep.
 
 4. **A person on file wins over a contact with the same name** (rule 4), and the guess is marked. The app does not ask "which one?".

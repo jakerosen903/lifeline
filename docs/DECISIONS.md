@@ -2,6 +2,55 @@
 
 One entry per decision. Newest first. Status is Decided, Open, or Superseded.
 
+## 2026-11-19 · PC-c: two people can be merged — decisions and rulings made while building
+
+**Status:** Decided by the builder and the controller. The owner approved the plan on 2026-11-19 ("Yes, build both") without a review of each decision. The owner can overrule each one. Source: `docs/plans/2026-11-19-people-contacts-c.md`, ledger `.superpowers/sdd/2026-11-19-people-contacts-c/rulings.md` (C1 to C9). Narrows `docs/specs/2026-11-18-people-contacts.md`, section "Merging two people", and call 21, each marked in the spec.
+
+**Decision.** The plan's ten decisions, as built:
+
+1. Hidden and kept-from-AI stay on. When either person is hidden, the result is hidden. When either person is kept from the AI, the result is kept from the AI. The confirm says so in one line when it applies. Undo restores both flags. This reverses spec call 21 for the two flags.
+2. The person the owner picks stays. On the button path the page's person goes. That page shows "Merged into {name}." with Undo, reads only, and closes to the People grid when the line goes. On the grid, the person dropped onto stays.
+3. The other person's name becomes an alias of the person that stays. A name that came from a contact does not.
+4. The forced case merges into the holder. The holder keeps the contact. When the page's person has a contact of their own, the app refuses with "They are linked to two different contacts."
+5. The owner is never merged. The picker does not list the owner, and the grid does not show the owner.
+6. A merge counts as the owner's act. The staying person's `created_by_guess` is cleared. Undo sets it again.
+7. Undo lives in memory only. A kill inside the 6 seconds keeps the merge. The confirm says that the merge can be undone for a few seconds only.
+8. The base already held `main`'s photo order. The branch was cut from the tip of `people-contacts-d`, so Task 1 merged nothing. The merge writes the photo order through `PhotoRepository.writeOrder`.
+9. The receipt copies rows by `select *`, so a column that a later migration adds is carried. `photo_page_declined` is a real table on this base. The merge moves its rows.
+10. The drag has a plain motion. The dragged tile shrinks toward the other tile and fades in 0.25 s. With Reduce Motion it only fades.
+
+Rulings:
+
+- C1 (Task 2): `PhotoRepository.writeOrder` is visible inside the kit.
+- **C2** (pre-flight): a merged link keeps its extractor handle (`person_handle`). When both persons link one memory, the staying person's row and its handle stay, and the other row goes into the receipt. Cost if wrong: a later card of that recording with the other handle is guessed again (D31 of PC-d).
+- C3 (Task 2): `undo` came in Task 3, not as a stub. When a photo is on both pages and the leaving side's link is the owner's, the staying link becomes the owner's.
+- **C4** (after the Task 2 review): the staying person keeps no row that disagrees with what they hold. The merge removes their "taken off this page" row for a photo they now hold, and their decline of the contact they now hold. When both persons link one memory and the staying link has no role text, it takes the leaving link's role text. Why: the owner's words are kept first.
+- C5 (Task 2): tags left on the leaving entity are deleted by hand, because `domain_tag` has no foreign key. The refusals run again inside the write.
+- C6 (Task 4): a refusal reaches the page after the sheet closes. A check that refuses as "same person", "owner" or "stale" shows "That person is not here any more." "Cancel" on the confirm closes the whole sheet.
+- **C7** (Task 3): the receipt keeps one copy per table, for both persons, in rowid order. The legacy `memory_person` rows are owned, so Undo gives them back. The merge does not move them to the staying person, because no code reads that table.
+- C8 (Task 5): the contact search makes its link after its own sheet has closed, so "Same person?" never opens over it. The forced confirm reads the pictures itself.
+- **C9** (Task 6): the drag carries the person's id as plain text with the prefix `lifeline-person:`, so no type is declared in Info.plist. A drop of other text does nothing. The merge and its notice exist on the People grid only, not for places and things. The Undo window starts when the motion ends. Cost: a tile dragged into another app pastes an internal id, with no content.
+- Tests: the longer person page (the new row) made five older UI tests miss their target. The tests now scroll to it. No assertion changed. The drag test runs on the simulator with a slow drag and a hold.
+
+**Why.** Two entries for one real person split the stories, names and photos. The merge joins them, asks first and gives Undo (principles 1 and 9). The flags stay on so that a merge never sends to the model a person the owner kept from it.
+
+**Known limits.**
+
+- No mock-up exists for the confirm or the picker. The copy is a draft.
+- Undo is lost when the owner leaves the page inside the 6 seconds, as for a move.
+- At the largest text sizes the grid is a list, and it has no drag. The button path is the way there.
+- Screens that hold the id of the person that went (an open "Who is this?" sheet, a stale page) show "That person is not here any more."
+- A later delete that the staleness checks do not cover makes Undo fail with a database error, not "stale". The transaction rolls back, and the app shows the failed-Undo line.
+- The grid's animation of row changes ignores Reduce Motion. Only the merge motion follows it.
+
+**Open for the owner.**
+
+- The copy is a draft: the row, the picker, the confirm, the notice and the refusals.
+- The drop ring also shows on the tile that is being dragged, and for text dragged from another app.
+- A tile dragged out of the app gives the plain text "lifeline-person:{id}" to the other app (C9). A private type is the other option.
+- A held page (its person is gone and the notice is up) cannot scroll, because the whole list is disabled. This is older behaviour (R34), not from this plan. Decision 2 says the page "reads only".
+- The device check (`docs/plans/2026-11-19-people-contacts-c-device-check.md`) has not run.
+
 ## 2026-11-19 · PC-d: the extractor tells people apart — decisions and rulings made while building
 
 **Status:** Decided by the builder and the controller. The owner approved the plan on 2026-11-19 ("Yes, build both") without a review of each decision. The owner can overrule each one. The prompt `v8` is built and is not the default. Source: `docs/plans/2026-11-19-people-contacts-d.md`, ledger `.superpowers/sdd/2026-11-19-people-contacts-d/rulings.md` (D1 to D33). Narrows `docs/specs/2026-11-18-people-contacts.md`, section "Step 2", and the lines on the group and on details, each marked in the spec.

@@ -350,4 +350,11 @@ All tests launch with `launchWithPeople` (Maya, Dad, Sam, Lena) and, where conta
 
 ## What changed while building
 
-(Empty until work starts.)
+- The base moved to the tip of `people-contacts-d`, which already held `main`'s photo order and migration `v16`. Task 1 was only the branch. Decision 8's merge of `origin/main` was not needed, and `photo_page_declined` is a real table (decision 9).
+- C2: a merged link keeps its extractor handle. When both persons link one memory, the staying row and its handle stay.
+- C4: the staying person keeps no decline row that disagrees with what they hold, and takes the leaving link's role text where theirs has none.
+- C7: Undo also gives back the legacy `memory_person` rows. The merge does not move them.
+- C8: the contact search makes its link after its sheet has closed, so two sheets never show at once.
+- C9: the drag carries the person's id as plain text with the prefix `lifeline-person:`. No type is declared.
+- The new row makes the person's page longer. Two `PeopleGuessUITests` tests (through one helper) and three `EntityPageUITests` tests now scroll to their target. No assertion changed.
+- The drag test runs on the simulator. It needs a slow drag with a hold (`press(forDuration: 1.5, thenDragTo:, withVelocity: .slow, thenHoldForDuration: 1.0)`). The device check still covers the drag by hand.
