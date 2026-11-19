@@ -31,3 +31,6 @@ Pre-flight: Task 6 needs a column that Task 1 owns: Task 1 text now carries it (
 - Task 4: minor (deferred): a restored link goes last; a photo that was the key photo is not the key photo after Undo when the page gained another photo. Open for the owner.
 - Task 4: minor (deferred): `photoPages` is `public var`; make it `public internal(set)`.
 - Task 4: minor (deferred): no test pins what `only:` is for (the moved moment also names a person who lacks the photo).
+- Task 4: fix round 1/5 (2 addressed, 0 open — still-named rule across sessions, same guard on Undo; commits 5ee1193..43dd1e3)
+- Task 4: complete (commits 84abc4b..43dd1e3, review clean after one fix round). Kit 1394.
+- Task 5: dispatched from 43dd1e3, in parallel with the Task 4 re-review (different files).
