@@ -14,6 +14,11 @@ struct SessionDetailScreen: View {
 
     var body: some View {
         List {
+            if viewModel.photoCard.card != nil {
+                PhotoCard(viewModel: viewModel.photoCard, cache: viewModel.deps.photoImages)
+                    .listRowBackground(Color.clear)
+                    .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
+            }
             if !viewModel.waiting.isEmpty {
                 Section("Waiting for you") {
                     CardStack(cards: viewModel.waiting, handler: viewModel.cards,
@@ -94,6 +99,7 @@ struct SessionDetailScreen: View {
         }
         .scrollContentBackground(.hidden)
         .linenBackground()
+        .photoErrorSlot(viewModel.photoCard.error)
         .navigationTitle(viewModel.session.startedAt.formatted(.dateTime.month().day().hour().minute()))
         .navigationBarTitleDisplayMode(.inline)
         .onAppear { viewModel.refresh() }

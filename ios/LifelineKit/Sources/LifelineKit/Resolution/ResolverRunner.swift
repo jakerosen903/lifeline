@@ -86,13 +86,6 @@ public struct ResolverRunner: Sendable {
         try store.curiosity.replaceOpenEntityItems(EntityCuriosity.drafts(entities: try store.entities.allEntities(), links: try store.entities.allLinks(),
                                                                           memories: byID, owner: try store.profile.owner()?.entityID))
 
-        // Chapters follow their members wherever the members just moved.
-        if !changes.isEmpty {
-            for chapter in chapters {
-                try store.chapters.setRange(chapter.id, ChapterRepository.span(over: try store.memories.moments(inChapter: chapter.id).map(\.range)))
-            }
-        }
-
         changes.sort { $0.title < $1.title }
         return RunReport(placed: changes.count, floatingCreated: floatingCreated, curiosityOpen: try store.curiosity.open().count, changes: changes)
     }
@@ -103,6 +96,14 @@ public struct ResolverRunner: Sendable {
             return MemoryRef(id: memory.id, title: memory.title, range: memory.range,
                              primarySpan: MemoryRef.Span(segmentID: span?.segmentID ?? SegmentID(rawValue: ""), startMs: span?.startMs ?? 0, endMs: span?.endMs ?? 0), kind: memory.kind)
         }
-        return ResolverInput(memories: refs, anchors: anchors, birthDate: birth, chapters: chapters, config: config)
+        // A chapter is read by its stated years, else by the span of its moments as the store
+        // has them at the start of the run. Placements are written after both passes, so the
+        // second pass does not see what the first placed (ruling R2). The span is never stored.
+        let anchored = try chapters.map { chapter in
+            var copy = chapter
+            copy.range = chapter.anchorRange(members: try store.memories.moments(inChapter: chapter.id).map(\.range))
+            return copy
+        }
+        return ResolverInput(memories: refs, anchors: anchors, birthDate: birth, chapters: anchored, config: config)
     }
 }

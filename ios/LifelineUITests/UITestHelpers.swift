@@ -125,6 +125,34 @@ extension XCUIApplication {
         return app
     }
 
+    /// Launches with `-uiTesting-seedPhotoStory`: the family, then two landed photo sessions. The first has the kept memories
+    /// "The beach" (unplaced; Maya and Dad) and "The drive home" (stated 2012; Dad), both holding a photo dated 14 June 2012, which
+    /// Maya's page holds too and Dad's does not. The second has no kept memory, and its photo has no other home.
+    /// `opening` leaves that session unlanded, so the app opens on its landing. First open is done.
+    static func launchWithPhotoStory(opening: String? = nil, _ extra: [String] = []) -> XCUIApplication {
+        let app = XCUIApplication()
+        app.launchArguments += ["-uiTesting", "-uiTesting-seedPhotoStory"] + (opening.map { ["-uiTesting-photoStoryLanding", $0] } ?? []) + extra
+        app.launch()
+        if opening == nil {
+            XCTAssertTrue(app.waitHittable(app.buttons["home.start"], timeout: 15), "the seeded app lands on the timeline")
+        } else {
+            XCTAssertTrue(app.staticTexts["landing.headline"].waitForExistence(timeout: 15), "the seeded app resumes on the landing")
+        }
+        return app
+    }
+
+    /// Maya's page, her cover in the viewer, then "Tell its story": a live photo session about her dated photo.
+    func tellMayasCoversStory() {
+        openEntityPage("Maya")
+        XCTAssertTrue(waitHittable(buttons["photo.header"], timeout: 10), "Maya's cover is on screen")
+        buttons["photo.header"].tap()
+        let tell = buttons["photo.tellStory"]
+        XCTAssertTrue(waitHittable(tell, timeout: 5), "the viewer offers Tell its story")
+        XCTAssertEqual(tell.label, "Tell its story")
+        tell.tap()
+        XCTAssertTrue(buttons["session.finish"].waitForExistence(timeout: 10), "the session starts")
+    }
+
     /// Launches with `-uiTesting-seedSpine`: Jordan (born 1990) with six placed moments, a gap of three years, one named
     /// chapter, one chapter without a title and one undated moment. First open is done; do not call `skipFirstOpen()`.
     static func launchWithSpine(_ extra: [String] = []) -> XCUIApplication {

@@ -1,3 +1,4 @@
+import Foundation
 import Testing
 import GRDB
 @testable import LifelineKit
@@ -117,13 +118,6 @@ import GRDB
     #expect(Migrations.isNewer("v99", than: "v8"), "an unknown version is from the future")
 }
 
-/// The unmerged photo branches own `v14` (`session.subject_photo_id`). GRDB records a migration by name,
-/// so this branch must not register it; a photo build's `v14` backup reads here as from the future.
-@Test func v14IsLeftToThePhotoBranches() {
-    #expect(!Migrations.versions.contains("v14"))
-    #expect(Migrations.isNewer("v14", than: Migrations.currentSchemaVersion), "a backup that says v14 is refused, not half-read")
-}
-
 @Test func v11OnAPopulatedV10Database() throws {
     var config = Configuration()
     config.foreignKeysEnabled = true
@@ -187,7 +181,7 @@ import GRDB
         try queue.read { db in try tables.map { try Row.fetchAll(db, sql: "select * from \($0) order by rowid") } }
     }
     let rowsBefore = try rows()
-    try Migrations.migrator.migrate(queue, upTo: "v13")  // v15 adds columns to two of these tables; it has its own test.
+    try Migrations.migrator.migrate(queue, upTo: "v13")  // v14 and v15 each have their own test.
     #expect(try rows() == rowsBefore, "no existing row or column changes")
     #expect(Set(try queue.read { try $0.columns(in: "photo") }.map(\.name))
             == ["id", "file_name", "asset_local_id", "taken_at", "taken_origin", "lat", "lon", "location_origin", "sha256", "pixel_width", "pixel_height", "added_at"])
@@ -218,7 +212,7 @@ import GRDB
     var config = Configuration()
     config.foreignKeysEnabled = true
     let queue = try DatabaseQueue(configuration: config)
-    try Migrations.migrator.migrate(queue, upTo: "v13")
+    try Migrations.migrator.migrate(queue, upTo: "v14")
     try queue.write { db in
         try db.execute(sql: """
             insert into entity (id, type, title, created_at) values ('e1', 'person', 'Maya', '2026-10-01');
@@ -311,4 +305,41 @@ import GRDB
     }
     try db.writer.write { try $0.execute(sql: "delete from candidate where id = 'c1'") }
     #expect(try db.writer.read { try Int.fetchOne($0, sql: "select count(*) from candidate_person_choice") } == 0)
+}
+
+@Test func v14OnAPopulatedV13Database() throws {
+    var config = Configuration()
+    config.foreignKeysEnabled = true
+    let queue = try DatabaseQueue(configuration: config)
+    try Migrations.migrator.migrate(queue, upTo: "v13")
+    try queue.write { db in
+        try db.execute(sql: """
+            insert into session (id, started_at, ended_at, audio_path, stage_log, landing_choice_made) values ('s1', '2026-10-01', '2026-10-01', 'a.m4a', '[]', 1);
+            insert into entity (id, type, title, created_at) values ('e1', 'person', 'Maya', '2026-10-01');
+            insert into photo (id, file_name, sha256, pixel_width, pixel_height, added_at) values ('p1', 'p1.jpg', 'p1-hash', 4, 3, '2026-10-01');
+            insert into photo_link (photo_id, entity_id, role, sort_order) values ('p1', 'e1', 'cover', 0);
+            """)
+    }
+    func count(_ table: String) throws -> Int { try queue.read { try Int.fetchOne($0, sql: "select count(*) from \(table)") ?? -1 } }
+    try Migrations.migrator.migrate(queue)
+    #expect(try count("session") == 1 && count("photo") == 1 && count("photo_link") == 1, "no row is lost")
+    #expect(try queue.read { try String?.fetchAll($0, sql: "select subject_photo_id from session") } == [nil], "every pointer starts empty")
+    try queue.write { try $0.execute(sql: "update session set subject_photo_id = 'p1' where id = 's1'") }
+    #expect(try queue.read { try String.fetchOne($0, sql: "select subject_photo_id from session where id = 's1'") } == "p1")
+    #expect(throws: DatabaseError.self, "a pointer to an unknown photo") {
+        try queue.write { try $0.execute(sql: "update session set subject_photo_id = 'nope' where id = 's1'") }
+    }
+}
+
+@Test func deletingAPhotoRowClearsTheSessionsPointer() throws {
+    let db = try AppDatabase.inMemory()
+    let photo = Photo(fileName: "a.jpg", sha256: "hash-a", pixelWidth: 4, pixelHeight: 3, addedAt: Date(timeIntervalSince1970: 1_700_000_000))
+    try PhotoRepository(db).insert(photo)
+    let session = Session(id: SessionID(), startedAt: .now, endedAt: nil, audioPath: "a.m4a", stageLog: "[]", landingChoiceMade: false,
+                          subjectPhotoID: photo.id, startedFrom: .photo)
+    try SessionRepository(db).insert(session)
+    try db.writer.write { _ = try Photo.deleteOne($0, key: photo.id.rawValue) }
+    let after = try #require(try SessionRepository(db).fetch(session.id))
+    #expect(after.subjectPhotoID == nil)
+    #expect(after.startedFrom == .photo, "the session row remains")
 }

@@ -19,6 +19,11 @@ struct SessionsScreen: View {
                     VStack(alignment: .leading, spacing: 4) {
                         Text(row.session.startedAt, format: .dateTime.weekday(.wide).month().day().hour().minute())
                             .font(.system(.headline, design: .serif))
+                        if row.isPhotoStory {
+                            Text("A story about a photo")
+                                .font(.subheadline.weight(.semibold)).foregroundStyle(Theme.oliveText)
+                                .accessibilityIdentifier("sessions.photoStory")
+                        }
                         Text("\(row.durationText) · \(row.segmentCount) moments")
                             .font(.subheadline).foregroundStyle(Theme.secondaryText)
                         if row.pendingCount > 0 {

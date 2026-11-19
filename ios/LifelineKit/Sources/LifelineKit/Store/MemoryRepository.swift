@@ -33,6 +33,8 @@ public struct MemoryRepository: Sendable {
             for anchor in anchors { try anchor.insert(db) }
             if let candidate {
                 try db.execute(sql: "update candidate set status = ? where id = ?", arguments: [CandidateStatus.accepted.rawValue, candidate.rawValue])
+                // Kept from a card, so told: a floating memory (no card) is not.
+                try PhotoRepository.linkSubjectPhoto(ofSegment: spans[0].segmentID, to: memory.id, in: db)
             }
             try Self.accept(continuations, in: db)
             if let story {
@@ -50,11 +52,13 @@ public struct MemoryRepository: Sendable {
     }
 
     /// Removes a memory and, by cascade, its spans, people, places and anchors.
-    /// The memory and everything hanging off it (cascade). A story left with no member goes too.
+    /// The memory and everything hanging off it (cascade). A story left with no member goes too,
+    /// and so does an untitled chapter left with nothing in it.
     public func delete(_ id: MemoryID) throws {
         try db.writer.write { db in
             _ = try Memory.deleteOne(db, key: id.rawValue)
             try db.execute(sql: Self.deleteEmptyStoriesSQL)
+            try db.execute(sql: ChapterRepository.deleteEmptyUntitledSQL)
         }
     }
 
@@ -76,6 +80,25 @@ public struct MemoryRepository: Sendable {
                 where segment.session_id = ? and (? or memory.created_from_candidate_id is not null)
                 order by segment."index", memory_span.start_ms, memory.created_at
                 """, arguments: [session.rawValue, includingStandIns])
+        }
+    }
+
+    /// Every told memory with a span in this session, once each, by its first span here (segment, then start).
+    /// Unlike `memories(in:)`, a memory first told in an earlier session counts when a telling of this session
+    /// was merged into it. Stand-ins are left out.
+    public func memories(toldIn session: SessionID) throws -> [Memory] {
+        try db.writer.read { db in
+            try Memory.fetchAll(db, sql: """
+                select memory.* from memory
+                join (
+                    select memory_span.memory_id, segment."index" as segment_index, memory_span.start_ms,
+                           row_number() over (partition by memory_span.memory_id order by segment."index", memory_span.start_ms) as nth
+                    from memory_span join segment on segment.id = memory_span.segment_id
+                    where segment.session_id = ?
+                ) here on here.memory_id = memory.id and here.nth = 1
+                where memory.created_from_candidate_id is not null
+                order by here.segment_index, here.start_ms, memory.created_at
+                """, arguments: [session.rawValue])
         }
     }
 
@@ -232,13 +255,15 @@ public struct MemoryRepository: Sendable {
         try restore([snapshot], settingCandidate: nil)
     }
 
-    /// Several memories back at once, a card's status with them, and a pair row reopened, in
+    /// Several memories back at once, a card's status with them, a pair row reopened and a photo link a merge added removed, in
     /// one transaction: an undo that is cut short leaves nothing half done.
     public func restore(_ snapshots: [Snapshot], settingCandidate candidate: (id: CandidateID, status: CandidateStatus)?,
-                        reopeningPair pair: DuplicatePair? = nil) throws {
+                        reopeningPair pair: DuplicatePair? = nil, removingPhoto photo: (id: PhotoID, from: MemoryID)? = nil) throws {
         try db.writer.write { db in
+            // The link a merge added goes in the same write; the photo row stays (its session still points at it).
+            if let photo { _ = try PhotoRepository.removeLink(photo.id, from: .memory(photo.from), in: db) }
             // Every memory row first, so a pair between two restored memories finds both.
-            for snapshot in snapshots { try snapshot.memory.save(db) }
+            for snapshot in snapshots { try Self.restorable(snapshot.memory, in: db).save(db) }
             for snapshot in snapshots { try Self.restore(snapshot, in: db) }
             if let candidate {
                 try db.execute(sql: "update candidate set status = ? where id = ?", arguments: [candidate.status.rawValue, candidate.id.rawValue])
@@ -253,9 +278,18 @@ public struct MemoryRepository: Sendable {
         }
     }
 
+    /// The memory as the snapshot has it, with no chapter when that chapter was removed since:
+    /// its tag cannot point at a row that is gone.
+    private static func restorable(_ memory: Memory, in db: Database) throws -> Memory {
+        guard let chapter = memory.chapterID, try !Chapter.exists(db, key: chapter.rawValue) else { return memory }
+        var freed = memory
+        freed.chapterID = nil
+        return freed
+    }
+
     private static func restore(_ snapshot: Snapshot, in db: Database) throws {
             let id = snapshot.memory.id.rawValue
-            try snapshot.memory.save(db)
+            try restorable(snapshot.memory, in: db).save(db)
             for table in ["memory_span", "moment_entity", "anchor", "collection_memory"] {
                 try db.execute(sql: "delete from \(table) where memory_id = ?", arguments: [id])
             }
@@ -286,9 +320,11 @@ public struct MemoryRepository: Sendable {
     /// `promotingStandIn` carries the card's title, quote and candidate when the target is a
     /// resolver stand-in: its borrowed span goes, this telling becomes order 0 and the memory
     /// becomes real. A failure anywhere leaves the card pending and the target untouched.
+    /// Returns the session's photo when this write linked it to the target (see `PhotoRepository.linkSubjectPhoto`).
+    @discardableResult
     public func mergeSpan(_ span: MemorySpan, continuations: [MemorySpan] = [], people: [MemoryPerson], places: [MemoryPlace], links: [MomentEntity] = [], entities: EntityRepository.Write = .init(), anchors: [Anchor],
                           promotingStandIn: (title: String, summaryQuote: String)?, acceptingCandidate candidate: CandidateID,
-                          acceptingContinuations continuationCards: [CandidateID] = []) throws {
+                          acceptingContinuations continuationCards: [CandidateID] = []) throws -> PhotoID? {
         try db.writer.write { db in
             try Self.mergeSpan(span, continuations: continuations, people: people, places: places, links: links, entities: entities, anchors: anchors,
                                promotingStandIn: promotingStandIn, acceptingCandidate: candidate, acceptingContinuations: continuationCards, in: db)
@@ -297,7 +333,7 @@ public struct MemoryRepository: Sendable {
 
     static func mergeSpan(_ span: MemorySpan, continuations: [MemorySpan], people: [MemoryPerson], places: [MemoryPlace], links: [MomentEntity] = [], entities: EntityRepository.Write = .init(), anchors: [Anchor],
                           promotingStandIn: (title: String, summaryQuote: String)?, acceptingCandidate candidate: CandidateID,
-                          acceptingContinuations continuationCards: [CandidateID] = [], in db: Database) throws {
+                          acceptingContinuations continuationCards: [CandidateID] = [], in db: Database) throws -> PhotoID? {
             var span = span
             if let promoted = promotingStandIn {
                 try db.execute(sql: "delete from memory_span where memory_id = ?", arguments: [span.memoryID.rawValue])
@@ -322,13 +358,17 @@ public struct MemoryRepository: Sendable {
             for anchor in anchors { try anchor.insert(db) }
             try db.execute(sql: "update candidate set status = ? where id = ?", arguments: [CandidateStatus.accepted.rawValue, candidate.rawValue])
             try Self.accept(continuationCards, in: db)
+            return try PhotoRepository.linkSubjectPhoto(ofSegment: span.segmentID, to: span.memoryID, in: db)
     }
 
     /// A group (M5): every source folds into the target, oldest first as given, then the card
     /// joins as the last telling. One transaction: a failure anywhere leaves every memory as it was.
+    /// Returns the session's photo when this write linked it to the target. The check runs after the folds, so a
+    /// photo a folded memory carried to the target is not counted as added.
+    @discardableResult
     public func mergeGroup(sources: [Memory], into target: Memory, span: MemorySpan, continuations: [MemorySpan], people: [MemoryPerson],
                            places: [MemoryPlace], links: [MomentEntity] = [], entities: EntityRepository.Write = .init(), anchors: [Anchor], promotingStandIn: (title: String, summaryQuote: String)?,
-                           acceptingCandidate candidate: CandidateID, acceptingContinuations continuationCards: [CandidateID] = []) throws {
+                           acceptingCandidate candidate: CandidateID, acceptingContinuations continuationCards: [CandidateID] = []) throws -> PhotoID? {
         try db.writer.write { db in
             for source in sources {
                 guard let current = try Memory.fetchOne(db, key: target.id.rawValue) else { throw Error.noSpan }
@@ -336,7 +376,7 @@ public struct MemoryRepository: Sendable {
             }
             var last = span
             last.order = (try Int.fetchOne(db, sql: "select max(\"order\") from memory_span where memory_id = ?", arguments: [target.id.rawValue]) ?? -1) + 1
-            try Self.mergeSpan(last, continuations: continuations, people: people, places: places, links: links, entities: entities, anchors: anchors,
+            return try Self.mergeSpan(last, continuations: continuations, people: people, places: places, links: links, entities: entities, anchors: anchors,
                                promotingStandIn: promotingStandIn, acceptingCandidate: candidate, acceptingContinuations: continuationCards, in: db)
         }
     }
@@ -520,6 +560,20 @@ public struct MemoryRepository: Sendable {
         }
     }
 
+    /// The memory's range, in one write. A chapter's range holds stated years only (S6c), so no chapter changes with it.
+    /// With a range in `ifCurrently`, the write happens only while the stored range is still that one: an offer drawn against
+    /// an older range must not replace a newer one. Returns false when the memory is gone or its range has changed.
+    @discardableResult
+    public func updateRange(_ id: MemoryID, _ range: TimeRange, ifCurrently expected: TimeRange?) throws -> Bool {
+        try db.writer.write { db in
+            guard var memory = try Memory.fetchOne(db, key: id.rawValue) else { return false }
+            if let expected, memory.range != expected { return false }
+            memory.range = range
+            try memory.update(db)
+            return true
+        }
+    }
+
     public func allMemories() throws -> [Memory] {
         try db.writer.read { try Memory.order(Column("created_at")).fetchAll($0) }
     }
@@ -570,8 +624,8 @@ public struct MemoryRepository: Sendable {
         try (includingHidden ? allMemories() : visibleMemories()).filter { !$0.isMoment && !$0.isFloating }
     }
 
-    /// The kind, and the chapter's derived range with it, in one write: a fact leaves the range,
-    /// a moment joins it, and a kill between the two can never leave the chapter stale (M7).
+    /// The kind, the detail links and the story place in one write, so a kill between them
+    /// leaves nothing half changed (M7). A chapter's range holds stated years only and does not move.
     /// The receipt holds what the change took away (a story place, detail links) for `undoKind`.
     @discardableResult
     public func setKind(_ id: MemoryID, _ kind: MemoryKind) throws -> KindReceipt {
@@ -579,7 +633,6 @@ public struct MemoryRepository: Sendable {
             let from = try MemoryKind(rawValue: String.fetchOne(db, sql: "select kind from memory where id = ?", arguments: [id.rawValue]) ?? "") ?? .event
             var receipt = KindReceipt(memory: id, from: from, to: kind, story: nil, details: [])
             try db.execute(sql: "update memory set kind = ? where id = ?", arguments: [kind.rawValue, id.rawValue])
-            try Self.refreshChapterRange(ofMemory: id, in: db)
             if kind.isMoment {
                 // A moment names what it was about; it is no longer a standing statement (M7).
                 let rows = try MomentEntity.filter(Column("memory_id") == id.rawValue).fetchAll(db)
@@ -604,7 +657,7 @@ public struct MemoryRepository: Sendable {
         }
     }
 
-    /// Puts a kind change back, in one write: the kind, the chapter range, the detail links a
+    /// Puts a kind change back, in one write: the kind, the detail links a
     /// moment turned into mentions, and the story place a fact, feeling or goal gave up (with
     /// the story itself when it was deleted for being empty). Stale once the kind moved again.
     public func undoKind(_ receipt: KindReceipt) throws {
@@ -613,7 +666,6 @@ public struct MemoryRepository: Sendable {
                 throw CandidateActions.Error.stale
             }
             try db.execute(sql: "update memory set kind = ? where id = ?", arguments: [receipt.from.rawValue, receipt.memory.rawValue])
-            try Self.refreshChapterRange(ofMemory: receipt.memory, in: db)
             for entity in receipt.details {
                 if receipt.alsoMentioned.contains(entity) {
                     let mentions = try MomentEntity.filter(Column("memory_id") == receipt.memory.rawValue && Column("entity_id") == entity.rawValue
@@ -635,15 +687,6 @@ public struct MemoryRepository: Sendable {
                 try membership.moment.insert(db)
             }
         }
-    }
-
-    /// Recomputes the range of the chapter a memory sits in from its placed moments.
-    static func refreshChapterRange(ofMemory id: MemoryID, in db: Database) throws {
-        guard let chapterID = try String.fetchOne(db, sql: "select chapter_id from memory where id = ?", arguments: [id.rawValue]),
-              var chapter = try Chapter.fetchOne(db, key: chapterID) else { return }
-        let members = try Memory.filter(Column("chapter_id") == chapterID).fetchAll(db).filter(\.isMoment)
-        chapter.range = ChapterRepository.span(over: members.map(\.range))
-        try chapter.update(db)
     }
 
     /// Memories with no range at all.

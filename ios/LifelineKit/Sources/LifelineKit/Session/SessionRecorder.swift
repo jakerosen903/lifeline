@@ -85,12 +85,13 @@ public actor SessionRecorder {
     /// The caller may choose the id so collaborators (the extraction queue) can be built first.
     @discardableResult
     public func start(id: SessionID = SessionID(), kind: SessionKind = .quick,
-                      subject: EntityID? = nil, startedFrom: SessionOrigin = .tab) async throws -> SessionID {
+                      subject: EntityID? = nil, subjectPhoto: PhotoID? = nil,
+                      startedFrom: SessionOrigin = .tab) async throws -> SessionID {
         precondition(session == nil, "SessionRecorder is single-use")
         let url = try audioURL(id)
         let row = Session(id: id, startedAt: now(), endedAt: nil, audioPath: url.lastPathComponent,
                           stageLog: "[]", landingChoiceMade: false, kind: kind,
-                          subjectEntityID: subject, startedFrom: startedFrom)
+                          subjectEntityID: subject, subjectPhotoID: subjectPhoto, startedFrom: startedFrom)
         try sessions.insert(row)
         session = row
         state.sessionID = id

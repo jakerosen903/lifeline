@@ -534,13 +534,8 @@ public struct CandidateActions: Sendable {
         case .collection:
             result = .collection(try addToCollection(memory.id, titled: out.phrase))
         case .chapter:
-            let key = MatchKey.of(out.phrase)
-            if !key.isEmpty, let existing = try store.chapters.chapters().first(where: { MatchKey.of($0.title ?? "") == key }) {
-                try assign(memory: memory.id, toChapter: existing.id)
-                result = .chapter(try store.chapters.chapter(id: existing.id) ?? existing)
-            } else {
-                result = .chapter(try createChapter(title: out.phrase, containing: memory.id))
-            }
+            guard let chapter = try ChapterActions(store: store).add(memory.id, toChapterNamed: out.phrase) else { throw Error.emptyTitle }
+            result = .chapter(chapter)
         case .story:
             result = .story(try acceptStoryHint(out.phrase, for: memory.id))
         case .domain:
@@ -557,17 +552,16 @@ public struct CandidateActions: Sendable {
         return try store.chapters.chapter(id: chapter.id) ?? chapter
     }
 
-    /// Moves a memory between chapters and refreshes both chapters' member-derived ranges.
+    /// Moves a memory between chapters; nil takes it out of its chapter. `ChapterActions` owns the
+    /// write. A chapter's range holds stated years only, so it does not change.
     public func assign(memory: MemoryID, toChapter chapter: ChapterID?) throws {
-        let previous = try store.memories.fetch(memory)?.chapterID
-        try store.chapters.assign(memory: memory, toChapter: chapter)
-        for id in [previous, chapter].compactMap({ $0 }) { try chapterRangeFromMembers(id) }
-        // The chapter the memory left may now be empty; one with no title either is removed.
-        try store.chapters.deleteEmptyUntitled()
+        let actions = ChapterActions(store: store)
+        if let chapter { try actions.add(memory, to: chapter) } else { try actions.takeOut(memory) }
     }
 
     /// "What is this?" on the Change sheet (M7): the only way a memory changes kind. A moment
-    /// turned fact leaves its chapter's range and its questions; a fact turned moment comes back.
+    /// turned fact leaves its questions; a fact turned moment comes back. Its chapter range does not
+    /// depend on its members.
     @discardableResult
     public func setKind(_ memory: MemoryID, _ kind: MemoryKind) throws -> KindReceipt? {
         guard let current = try store.memories.fetch(memory) else { return nil }
@@ -593,11 +587,6 @@ public struct CandidateActions: Sendable {
 
     public func removeFromCollection(_ memory: MemoryID, from collection: CollectionID) throws {
         try store.chapters.remove(memory: memory, from: collection)
-    }
-
-    /// A chapter's range is the span of its placed members, origin `derived`; unplaced when none are placed.
-    public func chapterRangeFromMembers(_ chapter: ChapterID) throws {
-        try store.chapters.setRange(chapter, ChapterRepository.span(over: try store.memories.moments(inChapter: chapter).map(\.range)))
     }
 
     // MARK: - Helpers

@@ -11,6 +11,8 @@ public struct MergeReceipt: Sendable, Equatable {
     /// The card, when the merge was "Same story" on a card.
     public var candidateID: CandidateID?
     public var mergedAt: Date
+    /// The session's photo, when this merge linked it to the target. Undo takes that link back; a link the target held before stays.
+    public var addedPhoto: PhotoID? = nil
 }
 
 /// "Same story" on a card, "Same as another memory…" on the Change sheet, and undo. Nothing
@@ -42,7 +44,7 @@ extension CandidateActions {
         for row in continuations { if let o = CandidatePayload.memory(row) { edges.merge(try self.edges(of: o, for: target, segment: row.segmentID, card: candidate.id)) } }
         // The owner named this moment before telling it; now they have told it.
         let promotion = targetMemory.isFloating ? (title: out.title, summaryQuote: out.quote) : nil
-        try store.memories.mergeSpan(span, continuations: try continuationSpans(of: out, for: target), people: edges.people, places: edges.places, links: edges.links, entities: edges.entityWrite,
+        let addedPhoto = try store.memories.mergeSpan(span, continuations: try continuationSpans(of: out, for: target), people: edges.people, places: edges.places, links: edges.links, entities: edges.entityWrite,
                                      anchors: edges.anchors, promotingStandIn: promotion, acceptingCandidate: candidate.id,
                                      acceptingContinuations: continuations.map(\.id) + edges.carriedPersonCards)
         let newMentions = try finishEdges(edges, segment: candidate.segmentID)
@@ -50,7 +52,7 @@ extension CandidateActions {
         _ = try ResolverRunner(store: store).run()
         guard let after = try store.memories.snapshot(of: target) else { throw Error.targetMissing }
         return MergedCandidate(receipt: MergeReceipt(target: target, targetTitle: targetMemory.title, before: [before], after: after,
-                                                     candidateID: candidate.id, mergedAt: .now),
+                                                     candidateID: candidate.id, mergedAt: .now, addedPhoto: addedPhoto),
                                newMentions: newMentions)
     }
 
@@ -93,17 +95,17 @@ extension CandidateActions {
         var edges = try edges(of: out, for: oldest.id, segment: candidate.segmentID, card: candidate.id)
         for row in continuations { if let o = CandidatePayload.memory(row) { edges.merge(try self.edges(of: o, for: oldest.id, segment: row.segmentID, card: candidate.id)) } }
         let promotion = oldest.isFloating && later.isEmpty ? (title: out.title, summaryQuote: out.quote) : nil
-        try store.memories.mergeGroup(sources: later, into: oldest, span: span, continuations: try continuationSpans(of: out, for: oldest.id),
+        // The write says what it linked, after the folds: a photo a folded memory held is moved, not added.
+        let addedPhoto = try store.memories.mergeGroup(sources: later, into: oldest, span: span, continuations: try continuationSpans(of: out, for: oldest.id),
                                       people: edges.people, places: edges.places, links: edges.links, entities: edges.entityWrite, anchors: edges.anchors,
                                       promotingStandIn: promotion, acceptingCandidate: candidate.id,
                                       acceptingContinuations: continuations.map(\.id) + edges.carriedPersonCards)
         let newMentions = try finishEdges(edges, segment: candidate.segmentID)
         try reindex(oldest.id)
-        if let chapter = try store.memories.fetch(oldest.id)?.chapterID { try chapterRangeFromMembers(chapter) }
         _ = try ResolverRunner(store: store).run()
         guard let after = try store.memories.snapshot(of: oldest.id) else { throw Error.targetMissing }
         return MergedCandidate(receipt: MergeReceipt(target: oldest.id, targetTitle: oldest.title, before: before, after: after,
-                                                     candidateID: candidate.id, mergedAt: .now),
+                                                     candidateID: candidate.id, mergedAt: .now, addedPhoto: addedPhoto),
                                newMentions: newMentions)
     }
 
@@ -124,7 +126,6 @@ extension CandidateActions {
         guard !sourceMemory.isFloating else { throw Error.standIn }
         try store.memories.fold(sourceMemory, into: targetMemory)
         try reindex(target)
-        if let chapter = try store.memories.fetch(target)?.chapterID { try chapterRangeFromMembers(chapter) }
         _ = try ResolverRunner(store: store).run()
         guard let after = try store.memories.snapshot(of: target) else { throw Error.targetMissing }
         return MergeReceipt(target: target, targetTitle: targetMemory.title, before: [targetBefore, sourceBefore], after: after, candidateID: nil, mergedAt: .now)
@@ -200,7 +201,8 @@ extension CandidateActions {
         guard let current = try store.memories.snapshot(of: receipt.target), Self.same(current, receipt.after) else { throw Error.stale }
         // One transaction: a kill mid-undo must never leave the source gone from both memories,
         // or the memories back with the pair's answer lost.
-        try store.memories.restore(receipt.before, settingCandidate: receipt.candidateID.map { ($0, .pending) }, reopeningPair: pair)
+        try store.memories.restore(receipt.before, settingCandidate: receipt.candidateID.map { ($0, .pending) }, reopeningPair: pair,
+                                    removingPhoto: receipt.addedPhoto.map { ($0, receipt.target) })
         for snapshot in receipt.before { try reindex(snapshot.memory.id) }
         _ = try ResolverRunner(store: store).run()
     }

@@ -28,16 +28,20 @@ final class SessionDetailViewModel {
     let flow: CardFlow
     var cards: CardHandler { flow.handler }
     let deps: Dependencies
+    /// The photo card of a photo session, at the top of the page; there is none for any other session.
+    let photoCard: PhotoCardViewModel
 
     init(session: Session, deps: Dependencies) {
         self.session = session
         self.deps = deps
+        photoCard = PhotoCardViewModel(session: session.id, deps: deps, showsRemoveFromStory: true)
         // The screen's onAppear loads it: SwiftUI may build and discard a model on a parent's render, so init stays cheap.
         flow = CardFlow(deps: deps)
         flow.onAutoClose = { [weak self] in self?.refresh() }
     }
 
     func refresh() {
+        photoCard.refresh()
         do {
             segments = try deps.sessions.segments(in: session.id)
             transcript = TranscriptItem.merge(segments: segments, turns: try InterviewerTurnRepository(deps.database).turns(in: session.id))

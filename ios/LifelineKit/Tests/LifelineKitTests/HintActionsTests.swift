@@ -76,17 +76,16 @@ private struct Env {
     #expect(throws: CandidateActions.Error.memoryNotAccepted) { try env.actions.acceptHint(hint) }
 }
 
-@Test func chapterRangeFollowsItsMembers() throws {
+@Test func assigningToAChapterLeavesItsRangeAlone() throws {
     let env = try Env()
     let a = try env.actions.acceptMemory(try env.memoryCandidate(ordinal: 0)).memory
     let b = try env.actions.acceptMemory(try env.memoryCandidate(ordinal: 1)).memory
     try env.store.memories.updateRange(a.id, .year(1998, origin: .stated, evidence: nil))
     try env.store.memories.updateRange(b.id, .year(2004, origin: .stated, evidence: nil))
     let chapter = try env.actions.createChapter(title: "Growing up", containing: a.id)
-    #expect(try env.store.chapters.chapter(id: chapter.id)?.range.earliest?.year == 1998)
+    #expect(try env.store.chapters.chapter(id: chapter.id)?.range == .unplaced)
     try env.actions.assign(memory: b.id, toChapter: chapter.id)
-    let range = try #require(try env.store.chapters.chapter(id: chapter.id)?.range)
-    #expect(range.earliest?.year == 1998 && range.latest?.year == 2004 && range.origin == .derived)
+    #expect(try env.store.chapters.chapter(id: chapter.id)?.range == .unplaced, "a member's years are not the chapter's years")
     let trips = try env.actions.addToCollection(a.id, titled: "Family trips")
     #expect(try env.store.chapters.members(of: trips.id).count == 1)
     try env.actions.removeFromCollection(a.id, from: trips.id)

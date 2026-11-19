@@ -101,7 +101,7 @@ Other launch arguments you can add next to `-uiTesting` (see `ios/Lifeline/Depen
 
 V1 milestones M1–M8 have shipped: record, transcribe, extract and confirm, place, land, organize, steady, memory kinds and entities, and the spoken interviewer. Card follow-ups have shipped too.
 
-The five-sections design (`docs/specs/2026-11-15-five-sections.md`) is in progress. The shell (five tabs and the record bar), the entity pages with the People grid, the You portrait and the Timeline spine (S6a) have shipped. `docs/plans/2026-11-15-sections.md` gives the ship order for the rest. Plans are in `docs/plans/`, specs in `docs/specs/`, and the decision log in `docs/DECISIONS.md`.
+The five-sections design (`docs/specs/2026-11-15-five-sections.md`) is in progress. The shell (five tabs and the record bar), the entity pages with the People grid, the You portrait and the Timeline spine (S6a) have shipped. Chapters (S6c) have shipped too: a chapter is a name with optional stated years, a moment's tag opens the chapter's sheet, and a life map shows every chapter. The pinned life strip (S6b) has not. `docs/plans/2026-11-15-sections.md` gives the ship order for the rest. Plans are in `docs/plans/`, specs in `docs/specs/`, and the decision log in `docs/DECISIONS.md`.
 
 ## Stack
 

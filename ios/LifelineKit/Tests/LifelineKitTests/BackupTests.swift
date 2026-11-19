@@ -57,6 +57,28 @@ private struct Root {
         return try #require(box.result).get()
     }
 
+    /// A story about a photo (photo story): the photo is stored with no link and the first session points at it,
+    /// as the app does at the start of a photo session. Returns the photo and the session.
+    func storyPhoto(rgb: Int) throws -> (photo: Photo, session: SessionID) {
+        let source = url.appending(path: "story-\(UUID().uuidString).jpg")
+        try GeneratedPhoto.write(to: source, width: 600, height: 400, rgb: rgb)
+        let library = PhotoLibrary(root: url, photos: store.photos)
+        let box = ResultBox<Photo>()
+        let done = DispatchSemaphore(value: 0)
+        Thread.detachNewThread {
+            Task {
+                box.result = await Result { try await library.store(fileAt: source, assetLocalID: nil) }
+                done.signal()
+            }
+        }
+        done.wait()
+        let photo = try #require(box.result).get()
+        var session = try #require(try store.sessions.listSessions().first)
+        session.subjectPhotoID = photo.id; session.startedFrom = .photo
+        try store.sessions.update(session)
+        return (photo, session.id)
+    }
+
     private var photosDirectory: URL { PhotoLocation.path(under: url) }
 
     /// Sorted, as the archive lists them.
@@ -524,6 +546,81 @@ private func stagedRestore() throws -> (target: Root, documents: URL) {
         // `path`, not `directory`: the restore itself must have made the folder and excluded it.
         #expect(try PhotoLocation.path(under: target.url).resourceValues(forKeys: [.isExcludedFromBackupKey]).isExcludedFromBackup == true)
         #expect(try SessionRepository(opened).listSessions().count == 1)
+    }
+
+    // MARK: Photo story: a session is a home for its photo
+
+    /// Exports `source`, restores the copy into a new root and opens it, as the next launch does.
+    private func exportAndRestore(_ source: Root) throws -> (root: URL, store: ExtractionStore) {
+        let archive = source.url.appending(path: "story.lifeline")
+        try Backup.export(root: source.url, appVersion: "1.0", to: archive, database: source.db)
+        let target = FileManager.default.temporaryDirectory.appending(path: "lifeline-restore-\(UUID().uuidString)")
+        _ = try AppDatabase.open(at: target.appending(path: "Lifeline/lifeline.sqlite"))
+        let documents = try docs()
+        _ = try Backup.stage(archive, root: target, appVersion: "1.0", safetyCopyDirectory: documents)
+        #expect(try Backup.applyPendingRestore(root: target, safetyCopyDirectory: documents))
+        return (target, ExtractionStore(try AppDatabase.open(at: target.appending(path: "Lifeline/lifeline.sqlite"))))
+    }
+
+    @Test func aStoryOnlyPhotoSurvivesExportAndRestore() throws {
+        let source = try Root(sessions: 1, memories: 1)
+        let (photo, session) = try source.storyPhoto(rgb: 0x405060)
+        // What Settings does before a copy is made: the session holds the photo, so the sweep keeps it.
+        #expect(try PhotoLibrary.sweep(root: source.url, photos: source.store.photos) == .init(rows: 0, files: 0))
+        let data = try source.photoData()
+        let (target, restored) = try exportAndRestore(source)
+        #expect(try restored.photos.subjectPhoto(of: session)?.id == photo.id, "the session still points at its photo")
+        #expect(try Data(contentsOf: PhotoLocation.path(under: target).appending(path: photo.fileName)) == data[photo.fileName])
+        // What the next launch does.
+        #expect(try PhotoLibrary.sweep(root: target, photos: restored.photos) == .init(rows: 0, files: 0), "the restore leaves nothing to sweep")
+        #expect(try PhotoStoryReader(store: restored).card(for: session)?.photo.id == photo.id, "the session's page shows the card")
+    }
+
+    @Test func aStoryOnlyPhotoWhoseFileIsMissingKeepsItsRowThroughARestore() throws {
+        let source = try Root(sessions: 1, memories: 1)
+        let (photo, session) = try source.storyPhoto(rgb: 0x506070)
+        try FileManager.default.removeItem(at: PhotoLocation.path(under: source.url).appending(path: photo.fileName))
+        let (target, restored) = try exportAndRestore(source)
+        #expect(try restored.photos.subjectPhoto(of: session)?.id == photo.id, "the row and the pointer travel without the file")
+        // Decision 10 (S4): the sweep never removes a row because its file is missing; a later pick of the same photo repairs it.
+        #expect(try PhotoLibrary.sweep(root: target, photos: restored.photos) == .init(rows: 0, files: 0))
+        #expect(try restored.photos.photo(id: photo.id) != nil)
+    }
+
+    @Test func aV13ArchiveRestoresAndMigrates() throws {
+        // A database migrated only to v13 (photos, no session pointer), one session, one photo on a page.
+        let oldRoot = FileManager.default.temporaryDirectory.appending(path: "lifeline-v13-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: oldRoot.appending(path: "Lifeline"), withIntermediateDirectories: true)
+        var config = Configuration(); config.foreignKeysEnabled = true
+        let queue = try DatabaseQueue(path: oldRoot.appending(path: "Lifeline/lifeline.sqlite").path, configuration: config)
+        try Migrations.migrator.migrate(queue, upTo: "v13")
+        try queue.write { db in
+            try db.execute(sql: "insert into session (id, started_at, ended_at, audio_path, stage_log, landing_choice_made) values ('s1', '2026-10-01', '2026-10-01', 'a.m4a', '[]', 1)")
+            try db.execute(sql: "insert into entity (id, type, title, created_at) values ('e1', 'person', 'Maya', '2026-10-01')")
+            try db.execute(sql: "insert into photo (id, file_name, sha256, pixel_width, pixel_height, added_at) values ('p1', 'p1.jpg', 'hash-p1', 400, 300, '2026-10-01')")
+            try db.execute(sql: "insert into photo_link (photo_id, entity_id, role, sort_order) values ('p1', 'e1', 'cover', 0)")
+        }
+        let photos = PhotoLocation.path(under: oldRoot)
+        try FileManager.default.createDirectory(at: photos, withIntermediateDirectories: true)
+        try GeneratedPhoto.write(to: photos.appending(path: "p1.jpg"), width: 400, height: 300, rgb: 0x203040)
+        let oldArchive = oldRoot.appending(path: "old.lifeline")
+        _ = try Backup.export(root: oldRoot, appVersion: "1.0", to: oldArchive)
+        #expect(try Backup.inspect(oldArchive).schemaVersion == "v13")
+
+        let target = try Root(sessions: 1, memories: 1)
+        let documents = try docs()
+        _ = try Backup.stage(oldArchive, root: target.url, appVersion: "1.0", database: target.db, safetyCopyDirectory: documents)
+        #expect(try Backup.applyPendingRestore(root: target.url, safetyCopyDirectory: documents))
+        let opened = try AppDatabase.open(at: target.url.appending(path: "Lifeline/lifeline.sqlite"))
+        let pointer = try opened.writer.read { db in
+            try Row.fetchOne(db, sql: "select subject_photo_id from session where id = 's1'")
+        }
+        #expect(pointer != nil, "migrated on open: the column is there")
+        #expect(pointer?["subject_photo_id"] as String? == nil, "an old session is about no photo")
+        let restored = ExtractionStore(opened)
+        #expect(try restored.photos.photos(of: .entity(EntityID(rawValue: "e1"))).map(\.id) == [PhotoID(rawValue: "p1")])
+        #expect(try PhotoLibrary.sweep(root: target.url, photos: restored.photos) == .init(rows: 0, files: 0))
+        #expect(try PhotoStoryReader(store: restored).card(for: SessionID(rawValue: "s1")) == nil)
     }
 
     @Test func theSafetyCopyKeepsThePhonesPhotos() throws {

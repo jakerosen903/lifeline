@@ -10,7 +10,7 @@ One entry per decision. Newest first. Status is Decided, Open, or Superseded.
 
 Schema:
 
-- R36: the migration is named `v15`. This branch registers no `v14`. Why: the unmerged photo branches register their own `v14`, and GRDB records a migration by name, so a device that ran one `v14` would skip the other. GRDB runs each unapplied id in registration order, so the gap is harmless.
+- R36: the migration is named `v15`. Why: the photo story registered `v14` first (`session.subject_photo_id`), and GRDB records a migration by name, so a device that ran one `v14` would skip the other. After the merge with `main` the order is `v14` (photo story), then `v15`.
 
 Matching and origins:
 
@@ -69,6 +69,103 @@ Plan decision 8: a name no memory carries keeps the old "Who's this?" card with 
 **Why.** On first use a story about a roommate was filed under a friend with the same spoken name, with no sign of a guess and no way to change it. A guess shown as a fact breaks principle 5. A contact gives a real person one identity across stories.
 
 **Costs.** Marks are common, because every bare name is a guess. Links older than this feature show no mark, so an old wrong link looks settled until the owner changes it. A name the app does not know becomes a person on Keep, so a misheard name is a person until the owner removes or merges it. The extractor does not see a contact's full name.
+
+## 2026-11-18 · S6c: chapters are names with stated years
+
+**Status:** Decided by the builder. The owner can overrule each one. Source: `docs/plans/2026-11-18-timeline-chapters.md`, ledger `.superpowers/sdd/2026-11-18-timeline-chapters/rulings.md`.
+
+**Decision.** A chapter is a name. It has stated years only when the person said them. It has said members: the moments the person put in it. `chapter.range` holds stated years only. The resolver computes the span of the said members on each run and never writes it to the chapter.
+
+The ten builder's defaults:
+
+1. The life map opens from the Timeline's "…" menu, item "Chapters", until S6b. The spec opens it from the pinned card, which does not exist yet. S6b can keep or remove the item.
+2. A chapter with no name and with said members shows no tag on the Timeline. On the life map it shows as "No name yet", so the person can name it or remove it.
+3. A tagged moment's menu has "Take out of "{name}"". The spec gives no other way to undo a wrong tag.
+4. A rename to a name that another chapter has is refused. The sheet says "You already have a chapter with this name." A rename never merges two chapters.
+5. A rename to an empty name is refused. A chapter loses its name only when it is removed.
+6. Existing derived ranges stay in the database. No write clears them. The code ignores them. "Say when it was" replaces one with a stated range.
+7. The prune keeps a chapter that a story points at. The launch repair changes in one way only: it never prunes a chapter with stated years.
+8. Undo of a removal puts a tag back only on a memory that still exists and has no chapter. Undo never takes a moment from a chapter the person chose in the meantime.
+9. Said members in the chapter's sheet are text rows. A tap on one does nothing yet.
+10. The extractor's context packet sends a chapter's stated years, or no years. It no longer sends a member span as the chapter's dates.
+
+Rulings made while building:
+
+- R2. Inside one resolver run, a chapter's member span comes from the ranges in the store at the start of that run. A moment that the run places does not widen the span until the next run. The stored range was refreshed only at the end of a run before this build, so this is not a regression. `run()` stays idempotent.
+- R3. The tag's accessibility label stays the chapter's name, with the hint "Opens this chapter". The plan's "Chapter: {name}" is withdrawn. An existing UI test asserts that the label is the name. The row's own label already says "chapter", and VoiceOver adds "button".
+- R4. A life map row has an `isOpenEnded` field. The view does not repeat the kit's rule for "no stated end". One rule lives in one place.
+- R7. The words "Untitled chapter" show nowhere. For a chapter with no name, the remove question is "Remove this chapter?" and the notice is "Removed a chapter with no name." A named chapter keeps "Remove “{name}”?" and "Removed “{name}”.". The notice sits on the Timeline, and the app must not quote a name that the person did not give.
+- R8. A session delete prunes the empty chapters with no name, in the same write. A merge does not prune: a merge can be undone, and a prune would lose the tag on undo. The launch repair prunes that case. When an undo puts back a memory whose chapter was removed in the meantime, the memory comes back with no chapter.
+- R9. Five minors from the final review are not fixed in this build. The plan lists them under "After S6c".
+- R1, R5 and R6 are process rulings. `ChapterActions` owns the tag write path and `CandidateActions` forwards to it (R1). Two files the plan did not list are accepted, for one responsibility per file (R5). The docs are written before the final run, and the controller records the full run and the screenshots after the final review (R6).
+
+**Supersedes.** "2026-10-26 · The timeline groups moments into computed life periods", for chapter ranges. That entry said that a chapter the person names replaces the period it covers. A chapter now never replaces a period. A chapter's range never comes from its members. The same rule in `docs/specs/2026-11-16-audit-data-fixes.md` (A1, rule 3) also yields to this entry.
+
+**Why.** A span computed from members showed dates the person never said (PRINCIPLES 5). A date overlap says nothing about a moment, so the app tags no moment by its date (PRINCIPLES 1).
+
+**Consequences.**
+
+- A chapter that had dates before this build shows "No dates yet" under "Not placed in time yet" on the life map until the owner says when. Its old range stays in the database and is ignored.
+- A said member dated outside the stated years keeps its tag. The app does not correct it.
+- No migration. `memory.chapter_id` is the one tag for a moment. `story.chapter_id` stays in the schema. The Timeline does not read it. The kit still reads and writes it: `ChapterRepository.remove` and `restore`, the prune, and `StoryRepository`. A later migration can drop it after the kit stops using it.
+- Each tag change is one write: the find-or-insert of a chapter, the tag and the prune.
+
+**Known costs.** These stay after the final review.
+
+- A chapter hint that is only punctuation cannot be accepted. The card stays pending and shows "Could not file that" on each tap. In "Add to a chapter…" and in the rename alert, a name of punctuation only keeps the button disabled.
+- Undo of a removal can leave two chapters with one name, when a hint made a chapter of the same name inside the 6 seconds.
+
+## 2026-11-16 · A photo starts a story; the app asks to see Favorites
+
+**Status:** Decided. Four items are open for the owner (see the end of this entry). This entry reverses one rule of S4.
+
+**Source:** `docs/specs/2026-11-16-photo-story.md` and `docs/plans/2026-11-16-photo-story.md`, decisions 1 to 12. The rulings made while building are below. The owner approved the v14 schema on 2026-11-16. The schema change is one column, `session.subject_photo_id`.
+
+**Decision.** The person picks one photo and tells its story. The photo stays on screen while the person talks. After the story, the photo goes on each memory the person keeps.
+
+- **This reverses S4’s rule “the app asks for no photo-library permission”.** The app now asks for photo access, once, on the first tap of “Tell a story about a photo”. The app does not ask at launch. It does not ask from the photo viewer. It does not ask from “Add a photo”, which still uses the system picker and asks for nothing.
+- **The owner’s reason.** The first screen must be the person’s own Favorites, not the whole library. A picker that opens on the whole library is a worse prompt for a story. Only the Favorites album gives the person a short list of photos that they already chose to keep.
+- **The access level.** The app asks with `.readWrite`. It is the only level that can read an album. The app never writes to the photo library.
+- **What the app reads.** The app reads the Favorites album, or the set of photos the person allowed (limited access), and the one photo the person picks. It does not scan the library. It does not fetch an asset outside that album. It stores only the picked photo, with the S4 rules (a JPEG of at most 2048 pixels, no EXIF, no GPS).
+- **Nothing leaves the phone.** The photo, its date and its position go nowhere. The app adds no network call. For the one picked photo, the system can download an iCloud original.
+- **Three homes for a photo.** A photo can sit on a page (an entity), on a memory, and now on a session. A session points at its photo with `subject_photo_id`. A photo that a session still points at stays when its last page link goes. When nothing holds the photo, the row and the file go in one call.
+- **Open and listen.** A photo session is a quick session that starts from a photo. The app speaks one fixed opening, “Tell me about this one.”, and then asks nothing. `TurnPolicy` and the interviewer prompt do not change.
+- **Tap-only offers.** The photo links to a memory when the person keeps the memory, or when a telling of the session is merged into a memory. After that, the photo card offers “Add to {title}’s page” and “Use this date”. Each offer is a tap. An offer has no “No” button and stores no declined state. A date from a photo comes only from a tap.
+- **A date from a photo is settled** (origin `photo`). The evidence text is “the photo’s date, 14 June 2012”. The memory page marks it “from a photo”.
+
+**Rulings made while building (2026-11-16).** Each ruling has its cost.
+
+- **Undo of a merge takes back the photo link that the merge added.** It never takes a link that the target held before. Why: without this, an undone merge leaves a photo on a memory that the telling no longer belongs to. Cost: none. Remove `MergeReceipt.addedPhoto` to undo the ruling. This differs from S4, where an undone merge leaves the photos on the target.
+- **The merge write says which link it added (final review).** The link call returns the photo when it wrote the link. The check runs inside the transaction, after the folds of a group merge. Why: a check before the folds counted a photo that a folded memory carried to the target as added. The undo then took the photo off both memories.
+- **“Use this date” is one write, then the resolver runs.** The write changes the memory’s range. (As first built, it also changed the range of the memory’s chapter. S6c of 2026-11-18 removed that: a chapter’s range holds stated years only.) Why: a memory placed relative to this one must be placed again at once. Cost: one resolver run per tap.
+- **`PhotoCaption.longDate` is public.** The caption and the evidence text share one formatter.
+- **The running session’s header reads “You chose a story about a photo”.** The Sessions list names the session “A story about a photo”. Why: the record bar sits under the session screen, so the plan’s name “on the bar” has no place to show. The header follows the pattern “You chose a quick story”. Cost: one string.
+- **The Sessions list names a photo story from `startedFrom`, not from the photo row.** It needs no read. The name stays true after the photo leaves the story.
+- **The system picker for “All photos”, for no access and for an empty album is inline in the start sheet.** Only its bottom toolbar is hidden. Why: every path then starts the session from the dismissal of that one sheet, and the app never presents the session over a sheet. Cost: the inline picker looks unlike the modal picker of “Add a photo”. The owner must see it on the device.
+- **The record bar menu uses a fixed order.** The menu opens upward and showed its items in reverse, so “Tell a story about a photo” sat above “Settle in”.
+- **A cancel while a photo is added stores nothing.** The rule lives in the kit (`CancellablePhotoStore`). A stray stored photo is not visible in the UI, so no UI test can fail for it.
+- **Thumbnails ask for the full-quality image on the phone, then for the phone’s low-quality copy. The network stays off. A nil result is asked again.** Each request calls back once, so a tile never waits for a second delivery. The continuation resumes once, and a cancelled tile cancels its request. An iCloud-only favorite then shows its local low-resolution image, not an empty tile. Cost: two requests for an iCloud-only photo. Not checked against a real iCloud library. The device check covers it.
+- **“Its photo goes too.” is on the landing’s delete dialog only.** The landing is the only place the app deletes a session.
+- **A deleted session sweeps its homeless photo at once.** Why: the sentence in the dialog must be true before the next launch. Cost: one directory listing and one query per delete.
+- **The Remove button’s accessibility label is “Remove from {title}”.** Two rows with the same visible “Remove” are the same to VoiceOver and Voice Control. The label starts with the visible text.
+- **The card lists each memory that has a telling in the session (final review).** This includes a memory that a telling was merged into, which was first told in another session. The memory gets its title, “Remove”, its page offers and its date offer. Why: the merge put the photo on that memory, so the person must see it and be able to take it off.
+- **The date offer is withheld for a date the person said or confirmed (review of PR #29).** `PhotoStory.offersDate` returns false for origin `stated` or `confirmed`. Why: “Use this date” replaces the range and its evidence text with no undo, so one tap could lose the person’s own words (principles 1 and 9). Cost: a photo cannot correct a said date from the card; the person uses the “when” controls. An offer with Undo is the other fix and is not built.
+- **“Use this date” skips a memory whose range changed after the card was drawn (review of PR #29).** The write compares the stored range with the range the offer was made against, inside the transaction. Why: a stale offer must not replace a newer date. The card reads the store again when it next appears.
+- **The offer stays for a guessed range (`inferred`, `derived`) outside the photo’s day. Open for the owner.** The review asked to withhold it there too, or to add Undo, because the tap replaces the range’s evidence text. The spec offers the date in this case, and withholding it would leave the offer for unplaced memories only. The recording and the transcript keep the person’s words; only the range’s evidence line is replaced. Cost if the owner disagrees: an Undo on the card, or one more guard in `offersDate`.
+- **A date from a photo has no “you said” line (final review).** The memory page shows the day and the mark “from a photo”. The mark states the source. Why: the person tapped an offer. The person did not say the date. `TimeRange.saidEvidence` holds the rule.
+- **“Tell its story” shows only where a session can start (final review).** The viewer inside a landing’s review does not show it. The app also hides it while a session or a landing is up. Why: there the button did nothing, and a start would replace a landing that the person has not answered.
+- **“Remove the photo from this story” asks first (final review).** The dialog follows S4’s “Remove photo…”. Title: “Remove this photo?”. Message: “It leaves this story. The original stays in your photo library.” Buttons: “Remove photo” and “Keep it”. Why: when nothing else holds the photo, the tap deletes it from the app. The owner must confirm the new copy.
+- **“Use this date” has the accessibility label “Use this date for {title}”.** Two offers are then not the same to VoiceOver and Voice Control. The label starts with the visible text.
+- **The test seed has two photo sessions.** The second has no kept memory, and its photo has no other home. The delete test needs one. `-uiTesting-photoStoryLanding first|second` opens the app on a landing, because the delete dialog opens from a landing only.
+- **Test changes.** The kit test target did not compile on Swift 6.4.2, so the controller un-nested two `#require` calls in `V7PeopleRulesTests.swift` in its own commit. `v13OnAPopulatedV12Database` now migrates up to v13, because its `select *` would see the v14 column. `testTheGridHoldsAtTheLargestText` launches with seeded people, because the Skip button of first open is out of reach at that size. That is an existing defect outside this work.
+- **A known red test, not ours.** `keepWritesTheCardsKind` fails on `origin/main` (a1638c3). It stays as it is.
+
+**Open items for the owner.** Each needs a decision or a look. The copy of the new “Remove this photo?” dialog also needs the owner’s word (see the rulings).
+
+1. **Plan decision 4: the re-link case.** The app does not store “removed from this memory”. If the person removes the photo from a memory, and a second telling of the same photo session is merged into that memory, the app links the photo again. The spec says it must not. The plan accepted this rare case to avoid a new table. Cost of a fix: a table of removed links.
+2. **The inline picker’s look.** See the ruling above. The device check shows it.
+3. **The opening swap.** When the person swaps the opening, the photo stays under a scene question. The spec keeps alternates. The owner must say if this is wrong.
+4. **A photo-dated memory reads as a guess on summaries.** The memory page shows a plain day. The entity page span and the life strip show “around 2019”. Plan decision 6 makes the date settled but not “as said”. Cost of a fix: one line in `readsAsSaid`.
 
 ## 2026-11-16 · S6a: rulings made while building the spine
 
@@ -262,7 +359,7 @@ Quotes on lists, entity pages and About hide filler words ("um", "uh", "like", "
 
 ## 2026-10-26 · The timeline groups moments into computed life periods
 
-**Status:** Decided by the owner. Source: `docs/specs/2026-10-26-ui-audit.md`, call 2 and findings F2–F3.
+**Status:** Decided by the owner. Superseded in part: for a chapter's range, by "2026-11-18 · S6c: chapters are names with stated years". A named chapter no longer takes the place of a period, and a chapter's range no longer comes from its members. Source: `docs/specs/2026-10-26-ui-audit.md`, call 2 and findings F2–F3.
 
 The timeline reads life periods from the dates and the owner's age, for example "Growing up · 2004–2012". Each computed period shows as a guess (PRINCIPLES 5). A chapter the person names replaces the period it covers. "Outside any chapter" goes away.
 

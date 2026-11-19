@@ -294,7 +294,7 @@ Step 2 changes no screen. It gets its own plan after step 1 ships.
 
 ## Data model
 
-Migration v15 is additive. The phone's database is the only copy, so the migration drops nothing and rewrites no row. The migration is named `v15`, not `v14`: the unmerged photo branches register their own `v14`, and GRDB records a migration by name (R36).
+Migration v15 is additive. The phone's database is the only copy, so the migration drops nothing and rewrites no row. The migration is named `v15`, not `v14`: the photo story registered `v14` first, and GRDB records a migration by name (R36).
 
 `person`, new columns, all nullable:
 

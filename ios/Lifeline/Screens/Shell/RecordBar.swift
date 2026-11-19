@@ -2,7 +2,7 @@ import LifelineKit
 import SwiftUI
 
 /// The tab view's bottom accessory: one button across the bar starts a quick story about the page
-/// on screen, and a trailing menu holds "Settle in". The system draws the bar's glass.
+/// on screen, and a trailing menu holds "Settle in" and "Tell a story about a photo". The system draws the bar's glass.
 struct RecordBar: View {
     let home: HomeViewModel
 
@@ -62,6 +62,8 @@ struct RecordBar: View {
         Menu {
             Button("Settle in", systemImage: "leaf") { Task { await home.startSession(kind: .settleIn) } }
                 .accessibilityIdentifier("home.settleIn")
+            Button("Tell a story about a photo", systemImage: "photo") { home.tellAboutAPhoto() }
+                .accessibilityIdentifier("home.photoStory")
         } label: {
             Image(systemName: "ellipsis")
                 .font(.headline)
@@ -69,6 +71,8 @@ struct RecordBar: View {
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        // A menu that opens upward from the bar lists its items bottom-up by default; fixed keeps "Settle in" first.
+        .menuOrder(.fixed)
         .padding(.trailing, 4)
         .accessibilityLabel("More ways to start")
         .accessibilityIdentifier("home.more")

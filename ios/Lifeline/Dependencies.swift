@@ -48,6 +48,8 @@ struct Dependencies {
     let photoImages: PhotoImageCache
     /// Under `-uiTesting-pickPhoto <path>`: "Add a photo" adds this file without the picker (decision 22).
     var pickPhotoPath: String? = nil
+    /// The photo library for "Tell a story about a photo": PhotoKit in the app, generated photos under `-uiTesting`.
+    var photoPickSource: any PhotoPickSource = LibraryPhotoPickSource()
     /// Under `-uiTesting-restoreFrom <path>`: Restore stages this file without the picker.
     var restoreFromPath: String? = nil
     /// Under `-uiTesting`: Export keeps the file in Documents and shows no share sheet, which a UI test cannot drive.
@@ -74,11 +76,11 @@ struct Dependencies {
     }
 
     /// A fresh question for the next session: an open thread first, then the bank without repeats.
-    func opening(subject: SessionSubject? = nil) -> Opening {
+    func opening(photo: PhotoID? = nil, subject: SessionSubject? = nil) -> Opening {
         let bank = (try? PromptBank.load()) ?? []
         let curiosity = (try? extractionStore.curiosity.open()) ?? []
         let used = (try? promptLog.lastUsed()) ?? [:]
-        return OpeningChooser.choose(subject: subject, curiosity: curiosity, bank: bank, lastUsed: used, now: .now)
+        return OpeningChooser.choose(photo: photo, subject: subject, curiosity: curiosity, bank: bank, lastUsed: used, now: .now)
     }
 
     func audioURL(for id: SessionID) throws -> URL {
@@ -290,11 +292,19 @@ struct Dependencies {
         if let i = args.firstIndex(of: "-uiTesting-restoreFrom"), i + 1 < args.count { deps.restoreFromPath = args[i + 1] }
         deps.exportWithoutShareSheet = true
         if let i = args.firstIndex(of: "-uiTesting-pickPhoto"), i + 1 < args.count { deps.pickPhotoPath = args[i + 1] }
+        let photoAccess = args.firstIndex(of: "-uiTesting-photoAccess").flatMap { $0 + 1 < args.count ? args[$0 + 1] : nil }
+        deps.photoPickSource = try ScriptedPhotoPickSource(mode: photoAccess, slowFile: args.contains("-uiTesting-slowPhotoFile"),
+                                                           folder: root.appending(path: "scripted-photos"))
         if args.contains("-uiTesting-seed") { try UITestSeed.write(sessions: deps.sessions, store: store) }
         if args.contains("-uiTesting-seedPerson") { try UITestSeed.writePersonOnly(store: store) }
         if args.contains("-uiTesting-seedPeople") { try UITestSeed.writePeople(store: store, profile: deps.profile, sessions: deps.sessions) }
         if args.contains("-uiTesting-seedPhotos") {
             try UITestSeed.writePhotos(store: store, profile: deps.profile, sessions: deps.sessions, library: deps.photos)
+        }
+        if args.contains("-uiTesting-seedPhotoStory") {
+            let landing = args.firstIndex(of: "-uiTesting-photoStoryLanding").flatMap { $0 + 1 < args.count ? args[$0 + 1] : nil }
+            try UITestSeed.writePhotoStory(store: store, profile: deps.profile, sessions: deps.sessions, library: deps.photos,
+                                           unlanded: landing.flatMap(UITestSeed.PhotoStoryLanding.init(rawValue:)))
         }
         if args.contains("-uiTesting-seedPortrait") { try UITestSeed.writePortrait(store: store, profile: deps.profile, sessions: deps.sessions) }
         if args.contains("-uiTesting-seedTaggedMoment") { try UITestSeed.tagOneMoment(store: store) }
