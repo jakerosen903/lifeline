@@ -8,6 +8,7 @@ public enum HandleResolve {
     /// For each memory with handles: `handlePeople` = the people of its handles, with a person id kept only when `knownPeople` holds it;
     /// `peopleRefs` = their said names, in handle order. A memory with no handle is not changed.
     /// `recording` is the packet's `recordingPeople`: a handle with no entry in this output takes the recording's entry (D17).
+    /// An `about_ref` that is a known handle joins `personHandles` first (D22).
     public static func resolved(_ output: OutputValidator.Validated, knownPeople: Set<String>,
                                 recording: [ContextPacket.RecordingPerson] = []) -> OutputValidator.Validated {
         guard !output.people.isEmpty || !recording.isEmpty else { return output }
@@ -19,8 +20,11 @@ public enum HandleResolve {
         let earlier = Dictionary(recording.compactMap { entry in person(of: entry).map { (entry.handle, checked($0, knownPeople)) } },
                                  uniquingKeysWith: { first, _ in first })
         let byHandle = own.merging(earlier, uniquingKeysWith: { own, _ in own })
+        let knownHandles = Set(out.people.map(\.handle)).union(recording.map(\.handle))
         out.accepted = output.accepted.map { candidate in
-            guard case .memory(var memory) = candidate, !memory.personHandles.isEmpty else { return candidate }
+            guard case .memory(var memory) = candidate else { return candidate }
+            memory.personHandles = withAboutRefHandle(memory, knownHandles: knownHandles)
+            guard !memory.personHandles.isEmpty else { return candidate }
             var seen: Set<String> = []
             // A handle listed twice in one memory is one person, so it gives one entry.
             memory.handlePeople = memory.personHandles.filter { seen.insert($0).inserted }.compactMap { byHandle[$0] }
@@ -28,6 +32,13 @@ public enum HandleResolve {
             return .memory(memory)
         }
         return out
+    }
+
+    /// D22: a handle in `about_ref` is one of the memory's people, so it is added (at the end) when the model left it out.
+    /// An `about_ref` that is not a known handle (`self`, an entity id, a mention ref) changes nothing.
+    private static func withAboutRefHandle(_ memory: MemoryOut, knownHandles: Set<String>) -> [String] {
+        guard let about = memory.aboutRef, knownHandles.contains(about), !memory.personHandles.contains(about) else { return memory.personHandles }
+        return memory.personHandles + [about]
     }
 
     /// The recording's entry as a person of this card: the first name said for the handle, so the chip shows

@@ -152,3 +152,34 @@ private let recordingRobyn = ContextPacket.RecordingPerson(handle: "p1", saidNam
     #expect(out.accepted.count == 1)
     #expect(try #require(firstMemory(out)).aboutRef == nil)
 }
+
+// D22: a handle in `about_ref` is one of the memory's people.
+@Test func aFactAboutARecordingHandleWithNoPersonHandlesStoresThatPerson() throws {
+    let out = HandleResolve.resolved(validated(memory(handles: [], aboutRef: "p1"), people: []), knownPeople: ["person-robyn"], recording: [recordingRobyn])
+    let m = try #require(firstMemory(out))
+    #expect(m.personHandles == ["p1"])
+    #expect(m.handlePeople == [PersonOut(handle: "p1", saidName: "Robyn", relationText: "from work", personID: "person-robyn")])
+    #expect(m.peopleRefs == ["Robyn"])
+}
+
+@Test func anAboutRefHandleOfThisOutputIsAddedAtTheEnd() throws {
+    let out = HandleResolve.resolved(validated(memory(handles: ["p2"], aboutRef: "p1"), people: [robynCousin, robynFriend]), knownPeople: [])
+    let m = try #require(firstMemory(out))
+    #expect(m.personHandles == ["p2", "p1"])
+    #expect(m.handlePeople == [robynFriend, robynCousin])
+}
+
+@Test func anAboutRefHandleTheMemoryListsIsNotAddedAgain() throws {
+    let out = HandleResolve.resolved(validated(memory(handles: ["p1"], aboutRef: "p1"), people: [robynCousin]), knownPeople: [])
+    #expect(try #require(firstMemory(out)).personHandles == ["p1"])
+}
+
+@Test func anAboutRefThatIsNotAHandleChangesNothing() throws {
+    for about in ["self", "t1", "entity-lake"] {
+        let input = validated(memory(handles: ["p1"], aboutRef: about), people: [robynCousin])
+        let m = try #require(firstMemory(HandleResolve.resolved(input, knownPeople: [], recording: [recordingRobyn])))
+        #expect(m.personHandles == ["p1"] && m.handlePeople == [robynCousin], "about_ref \(about)")
+    }
+    let noHandles = validated(memory(handles: [], aboutRef: "t1"), people: [])
+    #expect(HandleResolve.resolved(noHandles, knownPeople: [], recording: [recordingRobyn]) == noHandles)
+}

@@ -125,6 +125,13 @@ import Testing
     #expect(v6.contains("`people` as an empty list"), "v6 shares the schema, so it must return the new keys empty")
 }
 
+@Test func promptV8PutsAHandleOfAnAboutRefInPersonHandles() throws {
+    let v8 = try ExtractorPrompt.system(version: "v8")
+    #expect(v8.contains("use that person's handle in `person_handles`, and also in `about_ref` when the fact, feeling or goal is about them"))
+    #expect(v8.contains("A handle in `about_ref` is also listed in that memory's `person_handles`."))
+    #expect(!v8.contains("in `person_handles` or `about_ref`"), "D22: the handle always goes in person_handles")
+}
+
 @Test func emptyHandlesAndHintsDecodeAsNone() throws {
     let json = """
     {"memories":[{"ref":"m1","kind":"fact","title":"The fence was white","quote":"the fence was white","segment_span":{"start_word":0,"end_word":3},

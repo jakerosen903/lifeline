@@ -1043,3 +1043,30 @@ private func expectPreviewMatches(_ chips: [PreviewChip], _ links: [MomentEntity
     #expect(link.entityID == guessed.entityID && link.personHandle == "p1", "the card kept later links the same person")
     #expect(try env.store.people.people().filter { !$0.isOwner }.count == 1)
 }
+
+// MARK: - D22: a handle in about_ref is one of the memory's people
+
+@Test func aFactWhoseAboutRefIsAHandleIsADetailOfThatPersonWhateverIsKeptFirst() throws {
+    let env = try Env()
+    let (_, segs) = try StoreFixtures.session(in: env.store.sessions, segments: ["Robyn moved in that fall", "She was always late"])
+    let naming = try env.handleCard(in: segs[0].id, "Robyn moved in that fall", people: [handled("p1", "Robyn")])
+    // The model gave only about_ref "p1"; HandleResolve stores the recording's p1 on the card.
+    let modelOut = MemoryOut(ref: "m1", kind: .fact, title: "A title", quote: "She was always late", segmentSpan: WordSpan(startWord: 0, endWord: 3),
+                             peopleRefs: [], placeText: nil, anchors: [], collectionHint: nil, chapterHint: nil, confidence: 0.9, aboutRef: "p1")
+    let recording = [ContextPacket.RecordingPerson(handle: "p1", saidNames: ["Robyn"], relation: nil, personID: nil)]
+    let resolved = HandleResolve.resolved(OutputValidator.Validated(accepted: [.memory(modelOut)], rejected: [], flags: .none),
+                                          knownPeople: [], recording: recording)
+    guard case .memory(let out) = try #require(resolved.accepted.first) else { Issue.record("no memory"); return }
+    #expect(out.handlePeople == [handled("p1", "Robyn")])
+    let factCard = StoreFixtures.candidate(segs[1].id, ordinal: 1, payload: try CandidatePayload.encode(out))
+    try env.store.candidates.insert(factCard)
+
+    let fact = try env.actions.acceptMemory(factCard, joinStory: false)
+    let details = try env.personLinks(fact.memory.id, relation: .detail)
+    let guessed = try #require(details.first)
+    #expect(details.count == 1, "kept before the naming card, and with the naming card not kept, the fact has its detail")
+    let first = try env.actions.acceptMemory(naming, joinStory: false)
+    let link = try #require(try env.personLinks(first.memory.id).first)
+    #expect(link.entityID == guessed.entityID && link.personHandle == "p1", "the naming card kept later links the same person")
+    #expect(try env.store.people.people().filter { !$0.isOwner }.count == 1)
+}
