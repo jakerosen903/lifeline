@@ -118,7 +118,18 @@ An `assumed` link shows a dashed outline and the word "Assumed" until the person
 
 A person chip on a card, on the landing, on the memory page and on the person's page opens the "Who is this?" sheet. A name marked "Not a person" on a card that waits keeps a quiet chip, so the sheet opens again before Keep. A change can move all the moments of one recording, with the checkbox on, or one moment. A change shows "Changed to {name}." with Undo for 6 seconds. One answer carries inside one recording only. A name no memory carries keeps the old "Who's this?" card with its four choices.
 
-Contacts are not read yet. Rules 3, 5 and 6 find no contact until the next PR (PC-b), which adds the contacts directory, the link between a person and a contact, and suggestions in the sheet.
+### People and contacts
+
+A person can hold one contact, and a contact one person. A person needs no contact.
+
+- **What the app reads.** The app reads the name fields, the nickname and the picture of a contact. The name fields include the organization name, because a company contact is named by it. It reads nothing else. Rules 3, 5 and 6 match against a cache of the contacts the app can see.
+- **What the app keeps.** For a linked person the app keeps the contact's identifier, the contact's name and a copy of the picture. The copy goes through the photo store, as any photo does. It keeps no other contact. A name the owner said or typed is never replaced by a contact's name.
+- **What goes to the model.** Nothing from a contact goes to the model. A person made from a contact goes to the model under the name the owner said, never under the contact's name. A person with no said name is left out.
+- **When the app asks for access.** The app asks once, never at first launch. It asks on the landing of the first recording with a kept person, when the landing is quiet: the recording was not heavy, no serious disclosure showed and sorting is done. It also asks when the owner taps "Link to a contact" or "Search your contacts". After a yes on the landing, the app looks again at that recording only.
+- **The check.** The app checks the linked contacts at launch and when the system says contacts changed. A rename of the contact changes the kept name. It changes the person's name only when the name came from the contact. With no access, the check does nothing. A linked person with no copy of the picture gets the copy. A picture with the same bytes as a stored photo changes nothing. A new picture replaces the app's own copy, and only while that copy is the person's first photo. A copy that the owner removed does not come back. A contact that is gone unlinks nothing: the person keeps everything and shows "This contact is not in your contacts now". Under full access, one exact free name match links the person again. Under limited access the app cannot tell a deleted contact from one it may not see. A contact that is not shared shows as missing, and the app never links again by name.
+- **Suggestions.** When one free contact fits the name of a person with no contact, the person's page asks "Is this the same person?". The suggestion shows on the person's page only. "No" is kept.
+- **With limited access.** The app matches against the shared contacts. The search shows a button that shares one more contact.
+- **With no access.** The app matches against people on file only, and every guess is still marked. A person with a contact shows "Allow contacts" when the app never asked, and "Allow contacts in Settings" when access is denied. A person with no contact shows the card "Allow contacts in Settings" when access is denied.
 
 ### Every session lands
 

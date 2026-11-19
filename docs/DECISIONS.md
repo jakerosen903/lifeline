@@ -2,6 +2,94 @@
 
 One entry per decision. Newest first. Status is Decided, Open, or Superseded.
 
+## 2026-11-19 · PC-b: a person can be linked to a contact — decisions and rulings made while building
+
+**Status:** Decided by the builder and the controller. The owner must confirm plan decisions 4, 5, 6 and 8, and the new copy and identifier listed at the end. The owner can overrule each one. Source: `docs/plans/2026-11-18-people-contacts-b.md`, ledger `.superpowers/sdd/2026-11-18-people-contacts-b/rulings.md` (PB1 to PB67). Narrows `docs/specs/2026-11-18-people-contacts.md` in five places, each marked in the spec.
+
+**Decision.** The plan's ten decisions:
+
+1. No migration. `v15` already has the columns and tables.
+2. The plan does not need the `photo-card` branch (PR #31). The contact's picture goes in with `PhotoLibrary.add`, and a new one replaces the old copy.
+3. The app reads contacts into a cache (`ContactsCache`), not on each guess. It fills the cache at launch, after access is given, and when the system says contacts changed.
+4. The forced merge waits for PC-c. When the owner picks a contact that another person holds, the app refuses and names the holder. Owner must confirm.
+5. A new person's line has three forms: "New · not in your contacts", "New · not linked yet", and "New" when the app cannot see contacts. The app works it out when it shows the chip and stores nothing. Owner must confirm.
+6. The system prompt shows by itself, once, on the landing of the first recording with a kept person. The other option is a line with a button. Owner must confirm.
+7. After access is given on the landing, the app looks again at that recording only, and links the people it made.
+8. The contact picker is the app's own list, built from `ContactsDirectory`, not Apple's picker. Under limited access it shows `ContactAccessButton`. Owner must confirm.
+9. Search matches the full name, given name, family name and nickname, on a prefix of any word.
+10. A changed picture is found by the photo store: when the store returns the person's copy, nothing changed.
+
+Privacy:
+
+- PB10 and PB14: no text that goes to a model may hold the name of a person whose `name_origin` is `contact`. One helper, `NameForModel`, gives the name for the model: the oldest alias, or nil. The context packet, the curiosity question and the interviewer's opening all use it. A person with no said name is left out of the packet and is not asked about. A rename of such a person saves no alias.
+- PB6: "the oldest alias" is the alias table's rowid order. The backup keeps rowids and the app never runs VACUUM.
+- PB37: no log line holds the text of an error from a contacts path. It logs the error's type only.
+
+A person made from a contact, and the empty guess:
+
+- PB2 and PB3: a person the app made from a contact on Keep, and nobody has settled, counts as an empty guess when a move leaves them with nothing. A contact the owner linked always keeps the person. Only an owner's action clears `created_by_guess`.
+- PB19: unlink is the owner's action, so it clears `created_by_guess`. An unlinked person is never removed as an empty guess.
+- PB12: the picture the app copied from a contact does not keep a person the app made from a guess. A picture the owner added does.
+- PB42: "Someone new" on a link with no said name uses the person's name for the model. With none, the move is refused. A contact's name never becomes a said name.
+- PB11: "Assumed · new, from your contacts" shows only on the links of the recording of that person's first link. A later guess to the same person reads "Assumed · you said “{name}”".
+- PB41: a stored `contact` choice on Keep links to the person who holds that contact. If no person holds it and the app still sees it, Keep makes a person from it. If the app does not see it any more, Keep makes a new person with the said name.
+
+The picture:
+
+- PB16 and PB20: the copy of a contact's picture is one transaction: the photo, its link to the person, and `contact_photo_id`. A copy that cannot be recorded rolls back. A failed picture never fails a link, and a later check fills it in.
+- PB24: "New picture" compares bytes. A picture whose bytes are any stored photo changes nothing, so the app never claims the owner's photo. The replacement is one transaction, and it runs only while the copy is the person's first photo.
+- PB18 and PB43: Undo of a move restores a person's copy and its link. A move that made a person does not count that copy's link as later work.
+
+The check:
+
+- PB22: the check reads the linked identifiers in one batch. An identifier with no card in the batch is read again alone, because the system returns unified cards. A failed batch read writes nothing.
+- PB23: when the card of a stored identifier has an identifier another person holds, this person shows as "missing" and nothing else changes.
+- PB34: under limited access the check never re-links a missing contact by name. It marks the person missing. Why: the app sees only the shared contacts, so a card with that name can be a namesake. Under full access the name re-link stays, for one exact and free match.
+- PB35: `reguess` never links a contact the owner declined for that person.
+- PB39: a check of unchanged contacts writes nothing.
+- PB32: one `ContactsCheck` actor runs the check at launch, from `RootView`'s first task, and on `CNContactStoreDidChange`. Runs never overlap.
+
+Access and the prompt:
+
+- PB29 and PB37: "asked before" is the `UserDefaults` key `contacts.accessPromptShown`. The app sets it after the system answers, so a force-quit while the prompt shows lets the app ask again.
+- PB36 and PB38: the landing asks only when it is quiet: the recording was not heavy, no serious disclosure showed, and sorting is done. Otherwise the prompt waits for the next landing that qualifies. Why: PRINCIPLES, safety.
+- PB51: for a person with a contact while access was never asked (only after a restore to a new phone), the button reads "Allow contacts" and shows the system prompt. "Allow contacts in Settings" shows for denied access only and opens Settings.
+
+The sheet and the page:
+
+- PB44: the sheet's contact rows are the fitting contacts, each once, after the people. A contact a person holds shows as that person's row. A contact picked in the search is added as the last row.
+- PB49: the contact row is a section right under the page's header. The no-access card takes the row's place there, not the foot of the page. The suggestion card sits under the row. A suggestion shows on the person's page only.
+- PB50: the held-contact sentence and the row's error sentences show in the page's one pinned message slot.
+- PB48: an open page reads its row again when a check finishes and when the app becomes active.
+- PB40: a contact with an empty full name cannot make a person. A move to it is refused, and the sheet and the search leave it out.
+- PB55: the person's page opens its contacts search with `.sheet(item:)`. The item carries the map of who holds each linked contact. Why: a sheet reads `@State` as of the row's last render, so "In a story as {name}" was missing.
+- PB57: a waiting card's chip for a person Keep will make from a contact opens the sheet on that contact. The contact row is first and selected, with the line "In your contacts · my guess". "Done" with no change stores that contact. Keep then makes the person from it as the owner's answer, with no mark.
+- PB62: when "Done" is refused because the person or the contact is not found, the sheet says "That person is not here any more." The stale sentence shows only when a row changed since the sheet opened.
+
+The fix wave (final review):
+
+- PB58: after Keep and after "Same story", the app copies the contact's picture for each person of that memory who has a contact and no copy. Before, the picture came at the next launch.
+- PB59 and PB60: a contact's picture that the owner removed from a person's page stays removed. The app keeps the removal as a row of `contact_declined`, with `picture:` and the contact's identifier. There is no new table and no migration. Only `ContactPictureRemoval.swift` reads and writes this row. The copy of the picture respects it. Unlink and a link to another contact clear it. A contact that the system merges keeps it under the new identifier. The page writes the row before the photo goes, and only when the photo is the app's copy.
+- PB67: three small limits are known and not fixed. A re-link by name under full access keeps the picture removal for the card that now fits the name. A card screen keeps two waiting tasks until the next contacts notice. The sentence "That person is not here any more." is not exact when a link with no said name moved to "Someone new".
+- PB61: when the owner's stored choice and a guess on one card reach one planned person, the person is the owner's choice and not a guess. Two plans that join a person keep the guess only when both guessed.
+- PB63: a waiting card's chips read again when a check ends and when the owner gives access.
+- PB64: the look again after access marks the recording's `new` detail links as guesses too. It links nothing when no `new` mention link is left.
+- PB65: the full-name key set of `CNContactFormatter` also asks for the organization name and the contact type, the two sorting names and the display name order. The app asks for no other key.
+
+Tests:
+
+- PB45: under `-uiTesting`, the search shows a plain "Share another contact" button with `contacts.accessButton`, because XCUITest cannot drive the system button.
+- PB29: `-uiTesting-contacts <full|limited|notAsked|denied>` scripts the contacts. With no argument the access is "not asked" and the script answers a request with "denied".
+- PB56: `-uiTesting-seedContactLink`, after `-uiTesting-seedPeople`, links Lena to the invented card "Robyn Okafor" before the first screen. With `-uiTesting-contacts notAsked` this is a person with a contact while access was never asked.
+
+**Why.** Each ruling closes a case the plan left open. The contact's name never reaches the model and nothing the owner said or typed is replaced, so the app errs toward keeping what the owner gave and toward doing less when it cannot tell.
+
+**Costs.** PB34: after a restore on a new phone with limited access, the owner links again by hand. PB36 and PB38: the prompt can come one recording later. PB42: one rare older link cannot go to "Someone new"; the owner picks a person. PB44: after the first yes in the sheet, the fitting contacts show as rows only the next time the sheet opens. A hyphenated name such as "Anne-Marie" is one word in the search, so "marie" does not find it. PB59: an owner who wants a removed contact picture back must unlink and link again, or add the picture by hand.
+
+**Known limits.** A contact message on a person's page (for example "{name} is already linked to this contact.") uses the one message slot. When it arrives inside a move's 6 seconds, it replaces the move's Undo offer. The owner can change the move again in the sheet.
+
+**The owner must confirm.** Plan decisions 4, 5, 6 and 8. The new copy and identifiers that the approved plan does not hold: "Allow contacts" (PB51), "In a story as {name}" (PB44), "In your contacts · my guess" (PB57), "That person is not here any more." (PB62) and the identifier `who.settings` on the sheet's Settings row. The copy of the usage string, the chip lines and the row texts is a draft.
+
 ## 2026-11-18 · A photo story's photo goes on the pages of its people
 
 **Status:** Decided. Parts 1 to 4 of the spec are built on the branch `photo-people`: part 3 is “Done” and “Edit”, part 4 is several photos at one time. The branch is not merged. Nobody has run the device check. The open items for the owner are at the end of this entry. This entry changes the 2026-11-18 photo card entry below. It reverses one rule of that spec: “a page link is always the person’s tap”. It also reverses point 4 of that entry, “Photos do not move with a name”. Part 3 reverses the rule of that entry that the card has one layout (spec part 3, point 11): “Also show this photo on” has two layouts, open and done. The owner asked for it.
@@ -150,6 +238,74 @@ The device check is `docs/plans/2026-11-18-photo-on-people-pages-device-check.md
 11. **“Choose moments” draws switches.** The spec says checkboxes. A switch is the control that iOS has.
 12. **A memory dated from an age has origin `inferred`.** An example is “when I was 22”. The card counts it under “no date you said”, and a tap replaces its date. Undo covers it. But the sentence “no date you said” may not be true for it.
 13. **A resolver failure after the date write leaves no Undo.** The dates are stored. The card shows the error and gives no Undo for them. Only a store failure causes this.
+## 2026-11-18 · PC-a: rulings made while building people and contacts
+
+**Status:** Decided by the builder, except R13, which the controller made and the owner must confirm. The owner can overrule each one. Source: `docs/plans/2026-11-18-people-contacts.md`, ledger `.superpowers/sdd/2026-11-18-people-contacts/rulings.md` (R1 to R39). Narrows two statements of the entry below and of the spec.
+
+**Decision.**
+
+Schema:
+
+- R36: the migration is named `v15`. Why: the photo story registered `v14` first (`session.subject_photo_id`), and GRDB records a migration by name, so a device that ran one `v14` would skip the other. After the merge with `main` the order is `v14` (photo story), then `v15`.
+
+Matching and origins:
+
+- R7: with a said name, only the name picks candidates. The relation part of "Priya, my mom" never picks a candidate. Rule 2 never fires when a name was said. Rule 3 needs exactly one candidate whose full name equals the said name.
+- R12 and R13: every write that meets an existing link keeps the stronger origin, and no origin is the weakest. An older link with no origin takes the guess's origin when a retelling or a merge reaches it, and shows the mark when that is `assumed`. An older link nothing touches has no mark. Keep never settles a guess to `confirmed`. This narrows "Links older than this feature show no mark" below and in the spec. Why: a guess that reaches an old link is still a guess (principle 5).
+- R8: a stored choice applied on Keep saves both halves of the said name as aliases, as settle does. A guess with origin `said` saves only the relation half. A group phrase is never saved.
+- R9: a stored choice matches the whole said ref. "Robin" and "my roommate, Robin" are two keys.
+- R14: a person made by a stored "Someone new" choice is not an empty guess. A later move never removes them.
+- R15: an alias saved before this change that is a group phrase no longer links on Keep. The phrase asks again in each story.
+- R10: until PC-b, a guessed contact cannot occur. A stored `contact` choice makes a new person with origin `confirmed`.
+- R38: a fact linked by a person id that the model picked takes the origin of the mention link that reached the same person in that memory. With no such mention, it takes `assumed`. A move also takes a detail of the old person from each memory whose mention is in the move. Why: spec step 2 says a model-supplied person id is still `assumed`.
+- R11: after a serious disclosure no person mention counts as carried. The name goes to the People queue.
+
+Moves and Undo:
+
+- R19 and R23: a detail moves only with a whole answer. A fact whose own mention is in the move always takes its detail along.
+- R20 and R24: an empty guess is a person made by a guess, with nothing that refers to them. A move clears the target's guess flag.
+- R39: a move removes a guessed person only when the owner has not edited them: the name is still as said, no dates are stated, and the person is not hidden or kept from the AI. A rename on the person's page clears the guess flag, as the rename in People does. Why: spec "Moving a name", point 6, "no name the owner gave".
+- R21, R26 and R27: Undo is refused as stale when rows it would restore or change moved on since, for example a rename or a deleted memory. The refusal shows its sentence for 6 seconds, with no Undo.
+- R25: a settle that changed nothing records nothing, so its Undo is not refused.
+- R29: "Done" with the choice unchanged settles an `assumed` or `new` link. On `said`, `confirmed` or no origin it writes nothing.
+- R34: when a move removes the person whose page is open, the page stays up with its content disabled and the notice "Changed to {name}." with Undo. It closes when the notice ends. A successful Undo brings the page back.
+
+Cards and chips:
+
+- R30: a card that waits shows a person chip only for each preview. A said name that Keep will not link has no chip there. A group phrase keeps its own "Who's this?" card.
+- R37 (replaces the dead end in R30): a name marked "Not a person" on a waiting card keeps a quiet chip with the said name. The chip has no line and no mark. A tap opens the sheet with "Not a person" selected. Why: the sheet says "You can change this again at any time", and that must be true.
+- R31: the move notice uses the slot each host already has. A refused Undo shows in the same place.
+- R17: an `assumed` link with no said name still shows the word "Assumed".
+- R18: link reads return hidden memories too. Each view filters them.
+
+Test seeds:
+
+- R35: `-uiTesting-seedGuesses` seeds Priya, made by a guess, for R34's held page. `-uiTesting-guessesLanding` leaves the latest landing open. The follow-ups fixture gained the group phrase "for our parents".
+
+Plan decision 8: a name no memory carries keeps the old "Who's this?" card with its four choices in this PR. The owner decides later whether it goes.
+
+**Why.** Each ruling closes a case the plan left open. A hidden guess breaks principle 5, so each ruling errs toward showing the guess and toward a recoverable change.
+
+**Costs.** R13 puts a mark on an old link a retelling reaches, and the owner may see marks on old stories. R34 keeps a deleted person's page open for a few seconds. Two cards for one name exist until PC-b.
+
+## 2026-11-18 · People are backed by contacts, and every guess about a name shows
+
+**Status:** Decided. Source: the owner's brainstorm of 2026-11-18, four approved screens (`docs/design/PC1_Assumed.dc.html` to `PC4_NoContact.dc.html`) and the owner's approval of `docs/specs/2026-11-18-people-contacts.md`. Supersedes the line "`contact_identifier` is deferred; no Contacts framework in V1" in the first spec.
+
+**Decision.** A person can hold one contact, and a contact one person. A person needs no contact, and the app works with full, limited or no contacts access. A link between a memory and a person records how it was made: `assumed`, `said`, `confirmed` or `new`. A link the app chose from a name alone shows a dashed ochre outline and the word "Assumed" until the owner settles it. Keep does not settle it.
+
+- A name said with a relation phrase that one person holds ("Danielle, my sister") is not a guess.
+- A guess teaches the app no name. An alias is saved only from the owner's own words or choice.
+- One answer carries inside one recording only.
+- The contact's picture is the person's first picture when the person has none.
+- Nothing from a contact goes to the model.
+- Two people can be merged, by a drag on People or by a button, with a confirm and Undo.
+- The extractor will give each person in a recording a handle, so two people with one name stay apart (step 2, its own plan).
+
+**Why.** On first use a story about a roommate was filed under a friend with the same spoken name, with no sign of a guess and no way to change it. A guess shown as a fact breaks principle 5. A contact gives a real person one identity across stories.
+
+**Costs.** Marks are common, because every bare name is a guess. Links older than this feature show no mark, so an old wrong link looks settled until the owner changes it. A name the app does not know becomes a person on Keep, so a misheard name is a person until the owner removes or merges it. The extractor does not see a contact's full name.
+
 ## 2026-11-18 · S6c: chapters are names with stated years
 
 **Status:** Decided by the builder. The owner can overrule each one. Source: `docs/plans/2026-11-18-timeline-chapters.md`, ledger `.superpowers/sdd/2026-11-18-timeline-chapters/rulings.md`.
@@ -246,74 +402,6 @@ Rulings made while building:
 2. **The inline picker’s look.** See the ruling above. The device check shows it.
 3. **The opening swap.** When the person swaps the opening, the photo stays under a scene question. The spec keeps alternates. The owner must say if this is wrong.
 4. **A photo-dated memory reads as a guess on summaries.** The memory page shows a plain day. The entity page span and the life strip show “around 2019”. Plan decision 6 makes the date settled but not “as said”. Cost of a fix: one line in `readsAsSaid`.
-
-## 2026-11-18 · PC-a: rulings made while building people and contacts
-
-**Status:** Decided by the builder, except R13, which the controller made and the owner must confirm. The owner can overrule each one. Source: `docs/plans/2026-11-18-people-contacts.md`, ledger `.superpowers/sdd/2026-11-18-people-contacts/rulings.md` (R1 to R39). Narrows two statements of the entry below and of the spec.
-
-**Decision.**
-
-Schema:
-
-- R36: the migration is named `v15`. This branch registers no `v14`. Why: the unmerged photo branches register their own `v14`, and GRDB records a migration by name, so a device that ran one `v14` would skip the other. GRDB runs each unapplied id in registration order, so the gap is harmless.
-
-Matching and origins:
-
-- R7: with a said name, only the name picks candidates. The relation part of "Priya, my mom" never picks a candidate. Rule 2 never fires when a name was said. Rule 3 needs exactly one candidate whose full name equals the said name.
-- R12 and R13: every write that meets an existing link keeps the stronger origin, and no origin is the weakest. An older link with no origin takes the guess's origin when a retelling or a merge reaches it, and shows the mark when that is `assumed`. An older link nothing touches has no mark. Keep never settles a guess to `confirmed`. This narrows "Links older than this feature show no mark" below and in the spec. Why: a guess that reaches an old link is still a guess (principle 5).
-- R8: a stored choice applied on Keep saves both halves of the said name as aliases, as settle does. A guess with origin `said` saves only the relation half. A group phrase is never saved.
-- R9: a stored choice matches the whole said ref. "Robin" and "my roommate, Robin" are two keys.
-- R14: a person made by a stored "Someone new" choice is not an empty guess. A later move never removes them.
-- R15: an alias saved before this change that is a group phrase no longer links on Keep. The phrase asks again in each story.
-- R10: until PC-b, a guessed contact cannot occur. A stored `contact` choice makes a new person with origin `confirmed`.
-- R38: a fact linked by a person id that the model picked takes the origin of the mention link that reached the same person in that memory. With no such mention, it takes `assumed`. A move also takes a detail of the old person from each memory whose mention is in the move. Why: spec step 2 says a model-supplied person id is still `assumed`.
-- R11: after a serious disclosure no person mention counts as carried. The name goes to the People queue.
-
-Moves and Undo:
-
-- R19 and R23: a detail moves only with a whole answer. A fact whose own mention is in the move always takes its detail along.
-- R20 and R24: an empty guess is a person made by a guess, with nothing that refers to them. A move clears the target's guess flag.
-- R39: a move removes a guessed person only when the owner has not edited them: the name is still as said, no dates are stated, and the person is not hidden or kept from the AI. A rename on the person's page clears the guess flag, as the rename in People does. Why: spec "Moving a name", point 6, "no name the owner gave".
-- R21, R26 and R27: Undo is refused as stale when rows it would restore or change moved on since, for example a rename or a deleted memory. The refusal shows its sentence for 6 seconds, with no Undo.
-- R25: a settle that changed nothing records nothing, so its Undo is not refused.
-- R29: "Done" with the choice unchanged settles an `assumed` or `new` link. On `said`, `confirmed` or no origin it writes nothing.
-- R34: when a move removes the person whose page is open, the page stays up with its content disabled and the notice "Changed to {name}." with Undo. It closes when the notice ends. A successful Undo brings the page back.
-
-Cards and chips:
-
-- R30: a card that waits shows a person chip only for each preview. A said name that Keep will not link has no chip there. A group phrase keeps its own "Who's this?" card.
-- R37 (replaces the dead end in R30): a name marked "Not a person" on a waiting card keeps a quiet chip with the said name. The chip has no line and no mark. A tap opens the sheet with "Not a person" selected. Why: the sheet says "You can change this again at any time", and that must be true.
-- R31: the move notice uses the slot each host already has. A refused Undo shows in the same place.
-- R17: an `assumed` link with no said name still shows the word "Assumed".
-- R18: link reads return hidden memories too. Each view filters them.
-
-Test seeds:
-
-- R35: `-uiTesting-seedGuesses` seeds Priya, made by a guess, for R34's held page. `-uiTesting-guessesLanding` leaves the latest landing open. The follow-ups fixture gained the group phrase "for our parents".
-
-Plan decision 8: a name no memory carries keeps the old "Who's this?" card with its four choices in this PR. The owner decides later whether it goes.
-
-**Why.** Each ruling closes a case the plan left open. A hidden guess breaks principle 5, so each ruling errs toward showing the guess and toward a recoverable change.
-
-**Costs.** R13 puts a mark on an old link a retelling reaches, and the owner may see marks on old stories. R34 keeps a deleted person's page open for a few seconds. Two cards for one name exist until PC-b.
-
-## 2026-11-18 · People are backed by contacts, and every guess about a name shows
-
-**Status:** Decided. Source: the owner's brainstorm of 2026-11-18, four approved screens (`docs/design/PC1_Assumed.dc.html` to `PC4_NoContact.dc.html`) and the owner's approval of `docs/specs/2026-11-18-people-contacts.md`. Supersedes the line "`contact_identifier` is deferred; no Contacts framework in V1" in the first spec.
-
-**Decision.** A person can hold one contact, and a contact one person. A person needs no contact, and the app works with full, limited or no contacts access. A link between a memory and a person records how it was made: `assumed`, `said`, `confirmed` or `new`. A link the app chose from a name alone shows a dashed ochre outline and the word "Assumed" until the owner settles it. Keep does not settle it.
-
-- A name said with a relation phrase that one person holds ("Danielle, my sister") is not a guess.
-- A guess teaches the app no name. An alias is saved only from the owner's own words or choice.
-- One answer carries inside one recording only.
-- The contact's picture is the person's first picture when the person has none.
-- Nothing from a contact goes to the model.
-- Two people can be merged, by a drag on People or by a button, with a confirm and Undo.
-- The extractor will give each person in a recording a handle, so two people with one name stay apart (step 2, its own plan).
-
-**Why.** On first use a story about a roommate was filed under a friend with the same spoken name, with no sign of a guess and no way to change it. A guess shown as a fact breaks principle 5. A contact gives a real person one identity across stories.
-
-**Costs.** Marks are common, because every bare name is a guess. Links older than this feature show no mark, so an old wrong link looks settled until the owner changes it. A name the app does not know becomes a person on Keep, so a misheard name is a person until the owner removes or merges it. The extractor does not see a contact's full name.
 
 ## 2026-11-16 · S6a: rulings made while building the spine
 

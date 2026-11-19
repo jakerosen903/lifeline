@@ -1,4 +1,5 @@
 import Foundation
+import GRDB
 
 /// The files behind the photos: adds a downscaled copy, removes it, and sweeps what a kill leaves behind.
 /// Each public method runs as one actor call with no suspension point, so two adds never interleave
@@ -23,14 +24,28 @@ public actor PhotoLibrary {
     /// picking a photo again repairs one that does not show. Otherwise: writes `.<id>.partial`, renames it to
     /// `<id>.jpg`, then inserts the row and link. A kill after the rename leaves a file with no row; the sweep removes it.
     public func add(fileAt source: URL, assetLocalID: String?, to subject: PhotoSubject, now: Date = .now) throws -> Photo {
-        try importPhoto(fileAt: source, assetLocalID: assetLocalID, now: now, link: subject)
+        try importPhoto(fileAt: source, assetLocalID: assetLocalID, now: now, link: subject).photo
+    }
+
+    /// `add` for a photo the caller records as its own copy (the contact's picture). Only a new photo runs
+    /// `recordNew`, in the transaction that inserts the row and its link, so a kill or a throw leaves no row,
+    /// no link and no record. A stored photo with the same bytes is linked and `recordNew` does not run: the
+    /// caller never claims the owner's photo. Returns whether the photo is new.
+    func addRecordingNew(fileAt source: URL, to subject: PhotoSubject, now: Date = .now,
+                         recordNew: @escaping @Sendable (Database, PhotoID) throws -> Void) throws -> (photo: Photo, isNew: Bool) {
+        try importPhoto(fileAt: source, assetLocalID: nil, now: now, link: subject, recordNew: recordNew)
+    }
+
+    /// Deletes the file of a photo whose row is already gone. A file that will not delete waits for the next sweep.
+    func removeFile(of gone: Photo) {
+        try? FileManager.default.removeItem(at: url(for: gone))
     }
 
     /// The import of `add` with no link: the photo waits for a home (a session row that points at it, or a later link).
     /// Same photo already stored: returns it, writes a missing file again, adds no link. A photo that never gets a home
     /// goes at the next sweep.
     public func store(fileAt source: URL, assetLocalID: String?, now: Date = .now) throws -> Photo {
-        try importPhoto(fileAt: source, assetLocalID: assetLocalID, now: now, link: nil)
+        try importPhoto(fileAt: source, assetLocalID: assetLocalID, now: now, link: nil).photo
     }
 
     /// The session lets go of its photo; when nothing else holds the photo, its row and then its file go.
@@ -40,12 +55,13 @@ public actor PhotoLibrary {
         try? FileManager.default.removeItem(at: directory.appending(path: gone.fileName))
     }
 
-    private func importPhoto(fileAt source: URL, assetLocalID: String?, now: Date, link subject: PhotoSubject?) throws -> Photo {
+    private func importPhoto(fileAt source: URL, assetLocalID: String?, now: Date, link subject: PhotoSubject?,
+                             recordNew: (@Sendable (Database, PhotoID) throws -> Void)? = nil) throws -> (photo: Photo, isNew: Bool) {
         let sha256 = try PhotoImport.sha256(of: source)
         if let stored = try photos.photo(sha256: sha256) {
             if !FileManager.default.fileExists(atPath: url(for: stored).path) { _ = try writeFile(from: source, named: stored.fileName) }
             if let subject { try photos.link(stored.id, to: subject) }
-            return stored
+            return (stored, false)
         }
         let metadata = try PhotoImport.metadata(of: source)
         let id = PhotoID()
@@ -56,12 +72,16 @@ public actor PhotoLibrary {
                           lat: metadata.lat, lon: metadata.lon, locationOrigin: metadata.lat == nil ? nil : .exif,
                           sha256: sha256, pixelWidth: size.width, pixelHeight: size.height, addedAt: now)
         do {
-            if let subject { try photos.insert(photo, linkingTo: subject) } else { try photos.insert(photo) }
+            if let subject {
+                try photos.insert(photo, linkingTo: subject, alsoWriting: { db in try recordNew?(db, photo.id) })
+            } else {
+                try photos.insert(photo)
+            }
         } catch {
             try? FileManager.default.removeItem(at: url(for: photo))
             throw error
         }
-        return photo
+        return (photo, true)
     }
 
     /// Writes the downscaled copy to `.<name>.partial`, then renames it to `<name>`. A failure leaves no partial file.

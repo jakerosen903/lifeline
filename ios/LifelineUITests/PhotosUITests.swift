@@ -354,7 +354,7 @@ final class PhotosUITests: XCTestCase {
         XCTAssertTrue(waitForAddingLine(app, "Adding photo 1 of 2…", timeout: 5), "the first photo")
         XCTAssertTrue(waitForAddingLine(app, "Adding photo 2 of 2…", timeout: 10), "the line moves to the next photo")
         XCTAssertTrue(waitForAbsence(app.any("photo.adding"), timeout: 30), "both photos are done")
-        XCTAssertTrue(app.staticTexts["Photos"].waitForExistence(timeout: 5), "both photos were added")
+        XCTAssertTrue(app.reveal(app.staticTexts["Photos"]), "both photos were added")  // the contact row can push the row off a lazy list
     }
 
     /// Each file waits three seconds (`-uiTesting-slowPhotoFile`), so the page is seen while the photos are added.
@@ -374,7 +374,7 @@ final class PhotosUITests: XCTestCase {
         XCTAssertEqual(add.label, "Add a photo")
         closeMenu(app)
         XCTAssertTrue(waitForAbsence(app.any("photo.adding"), timeout: 30), "both photos are done")
-        XCTAssertTrue(app.staticTexts["Photos"].waitForExistence(timeout: 5), "both photos were added")
+        XCTAssertTrue(app.reveal(app.staticTexts["Photos"]), "both photos were added")  // the contact row can push the row off a lazy list
         app.buttons["entity.more"].tap()
         XCTAssertTrue(app.waitHittable(add, timeout: 5))
         XCTAssertTrue(add.isEnabled, "Add a photo works again once the photos are added")

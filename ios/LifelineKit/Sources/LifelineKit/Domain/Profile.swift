@@ -42,6 +42,15 @@ public struct Person: Codable, Sendable, Equatable, Identifiable {
     /// A person is an entity (M7); they share one id.
     public var entityID: EntityID { EntityID(rawValue: id.rawValue) }
 
+    /// `contact_state` of a person linked to a contact that resolves.
+    public static let contactLinked = "linked"
+    /// `contact_state` of a person whose identifier no longer resolves and whom no single contact's name fits.
+    public static let contactMissing = "missing"
+
+    /// Made by Keep from a contact (rules 3 and 5), and still the app's guess: the owner's own action
+    /// clears `createdByGuess` (PB3).
+    var isGuessFromContact: Bool { nameOrigin == .contact && createdByGuess }
+
     public init(id: PersonID, displayName: String, notes: String?, isOwner: Bool, birthDate: Date?, birthDateOrigin: BirthDateOrigin?,
                 nameOrigin: NameOrigin? = nil, createdByGuess: Bool = false, contactIdentifier: String? = nil,
                 contactName: String? = nil, contactState: String? = nil, contactPhotoID: PhotoID? = nil) {

@@ -54,8 +54,19 @@ extension CandidateActions {
             let aliases = [said.name, said.relation].compactMap { $0 }   // R8: the owner's answer teaches both halves
             switch stored.choice {
             case .person(let id): return GuessedLink(person: id, origin: .confirmed, aliases: aliases)
-            // PC-b links the new person to the contact; until then a contact choice is a new person.
-            case .newPerson, .contact:
+            case .contact(let identifier):
+                // The owner chose this contact. A person who holds it now is that choice; a contact the app can still see
+                // makes a person the owner chose (PB3). A contact gone from view since falls back to the said name.
+                if let holder = inputs.known.first(where: { $0.contactIdentifier == identifier }) {
+                    return GuessedLink(person: holder.id, origin: .confirmed, aliases: aliases)
+                }
+                if let contact = inputs.contacts.first(where: { $0.identifier == identifier }),
+                   let person = plannedPerson(from: contact, alias: nil, createdByGuess: false, card: inputs.card, plan: &plan) {
+                    return GuessedLink(person: person, origin: .confirmed, aliases: aliases)
+                }
+                return plannedPerson(for: said, createdByGuess: false, card: inputs.card, plan: &plan)
+                    .map { GuessedLink(person: $0, origin: .confirmed, aliases: aliases) }
+            case .newPerson:
                 return plannedPerson(for: said, createdByGuess: false, card: inputs.card, plan: &plan)
                     .map { GuessedLink(person: $0, origin: .confirmed, aliases: aliases) }
             case nil: return nil   // `choices(for:)` gives no choice only for "not a person", handled above
@@ -65,11 +76,43 @@ extension CandidateActions {
         switch result.choice {
         case .person(let id):
             return GuessedLink(person: id, origin: result.origin, aliases: result.origin == .said ? [said.relation].compactMap { $0 } : [])
-        // PC-b replaces `.contact` with a person linked to that contact (rules 3 and 5).
-        case .newPerson, .contact:
-            return plannedPerson(for: said, createdByGuess: true, card: inputs.card, plan: &plan)
-                .map { GuessedLink(person: $0, origin: .new, aliases: []) }
+        case .contact(let identifier):
+            // Rules 3 and 5: a person linked to the one contact that fits. The guess only picks a contact
+            // it was given, so the lookup cannot miss; if it ever did, a new person is the safe answer.
+            // A contact matches only by a said name, so one is always there; the guard keeps an empty one out.
+            if let contact = inputs.contacts.first(where: { $0.identifier == identifier }),
+               let alias = said.name?.trimmingCharacters(in: .whitespacesAndNewlines), !alias.isEmpty,
+               let person = plannedPerson(from: contact, alias: alias, createdByGuess: true, card: inputs.card, plan: &plan) {
+                return GuessedLink(person: person, origin: result.origin, aliases: [])
+            }
+            return newGuessedPerson(for: said, inputs, plan: &plan)
+        case .newPerson:
+            return newGuessedPerson(for: said, inputs, plan: &plan)
         }
+    }
+
+    /// Rules 6 and 7: a person with the said name and no contact, origin `new`.
+    private func newGuessedPerson(for said: SaidName, _ inputs: GuessInputs, plan: inout EntityRepository.Write) -> GuessedLink? {
+        plannedPerson(for: said, createdByGuess: true, card: inputs.card, plan: &plan).map { GuessedLink(person: $0, origin: .new, aliases: []) }
+    }
+
+    /// A new person linked to `contact` (`Person.fromContact`), planned once: a second ref in this card that reaches
+    /// the same contact reaches this person. `alias` is the said name Keep's guess saves with the plan ("The person's
+    /// name"), so the context packet has the owner's words for them; the owner's stored choice passes nil and saves
+    /// its said names as that link's aliases. The picture is copied after Keep, outside this plan. The caller never
+    /// passes a contact a person holds, so the unique index is not reached here.
+    private func plannedPerson(from contact: PersonGuess.Contact, alias: String?, createdByGuess: Bool, card: CandidateID?,
+                               plan: inout EntityRepository.Write) -> PersonID? {
+        if let index = plan.persons.firstIndex(where: { $0.contactIdentifier == contact.identifier }) {
+            // The owner's stored choice reaching a person the guess planned makes them the owner's (PB3, M-1).
+            if !createdByGuess { plan.persons[index].createdByGuess = false }
+            return plan.persons[index].id
+        }
+        guard let person = Person.fromContact(contact, createdByGuess: createdByGuess) else { return nil }
+        plan.entities.append(Entity(id: person.entityID, type: .person, title: person.displayName, createdFromCandidateID: card))
+        plan.persons.append(person)
+        if let alias { plan.aliases.append(Alias(personID: person.id, text: alias)) }
+        return person.id
     }
 
     /// A new person for a said name, planned once: a second ref with the same name in this
@@ -80,7 +123,11 @@ extension CandidateActions {
         let name = (said.name ?? said.relation ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         let key = SaidName.key(name)
         guard !key.isEmpty else { return nil }
-        if let planned = plan.persons.first(where: { SaidName.key($0.displayName) == key }) { return planned.id }
+        // A person planned from a contact is reached by that contact only (PB13), never by a said name.
+        if let index = plan.persons.firstIndex(where: { $0.contactIdentifier == nil && SaidName.key($0.displayName) == key }) {
+            if !createdByGuess { plan.persons[index].createdByGuess = false }   // as for a contact (M-1)
+            return plan.persons[index].id
+        }
         let person = Person(id: .init(), displayName: name, notes: nil, isOwner: false, birthDate: nil, birthDateOrigin: nil,
                             nameOrigin: .said, createdByGuess: createdByGuess)
         plan.entities.append(Entity(id: person.entityID, type: .person, title: name, createdFromCandidateID: card))

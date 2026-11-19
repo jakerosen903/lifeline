@@ -15,13 +15,27 @@ final class PersonMoveUndo {
     @ObservationIgnored private var timer: Task<Void, Never>?
     @ObservationIgnored private let actions: PersonLinkActions
 
-    init(store: ExtractionStore) { actions = PersonLinkActions(store: store) }
+    init(actions: PersonLinkActions) { self.actions = actions }
 
     /// What the sheet returned. Only a move offers Undo; a settle or a stored choice has nothing to take back.
     func note(_ outcome: WhoIsThisViewModel.Outcome) {
         guard case .moved(let receipt) = outcome else { return }
         self.receipt = receipt
         show(PersonChipLine.movedNotice(newName: receipt.newName))
+    }
+
+    /// Another message for the same slot, with no Undo (a person's contact row, PB50). It replaces what shows, a move's
+    /// offer included, and clears after the usual window.
+    func say(_ sentence: String) {
+        receipt = nil
+        show(sentence)
+    }
+
+    /// The next action began: a message with no Undo goes. A move's offer stays until its window ends.
+    func clearMessage() {
+        guard receipt == nil, text != nil else { return }
+        timer?.cancel()
+        text = nil
     }
 
     /// Returns true when the move was taken back. A refusal says why in the slot and ends the offer.

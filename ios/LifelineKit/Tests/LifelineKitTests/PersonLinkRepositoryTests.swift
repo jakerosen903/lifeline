@@ -108,6 +108,28 @@ private struct Env {
     #expect(try env.store.personLinks.guessCount(in: otherSession) == 1)
 }
 
+// PC-b Task 5: the landing asks for contacts once a kept moment of its recording names a person.
+@Test func keptPeopleCountCountsMentionsOfOthersInTheSession() throws {
+    let env = try Env()
+    let owner = try env.owner()
+    let robin = try env.store.people.insertPerson(displayName: "Robin Okafor")
+    let maya = try env.store.people.insertPerson(displayName: "Maya Lindqvist")
+    let (session, segs) = try env.session()
+    let (otherSession, elsewhere) = try env.session()
+    let (emptySession, _) = try env.session()
+    let m1 = try env.memory(in: segs[0].id), m2 = try env.memory(in: segs[0].id)
+    let away = try env.memory(in: elsewhere[0].id)
+    try env.link(m1, robin, said: "Robin", origin: .new)
+    try env.link(m1, maya, said: "Maya", origin: .assumed)
+    try env.link(m2, robin, said: "Robin", origin: nil)                         // an older link counts too
+    try env.link(m2, owner, said: "I", origin: .said)                           // the owner is not a person to match
+    try env.link(m2, maya, said: "Maya", origin: .assumed, relation: .detail)   // a detail, not a mention
+    try env.link(away, robin, said: "Robin", origin: .assumed)
+    #expect(try env.store.personLinks.keptPeopleCount(in: session) == 3)
+    #expect(try env.store.personLinks.keptPeopleCount(in: otherSession) == 1)
+    #expect(try env.store.personLinks.keptPeopleCount(in: emptySession) == 0)
+}
+
 @Test func anOlderLinkReadsWithNoOrigin() throws {
     let env = try Env()
     let maya = try env.store.people.insertPerson(displayName: "Maya Lindqvist")

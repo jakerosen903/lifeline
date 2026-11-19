@@ -18,6 +18,8 @@
 	<string>1.0</string>
 	<key>CFBundleVersion</key>
 	<string>1</string>
+	<key>NSContactsUsageDescription</key>
+	<string>Lifeline matches the names in your stories to your contacts. It reads names and pictures only, and they stay on this phone.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Lifeline records your sessions so you can hear them again.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
