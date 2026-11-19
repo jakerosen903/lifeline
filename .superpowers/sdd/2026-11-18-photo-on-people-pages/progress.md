@@ -34,3 +34,12 @@ Pre-flight: Task 6 needs a column that Task 1 owns: Task 1 text now carries it (
 - Task 4: fix round 1/5 (2 addressed, 0 open — still-named rule across sessions, same guard on Undo; commits 5ee1193..43dd1e3)
 - Task 4: complete (commits 84abc4b..43dd1e3, review clean after one fix round). Kit 1394.
 - Task 5: dispatched from 43dd1e3, in parallel with the Task 4 re-review (different files).
+- Task 5: complete (commits f958e1e..bdd5fa1, approved). UI: PhotoCard 26/0, PeopleGuess 15/0, Landing 14/0, PhotoStory 7/0, Photos 21/0. Kit 1394. Reviewer read every changed line of existing tests: each forced by chips that start filled, none weakened or deleted.
+- Task 5: accepted outside the brief: `CardHandler.onPeopleMoved` so the session's page refreshes the card after a move and its Undo (a real gap, with a UI test); the seed's hand link to Maya removed; the flag `-uiTesting-photoStoryAssumedName`.
+- Task 5: Ruling: the spec's status line gains what is built at the end of the build, not per task (the dispatch said to leave it) — goes in the final fix wave.
+- Task 5: minor (deferred): no UI test asserts that a page that held the photo before the story keeps the owner's link ("added") after Keep.
+- Task 5: minor (deferred): the card's height changes when the last story chip is taken off (two-line story line becomes the one-line tap line), against OVERVIEW's "a choice changes the state of a control, not the layout". Open for the owner, or reserve the height.
+- Task 5: minor (deferred): the device check's move ruling leaves out the Undo half; one line is not STE ("No older story must…").
+- Task 5: minor (deferred): `sam` is in the seed's function-level guard; look it up inside `if assumedName`.
+- Checked: the Task 1 minor (static `link` refusing a declined pair) was closed in Task 2 (`aStoryLinkToADeclinedPageWritesNothing`).
+- Task 7: dispatched from bdd5fa1 while Task 5 was in review (independent files). Task 6 waits for Task 7 (one simulator, one implementer at a time).
