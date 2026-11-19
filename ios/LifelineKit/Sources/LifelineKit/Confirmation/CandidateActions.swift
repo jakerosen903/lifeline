@@ -231,7 +231,7 @@ public struct CandidateActions: Sendable {
                handles: inout HandlePlan) throws -> Edges {
         let currentSegment = segment
         var e = Edges()
-        let inputs = try guessInputs(card: card, segment: segment, readingHandles: !out.handlePeople.isEmpty)
+        let inputs = try guessInputs(card: card, segment: segment, readingHandles: !out.handlePeople.isEmpty || Self.mayFollowAHandle(out))
         // What each people ref became (nil: "not a person"), so a fact about that name follows it.
         var refLinks: [(ref: String, link: GuessedLink?)] = []
         func addGroup(_ ref: String) { if !e.unknown.contains(where: { Self.same($0, ref) }) { e.unknown.append(ref) } }
@@ -355,6 +355,14 @@ public struct CandidateActions: Sendable {
               let mention = CandidatePayload.mention(row), mention.kind != .person,
               !(mention.kind == .place && GenericPhrase.isGeneric(mention.text)) else { return nil }
         return (try proposeEntity(from: mention, candidate: row, plan: &plan).id, nil)
+    }
+
+    /// A fact, feeling or goal whose `about_ref` may be a handle of the recording so far, said in an earlier
+    /// segment ("She was always late"). The card may name no people of its own, so the recording's handle
+    /// links are read for it too (D17). An `about_ref` that is no handle finds no handle link and reads on as before.
+    static func mayFollowAHandle(_ out: MemoryOut) -> Bool {
+        guard let kind = out.kind, !kind.isMoment, let about = out.aboutRef?.trimmingCharacters(in: .whitespacesAndNewlines) else { return false }
+        return !about.isEmpty && about != "self"
     }
 
     /// What a handle became on this Keep, else in a kept memory of this recording (decision 7). Nil when `ref` is no

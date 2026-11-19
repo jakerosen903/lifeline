@@ -1001,3 +1001,45 @@ private func expectPreviewMatches(_ chips: [PreviewChip], _ links: [MomentEntity
     #expect(try env.byHandle(fresh.id).map(\.entityID) == [tomas.entityID], "the later telling takes Tomas, not the first recording's p1")
     #expect(try env.byHandle(kept.memory.id).map(\.entityID) == [robyn.entityID])
 }
+
+// MARK: - PC-d Task 4b (D17): a later segment means a person of the recording by handle only
+
+@Test func aFactAboutARecordingHandleWithNoPeopleOfItsOwnIsADetailOfThatPerson() throws {
+    let env = try Env()
+    let (_, segs) = try StoreFixtures.session(in: env.store.sessions, segments: ["Robyn moved in that fall", "She was always late"])
+    let first = try env.actions.acceptMemory(try env.handleCard(in: segs[0].id, "Robyn moved in that fall", people: [handled("p1", "Robyn")]), joinStory: false)
+    let robyn = try #require(try env.personLinks(first.memory.id).first)
+    let fact = try env.actions.acceptMemory(try env.handleCard(in: segs[1].id, "She was always late", kind: .fact, people: [], about: "p1"),
+                                            joinStory: false)
+    let details = try env.personLinks(fact.memory.id, relation: .detail)
+    #expect(details.map(\.entityID) == [robyn.entityID], "the detail follows the recording's link of p1")
+    #expect(details.map(\.origin) == [.new], "the origin of a person the app made for this handle stays new (decision 7)")
+    #expect(try env.personLinks(fact.memory.id).isEmpty, "a fact with no people of its own names no one")
+}
+
+@Test func aFactThatStoresTheRecordingsPersonOfAHandleIsADetailOfThatPerson() throws {
+    let env = try Env()
+    let (_, segs) = try StoreFixtures.session(in: env.store.sessions, segments: ["Robyn moved in that fall", "She was always late"])
+    let first = try env.actions.acceptMemory(try env.handleCard(in: segs[0].id, "Robyn moved in that fall", people: [handled("p1", "Robyn")]), joinStory: false)
+    let robyn = try #require(try env.personLinks(first.memory.id).first)
+    // Rule 3: the card stores the recording's entry of p1, with the name said in the earlier segment.
+    let fact = try env.actions.acceptMemory(try env.handleCard(in: segs[1].id, "She was always late", kind: .fact, people: [handled("p1", "Robyn")],
+                                                               about: "p1"), joinStory: false)
+    #expect(try env.personLinks(fact.memory.id, relation: .detail).map(\.entityID) == [robyn.entityID])
+    #expect(try env.personLinks(fact.memory.id).map(\.entityID) == [robyn.entityID])
+}
+
+@Test func aFactKeptBeforeTheCardThatNamedTheHandleGuessesAndTheCardFollowsIt() throws {
+    let env = try Env()
+    let (_, segs) = try StoreFixtures.session(in: env.store.sessions, segments: ["Robyn moved in that fall", "She was always late"])
+    let card = try env.handleCard(in: segs[0].id, "Robyn moved in that fall", people: [handled("p1", "Robyn")])
+    let fact = try env.actions.acceptMemory(try env.handleCard(in: segs[1].id, "She was always late", kind: .fact, people: [handled("p1", "Robyn")],
+                                                               about: "p1"), joinStory: false)
+    let details = try env.personLinks(fact.memory.id, relation: .detail)
+    let guessed = try #require(details.first)
+    #expect(details.count == 1 && details.map(\.origin) == [.new], "no Robyn on file: the guess makes one")
+    let first = try env.actions.acceptMemory(card, joinStory: false)
+    let link = try #require(try env.personLinks(first.memory.id).first)
+    #expect(link.entityID == guessed.entityID && link.personHandle == "p1", "the card kept later links the same person")
+    #expect(try env.store.people.people().filter { !$0.isOwner }.count == 1)
+}

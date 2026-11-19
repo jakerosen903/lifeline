@@ -143,3 +143,20 @@ private func peopleOutput(_ people: [PersonOut], _ memories: [MemoryOut]) -> Ext
     let v = OutputValidator.validate(peopleOutput([blank, work], [cake]), segmentText: robyns, words: robynWords)
     #expect(v.people == [work], "a blank handle cannot be named by a memory")
 }
+
+// PC-d Task 4b (D17): a handle of the recording so far needs no `people` entry in a later segment.
+private let late = "She was always late"
+private let lateWords = ["She", "was", "always", "late"]
+private let lateMemory = handled("m1", quote: "She was always late", span: WordSpan(startWord: 0, endWord: 3), handles: ["p1"])
+
+@Test func aRecordingHandleWithNoPeopleEntryIsAccepted() {
+    let v = OutputValidator.validate(peopleOutput([], [lateMemory]), segmentText: late, words: lateWords, recordingHandles: ["p1"])
+    #expect(v.accepted == [.memory(lateMemory)] && v.rejected.isEmpty)
+    #expect(v.people.isEmpty, "the recording's entry is not this output's person")
+}
+
+@Test func aHandleKnownNowhereIsStillRejected() {
+    let v = OutputValidator.validate(peopleOutput([], [lateMemory]), segmentText: late, words: lateWords, recordingHandles: [])
+    #expect(v.accepted.isEmpty)
+    #expect(v.rejected.map(\.reason) == ["person_handles not in people: p1"])
+}

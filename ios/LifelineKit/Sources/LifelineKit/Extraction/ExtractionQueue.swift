@@ -128,13 +128,17 @@ public actor ExtractionQueue {
                 response = try await service.extract(request)
                 if Self.isBlank(response.output) { throw ExtractionError.badOutput("blank answer") }
             }
-            var validated = OutputValidator.validate(response.output, segmentText: segment.text, words: words)
+            // A handle of the recording so far may be named with no `people` entry in this answer (D17).
+            let recording = request.packet.recordingPeople
+            let recordingHandles = Set(recording.map(\.handle))
+            var validated = OutputValidator.validate(response.output, segmentText: segment.text, words: words, recordingHandles: recordingHandles)
             // The speaker is the owner: their own name is never a person to ask about (audit F10).
             validated = try store.people.ownerNames().removingOwner(from: validated)
             // An about_ref that names nothing the model was given is cleared; the memory is kept.
-            validated = AboutRefCheck.cleared(validated, knownIDs: Set(request.packet.people.map(\.id) + request.packet.entities.map(\.id)))
+            validated = AboutRefCheck.cleared(validated, knownIDs: Set(request.packet.people.map(\.id) + request.packet.entities.map(\.id)),
+                                              recordingHandles: recordingHandles)
             // Each memory stores the people its handles name, and their said names as people refs (PC-d).
-            validated = HandleResolve.resolved(validated, knownPeople: Set(request.packet.people.map(\.id)))
+            validated = HandleResolve.resolved(validated, knownPeople: Set(request.packet.people.map(\.id)), recording: recording)
             try mintStoryRefs(&validated)
             let shown = try storeCandidates(validated, segment: segmentID, version: response.version)
             lastFailure[segmentID] = nil

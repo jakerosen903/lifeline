@@ -111,3 +111,44 @@ private let robynFriend = PersonOut(handle: "p2", saidName: "Robyn", relationTex
     #expect(out.accepted.count == 1, "only the memory stays")
     #expect(try #require(firstMemory(out)).aboutRef == "self")
 }
+
+// PC-d Task 4b (D17): a handle of the recording so far, with no `people` entry in this output.
+private let recordingRobyn = ContextPacket.RecordingPerson(handle: "p1", saidNames: ["Robyn", "my roommate"], relation: "from work", personID: "person-robyn")
+
+@Test func aRecordingHandleWithNoEntryStoresTheRecordingsFirstSaidName() throws {
+    let out = HandleResolve.resolved(validated(memory(handles: ["p1"]), people: []), knownPeople: ["person-robyn"], recording: [recordingRobyn])
+    let m = try #require(firstMemory(out))
+    #expect(m.handlePeople == [PersonOut(handle: "p1", saidName: "Robyn", relationText: "from work", personID: "person-robyn")])
+    #expect(m.peopleRefs == ["Robyn"])
+    #expect(out.people.isEmpty, "the output's own people are not changed")
+}
+
+@Test func aRecordingHandlesPersonIDThePacketDidNotHoldIsCleared() throws {
+    let out = HandleResolve.resolved(validated(memory(handles: ["p1"]), people: []), knownPeople: [], recording: [recordingRobyn])
+    #expect(try #require(firstMemory(out)).handlePeople.map(\.personID) == [nil])
+}
+
+@Test func anOwnEntryForARecordingHandleWins() throws {
+    let again = PersonOut(handle: "p1", saidName: "Rob", relationText: nil, personID: nil)
+    let out = HandleResolve.resolved(validated(memory(handles: ["p1"]), people: [again]), knownPeople: [], recording: [recordingRobyn])
+    let m = try #require(firstMemory(out))
+    #expect(m.handlePeople == [again] && m.peopleRefs == ["Rob"])
+}
+
+@Test func aV6OutputPassesThroughWithARecordingUnchanged() {
+    let input = OutputValidator.Validated(accepted: [.memory(memory(handles: [], peopleRefs: ["Robyn"]))], rejected: [], flags: .none)
+    let out = HandleResolve.resolved(AboutRefCheck.cleared(input, knownIDs: [], recordingHandles: ["p1"]), knownPeople: [], recording: [recordingRobyn])
+    #expect(out == input)
+}
+
+@Test func anAboutRefThatOnlyTheRecordingHoldsSurvives() throws {
+    let input = validated(memory(handles: [], aboutRef: "p1"), people: [])
+    #expect(try #require(firstMemory(AboutRefCheck.cleared(input, knownIDs: [], recordingHandles: ["p1"]))).aboutRef == "p1")
+}
+
+@Test func anAboutRefKnownNowhereIsClearedAndTheMemoryStays() throws {
+    let input = validated(memory(handles: [], aboutRef: "p9"), people: [])
+    let out = AboutRefCheck.cleared(input, knownIDs: [], recordingHandles: ["p1"])
+    #expect(out.accepted.count == 1)
+    #expect(try #require(firstMemory(out)).aboutRef == nil)
+}

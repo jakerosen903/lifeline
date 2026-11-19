@@ -648,3 +648,24 @@ private func handleOutput(quote: String, span: WordSpan, continues: CandidateID?
     let payload = try #require(CandidatePayload.memory(again))
     #expect(payload.handlePeople == [robynP1, theo] && payload.personHandles == ["p1", "p2"])
 }
+
+// MARK: - PC-d Task 4b (D17): a later segment names a person of the recording by handle only
+
+@Test func aLaterSegmentNamesAPersonOfTheRecordingByHandleOnly() async throws {
+    let texts = ["my roommate Robyn moved in that fall", "She was always late"]
+    let env = try Env(texts: texts, script: [.success(handleOutput(quote: "Robyn moved in", span: WordSpan(startWord: 2, endWord: 4)))])
+    let queue = env.queue()
+    let events = await queue.events
+    await queue.enqueue(env.segments[0].id)
+    _ = try #require(firstCard(await collect(events, count: 1)))
+    let late = MemoryOut(ref: "m1", kind: .fact, title: "Always late", quote: "She was always late", segmentSpan: WordSpan(startWord: 0, endWord: 3),
+                         peopleRefs: [], placeText: nil, anchors: [], collectionHint: nil, chapterHint: nil, confidence: 0.9,
+                         aboutRef: "p1", personHandles: ["p1"])
+    env.service.push(.success(ExtractorOutput(memories: [late], mentions: [], flags: .none)))
+    await queue.enqueue(env.segments[1].id)
+    let card = try #require(firstCard(await collect(events, count: 1)))
+    let payload = try #require(CandidatePayload.memory(card))
+    #expect(card.segmentID == env.segments[1].id)
+    #expect(payload.handlePeople == [robynP1] && payload.peopleRefs == ["Robyn"], "the said name of the earlier segment")
+    #expect(payload.aboutRef == "p1")
+}

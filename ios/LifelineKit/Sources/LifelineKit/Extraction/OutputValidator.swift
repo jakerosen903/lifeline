@@ -29,10 +29,13 @@ public enum OutputValidator {
 
     public static let maxTitleWords = 8
 
-    public static func validate(_ output: ExtractorOutput, segmentText: String, words: [String]) -> Validated {
+    /// `recordingHandles`: the handles of the packet's `recordingPeople`. A memory may name one of them with no
+    /// `people` entry in this output: a later segment says "she" about a person named earlier in the recording (D17).
+    public static func validate(_ output: ExtractorOutput, segmentText: String, words: [String],
+                                recordingHandles: Set<String> = []) -> Validated {
         let haystack = tokens(segmentText)
         let people = validPeople(output.people, haystack: haystack)
-        let handles = Set(people.map(\.handle))
+        let handles = Set(people.map(\.handle)).union(recordingHandles)
         var result = Validated(accepted: [], rejected: [], flags: output.flags, people: people)
 
         for var memory in output.memories {

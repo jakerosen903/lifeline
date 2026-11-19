@@ -947,11 +947,6 @@ extension Env {
         }
     }
 
-    /// A detail of `person` on a kept fact, as Keep leaves it when the card's `about_ref` reached them.
-    func detail(_ memory: Memory, of person: Person) throws {
-        try db.writer.write { try MomentEntity(memoryID: memory.id, entityID: person.entityID, relation: .detail, origin: .assumed).insert($0) }
-    }
-
     /// A v8 person card: a mention that carries its handle.
     func mention(in segment: SegmentID, _ text: String, ref: String, handle: String?, ordinal: Int) throws {
         let mention = MentionOut(text: text, kind: .person, likelyAliasOfPersonID: nil, confidence: 0.9, relationText: nil, ref: ref, handle: handle)
@@ -1005,8 +1000,8 @@ extension Env {
     let aboutP1ByMention = try env.kept(in: segs[4], people: [], kind: .fact, about: "t3")
     try env.mention(in: segs[5], "Robyn", ref: "t4", handle: nil, ordinal: 5)
     let aboutTheName = try env.kept(in: segs[5], people: [], kind: .fact, about: "t4")
+    // Keep writes each detail itself: a handle with no people of the card's own follows the recording's link (D17).
     for fact in [aboutP1, aboutP2, aboutP1ByMention, aboutTheName] {
-        if try env.personRows(fact, .detail).isEmpty { try env.detail(fact, of: robyn) }
         #expect(try env.onlyPerson(fact, .detail) == robyn.id)
     }
 
