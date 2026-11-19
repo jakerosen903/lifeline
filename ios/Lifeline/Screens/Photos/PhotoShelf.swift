@@ -9,7 +9,8 @@ import LifelineKit
 final class PhotoShelf {
     let subject: PhotoSubject
     private(set) var photos: [PlacedPhoto] = []
-    /// Adds in flight outside a pick: a count, so two adds never clear each other.
+    /// Adds in flight, one per `add` call, inside a pick or not (a pick calls `add` once per photo): a count, so two
+    /// adds never clear each other. Outside a pick it alone shows the adding line.
     private var adds = InFlightCount()
     /// The picks in flight (part 4): from the moment the picked items arrive (before the system hands a file over,
     /// which is the long part for a photo in iCloud) until the last is stored or refused.

@@ -413,5 +413,7 @@ import GRDB
     try Migrations.migrator.migrate(queue)
     #expect(try counts() == before, "no row is lost")
     #expect(try queue.read { try String?.fetchAll($0, sql: "select origin from photo_link") } == [nil, nil], "every old link has no origin")
+    #expect(try queue.read { try Int.fetchAll($0, sql: "select photo_pages_done from session") } == [0], "every old story starts open")
+    #expect(try queue.read { try $0.tableExists("photo_page_declined") })
     #expect(try queue.read { try String.fetchAll($0, sql: "select identifier from grdb_migrations order by rowid") }.last == "v16")
 }
