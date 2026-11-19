@@ -66,10 +66,16 @@ extension PersonLinkRepository {
     }
 
     /// A memory linked to both keeps the stayer's row, with its role text and handle (ruling C2); that row takes the
-    /// stronger origin first. Every other link moves as it is: origin, role text and handle travel with the row.
+    /// stronger origin first, and the leaving row's role text when it has none (ruling C4): the owner's words are kept.
+    /// Every other link moves as it is: origin, role text and handle travel with the row.
     private static func moveLinks(from l: EntityID, to s: EntityID, in db: Database) throws {
         for link in try MomentEntity.filter(Column("entity_id") == l.rawValue).fetchAll(db) {
             try MomentEntity.raiseOrigin(link.memoryID, s, link.relation, to: link.origin, in: db)
+            guard let role = link.roleText, !isEmpty(role) else { continue }
+            try db.execute(sql: """
+                update moment_entity set role_text = ? where memory_id = ? and entity_id = ? and relation = ?
+                    and (role_text is null or trim(role_text) = '')
+                """, arguments: [role, link.memoryID.rawValue, s.rawValue, link.relation.rawValue])
         }
         try db.execute(sql: "update or ignore moment_entity set entity_id = ? where entity_id = ?", arguments: [s.rawValue, l.rawValue])
     }
@@ -122,6 +128,10 @@ extension PersonLinkRepository {
         let (lp, sp) = (l.id.rawValue, s.id.rawValue)
         if try db.tableExists("photo_page_declined") {
             try db.execute(sql: "update or ignore photo_page_declined set entity_id = ? where entity_id = ?", arguments: [sp, lp])
+            // Ruling C4: a photo the stayer now holds is not also "taken off" their page, from either side.
+            try db.execute(sql: """
+                delete from photo_page_declined where entity_id = ? and photo_id in (select photo_id from photo_link where entity_id = ?)
+                """, arguments: [sp, sp])
         }
         try db.execute(sql: "update mention set person_id = ? where person_id = ?", arguments: [sp, lp])
         try db.execute(sql: "update candidate_person_choice set person_id = ? where person_id = ?", arguments: [sp, lp])
@@ -136,7 +146,8 @@ extension PersonLinkRepository {
     }
 
     /// When only the leaving person holds a contact, the stayer takes it: identifier, kept name, state and the copied
-    /// picture. The leaving row lets go first, because the unique contact index is checked per statement.
+    /// picture. The leaving row lets go first, because the unique contact index is checked per statement. The stayer's
+    /// decline of that contact goes (ruling C4); a picture-removal marker is not a decline and stays.
     private static func moveContact(of l: Person, to s: Person, in db: Database) throws {
         guard let identifier = l.contactIdentifier, s.contactIdentifier == nil else { return }
         try db.execute(sql: """
@@ -144,6 +155,7 @@ extension PersonLinkRepository {
             """, arguments: [l.id.rawValue])
         try db.execute(sql: "update person set contact_identifier = ?, contact_name = ?, contact_state = ?, contact_photo_id = ? where id = ?",
                        arguments: [identifier, l.contactName, l.contactState, l.contactPhotoID?.rawValue, s.id.rawValue])
+        try db.execute(sql: "delete from contact_declined where person_id = ? and contact_identifier = ?", arguments: [s.id.rawValue, identifier])
     }
 
     /// The stayer keeps their name, name origin and every value they have; where they have none, they take the other's:

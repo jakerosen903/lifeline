@@ -355,6 +355,56 @@ private let valeContact = PersonGuess.Contact(identifier: "c-vale", fullName: "R
     #expect(try env.store.photos.isDeclined(photo.id, on: robyn.entityID))
 }
 
+// Ruling C4 (a): a photo the merged person holds is not also "taken off" their page, in either direction.
+@Test func aPhotoTheStayerHoldsAfterTheMergeIsNotAlsoTakenOffTheirPage() throws {
+    let env = try Env()
+    let robin = try env.store.people.insertPerson(displayName: "Robin")
+    let robyn = try env.store.people.insertPerson(displayName: "Robyn Vale")
+    let onStayer = try env.photo("s1", on: robyn)    // the owner took it off the leaving page
+    let onLeaving = try env.photo("l1", on: robin)   // the owner took it off the staying page
+    try env.sql("insert into photo_page_declined (photo_id, entity_id) values (?, ?), (?, ?)",
+                [onStayer.rawValue, robin.id.rawValue, onLeaving.rawValue, robyn.id.rawValue])
+
+    try env.actions.merge(robin.id, into: robyn.id)
+
+    #expect(try env.page(robyn.id) == [onStayer, onLeaving])
+    #expect(try !env.store.photos.isDeclined(onStayer, on: robyn.entityID))
+    #expect(try !env.store.photos.isDeclined(onLeaving, on: robyn.entityID))
+}
+
+// Ruling C4 (b): the stayer no longer declines the contact they now hold. A picture-removal marker stays.
+@Test func theStayerNoLongerDeclinesTheContactTheyTake() throws {
+    let env = try Env()
+    let robin = try env.store.people.insertPerson(displayName: "Robin")
+    let robyn = try env.store.people.insertPerson(displayName: "Robyn Vale")
+    try env.sql("update person set contact_identifier = 'c-vale', contact_name = 'Robyn Vale', contact_state = 'linked' where id = ?", [robin.id.rawValue])
+    try env.sql("insert into contact_declined (person_id, contact_identifier) values (?, 'c-vale'), (?, 'picture:c-vale'), (?, 'c-other')",
+                [robyn.id.rawValue, robyn.id.rawValue, robyn.id.rawValue])
+
+    try env.actions.merge(robin.id, into: robyn.id)
+
+    #expect(try env.person(robyn.id)?.contactIdentifier == "c-vale")
+    #expect(try env.store.people.declinedContacts(of: robyn.id) == ["c-other"])
+    #expect(try env.store.people.pictureWasRemoved(robyn.id, identifier: "c-vale"), "the marker is not a decline")
+}
+
+// Ruling C4 (c): the owner's words are kept. A stayer's link with no role text takes the leaving link's.
+@Test func aStayersLinkWithNoRoleTextTakesTheLeavingLinksRoleText() throws {
+    let env = try Env()
+    let robin = try env.store.people.insertPerson(displayName: "Robin")
+    let robyn = try env.store.people.insertPerson(displayName: "Robyn Vale")
+    let (m, n) = (try env.memory("Robin and Robyn painted the fence"), try env.memory("Robin and Robyn fixed the gate"))
+    try env.link(m, robin, role: "my roommate", origin: .confirmed)
+    try env.link(m, robyn, role: nil, origin: .assumed)
+    try env.link(n, robin, role: "my roommate", origin: .confirmed)
+    try env.link(n, robyn, role: "Robyn", origin: .assumed)
+
+    try env.actions.merge(robin.id, into: robyn.id)
+
+    let roles = try [m, n].map { memory in try env.store.entities.links(of: memory.id).filter { $0.entity.type == .person }.map(\.link.roleText) }
+    #expect(roles == [["my roommate"], ["Robyn"]], "the stayer's own role text wins (C2)")
+}
+
 // MARK: - What points at the person
 
 // Review Focus 1: a stored choice cascades on its person, so it moves before the delete.
