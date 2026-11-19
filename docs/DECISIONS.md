@@ -11,7 +11,7 @@ One entry per decision. Newest first. Status is Decided, Open, or Superseded.
 The plan's decisions that the owner can see:
 
 1. **The engine is a scan in Swift, not SQLite FTS5.** The app reads an index when the search screen appears and scans it on each change of the query. Cost: every kept word is read on each appear.
-3. **What is searched.** A person's name and aliases; the title of a place, a thing or an idea; a moment's title and words; the words only of a fact, a feeling or a goal, because its stored title shows on no screen. Cost: an alias older than v15 counts as the owner's words, so a wrong old alias can show.
+3. **What is searched.** A person's name and aliases; the title of a place, a thing or an idea; a moment's title and words; the words only of a fact, a feeling or a goal, because its heading is the quote, not the stored title. Cost: an alias older than v15 counts as the owner's words, so a wrong old alias can show.
 4. **The text of a memory is the person's own words.** It is the quote and the words of each telling inside the kept span. Cost: words cut by a trim are not found.
 6. **Hidden is not found. Kept from AI is found.** A hidden row is never a result; a floating stand-in and the owner are not results. Search uses no model, so a row kept from AI is found. Cost: search has no "Show hidden".
 7. **Every word typed must start a word of the result.** No spelling tolerance, no stemming, no "did you mean". Cost: "treehouse" does not find "tree house".
@@ -32,7 +32,7 @@ The plan's decisions that the owner can see:
 - R7. A person's own words never come from an `assumed` link. This fixes the merged people-and-contacts code, in its own commit. Cost: it changes the People tile and the person's page too; a person whose only relation phrase came with an unsettled guess shows no own words until the owner settles it.
 - R8. A person row in search shows no guess mark, as a People tile shows none. Cost: an old wrong alias shows as a second line.
 
-**Differs from the spec.** The spec says "Search is the trailing search tab". An iPhone tab bar holds five tabs, and a sixth folds two tabs into "More". This entry supersedes that line of `docs/specs/2026-11-15-five-sections.md`. Decision 23 supersedes the S4 line "no search result uses a photo yet" (2026-11-16, Photos on pages): a person result shows the key photo.
+**Differs from the spec.** The spec says "Search is the trailing search tab". An iPhone tab bar holds five tabs, and a sixth folds two tabs into "More". This entry supersedes that line of `docs/specs/2026-11-15-five-sections.md`. Decision 23 supersedes the search-result part of the S4 line "No Timeline row, Things tile, search result or map uses a photo yet" (2026-11-16, Photos on pages): a person result shows the key photo.
 
 **Why.** The person finds a story by a name or by words they said, from any tab, with no count and no task (PRINCIPLES 9). Results show the person's titles and words as stored, never a guess as a fact (PRINCIPLES 1 and 5). Search keeps the five tabs and keeps the record bar, so telling stays one tap away.
 
@@ -45,7 +45,7 @@ The plan's decisions that the owner can see:
 **Known costs.**
 
 - The index is read again on every appear, and the read takes every kept word.
-- The seven reads are not one snapshot. A row hidden or deleted in another tab can show until the read returns.
+- The seven reads are not one snapshot. A race between them drops a row and never shows a hidden one. A row hidden or deleted in another tab still shows in the results until the next read returns.
 - Leaving search waits 500 ms for the bar to settle; a pop sent sooner is dropped.
 - Each tab's search has its own query.
 - The keyboard hides the record bar while the keyboard is up.

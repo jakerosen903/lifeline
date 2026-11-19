@@ -4,6 +4,8 @@ No check on this list has been run yet.
 
 The owner ticks each item on the iPhone. Each item is one check. Build and install the `sections-search` branch first. Plan: `docs/plans/2026-11-16-sections-search.md`. Decisions: `docs/DECISIONS.md`, entry "2026-11-19 · S5".
 
+Before you start, compare `docs/screenshots/sections-search/before-timeline.png` with `after-timeline.png`: search is a button on each tab's top bar, not a tab (ruling R4).
+
 - [ ] 1. The Search button shows on all five tabs, in light and dark appearance, and with Reduce Transparency on.
 - [ ] 2. The Search button is olive like "Sessions". It dims while you press it. It does not crowd "Sessions", "More" or "Settings".
 - [ ] 3. The record bar shows on the search screen and reads "Tell a story". It names the page after you open a result.
