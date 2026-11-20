@@ -9,9 +9,10 @@ extension View {
     /// pick's one failure line, and its finished adds reload the page's photos.
     /// Under `-uiTesting-pickPhotos <path>,<path>` (or `-uiTesting-pickPhoto <path>`) the picker is skipped and those
     /// files go to `onFile` at once, in order.
-    func addPhotoFlow(isPresented: Binding<Bool>, deps: Dependencies, shelf: PhotoShelf?, onFile: @escaping (URL, String?) async -> Void,
-                      onError: @escaping (String) -> Void) -> some View {
-        modifier(AddPhotoFlow(isPresented: isPresented, pickPhotoPaths: deps.addPhotoPaths, pickPhotoDelay: deps.addPhotoDelay, shelf: shelf,
+    /// `searchText` (`PhotoSearchName`) opens the picker's search with that text on iOS 27 and later.
+    func addPhotoFlow(isPresented: Binding<Bool>, deps: Dependencies, shelf: PhotoShelf?, searchText: String? = nil,
+                      onFile: @escaping (URL, String?) async -> Void, onError: @escaping (String) -> Void) -> some View {
+        modifier(AddPhotoFlow(isPresented: isPresented, searchText: searchText, pickPhotoPaths: deps.addPhotoPaths, pickPhotoDelay: deps.addPhotoDelay, shelf: shelf,
                               onFile: onFile, onError: onError))
     }
 }
@@ -25,6 +26,8 @@ struct AddPhotoFlow: ViewModifier {
     static let pickLimit = 20
 
     @Binding var isPresented: Bool
+    /// The text the picker's search opens with, or nil for the whole library. It goes to the system picker only.
+    var searchText: String? = nil
     let pickPhotoPaths: [String]?
     /// UI tests only: the wait before each of those files is added.
     let pickPhotoDelay: Duration?
@@ -58,6 +61,7 @@ struct AddPhotoFlow: ViewModifier {
             content
                 .photosPicker(isPresented: $isPresented, selection: $selection, maxSelectionCount: Self.pickLimit,
                               selectionBehavior: .ordered, matching: .images, preferredItemEncoding: .current, photoLibrary: .shared())
+                .pickerSearchText(searchText)
                 .onChange(of: selection) { _, items in
                     // Cleared at once, so picking the same photos again is a change too. The clear itself comes back here empty.
                     guard !items.isEmpty else { return }
@@ -103,6 +107,17 @@ struct PickedPhotoFile: Transferable {
             let copy = PickedPhotoCopy.url(in: FileManager.default.temporaryDirectory, extension: received.file.pathExtension)
             try FileManager.default.copyItem(at: received.file, to: copy)
             return PickedPhotoFile(url: copy)
+        }
+    }
+}
+
+private extension View {
+    /// iOS 27 added the picker's search text. Before it, and with no text, the picker opens on the library.
+    @ViewBuilder func pickerSearchText(_ text: String?) -> some View {
+        if #available(iOS 27, *), let text {
+            photosPickerSearchText(text)
+        } else {
+            self
         }
     }
 }
