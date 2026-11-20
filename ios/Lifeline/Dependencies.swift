@@ -134,6 +134,11 @@ struct Dependencies {
         return actions
     }
 
+    /// The one way the app makes `PersonMergeActions`: "Same as another person…" and the grid's drag both use it.
+    func personMergeActions() -> PersonMergeActions {
+        PersonMergeActions(store: extractionStore)
+    }
+
     /// Keep's actions, guessing against `cache`. Both compositions build `actions` with it.
     private static func candidateActions(store: ExtractionStore, matcher: MemoryMatcher, cache: ContactsCache) -> CandidateActions {
         var actions = CandidateActions(store: store, matcher: matcher)

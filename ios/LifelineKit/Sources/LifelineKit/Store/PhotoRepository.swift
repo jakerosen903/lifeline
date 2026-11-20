@@ -159,7 +159,8 @@ public struct PhotoRepository: Sendable {
 
     /// The five steps, in this order, because the unique cover index allows one cover per page and is checked per statement:
     /// read the rows as a read shows them; stop on none; demote every cover; number the rows from 0; promote the first.
-    private static func writeOrder(_ wanted: [PhotoID], of subject: PhotoSubject, in db: Database) throws {
+    /// The one order function: the merge of two people (`PersonMergeWrites`) writes its page order here too.
+    static func writeOrder(_ wanted: [PhotoID], of subject: PhotoSubject, in db: Database) throws {
         let (column, value) = subject.key
         let held = try String.fetchAll(db, sql: """
             select photo_id from photo_link where \(column) = ? order by role = 'cover' desc, sort_order, rowid

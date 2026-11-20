@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Status:** Draft. The owner must approve it, with the plan decisions below, before work starts.
+**Status:** Approved by the owner on 2026-11-19 ("Yes, build both"), without a review of each decision. Each decision stays open to an overrule.
 
 **Goal:** The owner can say that two people on file are one person. The app joins them into one, asks first, and gives Undo for 6 seconds.
 
@@ -14,7 +14,7 @@
 
 **Not this plan:** PC-d (extractor handles). A merge of two places or two things by drag (spec call 2 is open: the owner said "two things").
 
-**Worktree and branch:** `.claude/worktrees/people-contacts-16241d`. A new branch `people-contacts-c`, cut from `people-contacts-b` (`8c882a9`, PR #35). That commit already holds `main`'s photo order and migration `v16`, so **Task 1 is only "cut the branch"**: its merge of `origin/main` is not needed, `PhotoRepository.writeOrder` is already visible inside the kit, and `photo_page_declined` is a real table (decisions 8 and 9 need no hand-made table in tests). (revised 2026-11-19, after PR #35 opened) No AI attribution in a commit or in PR text.
+**Worktree and branch:** `.claude/worktrees/people-contacts-16241d`. Branch `people-contacts-c`, cut from the tip of `people-contacts-d` (5bf37b2), which is cut from `people-contacts-b` (PR #35). So the stack is PC-b, PC-d, PC-c. That tip already holds `main`'s photo order, migration `v16` and the extractor handles of PC-d. **Task 1 is only "the branch exists"**: its merge of `origin/main` is not needed, `PhotoRepository.writeOrder` is already visible inside the kit, and `photo_page_declined` is a real table (decisions 8 and 9 need no hand-made table in tests). A link's `person_handle` (PC-d) moves with the link. (revised 2026-11-19) No AI attribution in a commit or in PR text.
 
 ---
 
@@ -70,7 +70,7 @@ The spec leaves these open, or this plan differs from the spec. The owner can ov
   - Picker title: "Who is {name} the same as?"; empty state: "No other people yet."
   - Confirm title: "Same person?"; body: "{leaving name} joins {staying name}. Every story, name and photo moves to {staying name}."; second line: "You can undo this for a few seconds only."; flag line, when decision 1 applies: "{staying name} stays hidden, because one of them is." or "{staying name} stays out of the AI's view, because one of them is."; buttons: "Merge", "Cancel".
   - Notice: "Merged into {name}." with "Undo".
-  - Refusals: "They are linked to two different contacts."; "That person is not here any more." (existing); a stale or failed Undo uses the existing lines `PersonChipLine.staleUndo` and `PersonChipLine.failedUndo`.
+  - Refusals: "They are linked to two different contacts."; "That person is not here any more." (existing); a stale Undo of a merge shows "That changed since. The merge stays." (`PersonChipLine.staleMergeUndo`, added by the final review, ruling C12); a failed Undo uses the existing line `PersonChipLine.failedUndo`.
   - VoiceOver label on the confirm's pictures: "{name}".
 - Accessibility identifiers, new: `entity.merge`, `merge.picker`, `merge.picker.person`, `merge.confirm`, `merge.confirm.text`, `merge.confirm.merge`, `merge.confirm.cancel`. The notice keeps `person.notice` and `notice.undo`. Keep every existing identifier.
 - Sample names in tests and seeds are invented.
@@ -350,4 +350,11 @@ All tests launch with `launchWithPeople` (Maya, Dad, Sam, Lena) and, where conta
 
 ## What changed while building
 
-(Empty until work starts.)
+- The base moved to the tip of `people-contacts-d`, which already held `main`'s photo order and migration `v16`. Task 1 was only the branch. Decision 8's merge of `origin/main` was not needed, and `photo_page_declined` is a real table (decision 9).
+- C2: a merged link keeps its extractor handle. When both persons link one memory, the staying row and its handle stay.
+- C4: the staying person keeps no decline row that disagrees with what they hold, and takes the leaving link's role text where theirs has none.
+- C7: Undo also gives back the legacy `memory_person` rows. The merge does not move them.
+- C8: the contact search makes its link after its sheet has closed, so two sheets never show at once.
+- C9: the drag carries the person's id as plain text with the prefix `lifeline-person:`. No type is declared.
+- The new row makes the person's page longer. Two `PeopleGuessUITests` tests (through one helper) and three `EntityPageUITests` tests now scroll to their target. No assertion changed.
+- The drag test runs on the simulator. It needs a slow drag with a hold (`press(forDuration: 1.5, thenDragTo:, withVelocity: .slow, thenHoldForDuration: 1.0)`). The device check still covers the drag by hand.

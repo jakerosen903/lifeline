@@ -13,6 +13,9 @@ struct PersonContactRow: View {
     /// rides in the item: a sheet's content reads `@State` as of the row's last render, and the row's body never reads
     /// a separate `heldBy`, so a value set just before `isPresented` reached the sheet empty.
     @State private var searching: Search?
+    /// The contact picked in the search. It is linked once the search sheet is gone, so the "Same person?" sheet a
+    /// held contact opens never meets a sheet still closing.
+    @State private var picked: ContactCard?
 
     private struct Search: Identifiable {
         let id = UUID()
@@ -26,7 +29,7 @@ struct PersonContactRow: View {
                 if case .notLinked(let suggestion?) = state { suggestionCard(suggestion) }
             }
             .disabled(viewModel.isWorking)
-            .sheet(item: $searching) { search($0.heldBy) }
+            .sheet(item: $searching, onDismiss: linkPicked) { search($0.heldBy) }
         }
     }
 
@@ -149,6 +152,13 @@ struct PersonContactRow: View {
         searching = Search(heldBy: viewModel.heldByOthers())
     }
 
+    /// Links the contact picked in the search, if any. "Cancel" picked none.
+    private func linkPicked() {
+        guard let card = picked else { return }
+        picked = nil
+        Task { await viewModel.link(card); onChange() }
+    }
+
     /// The 44-point frame sits in the label, so it is the area a tap reaches. The text wraps at large sizes.
     private func buttonLabel(_ title: String) -> some View {
         Text(title)
@@ -158,14 +168,14 @@ struct PersonContactRow: View {
             .contentShape(Rectangle())
     }
 
-    /// The search sheet: a pick links the person to that contact. A contact another person holds is refused by the
-    /// link, and the row says who holds it.
+    /// The search sheet: a pick links the person to that contact. A contact another person holds is not linked: its
+    /// row says who holds it, and the page asks whether the two are the same person.
     private func search(_ heldBy: [String: String]) -> some View {
         NavigationStack {
             ScrollView {
                 ContactSearchList(deps: viewModel.deps, heldBy: heldBy) { card in
+                    picked = card
                     searching = nil
-                    Task { await viewModel.link(card); onChange() }
                 }
                 .padding(.horizontal, 24).padding(.vertical, 16)
             }
