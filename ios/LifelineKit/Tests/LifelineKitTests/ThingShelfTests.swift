@@ -54,6 +54,17 @@ private func tile(_ title: String, in layout: ThingShelf.Layout) -> ThingShelf.T
     guard case .flat(let tiles) = ThingShelf.layout([b, a], birthYear: 1990) else { Issue.record("flat"); return }
     #expect(tiles.map(\.id.rawValue) == ["a", "b"])
 }
+@Test func twoThingsWithOneTitleAndDateInAPeriodKeepAnOrderById() {
+    let a = EntitySummary(entity: Entity(id: EntityID(rawValue: "a"), type: .thing, title: "The box"), ownWords: nil, momentRanges: [said(1999)], span: .unplaced)
+    let b = EntitySummary(entity: Entity(id: EntityID(rawValue: "b"), type: .thing, title: "The box"), ownWords: nil, momentRanges: [said(1999)], span: .unplaced)
+    guard case .grouped(let groups) = ThingShelf.layout([b, a], birthYear: 1990) else { Issue.record("grouped"); return }
+    #expect(groups.map { $0.tiles.map(\.id.rawValue) } == [["a", "b"]])
+}
+@Test func aHalfOpenStatedSpanPlacesNothing() {
+    let halfOpen = TimeRange(earliest: CivilDate(iso: "1999-01-01"), latest: nil, likelyStart: nil, likelyEnd: nil, granularity: .year, origin: .stated, evidenceText: nil)
+    let kite = thing("The kite", stated: halfOpen)
+    #expect(ThingShelf.layout([kite], birthYear: 1990) == .flat([ThingShelf.Tile(summary: kite, placedByGuess: false)]))
+}
 @Test func withNoPlacedThingTheShelfIsFlat() {
     let watch = thing("Grandpa's watch", [.unplaced]), guitar = thing("The guitar")
     #expect(ThingShelf.layout([guitar, watch], birthYear: 1990)

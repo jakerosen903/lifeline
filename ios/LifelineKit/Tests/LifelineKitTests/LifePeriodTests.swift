@@ -50,4 +50,10 @@ import Testing
 @Test func headingTextSaysByYourAgeOnlyForAnAgePeriod() {
     #expect(LifePeriod.containing(year: 2005, birthYear: 1990).headingText == "Teens · by your age")
     #expect(LifePeriod.containing(year: 2005, birthYear: nil).headingText == "The 2000s")
+    // The Timeline's waypoint sets the name in bold and the suffix plain, so the two must join to `headingText`.
+    #expect(LifePeriod.containing(year: 2005, birthYear: 1990).headingSuffix == " · by your age")
+    #expect(LifePeriod.containing(year: 2005, birthYear: nil).headingSuffix == "")
+    for period in [LifePeriod.containing(year: 2005, birthYear: 1990), .containing(year: 2005, birthYear: nil)] {
+        #expect(period.name + period.headingSuffix == period.headingText)
+    }
 }

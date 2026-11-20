@@ -36,6 +36,21 @@ private func told(in session: String) -> Telling {
     #expect(ThingQuote.choose(details: [detail("a", long, at: 1)], tellings: [MemoryID(rawValue: "a"): told(in: "calm")], heavySessions: [])
             == "W1 " + (2...20).map { "w\($0)" }.joined(separator: " ") + "…")
 }
+@Test func twoDetailsAtOneTimeKeepAnOrderById() {
+    let calm = [MemoryID(rawValue: "a"): told(in: "calm"), MemoryID(rawValue: "b"): told(in: "calm")]
+    #expect(ThingQuote.choose(details: [detail("b", "the seats were green", at: 1), detail("a", "the horn was loud", at: 1)],
+                              tellings: calm, heavySessions: []) == "The horn was loud")
+}
+@Test func aQuoteOfExactlyTwentyWordsIsNotCut() {
+    let twenty = (1...20).map { "w\($0)" }.joined(separator: " ")
+    #expect(ThingQuote.choose(details: [detail("a", twenty, at: 1)], tellings: [MemoryID(rawValue: "a"): told(in: "calm")], heavySessions: [])
+            == "W1 " + (2...20).map { "w\($0)" }.joined(separator: " "))
+}
+@Test func everyDetailFromAHeavySessionGivesNoQuote() {
+    let details = [detail("a", "he clanked all night", at: 1), detail("b", "the seats were green", at: 2)]
+    #expect(ThingQuote.choose(details: details, tellings: [MemoryID(rawValue: "a"): told(in: "heavy"), MemoryID(rawValue: "b"): told(in: "heavy")],
+                              heavySessions: [SessionID(rawValue: "heavy")]) == nil)
+}
 @Test func countLineSaysMomentsAndNothingForNone() {
     #expect(ThingTileText.countLine(0) == nil)
     #expect(ThingTileText.countLine(1) == "1 moment")

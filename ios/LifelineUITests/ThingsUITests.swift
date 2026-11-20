@@ -45,14 +45,16 @@ final class ThingsUITests: XCTestCase {
     @MainActor func testAGuessedDateSaysSo() {
         let app = XCUIApplication.launchWithThings()
         XCTAssertEqual(app.shelfTile("The radiator").value as? String, "1 moment. Placed by a guess")
-        XCTAssertFalse((app.shelfTile("The red bike").value as? String ?? "").contains("guess"))
+        XCTAssertFalse((app.shelfTile("The red bike").value as? String ?? "x guess").contains("guess"))
         XCTAssertFalse((app.shelfTile("The piano").value as? String ?? "x guess").contains("guess"), "a stated span is not a guess")
     }
 
     @MainActor func testAHiddenMemoryGivesNoQuoteAndNoPlace() {
         let app = XCUIApplication.launchWithThings()
-        XCTAssertFalse((app.shelfTile("The radiator").value as? String ?? "").contains("clanked"), "the hidden fact gives no quote")
-        XCTAssertEqual(app.shelfTile("The blue kite").value as? String ?? "", "", "the hidden moment gives no count and no period")
+        XCTAssertFalse((app.shelfTile("The radiator").value as? String ?? "x clanked").contains("clanked"), "the hidden fact gives no quote")
+        let kite = app.shelfTile("The blue kite")
+        XCTAssertTrue(app.reveal(kite))
+        XCTAssertEqual(kite.value as? String, "", "the hidden moment gives no count and no period")
     }
 
     @MainActor func testAHiddenThingIsNotOnTheShelf() {
@@ -119,7 +121,9 @@ final class ThingsUITests: XCTestCase {
         XCTAssertEqual(volvo.value as? String, "1 moment. “It smelled like oranges and wet dog”", "the count and the quote are the spoken value")
         XCTAssertEqual(volvo.buttons.count, 0, "no button inside the tile")
         XCTAssertEqual(app.buttons.matching(NSPredicate(format: "label == %@", "Dad's Volvo")).count, 1, "one button for the tile")
-        XCTAssertFalse(app.shelfTile("The red bike").images.firstMatch.exists, "no photo is described")
+        let bike = app.shelfTile("The red bike")
+        XCTAssertTrue(bike.exists)
+        XCTAssertFalse(bike.images.firstMatch.exists, "no photo is described")
     }
 
     @MainActor func testTheLargestTextIsOneColumnAndNothingIsCut() {
@@ -128,8 +132,15 @@ final class ThingsUITests: XCTestCase {
         XCTAssertTrue(piano.waitForExistence(timeout: 5) && app.reveal(bike))
         XCTAssertEqual(piano.frame.minX, bike.frame.minX, accuracy: 1, "one column")
         XCTAssertGreaterThanOrEqual(piano.frame.height, 44)
-        let chair = app.shelfTile("The enormous green armchair that came with the flat on Hemenway Street")
+        // The grid is lazy: the piano leaves the tree when the chair is scrolled in, so keep its title's height now.
+        let pianoTitleHeight = piano.staticTexts["The piano"].frame.height
+        XCTAssertGreaterThan(pianoTitleHeight, 0)
+        let chairTitle = "The enormous green armchair that came with the flat on Hemenway Street"
+        let chair = app.shelfTile(chairTitle)
         XCTAssertTrue(app.reveal(chair, swipes: 20))
         XCTAssertLessThanOrEqual(chair.frame.maxX, app.windows.firstMatch.frame.maxX)
+        // A text's label is always its full string, so no assertion here can see a cut title. This checks that the
+        // long title wraps to more lines than a short one; that nothing is cut is on the device checklist.
+        XCTAssertGreaterThan(chair.staticTexts[chairTitle].frame.height, pianoTitleHeight, "the long title wraps")
     }
 }

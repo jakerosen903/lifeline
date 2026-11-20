@@ -102,10 +102,13 @@ private struct Fixture {
     let hidden = try f.memory("Hidden", hidden: true, link: bike)
     let standIn = try f.memory("Stand-in", floating: true, link: bike)
     let hiddenMoment = try f.memory("Hidden ride", kind: .event, hidden: true, link: bike, relation: .mention)
+    // An untold stand-in moment with a year: it must not place the thing or count as a moment.
+    let standInMoment = try f.memory("Stand-in ride", kind: .event, floating: true, link: bike, relation: .mention)
+    try f.store.memories.updateRange(standInMoment.id, .stated(year: 1999))
     let source = try f.store.thingShelfSource()
     #expect(source.details[bike.id]?.map(\.id) == [shown.id])
     #expect(Set(source.tellings.keys) == [shown.id])
-    for gone in [hidden.id, standIn.id, hiddenMoment.id] { #expect(source.tellings[gone] == nil) }
+    for gone in [hidden.id, standIn.id, hiddenMoment.id, standInMoment.id] { #expect(source.tellings[gone] == nil) }
     #expect(source.things.first?.momentRanges.isEmpty == true)
 }
 

@@ -176,7 +176,7 @@ private struct SpineWaypoint: View {
     }
 
     /// The same words as the accessibility label, with the name in semibold.
-    private var label: Text { Text("\(Text(period.name).fontWeight(.semibold))\(String(period.headingText.dropFirst(period.name.count)))") }
+    private var label: Text { Text("\(Text(period.name).fontWeight(.semibold))\(period.headingSuffix)") }
 }
 
 /// A piece of the spine: the full height of whatever it is behind, centred on `x`.

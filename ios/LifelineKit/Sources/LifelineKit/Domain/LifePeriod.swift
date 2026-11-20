@@ -25,6 +25,8 @@ public struct LifePeriod: Hashable, Sendable {
         return LifePeriod(name: "The \(decade)s", byAge: false)
     }
 
+    /// " · by your age" for a period by age; empty for a decade. The Timeline's waypoint sets it after the bold name.
+    public var headingSuffix: String { byAge ? " · by your age" : "" }
     /// "Teens · by your age" for a period by age; "The 1990s" for a decade. One text for the Timeline and the shelf.
-    public var headingText: String { byAge ? name + " · by your age" : name }
+    public var headingText: String { name + headingSuffix }
 }
