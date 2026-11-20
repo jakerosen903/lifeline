@@ -295,6 +295,7 @@ extension PersonLinkRepository {
                                    Repoint(table: "session", column: "subject_entity_id", key: "id")]
 
     /// A `curiosity_item` row that is open while the stayer (the one argument) has an open item of the same kind (C15).
+    /// The subquery is not correlated, so SQLite reads it once per statement, before any row moves (tested).
     private static let sameOpenQuestion = """
         status = 'open' and kind in (select kind from curiosity_item where entity_id = ? and status = 'open')
         """

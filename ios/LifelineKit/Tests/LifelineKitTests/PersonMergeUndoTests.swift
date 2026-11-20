@@ -123,6 +123,7 @@ enum MergeCase: String, CaseIterable, Sendable {
             try env.question(.personWithoutMoment, about: robin, "When did you meet Robin?")
             try env.question(.personWithoutMoment, .dismissed, about: robin, "Where did Robin live?")
             try env.question(.unexplainedPerson, about: robin, "Who is Robin?")
+            try env.question(.unexplainedPerson, about: robin, "Who is Rob?")
         case .firstTellings:
             let segments = try env.session(["Robyn cut the grass", "Robin painted the fence", "Robin fixed the gate"])
             try env.store.entities.insertSpan(EntitySpan(entityID: robyn.entityID, segmentID: segments[0], startMs: 0, endMs: 900, order: 0))

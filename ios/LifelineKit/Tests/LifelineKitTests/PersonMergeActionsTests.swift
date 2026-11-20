@@ -617,11 +617,14 @@ extension MergeEnv {
     try env.question(.personWithoutMoment, about: robin, "When did you meet Robin?")
     try env.question(.personWithoutMoment, .dismissed, about: robin, "Where did Robin live?")
     try env.question(.unexplainedPerson, about: robin, "Who is Robin?")
+    // Two open questions of a kind the stayer lacks both move: the stayer's kinds are read before any row moves.
+    try env.question(.unexplainedPerson, about: robin, "Who is Rob?")
 
     try env.actions.merge(robin.id, into: robyn.id)
 
     #expect(try env.questions(about: robyn) == ["person_without_moment|dismissed|Where did Robin live?",
                                                 "person_without_moment|open|When did you meet Robyn?",
+                                                "unexplained_person|open|Who is Rob?",
                                                 "unexplained_person|open|Who is Robin?"])
     #expect(try env.store.curiosity.open().filter { $0.kind == .personWithoutMoment }.count == 1)
 }
