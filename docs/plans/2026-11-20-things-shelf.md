@@ -69,7 +69,7 @@ The spec lists these under its section of the same name: a chapter is no longer 
 2. **Hidden stays hidden.** A hidden thing is not a tile; a hidden memory gives no quote and no date. Task 3 (`aHiddenOrUntoldDetailIsNotRead`, `theShelfSourceLeavesAHiddenThingAndItsKeyPhotoOut`) and Task 4 (`testAHiddenThingIsNotOnTheShelf`, `testAHiddenMemoryGivesNoQuoteAndNoPlace`).
 3. **A thing in two periods.** It shows once, in the earlier one, and that period comes first. Task 1 (`aThingSitsOnceInThePeriodOfItsEarliestDatedMoment`) and Task 4 (`testAThingShowsOnceInItsFirstPeriod`).
 4. **The quote is the person's words, cleaned, and safe.** Filler-only details are skipped; a heavy session never gives the quote; a long quote is cut. Task 2 (`aDetailOfOnlyFillerIsSkipped`, `aDetailFromAHeavySessionIsNotChosen`, `aLongQuoteIsCutAtTwentyWords`) and Task 4 (`testATileWithoutAPhotoShowsTheQuote`).
-5. **The largest text and VoiceOver.** One column, nothing cut, one button per tile with its value. Task 4 (`testTheLargestTextIsOneColumnAndNothingIsCut`, `testATileReadsAsOneButton`).
+5. **The largest text and VoiceOver.** One column, nothing cut, one button per tile with its value. Task 4 (`testTheLargestTextIsOneColumnAndALongTitleWraps`, `testATileReadsAsOneButton`).
 
 ---
 
@@ -527,7 +527,7 @@ final class ThingsUITests: XCTestCase {
         XCTAssertFalse(volvo.staticTexts.firstMatch.exists, "the tile's texts are one element")
         XCTAssertFalse(volvo.images.firstMatch.exists, "no photo is described")
     }
-    @MainActor func testTheLargestTextIsOneColumnAndNothingIsCut() {
+    @MainActor func testTheLargestTextIsOneColumnAndALongTitleWraps() {
         let app = XCUIApplication.launchWithThings(["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"])
         let piano = app.shelfTile("The piano"), bike = app.shelfTile("The red bike")
         XCTAssertTrue(piano.waitForExistence(timeout: 5) && app.reveal(bike))
