@@ -81,7 +81,7 @@ public struct LifeMap: Sendable, Equatable {
     }
 
     /// The first and last stated year; `last` is nil when no end is stated. Nil without stated years.
-    private static func years(of chapter: Chapter) -> (first: Int, last: Int?)? {
+    static func years(of chapter: Chapter) -> (first: Int, last: Int?)? {
         guard let range = chapter.statedYears else { return nil }
         guard let first = (range.earliest ?? range.likelyStart ?? range.latest)?.year else { return nil }
         let last = (range.latest ?? range.likelyEnd)?.year

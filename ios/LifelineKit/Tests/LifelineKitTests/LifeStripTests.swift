@@ -92,3 +92,23 @@ private func guess(_ y: Int) -> TimeRange { .year(y, origin: .inferred, evidence
         #expect(LifeStrip(moments: [said(2001), onlyEarliest], birthYear: 1990, currentYear: 2026).sentence == "In 2 moments, in 2001")
     }
 }
+
+@Suite struct LifeStripMarkPlacementTests {
+    private let range = TimeRange.stated(between: 2008, and: 2010)
+
+    @Test func aMarkCanSitAtTheStartOfItsRange() {
+        let start = LifeStrip(moments: [range], birthYear: 1990, currentYear: 2026, marks: .start)
+        #expect(abs(start.marks[0].position - (2008.0 - 1990) / 37.0) < 0.0001)
+        let middle = LifeStrip(moments: [range], birthYear: 1990, currentYear: 2026, marks: .middle)
+        #expect(abs(middle.marks[0].position - ((2008.0 + 2010 + 1) / 2 - 1990) / 37.0) < 0.0001)
+    }
+    @Test func theEntityPagesStripDoesNotChange() {
+        let byDefault = LifeStrip(moments: [range, said(1999)], birthYear: 1990, currentYear: 2026)
+        #expect(byDefault == LifeStrip(moments: [range, said(1999)], birthYear: 1990, currentYear: 2026, marks: .middle))
+    }
+    @Test func oneMomentIsOneMark() {
+        let strip = LifeStrip(moments: [said(2001)], birthYear: 1990, currentYear: 2026, marks: .start)
+        #expect(strip.marks.count == 1)
+        #expect((0...1).contains(strip.marks[0].position))
+    }
+}

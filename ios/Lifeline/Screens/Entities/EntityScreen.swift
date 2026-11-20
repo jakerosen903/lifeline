@@ -145,8 +145,9 @@ struct EntityScreen: View {
 
                 if let error = viewModel.error { Text(error).foregroundStyle(.red) }
             }
-            // A new cover is the page's news: the page goes back to the top, where the cover is.
-            .onChange(of: viewModel.shelf.cover?.id) { withAnimation { proxy.scrollTo(Self.top, anchor: .top) } }
+            // A new cover is the page's news: the page goes back to the top, where the cover is. The first read's
+            // cover is not news: the page opens at the top.
+            .onChange(of: viewModel.shelf.coverChanges) { withAnimation { proxy.scrollTo(Self.top, anchor: .top) } }
         }
         .scrollContentBackground(.hidden)
         // The person is gone and the notice is still up: the page shows what it last read, and writes nothing.

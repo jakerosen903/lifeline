@@ -12,6 +12,10 @@ public struct LifeStrip: Sendable, Equatable {
         public init(position: Double, isGuess: Bool) { self.position = position; self.isGuess = isGuess }
     }
 
+    /// Where a moment's mark sits along its band: at the middle (the entity page), or at the
+    /// start of its range (the Timeline card).
+    public enum MarkPlacement: Sendable, Equatable { case middle, start }
+
     public let startYear: Int
     /// The current year.
     public let endYear: Int
@@ -24,7 +28,8 @@ public struct LifeStrip: Sendable, Equatable {
 
     public var showsAxis: Bool { marks.count >= 2 }
 
-    public init(moments: [TimeRange], stated: TimeRange = .unplaced, birthYear: Int?, currentYear: Int) {
+    public init(moments: [TimeRange], stated: TimeRange = .unplaced, birthYear: Int?, currentYear: Int,
+                marks placement: MarkPlacement = .middle) {
         let dated = moments.compactMap(Dated.init)
         var start = min(birthYear ?? .max, dated.map(\.startYear).min() ?? .max)
         if start == .max { start = currentYear }
@@ -34,7 +39,7 @@ public struct LifeStrip: Sendable, Equatable {
 
         self.startYear = start
         self.endYear = currentYear
-        self.marks = dated.map { Mark(position: position($0.middle), isGuess: $0.isGuess) }
+        self.marks = dated.map { Mark(position: position(placement == .start ? Double($0.startYear) : $0.middle), isGuess: $0.isGuess) }
         if let from = (stated.earliest ?? stated.likelyStart)?.year, let to = (stated.latest ?? stated.likelyEnd)?.year {
             // A stored span may run backwards; a range must never.
             self.statedSpan = position(Double(min(from, to)))...position(Double(max(from, to) + 1))

@@ -25,6 +25,14 @@ One entry per decision. Newest first. Status is Decided, Open, or Superseded.
 4. On the simulator the text "Sam O'Neil" showed as "Sam ONeil". The app passes the name as it is. The device check has a line for it.
 5. No setting turns this off.
 
+## 2026-11-19 · A page's first read of its photos does not scroll it
+
+**Status:** Decided by the builder (a bug fix). The owner can overrule it.
+
+**Decision.** A person's page and You go back to the top only when a later read of the photos finds another cover (`PhotoShelf.coverChanges`). The first read sets the cover the page opens with. It must not scroll the page.
+
+**Why.** The pages watched the cover's id. The id changes from nil to the first cover on the page's first read, so each page with a photo scrolled "back to the top" during its first layout. With the PC-b contact row, at the largest text size on an iPhone 17 Pro Max, the List then opened at its bottom: the cover and the name were off screen and out of the accessibility tree. On an iPhone 17 Pro the page opened correctly. `PhotosUITests.testAPageWithPhotosOpensAtItsTopAtTheLargestText` guards it; it fails on the Pro Max without the fix.
+
 ## 2026-11-19 · PC-b: a person can be linked to a contact — decisions and rulings made while building
 
 **Status:** Decided by the builder and the controller. The owner must confirm plan decisions 4, 5, 6 and 8, and the new copy and identifier listed at the end. The owner can overrule each one. Source: `docs/plans/2026-11-18-people-contacts-b.md`, ledger `.superpowers/sdd/2026-11-18-people-contacts-b/rulings.md` (PB1 to PB67). Narrows `docs/specs/2026-11-18-people-contacts.md` in five places, each marked in the spec.
@@ -193,6 +201,48 @@ Tests:
 9. **The Undo notice after a name move can sit below the screen for its 6 seconds.** The owner must scroll down to reach it. One fix is to pin it above the record bar.
 
 The device check is `docs/plans/2026-11-18-photo-on-people-pages-device-check.md`. Its last part lists the small items the reviews deferred.
+
+## 2026-11-18 · S6b: a pinned card with the life strip, a frame and a During line
+
+**Status:** Decided by the builder. The owner can overrule each one. Source: `docs/plans/2026-11-18-timeline-card.md`, ledger `.superpowers/sdd/2026-11-18-timeline-card/rulings.md`.
+
+**Decision.** The Timeline pins a card under its title. The card shows the whole life as a strip, from the birth year to now. Each dated moment is one tick. A frame covers the years of the spine rows on screen and moves as the list scrolls. One "During" line names the chapters whose stated years overlap the frame's years. A tap on the card opens the life map. The card asks for nothing and shows no count of what is missing (PRINCIPLES 9). It shows a chapter's years only when the person stated them (PRINCIPLES 5).
+
+The eight builder's defaults:
+
+1. The "Chapters" item stays in the Timeline's "…" menu. With no dated moment there is no card, and the life map must stay reachable.
+2. The frame keeps its last years when no spine row is on screen (the waiting cards at the top, the shelf at the end). Before any spine row was on screen, the card shows no frame. When the spine's rows change and no row is on screen, the app clears the kept years.
+3. A row counts as on screen when half of it is visible. Ruling R3 replaces the plan's second sentence of this default, "A row under the pinned card counts while it is in the scroll view's visible area". R3 says how the app measures this.
+4. The visible "During" text is the word "During", the names joined by " · ", then "+N". VoiceOver uses the spec's sentence with at most two names and "and N more".
+5. `LifeStrip` gains a choice of where a mark sits. The entity page keeps the middle of the band. The Timeline card uses the start of the range, as the spec says. The entity page does not change.
+6. When two chapters are equally long, the earlier start comes first, then the name in alphabetical order. A chapter with no stated end counts as running to now.
+7. The card is in the Timeline tab only.
+8. One year on screen reads "On screen: 1999." Two or more years read "On screen: 1998 to 2003."
+
+Rulings made while building:
+
+- R3. A spine row is on screen when at least half of its frame is inside the list's own frame, measured with `onGeometryChange`. `onDisappear` clears it. The plan named two techniques and both were dropped. `onScrollVisibilityChange` reported "visible" and never "not visible" in this list. `onAppear` and `onDisappear` count a row hidden under the pinned card as visible, so the frame never moved. The app measures the frame of the SwiftUI list inside the pinned inset. That frame starts at the bottom of the inset, which is the card and 8 points below it. It ends above the record bar. The list's scroll view itself runs the full height of the screen, so the rows scroll under the card. A row under the card is outside the measured frame. A simulator probe confirmed this: the measured top was 239.7 points, and the card's bottom was 231.7 points. The area between the inset and the record bar is what "on screen" means to the person.
+- R4. The "During" line decides how many names fit with `ViewThatFits(in: .vertical)` against a box one line tall. At accessibility sizes the box is two lines tall. The plan's horizontal form cannot allow a second line, because a horizontal fit measures the width of one line.
+- Hysteresis. A row comes on screen when half of it is inside the list's frame. A row that is on stays on while any part of it is inside the list's frame widened by a slack at both edges. The slack is one point more than the most the card's height can change. The "During" line and the space above it make that change. Without the slack, the card froze the app. A row at the top edge turned on and brought a chapter into the "During" line. The taller card then covered the row, and the row turned off. The "During" line went, the card shrank, and the row turned on again. This repeated without end. The first rule in this build turned a row off when the card covered all of it. That rule still looped for a row shorter than twice the card's change (C1, final review). The rule is one pure function in the kit, `RowVisibility.isOnScreen`. A closed-loop test checks each row height from 1 to 400 points for three sizes of the card's change.
+- R1, R2, R5 and R6 are process and test rulings. R1: the spine seed is not changed. So no UI test opens a dated story. R2: the docs are written in Task 6. The controller records the full run and the screenshots after the final review. R5 and R6: the test for the pinned card does not compare the card's top with its launch value. The large title collapses, and the card moves up with it. The test asserts that the card is hittable. It asserts that the card's top is not lower than at launch. It asserts that the middle of the first hittable spine row is below the card's bottom.
+- R7 and R8 come from the final review. R7 records two known costs (below). R8 moves four small items to "After S6b" in the plan.
+
+**Differs from the mock-up.** The mock-up `docs/design/TL_SpineStrip.dc.html` draws every tick the same. The card draws a guessed date as a hollow tick, so the shape, and not colour alone, shows that the date is a guess. The look is otherwise the mock-up's: an olive rounded frame, names in olive semibold, "+N" at the trailing edge.
+
+**Why.** The card gives the person one look at the whole life and where the list is in it. A date overlap puts a chapter in the "During" line only. It never tags a moment (PRINCIPLES 1).
+
+**Consequences.**
+
+- No migration and no change under `Store/`. The card only reads.
+- `SpineLayout.Stop` gains `yearSpan`, so the app does not repeat the rule for the years of a row.
+
+**Known costs.** These stay after the final review.
+
+- The slack also applies at the bottom edge. A row stays on until all of it is out of the widened frame. So the frame can lag by one row at each edge of the list.
+- An open story's member rows do not move the frame. The story's own row decides (R7). While the person scrolls in a long open story, the frame can show the years of the story's row or of the rows below it.
+- A confirmed relation's row has a tick and no years. It does not move the frame (R7).
+- At the largest text size, the period label above an opened story is cut by a few points at the card's edge.
+- No UI test opens a story to move the frame, because no seed has a dated story (R1). The kit tests guard the rule. The device check covers the case.
 
 ## 2026-11-18 · The photo card has one layout, and the first photo is the key photo
 
