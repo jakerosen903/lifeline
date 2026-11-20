@@ -16,3 +16,6 @@ Task 4: built (29b6d0f..364b707); review: screen, tile, view model and seed matc
 Task 4 fix round 1: 59cde48. ThingsUITests: Executed 15 tests, with 0 failures; Entities 2, Kinds 1, Shell 13 pass. Scoped re-review dispatched.
 Task 4: complete (commits 29b6d0f..59cde48). The fix round's review was folded into the final review, which read 59cde48 with care and found it sound.
 Final review (opus, aab2aa0..c6fa91b): ready after fixes; no Critical, no Important; 4 Minors to fix, deferred Minors triaged, 6 findings for the owner. Findings 1 and 2 ruled R4 and R5. Report in final-review.md. One agent takes the fixes and Task 5.
+Fix wave and Task 5: commits c1ff218..52a126d (318ca5a R5, 4804db7 R4, de4c676 Minors and tests, 52a126d docs). Re-review (opus): clean; nine wording findings, all corrected by the controller (25f0666 docs; two code comments and one test name in the closing commit). Parked: the largest-text test proves a long title wraps, not that no line is cut; that is on the device checklist.
+Main merged locally: f4d74b5 (picker scroll). Kit on the merged tree: 1440 tests, one timing test (drainGivesUpAtItsDeadline) fails under load. Whole UI suite on the merged tree: Executed 246 tests, with 0 failures, simulator "Lifeline Things".
+Ledger closed 2026-11-20. Nothing pushed. The device checklist is not run.

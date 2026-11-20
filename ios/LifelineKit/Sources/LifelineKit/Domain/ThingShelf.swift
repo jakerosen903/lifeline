@@ -1,6 +1,6 @@
 /// The Things shelf: which group each thing sits in, and in what order. Pure: it stores nothing.
 /// It uses the Timeline spine's own period rule (`SpineLayout.placingDate`, `LifePeriod.containing`),
-/// so a thing never sits in a different period here than on the Timeline.
+/// so the period rule and the headings are the Timeline's.
 public enum ThingShelf {
     public struct Tile: Sendable, Equatable, Identifiable {
         public var summary: EntitySummary
@@ -33,7 +33,7 @@ public enum ThingShelf {
     public enum Layout: Sendable, Equatable { case flat([Tile]), grouped([Group]) }
 
     /// Spec "Grouping by period", "The flat grid" and "Order". `things` holds visible things only.
-    /// A thing sits once, in the period of its earliest placing date. With no placed thing the shelf is flat.
+    /// A thing sits once: in the period of its dated stated span, or else of its earliest dated moment. With no placed thing the shelf is flat.
     public static func layout(_ things: [EntitySummary], birthYear: Int?) -> Layout {
         var placed: [Placed] = []
         var unplaced: [Tile] = []

@@ -126,7 +126,7 @@ final class ThingsUITests: XCTestCase {
         XCTAssertFalse(bike.images.firstMatch.exists, "no photo is described")
     }
 
-    @MainActor func testTheLargestTextIsOneColumnAndNothingIsCut() {
+    @MainActor func testTheLargestTextIsOneColumnAndALongTitleWraps() {
         let app = XCUIApplication.launchWithThings(["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"])
         let piano = app.shelfTile("The piano"), bike = app.shelfTile("The red bike")
         XCTAssertTrue(piano.waitForExistence(timeout: 5) && app.reveal(bike))
