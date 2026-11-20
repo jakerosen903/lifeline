@@ -17,6 +17,10 @@ struct SpineRowView: View {
     let onToggleStory: () -> Void
     let actions: MemoryRowActions
     let storyActions: StoryRowActions
+    /// Where the list's rows can be seen, and the slack the card's own height needs (`OnScreenReport`).
+    let screenArea: ScreenArea
+    /// True when the stop's row comes on screen, false when it leaves; the card's frame follows.
+    let onScreenChange: (Bool) -> Void
     @Environment(\.dynamicTypeSize) private var typeSize
     /// Wide enough for "2008–10" at the row's text size.
     @ScaledMetric(relativeTo: .footnote) private var marginWidth: CGFloat = 52
@@ -25,7 +29,9 @@ struct SpineRowView: View {
         VStack(alignment: .leading, spacing: 0) {
             if let gap = row.stop.gapAbove, gap.units > 0 { SpineGap(gap: gap, geometry: geometry) }
             if let period = row.stop.periodAbove { SpineWaypoint(period: period, geometry: geometry, drawsSpine: !isFirst) }
-            stopRow
+            // Only the stop's own row reports: not the gap or the period above it, and not an open
+            // story's members below. Members can have dates; they do not report in this PR (ruling R7).
+            stopRow.reportsOnScreen(in: screenArea, onChange: onScreenChange)
         }
         // List rows of their own, so each member keeps its own long-press menu (Hide, Exclude, Delete):
         // the list lifts a context menu to its cell. The screen's row modifiers apply to each of them.
