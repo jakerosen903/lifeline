@@ -55,10 +55,12 @@ A thing has a photo on the shelf when it has a key photo.
 
 ### Grouping by period
 
-1. A thing goes into the period of its earliest dated moment. "Earliest" is by placing date.
-2. A thing shows once on the shelf. It does not repeat in a later period.
-3. A thing with no dated moment, and with a stated span (the person used "Add dates" on its page), goes into the period of the span's placing date.
-4. Every other thing goes into "Not placed in time yet".
+1. A thing with a dated stated span (the person used "Add dates" on its page, with both ends) goes into the period of the span's placing date. Its moments do not move it.
+2. A thing with no dated stated span goes into the period of its earliest dated moment. "Earliest" is by placing date.
+3. A thing shows once on the shelf. It does not repeat in a later period.
+4. Every other thing goes into "Not placed in time yet". A half-open stated span places nothing, so the thing's dated moments place it, as in rule 2.
+
+Changed 2026-11-20 by ruling R5.
 5. The heading of a period is the Timeline's waypoint text: "Teens · by your age" for a period by age, "The 1990s" for a decade. It is a header for VoiceOver.
 6. The heading of the last group is "Not placed in time yet". It is a header for VoiceOver.
 7. A period with no tile does not show.
@@ -161,8 +163,8 @@ One PR. The step is size M in the five-sections build order.
 
 Each one is decided. Each one is one rule in one place, so an overrule changes one function and its tests.
 
-1. **A thing shows once, in the period of its earliest dated moment.** Cost: a thing that runs through several periods (a car kept for twenty years) shows only in the first.
-2. **A stated span places a thing with no dated moment.** The bullet says "from the thing's dated moments". Without this rule, a thing whose page says "from 1996 to 2002" would sit under "Not placed in time yet", which is false. Cost: one rule beyond the bullet.
+1. **A thing shows once, in one period.** With no dated stated span, it is the period of its earliest dated moment. Cost: a thing that runs through several periods (a car kept for twenty years) shows only in the first.
+2. **A dated stated span places the thing, before any moment.** The bullet says "from the thing's dated moments". Without this rule, a thing whose page says "from 1996 to 2002" would sit under "Not placed in time yet", or move to the period of one guessed moment. The person's words about the thing beat the app's guess about one moment (P1). Dated moments place only a thing with no dated stated span. Cost: one rule beyond the bullet; a thing with a stated span and a settled moment outside it sits in the span's period, not the moment's. Changed 2026-11-20 by ruling R5.
 3. **"A memory about the thing" is a detail link.** A mention is a moment the thing is in, not a memory about it. Cost: few tiles show a quote until extractor v7 adds detail links (the audit found 3 detail links in 37 memories).
 4. **The quote is the oldest told detail that has words after the cleanup, cut at 20 words.** Cost: a later, better line does not show. The person cannot choose the line.
 5. **A detail from a heavy session never gives the quote.** Cost: an ordinary line told in a heavy session never shows on the shelf.
@@ -180,7 +182,7 @@ Each one is decided. Each one is one rule in one place, so an overrule changes o
 ## Where the spec did not fit the code
 
 - **"A named period is a `Chapter`".** S6c changed this. A chapter never replaces a period (`docs/specs/2026-11-16-timeline.md`, "Periods", rule 4). The shelf uses the computed periods only, as that spec says in rule 5.
-- **"Nothing in the store states either" a year range.** The store can hold a stated span for a thing: "Add dates" on its page writes `entity.range`. The shelf uses it to place a thing with no dated moment (default 2). The tile still shows no range.
+- **"Nothing in the store states either" a year range.** The store can hold a stated span for a thing: "Add dates" on its page writes `entity.range`. The shelf uses it, when it is dated, to place the thing before any moment (default 2). The tile still shows no range.
 - **"When a memory is about the thing".** The store has no "about" relation. It has `detail` and `mention`. The shelf uses `detail` (default 3).
 - **"From the thing's dated moments".** `EntitySummary.momentRanges` also holds undated ranges. "Dated" here is `TimeRange.isDated`, the spine's test. A half-open range does not count.
 - **"Reuse the Timeline's grouping".** The Timeline places a story by the span of its members and keeps a moment in a collection off the spine. The shelf places a thing by each moment's own range. The period rule, `LifePeriod.containing` on the placing year, is the same. The placing date moves into one public function in `SpineLayout`, so the two cannot drift.

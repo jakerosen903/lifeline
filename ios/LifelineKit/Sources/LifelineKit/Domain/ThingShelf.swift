@@ -70,17 +70,20 @@ public enum ThingShelf {
         let date: CivilDate
     }
 
-    /// The thing's period and tile, or nil when nothing dates it. Dated moments place a thing; with none,
-    /// its own stated span does. The earliest placing range decides the period.
+    /// The thing's period and tile, or nil when nothing dates it. The thing's own dated span ("Add dates")
+    /// places it whenever it has one (R5: the person's words beat a guess about one moment). With no dated
+    /// span, its dated moments place it, and the earliest placing date decides the period.
     private static func place(_ thing: EntitySummary, birthYear: Int?) -> Placed? {
-        var placing = thing.momentRanges.filter(\.isDated)
-        if placing.isEmpty, thing.entity.range.isDated { placing = [thing.entity.range] }
-        guard let deciding = placing.min(by: { SpineLayout.placingDate(of: $0)! < SpineLayout.placingDate(of: $1)! }),
-              let date = SpineLayout.placingDate(of: deciding) else { return nil }
-        let period = LifePeriod.containing(year: date.year, birthYear: birthYear)
-        let inPeriod = placing.filter { LifePeriod.containing(year: SpineLayout.placingDate(of: $0)!.year, birthYear: birthYear) == period }
-        let guess = !inPeriod.contains(where: \.isSettled)
-        return Placed(tile: Tile(summary: thing, placedByGuess: guess), period: period, date: date)
+        let placing: [(range: TimeRange, date: CivilDate)]
+        if let date = SpineLayout.placingDate(of: thing.entity.range) {
+            placing = [(thing.entity.range, date)]
+        } else {
+            placing = thing.momentRanges.compactMap { range in SpineLayout.placingDate(of: range).map { (range, $0) } }
+        }
+        guard let deciding = placing.min(by: { $0.date < $1.date }) else { return nil }
+        let period = LifePeriod.containing(year: deciding.date.year, birthYear: birthYear)
+        let guess = !placing.contains { LifePeriod.containing(year: $0.date.year, birthYear: birthYear) == period && $0.range.isSettled }
+        return Placed(tile: Tile(summary: thing, placedByGuess: guess), period: period, date: deciding.date)
     }
 
     /// By title ignoring case; the id breaks a tie so the order never depends on the input order.

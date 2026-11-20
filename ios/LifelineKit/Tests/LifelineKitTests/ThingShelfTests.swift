@@ -67,9 +67,27 @@ private func tile(_ title: String, in layout: ThingShelf.Layout) -> ThingShelf.T
     #expect(headings(layout) == ["Childhood · by your age"])
     #expect(tile("The piano", in: layout)?.placedByGuess == false)
 }
-@Test func aDatedMomentBeatsTheStatedSpan() {
+// R5: the person's own dated span places the thing before any moment, said or guessed.
+@Test func theStatedSpanBeatsADatedMoment() {
     let layout = ThingShelf.layout([thing("The piano", [said(2012)], stated: .stated(between: 1996, and: 2002))], birthYear: 1990)
+    #expect(headings(layout) == ["Childhood · by your age"])
+}
+@Test func theStatedSpanBeatsAGuessedMomentAndShowsNoMark() {
+    let layout = ThingShelf.layout([thing("The piano", [guess(2012)], stated: .stated(between: 1996, and: 2002))], birthYear: 1990)
+    #expect(headings(layout) == ["Childhood · by your age"])
+    #expect(titles(layout) == [["The piano"]], "not again under Twenties")
+    #expect(tile("The piano", in: layout)?.placedByGuess == false)
+}
+@Test func aHalfOpenStatedSpanLetsADatedMomentPlace() {
+    let halfOpen = TimeRange(earliest: CivilDate(iso: "1999-01-01"), latest: nil, likelyStart: nil, likelyEnd: nil, granularity: .year, origin: .stated, evidenceText: nil)
+    let layout = ThingShelf.layout([thing("The piano", [guess(2012)], stated: halfOpen)], birthYear: 1990)
     #expect(headings(layout) == ["Twenties · by your age"])
+    #expect(tile("The piano", in: layout)?.placedByGuess == true)
+}
+@Test func withNoStatedSpanTheEarliestMomentStillPlaces() {
+    let layout = ThingShelf.layout([thing("The kite", [said(2012), guess(2003)])], birthYear: 1990)
+    #expect(headings(layout) == ["Teens · by your age"])
+    #expect(tile("The kite", in: layout)?.placedByGuess == true)
 }
 @Test func aGuessedDateMarksTheTile() {
     let layout = ThingShelf.layout([thing("The radiator", [guess(2012)]), thing("The red bike", [said(1999)])], birthYear: 1990)
