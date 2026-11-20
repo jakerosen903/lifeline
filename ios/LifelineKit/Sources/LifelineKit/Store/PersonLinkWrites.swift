@@ -20,10 +20,11 @@ extension PersonLinkRepository {
         try db.writer.write { db in try Self.undo(receipt, in: db) }
     }
 
-    /// Stores the owner's answer for one said name on a waiting card; a second answer replaces it.
-    func storeChoice(_ target: PersonLinkActions.Target, for saidName: String, on candidate: CandidateID) throws {
-        let key = SaidName.key(saidName)
-        guard !key.isEmpty else { throw Error.notFound }   // no words, nothing Keep could match
+    /// Stores the owner's answer for one said name on a waiting card; a second answer replaces it. With a handle
+    /// the answer is that handle's alone (`ChoiceKey`): another handle of the same said name keeps its own guess.
+    func storeChoice(_ target: PersonLinkActions.Target, for saidName: String, handle: String? = nil, on candidate: CandidateID) throws {
+        guard !SaidName.key(saidName).isEmpty else { throw Error.notFound }   // no words, nothing Keep could match
+        let key = ChoiceKey.text(saidName: saidName, handle: handle)
         try db.writer.write { db in
             guard let card = try Candidate.fetchOne(db, key: candidate.rawValue), card.kind == .memory else { throw Error.notFound }
             guard card.status == .pending else { throw Error.stale }   // Keep has run: the answer would apply to nothing
@@ -170,7 +171,7 @@ extension PersonLinkRepository {
     /// came from a contact, the oldest name the owner said, so a contact's name never becomes a said name (PB10).
     /// Refused (`notFound`) when there is none: the app has no name of the owner's to give the new person.
     private static func newPerson(for link: PersonLink, in db: Database) throws -> Person {
-        let said = try saidName(of: link.memoryID, ref: link.saidName, in: db)
+        let said = try saidName(of: link.memoryID, ref: link.saidName, handle: link.handle, in: db)
         let aliases = try Alias.filter(Column("person_id") == link.person.id.rawValue).order(Column.rowID).fetchAll(db)
         guard let found = said?.name ?? said?.relation ?? NameForModel.of(link.person, aliasesOldestFirst: aliases) else { throw Error.notFound }
         let name = found.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -193,29 +194,44 @@ extension PersonLinkRepository {
 
     /// The facts, feelings and goals of the link's session that are details of its person, and either
     /// sit in a memory of `mentioned` (a detail the model linked by a person id, R38) or have a card
-    /// whose `about_ref` is a person mention with the link's said name. A detail placed by hand in
-    /// another memory has no such card ref and stays.
+    /// whose `about_ref` names the link's person (`names`). A detail placed by hand in another memory
+    /// has no such card ref and stays.
     private static func details(about link: PersonLink, mentionedIn mentioned: Set<MemoryID>, in db: Database) throws -> [MomentEntity] {
         guard let session = try session(of: link.memoryID, in: db) else { return [] }
         let said = link.saidName.map { SaidName(ref: $0) }
-        // An older link with no said name matches no card ref; only its own memories' details go.
+        // An older link with no said name matches no card ref by name; only its own memories' details go.
         let keys = Set(said.map { [SaidName.key($0.raw)] + ($0.name.map { [SaidName.key($0)] } ?? []) } ?? []).subtracting([""])
         let candidates = try fetch(where: "person.id = ? and me.relation = 'detail' and \(sessionSQL) = ?",
                                    arguments: [link.person.id.rawValue, session], order: "memory.created_at, me.memory_id", in: db)
         return try rows(of: try candidates.filter { candidate in
             if mentioned.contains(candidate.memoryID) { return true }
-            guard !keys.isEmpty else { return false }
-            return try aboutMentionText(of: candidate.memoryID, in: db).map { keys.contains(SaidName.key($0)) } == true
+            return try about(of: candidate.memoryID, in: db).map { names($0, handle: link.handle, saidKeys: keys) } == true
         }, in: db)
     }
 
-    /// The text of the person mention a memory's card is about, when its `about_ref` names one.
-    private static func aboutMentionText(of memory: MemoryID, in db: Database) throws -> String? {
+    /// What a detail's card is about: its `about_ref`, and the person mention of its segment with that ref, if any.
+    private typealias About = (ref: String, mention: MentionOut?)
+
+    /// Whether a detail's `about_ref` names the link's person. A link with a handle (PC-d): the ref is that handle
+    /// (decision D15 reads a handle first), or a person mention with that handle; a mention with another handle is
+    /// another person. A link with no handle, or a mention with none (v6): a mention said with the link's said name.
+    private static func names(_ about: About, handle: String?, saidKeys: Set<String>) -> Bool {
+        if let handle {
+            if about.ref == handle { return true }
+            if let other = about.mention?.handle { return other == handle }
+        }
+        guard let text = about.mention?.text else { return false }
+        return saidKeys.contains(SaidName.key(text))
+    }
+
+    /// The `about_ref` of a memory's card, with the person mention it names. Nil when the card has no `about_ref`.
+    private static func about(of memory: MemoryID, in db: Database) throws -> About? {
         guard let card = try Candidate.fetchOne(db, sql: "select candidate.* from candidate join memory on memory.created_from_candidate_id = candidate.id where memory.id = ?",
                                                 arguments: [memory.rawValue]),
-              let about = CandidatePayload.memory(card)?.aboutRef else { return nil }
-        return try Candidate.fetchAll(db, sql: "select * from candidate where segment_id = ? and kind = 'person'", arguments: [card.segmentID.rawValue])
-            .compactMap(CandidatePayload.mention).first { $0.ref == about }?.text
+              let ref = CandidatePayload.memory(card)?.aboutRef else { return nil }
+        let mention = try Candidate.fetchAll(db, sql: "select * from candidate where segment_id = ? and kind = 'person'", arguments: [card.segmentID.rawValue])
+            .compactMap(CandidatePayload.mention).first { $0.ref == ref }
+        return (ref, mention)
     }
 
     // MARK: - First tellings
@@ -416,7 +432,7 @@ extension PersonLinkRepository {
     private static func addAliases(from rows: [MomentEntity], to person: PersonID, in db: Database) throws -> [Alias] {
         var added: [Alias] = []
         for row in rows {
-            guard let said = try saidName(of: row.memoryID, ref: row.roleText, in: db) else { continue }
+            guard let said = try saidName(of: row.memoryID, ref: row.roleText, handle: row.personHandle, in: db) else { continue }
             for text in [said.name, said.relation].compactMap({ $0 }) where !GroupPhrase.isGroup(text) {
                 if try PeopleRepository.insertAlias(text, person, db) { added.append(Alias(personID: person, text: text.trimmingCharacters(in: .whitespacesAndNewlines))) }
             }
@@ -424,17 +440,43 @@ extension PersonLinkRepository {
         return added
     }
 
-    /// A link's said name, with the relation phrase a person card of the memory's segments gave it,
-    /// as Keep reads it (`GuessInputs.saidName`). Nil for a link with no words.
-    private static func saidName(of memory: MemoryID, ref: String?, in db: Database) throws -> SaidName? {
+    /// A link's said name, with its relation phrase, as Keep reads it. Nil for a link with no words.
+    /// - A link with a handle (PC-d): the relation of that handle, from a person mention with the handle or the card's
+    ///   `handlePeople` entry for it. Two people of one name ("Robyn and my cousin Robyn") keep their own relations.
+    /// - A link with no handle: the relation a person card of the memory's segments gave the said name (`GuessInputs.saidName`).
+    private static func saidName(of memory: MemoryID, ref: String?, handle: String?, in db: Database) throws -> SaidName? {
         guard let ref, !SaidName.key(ref).isEmpty else { return nil }
-        let relation = try Candidate.fetchAll(db, sql: """
+        let relation = try handle.map { try relation(ofHandle: $0, in: memory, db) } ?? relation(saying: ref, in: memory, db)
+        return SaidName(ref: ref, mentionRelation: relation)
+    }
+
+    private static func relation(saying ref: String, in memory: MemoryID, _ db: Database) throws -> String? {
+        try Candidate.fetchAll(db, sql: """
             select * from candidate where kind = 'person' and segment_id in (select segment_id from memory_span where memory_id = ?)
             order by ordinal
             """, arguments: [memory.rawValue])
             .compactMap(CandidatePayload.mention)
-            .first { PeopleRepository.normalize($0.text) == PeopleRepository.normalize(ref) && !($0.relationText ?? "").trimmingCharacters(in: .whitespaces).isEmpty }?
+            .first { PeopleRepository.normalize($0.text) == PeopleRepository.normalize(ref) && nonEmpty($0.relationText) != nil }?
             .relationText
-        return SaidName(ref: ref, mentionRelation: relation)
+    }
+
+    /// The handle's relation in the memory's own recording: a handle of another recording's telling is another person.
+    private static func relation(ofHandle handle: String, in memory: MemoryID, _ db: Database) throws -> String? {
+        guard let session = try session(of: memory, in: db) else { return nil }
+        let cards = try Candidate.fetchAll(db, sql: """
+            select candidate.* from candidate join segment on segment.id = candidate.segment_id
+            where segment.session_id = ? and candidate.segment_id in (select segment_id from memory_span where memory_id = ?)
+            order by segment."index", candidate.ordinal
+            """, arguments: [session, memory.rawValue])
+        if let mention = cards.compactMap(CandidatePayload.mention).first(where: { $0.kind == .person && $0.handle == handle && nonEmpty($0.relationText) != nil }) {
+            return nonEmpty(mention.relationText)
+        }
+        return cards.compactMap(CandidatePayload.memory).flatMap(\.handlePeople).lazy
+            .compactMap { $0.handle == handle ? nonEmpty($0.relationText) : nil }.first
+    }
+
+    private static func nonEmpty(_ text: String?) -> String? {
+        guard let trimmed = text?.trimmingCharacters(in: .whitespacesAndNewlines), !trimmed.isEmpty else { return nil }
+        return trimmed
     }
 }

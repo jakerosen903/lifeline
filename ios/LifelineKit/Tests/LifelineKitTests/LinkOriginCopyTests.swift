@@ -35,7 +35,10 @@ private struct Env {
 @Test func aMemoryMergeKeepsAnAssumedOrigin() throws {
     let env = try Env()
     let robin = try env.store.people.insertPerson(displayName: "Robin")
-    let target = try env.kept("The fence"), source = try env.kept("Painting day")
+    // One recording: a handle has no meaning in another recording, so a fold across recordings drops it (final review I2).
+    let segments = try StoreFixtures.session(in: env.store.sessions, segments: ["Robin and I painted the fence", "Robin held the ladder"]).1
+    let target = try StoreFixtures.memory(in: env.store.memories, candidates: env.store.candidates, segment: segments[0].id, title: "The fence")
+    let source = try StoreFixtures.memory(in: env.store.memories, candidates: env.store.candidates, segment: segments[1].id, title: "Painting day")
     try env.link(source.id, robin.entityID, origin: .assumed, handle: "h1")
     _ = try env.actions.merge(source.id, into: target.id)
     let row = try #require(try env.row(target.id, robin.entityID))

@@ -175,3 +175,40 @@ private struct Env {
     #expect(Set(links.map(\.relation)) == [.mention, .detail])
     #expect(links.first { $0.memoryID == a.id }?.isGuess == true)
 }
+
+// MARK: - PC-d Task 5: the group is the extractor's handle
+
+extension Env {
+    /// A mention link that carries the extractor's handle, as Keep writes it for a v8 card.
+    func link(_ memory: Memory, _ person: Person, said: String, handle: String?, origin: LinkOrigin = .assumed) throws {
+        try db.writer.write { db in
+            try MomentEntity(memoryID: memory.id, entityID: person.entityID, relation: .mention, roleText: said, origin: origin,
+                             personHandle: handle).insert(db)
+        }
+    }
+}
+
+@Test func theGroupOfALinkWithAHandleIsThatHandleInOneRecording() throws {
+    let env = try Env()
+    let robin = try env.store.people.insertPerson(displayName: "Robin Okafor")
+    let (_, segs) = try env.session()
+    let (_, elsewhere) = try env.session()
+    let first = try env.memory(in: segs[0].id), spelledOtherwise = try env.memory(in: segs[0].id)
+    let otherHandle = try env.memory(in: segs[0].id), noHandle = try env.memory(in: segs[0].id), noHandleToo = try env.memory(in: segs[0].id)
+    let otherRecording = try env.memory(in: elsewhere[0].id)
+    try env.link(first, robin, said: "Robyn", handle: "p1")
+    try env.link(spelledOtherwise, robin, said: "Robin", handle: "p1")
+    try env.link(otherHandle, robin, said: "Robyn", handle: "p2")
+    try env.link(noHandle, robin, said: "Robyn", handle: nil)
+    try env.link(noHandleToo, robin, said: "robyn ", handle: nil)
+    try env.link(otherRecording, robin, said: "Robyn", handle: "p1")
+
+    let link = try #require(try env.store.personLinks.links(of: first.id).first)
+    #expect(link.handle == "p1", "the link reads its handle")
+    #expect(Set(try env.store.personLinks.group(of: link).map(\.memoryID)) == [first.id, spelledOtherwise.id],
+            "one handle, whatever its words; another handle of the same words is another person; p1 means nothing in another recording")
+    let bare = try #require(try env.store.personLinks.links(of: noHandle.id).first)
+    #expect(bare.handle == nil)
+    #expect(Set(try env.store.personLinks.group(of: bare).map(\.memoryID)) == [noHandle.id, noHandleToo.id],
+            "a link with no handle groups by its said name, among the links with no handle")
+}

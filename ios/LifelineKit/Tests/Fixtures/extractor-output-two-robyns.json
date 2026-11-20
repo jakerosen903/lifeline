@@ -1,0 +1,99 @@
+{
+  "people": [
+    {
+      "handle": "p1",
+      "said_name": "Robyn",
+      "relation_text": "from work",
+      "person_id": ""
+    },
+    {
+      "handle": "p2",
+      "said_name": "Robyn",
+      "relation_text": "my cousin",
+      "person_id": ""
+    }
+  ],
+  "memories": [
+    {
+      "ref": "m1",
+      "kind": "event",
+      "title": "Robyn brought the cake",
+      "quote": "Robyn from work brought the cake",
+      "segment_span": {
+        "start_word": 0,
+        "end_word": 5
+      },
+      "people_refs": [],
+      "person_handles": [
+        "p1"
+      ],
+      "place_text": null,
+      "anchors": [],
+      "same_as_memory_ids": [],
+      "continues_candidate_id": null,
+      "story_ref": null,
+      "story_title_hint": null,
+      "collection_hint": null,
+      "chapter_hint": null,
+      "confidence": 0.9,
+      "entity_refs": [],
+      "about_ref": "",
+      "domain_hint": ""
+    },
+    {
+      "ref": "m2",
+      "kind": "event",
+      "title": "My cousin Robyn sang",
+      "quote": "the other Robyn, my cousin, sang all night",
+      "segment_span": {
+        "start_word": 7,
+        "end_word": 14
+      },
+      "people_refs": [],
+      "person_handles": [
+        "p2"
+      ],
+      "place_text": null,
+      "anchors": [],
+      "same_as_memory_ids": [],
+      "continues_candidate_id": null,
+      "story_ref": null,
+      "story_title_hint": null,
+      "collection_hint": null,
+      "chapter_hint": null,
+      "confidence": 0.8,
+      "entity_refs": [],
+      "about_ref": "",
+      "domain_hint": ""
+    }
+  ],
+  "mentions": [
+    {
+      "text": "Robyn",
+      "kind": "person",
+      "confidence": 0.9,
+      "relation_text": "from work",
+      "ref": "",
+      "likely_entity_id": null,
+      "title": "",
+      "domain_hint": "",
+      "handle": "p1"
+    },
+    {
+      "text": "Robyn",
+      "kind": "person",
+      "confidence": 0.9,
+      "relation_text": "my cousin",
+      "ref": "",
+      "likely_entity_id": null,
+      "title": "",
+      "domain_hint": "",
+      "handle": "p2"
+    }
+  ],
+  "flags": {
+    "disclosure": "none",
+    "wants_to_stop": false,
+    "wants_to_change_subject": false
+  }
+}

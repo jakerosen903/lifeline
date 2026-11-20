@@ -152,7 +152,8 @@ final class WhoIsThisViewModel {
                     return .moved(receipt)
                 }
             case .waiting(let candidate, let chip):
-                try actions.choose(selected, for: chip.saidName, on: candidate.id)
+                // The chip's handle keys the answer, so it reaches this person only (PC-d decision 8).
+                try actions.choose(selected, for: chip.saidName, handle: chip.handle, on: candidate.id)
                 return .stored
             }
         } catch let refused as PersonLinkActions.Error {

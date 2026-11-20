@@ -8,14 +8,17 @@ public struct PersonLink: Sendable, Equatable, Identifiable {
     public var saidName: String?
     public var origin: LinkOrigin?
     public var relation: EntityRelation
+    /// The extractor's handle for the person in the link's recording (PC-d). Nil for a link older than v8, a link the
+    /// owner made by hand, and a Same story into another recording's memory (D11).
+    public var handle: String?
 
     /// The link's memory was told in the same recording as the person's first link (PB11).
     public var inPersonsFirstRecording: Bool
 
     public init(memoryID: MemoryID, person: Person, saidName: String?, origin: LinkOrigin?, relation: EntityRelation,
-                inPersonsFirstRecording: Bool = true) {
+                inPersonsFirstRecording: Bool = true, handle: String? = nil) {
         self.memoryID = memoryID; self.person = person; self.saidName = saidName
-        self.origin = origin; self.relation = relation; self.inPersonsFirstRecording = inPersonsFirstRecording
+        self.origin = origin; self.relation = relation; self.inPersonsFirstRecording = inPersonsFirstRecording; self.handle = handle
     }
 
     public var id: String { "\(memoryID.rawValue)|\(person.id.rawValue)|\(relation.rawValue)" }

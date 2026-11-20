@@ -1,0 +1,25 @@
+{
+  "started_at": "2026-05-23T14:00:00Z",
+  "expected_people": [["Hollis"]],
+  "segments": [
+    { "start_ms": 0, "end_ms": 6715, "words": [
+      { "text": "my", "start_ms": 0, "end_ms": 270 }, { "text": "neighbor", "start_ms": 310, "end_ms": 850 }, { "text": "Hollis", "start_ms": 890, "end_ms": 1340 }, { "text": "lent", "start_ms": 1380, "end_ms": 1740 },
+      { "text": "me", "start_ms": 1780, "end_ms": 2050 }, { "text": "his", "start_ms": 2090, "end_ms": 2405 }, { "text": "ladder", "start_ms": 2445, "end_ms": 2895 }, { "text": "the", "start_ms": 2935, "end_ms": 3250 },
+      { "text": "spring", "start_ms": 3290, "end_ms": 3740 }, { "text": "we", "start_ms": 3780, "end_ms": 4050 }, { "text": "fixed", "start_ms": 4090, "end_ms": 4495 }, { "text": "the", "start_ms": 4535, "end_ms": 4850 },
+      { "text": "roof", "start_ms": 4890, "end_ms": 5250 }, { "text": "on", "start_ms": 5290, "end_ms": 5560 }, { "text": "the", "start_ms": 5600, "end_ms": 5915 }, { "text": "old", "start_ms": 5955, "end_ms": 6270 },
+      { "text": "house", "start_ms": 6310, "end_ms": 6715 }
+    ]},
+    { "start_ms": 8915, "end_ms": 15680, "words": [
+      { "text": "years", "start_ms": 8915, "end_ms": 9320 }, { "text": "later", "start_ms": 9360, "end_ms": 9765 }, { "text": "Hollis", "start_ms": 9805, "end_ms": 10255 }, { "text": "became", "start_ms": 10295, "end_ms": 10745 },
+      { "text": "my", "start_ms": 10785, "end_ms": 11055 }, { "text": "business", "start_ms": 11095, "end_ms": 11635 }, { "text": "partner", "start_ms": 11675, "end_ms": 12170 }, { "text": "and", "start_ms": 12210, "end_ms": 12525 },
+      { "text": "we", "start_ms": 12565, "end_ms": 12835 }, { "text": "opened", "start_ms": 12875, "end_ms": 13325 }, { "text": "a", "start_ms": 13365, "end_ms": 13590 }, { "text": "hardware", "start_ms": 13630, "end_ms": 14170 },
+      { "text": "shop", "start_ms": 14210, "end_ms": 14570 }, { "text": "on", "start_ms": 14610, "end_ms": 14880 }, { "text": "Mill", "start_ms": 14920, "end_ms": 15280 }, { "text": "Road", "start_ms": 15320, "end_ms": 15680 }
+    ]},
+    { "start_ms": 17880, "end_ms": 23530, "words": [
+      { "text": "Hollis", "start_ms": 17880, "end_ms": 18330 }, { "text": "my", "start_ms": 18370, "end_ms": 18640 }, { "text": "partner", "start_ms": 18680, "end_ms": 19175 }, { "text": "kept", "start_ms": 19215, "end_ms": 19575 },
+      { "text": "the", "start_ms": 19615, "end_ms": 19930 }, { "text": "books", "start_ms": 19970, "end_ms": 20375 }, { "text": "and", "start_ms": 20415, "end_ms": 20730 }, { "text": "I", "start_ms": 20770, "end_ms": 20995 },
+      { "text": "ran", "start_ms": 21035, "end_ms": 21350 }, { "text": "the", "start_ms": 21390, "end_ms": 21705 }, { "text": "counter", "start_ms": 21745, "end_ms": 22240 }, { "text": "for", "start_ms": 22280, "end_ms": 22595 },
+      { "text": "eleven", "start_ms": 22635, "end_ms": 23085 }, { "text": "years", "start_ms": 23125, "end_ms": 23530 }
+    ]}
+  ]
+}

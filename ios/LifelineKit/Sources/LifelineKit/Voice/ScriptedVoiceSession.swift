@@ -154,6 +154,12 @@ public actor ScriptedVoiceSession: VoiceSession {
                           words: words("my cousin Dara and I mended the garden gate for our parents", from: 0, to: 5_000)),
     ]
 
+    /// Two people with one name in one line (PC-d), for `ScriptedExtractionService.twoRobynsOutput`.
+    public static let twoRobynsScript: [SegmentTranscript] = [
+        SegmentTranscript(range: MsRange(start: 0, end: 4_000), text: "Robyn from work and my cousin Robyn swam at the lake",
+                          words: words("Robyn from work and my cousin Robyn swam at the lake", from: 0, to: 4_000)),
+    ]
+
     private static func words(_ text: String, from start: Int, to end: Int) -> [TranscribedWord] {
         let tokens = text.split(separator: " ").map(String.init)
         let step = (end - start) / tokens.count

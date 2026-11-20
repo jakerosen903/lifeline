@@ -64,17 +64,22 @@ public struct PreviewChip: Sendable, Equatable, Identifiable {
     /// The contact Keep will make the person from, when Keep makes a person (`person` nil). The sheet opens on it,
     /// so "Done" with nothing changed keeps that contact (I-1). Nil for a person on file or a person with no contact.
     public var contactIdentifier: String?
-    public var id: String { SaidName.key(saidName) }
+    /// The extractor's handle for this person (PC-d); nil for a card from before v8. The sheet's answer is stored
+    /// under it, so two chips of one said name are two answers.
+    public var handle: String?
+    /// The key the sheet's answer for this chip is stored under (`ChoiceKey`).
+    public var id: String { ChoiceKey.text(saidName: saidName, handle: handle) }
 
     public init(saidName: String, name: String, origin: LinkOrigin, person: PersonID?, fromContact: Bool = false,
-                contactIdentifier: String? = nil) {
+                contactIdentifier: String? = nil, handle: String? = nil) {
         self.saidName = saidName; self.name = name; self.origin = origin; self.person = person
-        self.isNotAPerson = false; self.fromContact = fromContact; self.contactIdentifier = contactIdentifier
+        self.isNotAPerson = false; self.fromContact = fromContact; self.contactIdentifier = contactIdentifier; self.handle = handle
     }
 
     /// The chip shows the said name with no line and no mark: the owner's own answer (`confirmed`).
-    public static func notAPerson(saidName: String) -> PreviewChip {
-        var chip = PreviewChip(saidName: saidName, name: saidName.trimmingCharacters(in: .whitespacesAndNewlines), origin: .confirmed, person: nil)
+    public static func notAPerson(saidName: String, handle: String? = nil) -> PreviewChip {
+        var chip = PreviewChip(saidName: saidName, name: saidName.trimmingCharacters(in: .whitespacesAndNewlines), origin: .confirmed, person: nil,
+                               handle: handle)
         chip.isNotAPerson = true
         return chip
     }
@@ -109,8 +114,9 @@ public struct PersonLinkActions: Sendable {
     }
 
     /// The sheet used on a card that waits: stored, applied on Keep. A contact a person holds is stored as that person.
-    public func choose(_ target: Target, for saidName: String, on candidate: CandidateID) throws {
-        try store.personLinks.storeChoice(target, for: saidName, on: candidate)
+    /// `handle`: the chip's handle (`PreviewChip.handle`), so the answer reaches that handle only.
+    public func choose(_ target: Target, for saidName: String, handle: String? = nil, on candidate: CandidateID) throws {
+        try store.personLinks.storeChoice(target, for: saidName, handle: handle, on: candidate)
     }
 
     /// What Keep would do for each said name of a waiting memory card. Writes nothing.
@@ -120,11 +126,8 @@ public struct PersonLinkActions: Sendable {
         guard let out = CandidatePayload.memory(candidate) else { return [] }
         var keep = CandidateActions(store: store)
         keep.contactsForGuess = contactsForGuess
-        let unwritten = MemoryID()
-        var edges = try keep.edges(of: out, for: unwritten, segment: candidate.segmentID, card: candidate.id)
-        for row in try store.candidates.continuations(of: candidate.id) {
-            if let o = CandidatePayload.memory(row) { edges.merge(try keep.edges(of: o, for: unwritten, segment: row.segmentID, card: candidate.id)) }
-        }
+        let continuations = try store.candidates.continuations(of: candidate.id)
+        let edges = try keep.tellingEdges(of: out, card: candidate, continuations: continuations, for: MemoryID())
         let planned = Dictionary(edges.entityWrite.persons.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
         let recording = try store.sessions.fetchSegment(candidate.segmentID)?.sessionID
         let linked: [PreviewChip] = try edges.people.compactMap { link in
@@ -133,33 +136,38 @@ public struct PersonLinkActions: Sendable {
             let said = link.roleText ?? ""
             if let new = planned[link.personID] {
                 return PreviewChip(saidName: said, name: new.displayName, origin: origin, person: nil, fromContact: new.isGuessFromContact,
-                                   contactIdentifier: new.contactIdentifier)
+                                   contactIdentifier: new.contactIdentifier, handle: link.handle)
             }
             guard let person = try store.people.person(id: link.personID) else { return nil }
             // As `PersonLink.personFromContact`: only in the recording of the person's first link (PB11).
             let first = try store.personLinks.firstSession(of: person.id)
             let fromContact = person.isGuessFromContact && (first == nil || first == recording)
-            return PreviewChip(saidName: said, name: person.displayName, origin: origin, person: person.id, fromContact: fromContact)
+            return PreviewChip(saidName: said, name: person.displayName, origin: origin, person: person.id, fromContact: fromContact,
+                               handle: link.handle)
         }
-        let refs = out.peopleRefs + (try store.candidates.continuations(of: candidate.id).compactMap(CandidatePayload.memory).flatMap(\.peopleRefs))
-        return Self.withNotAPerson(linked, refs: refs, choices: try store.personLinks.choices(for: candidate.id))
+        // The said names no handle covers by said name alone, then each handle (`CandidateActions.edges`).
+        let names = ([out] + continuations.compactMap(CandidatePayload.memory)).flatMap { o -> [(saidName: String, handle: String?)] in
+            CandidateActions.saidNamesNoHandleCovers(o).map { ($0, nil) } + o.handlePeople.map { ($0.saidName, $0.handle) }
+        }
+        return Self.withNotAPerson(linked, names: names, choices: try store.personLinks.choices(for: candidate.id))
     }
 
     /// Keep's chips, with a quiet chip for each said name the owner marked "Not a person", in the order
     /// the names were said. A sheet opens only from a chip, so a stored "Not a person" always had one.
-    static func withNotAPerson(_ linked: [PreviewChip], refs: [String], choices: [PersonChoice]) -> [PreviewChip] {
+    /// Names and answers meet by `ChoiceKey`: with a handle, a mark reaches that handle only.
+    static func withNotAPerson(_ linked: [PreviewChip], names: [(saidName: String, handle: String?)], choices: [PersonChoice]) -> [PreviewChip] {
         let marked = Set(choices.filter(\.notAPerson).map(\.saidKey))
         guard !marked.isEmpty else { return linked }
         var out: [PreviewChip] = [], seen = Set<String>(), rest = linked
-        for ref in refs {
-            let key = SaidName.key(ref)
-            guard !key.isEmpty, seen.insert(key).inserted else { continue }
+        for name in names {
+            let key = ChoiceKey.text(saidName: name.saidName, handle: name.handle)
+            guard !SaidName.key(name.saidName).isEmpty, seen.insert(key).inserted else { continue }
             if let index = rest.firstIndex(where: { $0.id == key }) {
                 out.append(rest.remove(at: index))
             } else if marked.contains(key) {
-                out.append(.notAPerson(saidName: ref))
+                out.append(.notAPerson(saidName: name.saidName, handle: name.handle))
             }
         }
-        return out + rest   // a chip whose said name is not among the refs keeps Keep's order at the end
+        return out + rest   // a chip whose said name is not among the names keeps Keep's order at the end
     }
 }

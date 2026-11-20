@@ -463,12 +463,15 @@ public struct MemoryRepository: Sendable {
     /// Collections and the chapter move only when the target has none; the range moves when
     /// the target has none. A stand-in target becomes real: its borrowed span goes and the
     /// source's first telling, title, quote and candidate become the target's. One transaction;
-    /// the source row is deleted at the end.
+    /// the source row is deleted at the end. A handle means one person inside one recording (PC-d), so the links that
+    /// move from another recording leave their handles behind; undo restores them from the snapshot.
     public func fold(_ source: Memory, into target: Memory) throws {
         try db.writer.write { db in try Self.fold(source, into: target, in: db) }
     }
 
     static func fold(_ source: Memory, into target: Memory, in db: Database) throws {
+            // Read before the spans move. A stand-in target takes the source's first telling, so its recording becomes the source's.
+            let otherRecording = try !target.isFloating && isAnotherRecording(source.id, than: target.id, in: db)
             var next = (try Int.fetchOne(db, sql: "select max(\"order\") from memory_span where memory_id = ?", arguments: [target.id.rawValue]) ?? -1) + 1
             if target.isFloating {
                 try db.execute(sql: "delete from memory_span where memory_id = ?", arguments: [target.id.rawValue])
@@ -492,6 +495,7 @@ public struct MemoryRepository: Sendable {
             // A link both memories hold keeps the target's row and the stronger origin (R6).
             for var link in try MomentEntity.filter(Column("memory_id") == source.id.rawValue).fetchAll(db) {
                 link.memoryID = target.id
+                if otherRecording { link.personHandle = nil }
                 try link.insertKeepingStrongerOrigin(db)
             }
             try db.execute(sql: "update anchor set memory_id = ? where memory_id = ?", arguments: [target.id.rawValue, source.id.rawValue])
@@ -505,6 +509,13 @@ public struct MemoryRepository: Sendable {
             try Self.movePhotoLinks(from: source.id, to: target.id, in: db)
             _ = try Memory.deleteOne(db, key: source.id.rawValue)
             try db.execute(sql: Self.deleteEmptyStoriesSQL)
+    }
+
+    /// Whether two memories were first told in two recordings (the session of each order-0 span). A memory with no
+    /// first span to read counts as the same recording: there is no other recording its handles could be read as.
+    private static func isAnotherRecording(_ a: MemoryID, than b: MemoryID, in db: Database) throws -> Bool {
+        guard let first = try PersonLinkRepository.session(of: a, in: db), let second = try PersonLinkRepository.session(of: b, in: db) else { return false }
+        return first != second
     }
 
     /// The source's photos the target does not hold move to the target, after its own. The target keeps
