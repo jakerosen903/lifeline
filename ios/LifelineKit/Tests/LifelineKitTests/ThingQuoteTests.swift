@@ -29,11 +29,11 @@ private func told(in session: String) -> Telling {
 }
 @Test func noDetailGivesNoQuote() {
     #expect(ThingQuote.choose(details: [], tellings: [:], heavySessions: []) == nil)
-    #expect(ThingQuote.choose(details: [detail("a", "um, uh", at: 1)], tellings: [MemoryID(rawValue: "a"): told(in: "calm"), MemoryID(rawValue: "b"): told(in: "calm")], heavySessions: []) == nil)
+    #expect(ThingQuote.choose(details: [detail("a", "um, uh", at: 1)], tellings: [MemoryID(rawValue: "a"): told(in: "calm")], heavySessions: []) == nil)
 }
 @Test func aLongQuoteIsCutAtTwentyWords() {
     let long = (1...30).map { "w\($0)" }.joined(separator: " ")
-    #expect(ThingQuote.choose(details: [detail("a", long, at: 1)], tellings: [MemoryID(rawValue: "a"): told(in: "calm"), MemoryID(rawValue: "b"): told(in: "calm")], heavySessions: [])
+    #expect(ThingQuote.choose(details: [detail("a", long, at: 1)], tellings: [MemoryID(rawValue: "a"): told(in: "calm")], heavySessions: [])
             == "W1 " + (2...20).map { "w\($0)" }.joined(separator: " ") + "…")
 }
 @Test func countLineSaysMomentsAndNothingForNone() {

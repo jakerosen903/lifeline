@@ -465,7 +465,8 @@ public struct EntityRepository: Sendable {
 
     /// Told, visible memories linked to each entity of a type by `detail`, oldest told first
     /// (`created_at`, then id). One statement. An entity with none is absent. Hidden entities are
-    /// not filtered: pair it with `entities(type:)`.
+    /// not filtered: pair it with `entities(type:)`. A detail link to a non-person carries no origin,
+    /// so this read needs no guess filter.
     public func details(type: EntityType) throws -> [EntityID: [Memory]] {
         try db.writer.read { db in
             let rows = try Row.fetchAll(db, sql: """

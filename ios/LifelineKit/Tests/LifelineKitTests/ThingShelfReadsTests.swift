@@ -155,3 +155,28 @@ private struct Fixture {
     #expect(statementsFor2 > 0)
     #expect(statementsFor20 == statementsFor2)
 }
+
+@Test func theShelfSourceCarriesAHeavySession() throws {
+    var f = try Fixture()
+    let bike = try f.thing("The red bike")
+    let heavy = Session(id: .init(), startedAt: at(500), endedAt: nil, audioPath: "heavy.m4a",
+                        stageLog: #"[{"stage":"windDown","at":"2026-03-01T00:00:00Z","reason":"wantsToStop"}]"#, landingChoiceMade: true)
+    try f.store.sessions.insert(heavy)
+    let heavySegment = Segment(id: .init(), sessionID: heavy.id, index: 0, startMs: 0, endMs: 900, text: "words", status: .extracted)
+    try f.store.sessions.insert(heavySegment, words: [])
+    let heavyDetail = try StoreFixtures.memory(in: f.store.memories, candidates: f.store.candidates, segment: heavySegment.id, title: "Heavy", createdAt: at(1))
+    try f.store.memories.setKind(heavyDetail.id, .fact)
+    try f.store.entities.link(heavyDetail.id, bike.id, relation: .detail, roleText: nil)
+
+    var source = try f.store.thingShelfSource()
+    #expect(source.heavySessions == [heavy.id])
+    #expect(source.tellings[heavyDetail.id]?.sessionID == heavy.id)
+    func quote() -> String? {
+        ThingQuote.choose(details: source.details[bike.id] ?? [], tellings: source.tellings, heavySessions: source.heavySessions)
+    }
+    #expect(quote() == nil, "the only detail was told in a heavy session")
+
+    _ = try f.memory("Calm", told: 2, link: bike)
+    source = try f.store.thingShelfSource()
+    #expect(quote() == "The garden had a pomegranate tree")
+}

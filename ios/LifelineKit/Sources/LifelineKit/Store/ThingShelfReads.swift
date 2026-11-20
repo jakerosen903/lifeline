@@ -7,6 +7,7 @@ public struct ThingShelfSource: Sendable {
     public var things: [EntitySummary]
     /// The key photo of each visible thing.
     public var keyPhotos: [EntityID: Photo]
+    /// May hold keys of hidden things: look it up by the ids of `things` only.
     public var details: [EntityID: [Memory]]
     /// The first telling of every told, visible memory, for the heavy-session rule.
     public var tellings: [MemoryID: Telling]
