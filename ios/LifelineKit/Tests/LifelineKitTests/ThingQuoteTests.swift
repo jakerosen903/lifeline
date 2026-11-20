@@ -12,24 +12,28 @@ private func told(in session: String) -> Telling {
 
 @Test func theQuoteIsTheOldestToldDetailCleaned() {
     let quote = ThingQuote.choose(details: [detail("b", "the seats were green", at: 2), detail("a", "um, it smelled like oranges and wet dog", at: 1)],
-                                  tellings: [:], heavySessions: [])
+                                  tellings: [MemoryID(rawValue: "a"): told(in: "calm"), MemoryID(rawValue: "b"): told(in: "calm")], heavySessions: [])
     #expect(quote == "It smelled like oranges and wet dog")
 }
 @Test func aDetailOfOnlyFillerIsSkipped() {
-    #expect(ThingQuote.choose(details: [detail("a", "um, uh", at: 1), detail("b", "the seats were green", at: 2)], tellings: [:], heavySessions: []) == "The seats were green")
+    #expect(ThingQuote.choose(details: [detail("a", "um, uh", at: 1), detail("b", "the seats were green", at: 2)], tellings: [MemoryID(rawValue: "a"): told(in: "calm"), MemoryID(rawValue: "b"): told(in: "calm")], heavySessions: []) == "The seats were green")
 }
 @Test func aDetailFromAHeavySessionIsNotChosen() {
     let details = [detail("a", "he clanked all night", at: 1), detail("b", "the seats were green", at: 2)]
-    #expect(ThingQuote.choose(details: details, tellings: [MemoryID(rawValue: "a"): told(in: "heavy")], heavySessions: [SessionID(rawValue: "heavy")]) == "The seats were green")
-    #expect(ThingQuote.choose(details: details, tellings: [MemoryID(rawValue: "a"): told(in: "calm")], heavySessions: [SessionID(rawValue: "heavy")]) == "He clanked all night")
+    #expect(ThingQuote.choose(details: details, tellings: [MemoryID(rawValue: "a"): told(in: "heavy"), MemoryID(rawValue: "b"): told(in: "calm")], heavySessions: [SessionID(rawValue: "heavy")]) == "The seats were green")
+    #expect(ThingQuote.choose(details: details, tellings: [MemoryID(rawValue: "a"): told(in: "calm"), MemoryID(rawValue: "b"): told(in: "calm")], heavySessions: [SessionID(rawValue: "heavy")]) == "He clanked all night")
+}
+@Test func aDetailWithNoFirstTellingIsNotChosen() {
+    // No telling means the session is unknown, so it cannot be known to be calm.
+    #expect(ThingQuote.choose(details: [detail("a", "the seats were green", at: 1)], tellings: [:], heavySessions: []) == nil)
 }
 @Test func noDetailGivesNoQuote() {
     #expect(ThingQuote.choose(details: [], tellings: [:], heavySessions: []) == nil)
-    #expect(ThingQuote.choose(details: [detail("a", "um, uh", at: 1)], tellings: [:], heavySessions: []) == nil)
+    #expect(ThingQuote.choose(details: [detail("a", "um, uh", at: 1)], tellings: [MemoryID(rawValue: "a"): told(in: "calm"), MemoryID(rawValue: "b"): told(in: "calm")], heavySessions: []) == nil)
 }
 @Test func aLongQuoteIsCutAtTwentyWords() {
     let long = (1...30).map { "w\($0)" }.joined(separator: " ")
-    #expect(ThingQuote.choose(details: [detail("a", long, at: 1)], tellings: [:], heavySessions: [])
+    #expect(ThingQuote.choose(details: [detail("a", long, at: 1)], tellings: [MemoryID(rawValue: "a"): told(in: "calm"), MemoryID(rawValue: "b"): told(in: "calm")], heavySessions: [])
             == "W1 " + (2...20).map { "w\($0)" }.joined(separator: " ") + "…")
 }
 @Test func countLineSaysMomentsAndNothingForNone() {
