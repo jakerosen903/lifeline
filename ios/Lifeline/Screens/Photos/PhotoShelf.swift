@@ -33,9 +33,17 @@ final class PhotoShelf {
     }
 
     var cover: Photo? { photos.first(where: \.isCover)?.photo }
+    /// Counts the reads that found another cover than the read before. The page watches it and goes back to the top,
+    /// where the new cover is. The first read is not counted: it sets the cover the page opens with. A scroll in the
+    /// page's first layout put a tall List at its bottom (the largest text size on an iPhone 17 Pro Max).
+    private(set) var coverChanges = 0
+    @ObservationIgnored private var hasRead = false
 
     func load() {
+        let before = cover?.id
         do { photos = try deps.extractionStore.photos.photos(of: subject) } catch { onError("Could not show the photos: \(error.localizedDescription)") }
+        if hasRead, cover?.id != before { coverChanges += 1 }
+        hasRead = true
     }
 
     /// The flow calls these around a pick of `count` photos: `beginAdding(count:)`, then `finishedOne()` after each
