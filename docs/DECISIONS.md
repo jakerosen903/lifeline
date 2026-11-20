@@ -10,7 +10,7 @@ One entry per decision. Newest first. Status is Decided, Open, or Superseded.
 
 The builder's defaults, as they stand after rulings R4 and R5:
 
-1. A thing shows once, in one period. Cost: a thing that runs through several periods shows only in the first.
+1. A thing shows once, in one period. Cost: a thing that runs through several periods shows in one only: the period of its stated span, or else of its earliest moment.
 2. A dated stated span ("Add dates") places the thing before any moment. Dated moments place only a thing with no dated span (R5). Cost: a stated span and a settled moment outside it put the thing in the span's period.
 3. "A memory about the thing" is a `detail` link, not a `mention`. Cost: few tiles show a quote until the extractor writes more detail links.
 4. The quote is the oldest told detail that has words after the filler cleanup, cut at 20 words. Cost: a later, better line does not show, and the person cannot choose it.
@@ -36,12 +36,12 @@ The builder's defaults, as they stand after rulings R4 and R5:
 
 **Differs from the mock-up.** The Things phone in `docs/design/Sections.html` predates S6c. The shelf does not build its named periods ("From childhood", "From the Boston years"), the year range beside each heading, the count line ("11 things you've talked about") or the "By when" control. A chapter never replaces a period (S6c), and nothing the person said gives a year range for most things.
 
-**Why.** A list of titles made every thing look the same. A key photo or one line in the person's own words makes a thing recognisable at a glance (PRINCIPLES 1). The periods are the Timeline's own, so a thing never sits in a different stretch of life on the two tabs, and a guess that decides the group says so in words (PRINCIPLES 5).
+**Why.** A list of titles made every thing look the same. A key photo or one line in the person's own words makes a thing recognisable at a glance (PRINCIPLES 1). The periods and their headings are the Timeline's own. A guess that decides the group says so in words (PRINCIPLES 5).
 
 **Consequences.**
 
 - No migration and no new table or column. The shelf only reads, in a fixed number of statements however many things there are. Backup and restore do not change.
-- One new read, `EntityRepository.details(type:)`. It reads only told, visible details.
+- One new read, `EntityRepository.details(type:)`. It reads only told, visible details. `ExtractionStore.thingShelfSource()` is new too: it batches the shelf's reads.
 - `SpineLayout.placingDate(of:)` is public, and the Timeline and the shelf use it. `LifePeriod` gains `headingText` and `headingSuffix`. `TimeRange` gains `isConfirmedRelation`, moved from `SpineLayout`. The Timeline's behaviour does not change.
 - This supersedes, for Things tiles, the S4 line "No Timeline row, Things tile, search result or map uses a photo yet". A Things tile shows the key photo.
 - New accessibility identifiers: `things.grid`, `things.period`, `things.unplaced`, `things.empty`, `things.error`.

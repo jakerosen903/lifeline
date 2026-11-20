@@ -60,14 +60,14 @@ A thing has a photo on the shelf when it has a key photo.
 3. A thing shows once on the shelf. It does not repeat in a later period.
 4. Every other thing goes into "Not placed in time yet". A half-open stated span places nothing, so the thing's dated moments place it, as in rule 2.
 
-Changed 2026-11-20 by ruling R5.
+Rules 1 to 4 were changed on 2026-11-20 by ruling R5.
 5. The heading of a period is the Timeline's waypoint text: "Teens · by your age" for a period by age, "The 1990s" for a decade. It is a header for VoiceOver.
 6. The heading of the last group is "Not placed in time yet". It is a header for VoiceOver.
 7. A period with no tile does not show.
 
 ### A guess that decides the group
 
-1. A tile is placed by a guess when no dated moment in its period is settled by the person's word. Settled is `TimeRange.isSettled`: stated, confirmed, or from a photo. An inferred or derived date is the app's guess.
+1. A tile placed by its moments is placed by a guess when no dated moment in its period is settled by the person's word. Settled is `TimeRange.isSettled`: stated, confirmed, or from a photo. An inferred or derived date is the app's guess.
 2. A confirmed relation ("before Graduation (2004)", `TimeRange.isConfirmedRelation`) does not clear the line. The person confirmed the relation, but its year comes from the builder's slack, so the period is the app's arithmetic. The Timeline uses the same test to show such a date as words. Changed 2026-11-20 by ruling R4.
 3. The person's own hedge ("around 1998", origin `stated`) is not the app's guess. It does not give the line.
 4. A tile placed by a guess shows one line in the ochre text colour: "Placed by a guess" **(invented copy)**.
@@ -121,13 +121,13 @@ Changed 2026-11-20 by ruling R5.
 
 ## Edge cases
 
-- **A thing with moments in two periods.** It shows once, in the earlier period.
+- **A thing with moments in two periods.** It shows once. With a dated stated span, it shows in the span's period. With no dated span, it shows in the earlier period.
 - **A thing with only undated moments.** It is under "Not placed in time yet", with its count.
 - **A thing with only facts.** It has no moment, so no count. It is under "Not placed in time yet", or under its stated span's period. A fact linked as a detail can give its quote.
 - **A hidden thing.** It is not on the shelf. Its key photo is not read. This is as today.
 - **A hidden memory as the only source of a quote.** No quote shows. The read leaves hidden and untold memories out.
 - **A hidden memory as the only source of a date.** It is not a moment of the thing. The thing has no dated moment and is not placed by it.
-- **A guessed date deciding the group.** The tile shows "Placed by a guess". A settled moment in the same period removes the line. A guess in an earlier period still decides the group, and the tile keeps the line.
+- **A guessed date deciding the group.** The tile shows "Placed by a guess". A settled moment in the same period removes the line. A date from a confirmed relation ("before Graduation") does not remove it (ruling R4). A guess in an earlier period still decides the group, and the tile keeps the line.
 - **A moment dated before the birth date.** Its period is its decade ("The 1980s"), as on the Timeline. That group comes first.
 - **A half-open range** (an earliest date only). It is not dated. It does not place the thing.
 - **A very long title.** At the default sizes it wraps to at most three lines and ends with "…". At the accessibility sizes it shows in full. VoiceOver always reads it in full.
