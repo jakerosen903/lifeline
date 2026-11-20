@@ -82,6 +82,8 @@ These supersede the matching Phase 1 screens. See `docs/DECISIONS.md`, entries d
 | --- | --- |
 | Sections.html | Timeline, People, Places, Things, an entity page with and without a photo, and You as a portrait. Plain HTML, not a canvas export. Spec: `docs/specs/2026-11-15-five-sections.md` |
 
+The Things phone in `Sections.html` predates S6c. The shelf as built is specified in `docs/specs/2026-11-20-things-shelf.md`.
+
 ## Photo card and key photo (2026-11-18)
 
 | File | Screen | What it shows |

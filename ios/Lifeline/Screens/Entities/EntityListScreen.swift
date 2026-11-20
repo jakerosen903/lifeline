@@ -1,7 +1,7 @@
 import LifelineKit
 import SwiftUI
 
-/// One kind of entity (People, Places or Things), the root of its tab. A free-text tag narrows it.
+/// One kind of entity as a list, the root of its tab (Places; People and Things have grids). A free-text tag narrows it.
 struct EntityListScreen: View {
     /// Created once per presentation: a parent re-render must not reset the filter.
     @State private var viewModel: EntitiesViewModel
@@ -61,9 +61,16 @@ struct EntityRows: View {
     }
 }
 
+/// A screen's model that a tag can narrow: the entity lists and the Things shelf.
+@MainActor
+protocol TagFiltering: AnyObject, Observable {
+    var allTags: [String] { get }
+    var tagFilter: String? { get set }
+}
+
 /// The toolbar menu that narrows a list to one tag. It shows only once a tag exists.
-struct EntityTagFilterMenu: ToolbarContent {
-    let viewModel: EntitiesViewModel
+struct EntityTagFilterMenu<Model: TagFiltering>: ToolbarContent {
+    let viewModel: Model
 
     var body: some ToolbarContent {
         ToolbarItem {
