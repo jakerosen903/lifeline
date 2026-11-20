@@ -89,6 +89,8 @@ final class PhotoStoryUITests: XCTestCase {
         app.openTab("Timeline")
         let beach = app.buttons.matching(identifier: "timeline.memory").matching(NSPredicate(format: "label CONTAINS %@", "The beach")).firstMatch
         XCTAssertTrue(app.reveal(beach, swipes: 10), "The beach is on the timeline")
+        // The swipe that brings the row in can leave it under the record bar, and the tap point with it.
+        XCTAssertTrue(app.bringClearOfTheCardAndBar(beach), "The beach is between the pinned card and the record bar")
         beach.coordinate(withNormalizedOffset: CGVector(dx: 0.15, dy: 0.35)).tap()
         let range = app.buttons["memory.range"]
         XCTAssertTrue(range.waitForExistence(timeout: 5))

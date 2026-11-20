@@ -25,6 +25,15 @@ final class ChaptersUITests: XCTestCase {
         return allTags(app).allElementsBoundByIndex.filter { $0.exists && $0.frame.minY >= frame.minY && $0.frame.minY <= frame.maxY + 24 }
     }
 
+    /// The labels of the row's tags once it has one, or none after `timeout`. The row can settle before the
+    /// tag it just got is drawn.
+    @MainActor
+    private func tagLabels(in title: String, _ app: XCUIApplication, timeout: TimeInterval = 5) -> [String] {
+        let deadline = Date().addingTimeInterval(timeout)
+        while tags(in: title, app).isEmpty && Date() < deadline { RunLoop.current.run(until: Date().addingTimeInterval(0.2)) }
+        return tags(in: title, app).map(\.label)
+    }
+
     /// The row's own "…" button: the nearest one to the top of the row.
     private func moreButton(of title: String, _ app: XCUIApplication) -> XCUIElement {
         let top = memoryRow(app, title).frame.minY
@@ -219,6 +228,7 @@ final class ChaptersUITests: XCTestCase {
         let app = XCUIApplication.launchWithSpine()
         let swim = memoryRow(app, "Learning to swim")
         XCTAssertTrue(app.reveal(swim), "Learning to swim is on the timeline")
+        XCTAssertTrue(app.bringClearOfTheCardAndBar(swim), "Learning to swim is between the pinned card and the record bar")
         moreButton(of: "Learning to swim", app).tap()
         let add = app.buttons["row.addChapter"]
         XCTAssertTrue(app.waitHittable(add, timeout: 5), "Add to a chapter… is in the row's menu")
@@ -234,7 +244,7 @@ final class ChaptersUITests: XCTestCase {
         app.buttons["chapter.add"].tap()
         XCTAssertTrue(waitUntilGone(field, timeout: 5), "the sheet closed")
         XCTAssertTrue(app.waitHittable(memoryRow(app, "Learning to swim"), timeout: 5))
-        XCTAssertEqual(tags(in: "Learning to swim", app).map(\.label), ["Swim team"], "the row has the tag")
+        XCTAssertEqual(tagLabels(in: "Learning to swim", app), ["Swim team"], "the row has the tag")
     }
 
     @MainActor
@@ -242,17 +252,22 @@ final class ChaptersUITests: XCTestCase {
         let app = XCUIApplication.launchWithSpine()
         let swim = memoryRow(app, "Learning to swim")
         XCTAssertTrue(app.reveal(swim), "Learning to swim is on the timeline")
+        XCTAssertTrue(app.bringClearOfTheCardAndBar(swim), "Learning to swim is between the pinned card and the record bar")
         moreButton(of: "Learning to swim", app).tap()
-        app.buttons["row.addChapter"].tap()
+        let add = app.buttons["row.addChapter"]
+        XCTAssertTrue(app.waitHittable(add, timeout: 5), "Add to a chapter… is in the row's menu")
+        add.tap()
         let pick = app.buttons.matching(identifier: "chapter.pick").matching(NSPredicate(format: "label CONTAINS 'Maple Street'")).firstMatch
         XCTAssertTrue(app.waitHittable(pick, timeout: 5), "Maple Street is on the list")
         pick.tap()
         XCTAssertTrue(waitUntilGone(pick, timeout: 5), "the sheet closed")
         XCTAssertTrue(app.waitHittable(memoryRow(app, "Learning to swim"), timeout: 5))
-        XCTAssertEqual(tags(in: "Learning to swim", app).map(\.label), ["Maple Street"], "the moment has the tag")
+        XCTAssertEqual(tagLabels(in: "Learning to swim", app), ["Maple Street"], "the moment has the tag")
         XCTAssertEqual(app.tagsOnTheWholeTimeline(), ["The tree house": "Maple Street", "Learning to swim": "Maple Street"], "two tags show")
 
         XCTAssertTrue(app.reveal(memoryRow(app, "Learning to swim")))
+        // The walk over the whole Timeline ends with this row under the pinned card.
+        XCTAssertTrue(app.bringClearOfTheCardAndBar(memoryRow(app, "Learning to swim")), "Learning to swim is between the pinned card and the record bar")
         moreButton(of: "Learning to swim", app).tap()
         let takeOut = app.buttons["row.takeOutOfChapter"]
         XCTAssertTrue(app.waitHittable(takeOut, timeout: 5), "Take out is in the menu of a moment with a tag")
