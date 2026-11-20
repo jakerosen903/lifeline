@@ -12,12 +12,17 @@ import Testing
         .filter { $0.pathExtension == "swift" && $0.lastPathComponent != "Migrations.swift" }
     #expect(files.count > 50, "the walk found the kit's sources")
     let forbidden = ["memory_person", "memory_place", "from place ", "join place ", "into place (", "update place set", "person.display_name"]
+    // Ruling C16: the person merge never reads `memory_person` for behaviour. It copies the leaving person's legacy rows
+    // whole, so Undo can restore every row (PC-c ruling C7). Only that one name is allowed, in that one file.
+    let allowed: [String: Set<String>] = ["Store/PersonMergeWrites.swift": ["memory_person"]]
     for file in files {
         let text = try String(contentsOf: file, encoding: .utf8)
-        for word in forbidden {
+        let path = file.pathComponents.suffix(2).joined(separator: "/")
+        for word in forbidden where !(allowed[path]?.contains(word) ?? false) {
             #expect(!text.contains(word), "\(file.lastPathComponent) still uses \(word)")
         }
     }
+    #expect(files.contains { $0.pathComponents.suffix(2).joined(separator: "/") == "Store/PersonMergeWrites.swift" }, "the allowed file exists")
 }
 
 @Test func renameMergeDeleteFollowTheEntity() throws {
