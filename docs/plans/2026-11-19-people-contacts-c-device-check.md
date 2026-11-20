@@ -41,6 +41,12 @@ The phone branch must have this branch merged in first, with the owner's word.
 - [ ] 21. Set the largest text size. The People grid is a list, and a long press does not drag. "Same as another person…" on a person's page still works. On the confirm, scroll to "Merge" and tap it.
 - [ ] 22. Turn on VoiceOver. Do items 1 to 6 with VoiceOver. On the confirm, VoiceOver reads each picture with that person's name, once each. VoiceOver reads the "Merged into {name}." line when it shows.
 
+## Added by the final review
+
+- [ ] 23. A refused Undo. Merge two people on a person's page. Inside the 6 seconds, open the person that stayed in another way and rename them, or wait for a change from the contacts. Then tap "Undo". The line reads "That changed since. The merge stays." Both people stay merged.
+- [ ] 24. Turn on VoiceOver. Merge two people and try to reach "Undo" inside the 6 seconds. Say whether it is possible without hurry. Do the same with Switch Control if you can.
+- [ ] 25. On the People grid, merge two people by drag. While "Undo" shows, drag another face onto a third. Nothing happens: no confirm and no message. "Undo" still shows. When the line has gone, a drag works again.
+
 ## Also look at
 
 - The held page (its person is gone and the line is up) cannot scroll. This is older behaviour (R34). Say whether "reads only" should still let you scroll.

@@ -34,9 +34,11 @@ Rulings:
 - **C12** (final review I2): a refused Undo of a merge shows "That changed since. The merge stays." (draft copy). The move's line tells the owner to open a name, and a merge has no way back. A move's line is unchanged. Any other failure shows "Could not undo that."
 - **C13** (final review M1): when the staying person's name came from a contact, a leaving alias or name equal to that name is not added as an alias. Typed by the owner or not, it is the contact's exact name, and aliases go to the model. Cost: the owner's typed spelling of that name is not kept as an alias. It is the person's display name anyway.
 - **C15** (final review M6): when the staying person has an open question of one kind, an open question of the same kind of the leaving person does not move. It goes with the leaving person, and Undo gives it back. Every other question moves. Why: one person must not be asked the same question twice. Cost if wrong: a merge drops one open question.
+- **C14** (final review M2): while the People grid's line offers Undo, a drop on the grid does nothing: no check, no sheet, no message. A refusal would replace the only way back from the merge just made. Cost: the owner waits up to 6 seconds before the next drag.
+- Final review M4 and M8: the merge row on a person's page is disabled while a contact link runs. The picker leaves out its title when it has no person that goes.
 - Tests: the longer person page (the new row) made five older UI tests miss their target. The tests now scroll to it. No assertion changed. The drag test runs on the simulator with a slow drag and a hold.
 
-**Why.** Two entries for one real person split the stories, names and photos. The merge joins them, asks first and gives Undo (principles 1 and 9). The flags stay on so that a merge never sends to the model a person the owner kept from it.
+**Why.** Two entries for one real person split the stories, names and photos. The merge joins them, asks first and gives Undo (principles 1 and 9). The flags stay on, so a merge never undoes the owner's choice: a hidden person stays hidden from the timeline, and a person kept from the AI stays marked so. The packet does not read the kept-from-AI flag today (see "Open for the owner").
 
 **Known limits.**
 
@@ -54,6 +56,9 @@ Rulings:
 - A tile dragged out of the app gives the plain text "lifeline-person:{id}" to the other app (C9). A private type is the other option.
 - A held page (its person is gone and the notice is up) cannot scroll, because the whole list is disabled. This is older behaviour (R34), not from this plan. Decision 2 says the page "reads only".
 - The device check (`docs/plans/2026-11-19-people-contacts-c-device-check.md`) has not run.
+- Found by the final review, older than this plan: the context packet's people list does not read the kept-from-AI flag. The name and aliases of a person kept from the AI still go to the model (`Extraction/ContextPacket.swift`, the people section; `ExtractionQueue.packet(for:)`).
+- Where both persons have notes, a birth date, a detail line or stated dates, the merge drops the leaving person's value, and the confirm does not say so. No screen writes these for a person today (spec point 4). When one does, the confirm must say it, or the merge must refuse.
+- Undo in 6 seconds is hard to reach with VoiceOver or Switch Control. A merge is the one act in the app with no later way back.
 
 ## 2026-11-19 · PC-d: the extractor tells people apart — decisions and rulings made while building
 
