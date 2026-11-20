@@ -50,6 +50,25 @@ extension XCUIApplication {
         return settled() && element.isHittable
     }
 
+    /// An alert focuses its text field and raises the keyboard by itself. A second tap on the field only opens
+    /// the edit menu, so tap it only when the keyboard did not come up.
+    func focusAlertField(_ field: XCUIElement) {
+        if !keyboards.firstMatch.waitForExistence(timeout: 2) { field.tap() }
+    }
+
+    /// While typing, the keyboard can hide and come back, and an alert moves with it. A tap aimed while it was
+    /// centred then lands outside it. Taps `button` once it holds still, then waits for `container` to go;
+    /// tries again (the query finds the button anew) while it is still there.
+    func tapUntilGone(_ button: XCUIElement, closing container: XCUIElement, tries: Int = 3, timeout: TimeInterval = 2) -> Bool {
+        let gone = NSPredicate(format: "exists == false")
+        for _ in 0..<tries {
+            guard container.exists else { return true }
+            if waitHittable(button, timeout: timeout) { button.tap() }
+            if XCTWaiter().wait(for: [XCTNSPredicateExpectation(predicate: gone, object: container)], timeout: timeout) == .completed { return true }
+        }
+        return !container.exists
+    }
+
     /// Lists are lazy: a row below the fold is not in the tree until it scrolls into view.
     func reveal(_ element: XCUIElement, swipes: Int = 6) -> Bool {
         for _ in 0..<swipes {
