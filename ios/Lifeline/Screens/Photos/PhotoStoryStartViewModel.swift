@@ -17,8 +17,6 @@ final class PhotoStoryStartViewModel: Identifiable {
     var isLoaded: Bool { start != nil }
     /// The grid's photos, newest first.
     private(set) var photos: [LibraryPhoto] = []
-    /// Each thumbnail is read and decoded once, then kept while the grid is up. One that could not be read is asked again.
-    private(set) var thumbnails: [String: UIImage] = [:]
     /// "Adding the photo…" shows while this is true.
     private(set) var isAdding = false
     private(set) var error: String?
@@ -27,7 +25,9 @@ final class PhotoStoryStartViewModel: Identifiable {
     @ObservationIgnored private let source: any PhotoPickSource
     @ObservationIgnored private let library: PhotoLibrary
     @ObservationIgnored private let onChosen: (PhotoStoryStartViewModel, Photo) -> Void
-    @ObservationIgnored private var thumbnailsAsked: Set<String> = []
+    /// The thumbnails that arrived, kept while the sheet is up, so a tile that scrolls back shows its image at once.
+    /// Not observed: each tile holds its own image, and one arrival must redraw one tile, not the grid.
+    @ObservationIgnored private var thumbnails: [String: UIImage] = [:]
     /// The sheet closed with no photo chosen: a copy still on its way is not stored.
     @ObservationIgnored private(set) var isCancelled = false
 
@@ -56,10 +56,17 @@ final class PhotoStoryStartViewModel: Identifiable {
         start = PhotoStoryStart.route(access: access, photoCount: photos.count)
     }
 
-    func thumbnail(for photo: LibraryPhoto, side: CGFloat) async {
-        guard thumbnailsAsked.insert(photo.id).inserted else { return }
-        // Nil is forgotten, so the tile asks again the next time it appears.
-        if let image = await source.thumbnail(for: photo, side: side) { thumbnails[photo.id] = image } else { thumbnailsAsked.remove(photo.id) }
+    /// A thumbnail that already arrived, or nil. No read and no wait, so a tile can show it while it is made.
+    func cachedThumbnail(for photo: LibraryPhoto) -> UIImage? { thumbnails[photo.id] }
+
+    /// The cached thumbnail, or one read now and cached. Nil (unreadable, or the tile left and its task was cancelled)
+    /// is not cached, so the tile asks again the next time it appears. Two tiles asking at once both read; the second
+    /// arrival only replaces an equal image, so there is no in-flight bookkeeping to leak on a cancel.
+    func thumbnail(for photo: LibraryPhoto, side: CGFloat) async -> UIImage? {
+        if let cached = thumbnails[photo.id] { return cached }
+        guard let image = await source.thumbnail(for: photo, side: side) else { return nil }
+        thumbnails[photo.id] = image
+        return image
     }
 
     /// The sheet closed before a photo was chosen ("Cancel" or a swipe), perhaps while one is being copied.

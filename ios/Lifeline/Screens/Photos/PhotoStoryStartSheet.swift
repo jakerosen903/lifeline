@@ -1,3 +1,4 @@
+import LifelineKit
 import SwiftUI
 
 /// The one sheet of "Tell a story about a photo": the explanation, the grid, or the picker, as
@@ -20,6 +21,8 @@ struct PhotoStoryStartSheet: View {
                     picker
                 }
         }
+        // While the out-of-process picker shows, a downward swipe scrolls it and must not pull the sheet down.
+        .interactiveDismissDisabled(!PhotoStoryStart.allowsSwipeToDismiss(start: viewModel.start, showsAllPhotos: viewModel.showsAllPhotos))
         .task { if !viewModel.isLoaded { await viewModel.load() } }
     }
 

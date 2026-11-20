@@ -30,4 +30,11 @@ public enum PhotoStoryStart: Sendable, Equatable {
         case .full, .limited, .none: .picker
         }
     }
+
+    /// False while the system picker shows: the route's own picker, or the one "All photos" pushes. The picker's
+    /// grid runs in another process, and a downward swipe there must scroll it, not pull the sheet down. "Cancel"
+    /// closes the sheet in every state. `start` is nil while the access loads.
+    public static func allowsSwipeToDismiss(start: PhotoStoryStart?, showsAllPhotos: Bool) -> Bool {
+        start != .picker && !showsAllPhotos
+    }
 }

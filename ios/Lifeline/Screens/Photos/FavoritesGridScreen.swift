@@ -28,7 +28,7 @@ struct FavoritesGridScreen: View {
                 .accessibilityIdentifier("favorites.allPhotos")
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: cell), spacing: 4)], spacing: 4) {
                     ForEach(Array(viewModel.photos.enumerated()), id: \.element.id) { index, photo in
-                        tile(photo, position: index + 1)
+                        FavoriteTile(photo: photo, position: index + 1, viewModel: viewModel, side: cell * displayScale)
                     }
                 }
                 .accessibilityElement(children: .contain)
@@ -36,27 +36,5 @@ struct FavoritesGridScreen: View {
             }
             .padding(16)
         }
-    }
-
-    private func tile(_ photo: LibraryPhoto, position: Int) -> some View {
-        Button { Task { await viewModel.pick(photo) } } label: {
-            Color.clear
-                .aspectRatio(1, contentMode: .fit)
-                .overlay {
-                    if let image = viewModel.thumbnails[photo.id] {
-                        Image(uiImage: image).resizable().scaledToFill()
-                    } else {
-                        Theme.sand
-                    }
-                }
-                .clipShape(RoundedRectangle(cornerRadius: 6))
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .disabled(viewModel.isAdding)
-        .task { await viewModel.thumbnail(for: photo, side: cell * displayScale) }
-        .accessibilityLabel("Photo")
-        .accessibilityValue("\(position) of \(viewModel.photos.count)")
-        .accessibilityIdentifier("favorites.photo")
     }
 }
