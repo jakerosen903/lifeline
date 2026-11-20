@@ -19,8 +19,15 @@ public struct PhotoStoryReader: Sendable {
         let pendingCards = try store.candidates.pending(in: session).contains { $0.kind == .memory }
         let pendingSegments = try !store.sessions.segments(in: session, status: .pending).isEmpty
         return PhotoStory.card(photo: photo, sessionMemories: memories, holding: holding, linked: linked, pagesWithPhoto: pagesWithPhoto,
-                               ownerEntity: try store.profile.owner()?.entityID, hasPendingMoments: pendingCards || pendingSegments,
-                               hasOtherHome: try store.photos.hasOtherHome(photo.id, than: session))
+                               ownerEntity: try store.profile.owner()?.entityID,
+                               storyPages: try store.photos.storyPages(of: photo.id), hasPendingMoments: pendingCards || pendingSegments,
+                               hasOtherHome: try store.photos.hasOtherHome(photo.id, than: session),
+                               pagesDone: try store.sessions.fetch(session)?.photoPagesDone ?? false)
+    }
+
+    /// "Done" (true) or "Edit" (false) on the pages part of the session's photo story. Stored for the story.
+    public func setPagesDone(_ done: Bool, for session: SessionID) throws {
+        try store.sessions.setPhotoPagesDone(session, done)
     }
 
     /// The first photo on a page is its cover (the S4 rule, in `PhotoRepository.link`).

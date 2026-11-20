@@ -674,3 +674,101 @@ private func makeTheOldShape(_ f: Fixture, _ maya: Entity, a: Photo, c: Photo) t
     try f.photos.reorder([c.id, b.id, a.id], of: .entity(maya.id))
     #expect(counter.count == 1)
 }
+
+// MARK: - Photo on people's pages: which link a story made, which page the owner took a photo off
+
+private func declineCount(in db: AppDatabase) throws -> Int {
+    try db.writer.read { try Int.fetchOne($0, sql: "select count(*) from photo_page_declined") ?? -1 }
+}
+
+@Test func unlinkingFromAPageRecordsTheDecline() throws {
+    let f = try Fixture(), maya = try f.person("Maya"), dad = try f.person("Dad")
+    let a = photo("a")
+    try f.photos.insert(a, linkingTo: .entity(dad.id)); try f.photos.link(a.id, to: .entity(maya.id))
+    #expect(try !f.photos.isDeclined(a.id, on: maya.id))
+    _ = try f.photos.unlink(a.id, from: .entity(maya.id))
+    #expect(try f.photos.isDeclined(a.id, on: maya.id))
+    #expect(try !f.photos.isDeclined(a.id, on: dad.id), "a decline is for one page")
+}
+
+@Test func linkingAgainClearsTheDecline() throws {
+    let f = try Fixture(), maya = try f.person("Maya"), dad = try f.person("Dad")
+    let a = photo("a")
+    try f.photos.insert(a, linkingTo: .entity(dad.id))
+    try f.photos.link(a.id, to: .entity(maya.id))
+    _ = try f.photos.unlink(a.id, from: .entity(maya.id))
+    try f.photos.link(a.id, to: .entity(maya.id))
+    #expect(try !f.photos.isDeclined(a.id, on: maya.id))
+    #expect(try f.photos.storyPages(of: a.id).isEmpty, "the owner's link has no origin")
+}
+
+@Test func anOwnersLinkOverAStoryLinkMakesItTheOwners() throws {
+    let f = try Fixture(), maya = try f.person("Maya")
+    let a = photo("a")
+    try f.photos.insert(a)
+    let wrote = try f.db.writer.write { try PhotoRepository.link(a.id, to: .entity(maya.id), origin: .story, in: $0) }
+    #expect(wrote)
+    #expect(try f.photos.storyPages(of: a.id) == [maya.id])
+    try f.photos.link(a.id, to: .entity(maya.id))
+    #expect(try f.photos.storyPages(of: a.id).isEmpty)
+    #expect(try f.photos.photos(of: .entity(maya.id)).map(\.id) == [a.id], "the page holds the photo one time")
+}
+
+@Test func aStoryLinkOverAnOwnersLinkChangesNothing() throws {
+    let f = try Fixture(), maya = try f.person("Maya")
+    let a = photo("a")
+    try f.photos.insert(a, linkingTo: .entity(maya.id))
+    let wrote = try f.db.writer.write { try PhotoRepository.link(a.id, to: .entity(maya.id), origin: .story, in: $0) }
+    #expect(!wrote)
+    #expect(try f.photos.storyPages(of: a.id).isEmpty, "a story never takes over the owner's link")
+}
+
+@Test func unlinkingFromAMemoryRecordsNoDecline() throws {
+    let f = try Fixture(), maya = try f.person("Maya"), treeHouse = try f.memory("The tree house", segment: 0)
+    let a = photo("a")
+    try f.photos.insert(a, linkingTo: .entity(maya.id)); try f.photos.link(a.id, to: .memory(treeHouse.id))
+    _ = try f.photos.unlink(a.id, from: .memory(treeHouse.id))
+    #expect(try declineCount(in: f.db) == 0)
+}
+
+@Test func unlinkingAPhotoThePageDoesNotHoldRecordsNoDecline() throws {
+    let f = try Fixture(), maya = try f.person("Maya"), dad = try f.person("Dad")
+    let a = photo("a")
+    try f.photos.insert(a, linkingTo: .entity(dad.id))
+    #expect(try f.photos.unlink(a.id, from: .entity(maya.id)) == nil)
+    #expect(try declineCount(in: f.db) == 0, "only a removal the owner made is a decline")
+}
+
+@Test func deletingAPersonDeletesItsDeclines() throws {
+    let f = try Fixture(), maya = try f.person("Maya"), dad = try f.person("Dad")
+    let a = photo("a")
+    try f.photos.insert(a, linkingTo: .entity(dad.id)); try f.photos.link(a.id, to: .entity(maya.id))
+    _ = try f.photos.unlink(a.id, from: .entity(maya.id))
+    #expect(try declineCount(in: f.db) == 1)
+    try f.store.entities.delete(maya.id)
+    #expect(try declineCount(in: f.db) == 0)
+    #expect(try f.photos.photo(id: a.id) == a, "the photo stays on Dad's page")
+}
+
+@Test func deletingAPhotoDeletesItsDeclines() throws {
+    let f = try Fixture(), maya = try f.person("Maya"), dad = try f.person("Dad")
+    let a = photo("a")
+    try f.photos.insert(a, linkingTo: .entity(dad.id)); try f.photos.link(a.id, to: .entity(maya.id))
+    _ = try f.photos.unlink(a.id, from: .entity(maya.id))
+    // The last page goes: the photo row goes, and its declines with it.
+    #expect(try f.photos.unlink(a.id, from: .entity(dad.id)) == a)
+    #expect(try declineCount(in: f.db) == 0)
+}
+
+@Test func aStoryLinkToADeclinedPageWritesNothing() throws {
+    let f = try Fixture(), maya = try f.person("Maya"), dad = try f.person("Dad")
+    let a = photo("a")
+    try f.photos.insert(a, linkingTo: .entity(dad.id)); try f.photos.link(a.id, to: .entity(maya.id))
+    _ = try f.photos.unlink(a.id, from: .entity(maya.id))
+    let wrote = try f.db.writer.write { try PhotoRepository.link(a.id, to: .entity(maya.id), origin: .story, in: $0) }
+    #expect(!wrote, "the write itself refuses a page the owner took the photo off")
+    #expect(try !f.photos.isLinked(a.id, to: .entity(maya.id)))
+    #expect(try f.photos.isDeclined(a.id, on: maya.id))
+    // An owner's link (no origin) is never refused.
+    #expect(try f.db.writer.write { try PhotoRepository.link(a.id, to: .entity(maya.id), in: $0) })
+}

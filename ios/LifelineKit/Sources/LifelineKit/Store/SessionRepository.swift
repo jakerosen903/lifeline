@@ -71,6 +71,11 @@ public struct SessionRepository: Sendable {
         try db.writer.write { try $0.execute(sql: "UPDATE session SET hidden_from_timeline = ? WHERE id = ?", arguments: [hidden, id.rawValue]) }
     }
 
+    /// "Done" or "Edit" on the pages part of a photo story's card (spec part 3). One column: no other write sees it.
+    public func setPhotoPagesDone(_ id: SessionID, _ done: Bool) throws {
+        try db.writer.write { try $0.execute(sql: "UPDATE session SET photo_pages_done = ? WHERE id = ?", arguments: [done, id.rawValue]) }
+    }
+
     /// Sessions with at least one segment still waiting to be sorted, newest first.
     public func sessionsWithPendingSegments() throws -> [Session] {
         try db.writer.read { db in
