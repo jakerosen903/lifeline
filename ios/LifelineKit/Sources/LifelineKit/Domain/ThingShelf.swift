@@ -4,7 +4,8 @@
 public enum ThingShelf {
     public struct Tile: Sendable, Equatable, Identifiable {
         public var summary: EntitySummary
-        /// No dated moment in this tile's period is settled. False for a stated span and for an unplaced tile.
+        /// No dated moment in this tile's period is settled by the person's word (a confirmed relation's year is
+        /// the builder's slack, R4). False for a stated span and for an unplaced tile.
         public var placedByGuess: Bool
         public var id: EntityID { summary.id }
         public init(summary: EntitySummary, placedByGuess: Bool) {
@@ -82,7 +83,7 @@ public enum ThingShelf {
         }
         guard let deciding = placing.min(by: { $0.date < $1.date }) else { return nil }
         let period = LifePeriod.containing(year: deciding.date.year, birthYear: birthYear)
-        let guess = !placing.contains { LifePeriod.containing(year: $0.date.year, birthYear: birthYear) == period && $0.range.isSettled }
+        let guess = !placing.contains { LifePeriod.containing(year: $0.date.year, birthYear: birthYear) == period && $0.range.isSettled && !$0.range.isConfirmedRelation }
         return Placed(tile: Tile(summary: thing, placedByGuess: guess), period: period, date: deciding.date)
     }
 

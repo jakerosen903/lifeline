@@ -102,6 +102,14 @@ private func tile(_ title: String, in layout: ThingShelf.Layout) -> ThingShelf.T
     #expect(headings(layout) == ["Teens · by your age"])
     #expect(tile("The kite", in: layout)?.placedByGuess == true)
 }
+// R4: "before Graduation" is confirmed, but its year is the builder's slack (2004 less 5 years), not the person's word.
+@Test func aConfirmedRelationDoesNotClearTheMark() {
+    let before = TimeRange.span(.firstOfYear(1999), .lastOfYear(2004), granularity: .year, origin: .confirmed, evidence: "before Graduation (2004)")
+    let layout = ThingShelf.layout([thing("The kite", [before]), thing("The red bike", [before, said(2001)])], birthYear: 1990)
+    #expect(headings(layout) == ["Childhood · by your age"])
+    #expect(tile("The kite", in: layout)?.placedByGuess == true)
+    #expect(tile("The red bike", in: layout)?.placedByGuess == false, "a year the person said in the same period clears it")
+}
 @Test func thePersonsOwnAroundIsNotAGuess() {
     #expect(tile("The kite", in: ThingShelf.layout([thing("The kite", [.stated(around: 1999)])], birthYear: 1990))?.placedByGuess == false)
 }

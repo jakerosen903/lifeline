@@ -50,7 +50,7 @@ public enum SpineLayout {
             let shown = shownYears(of: item.range)
             let mark = mark(for: item.range, shown: shown)
             let years = TimeRange.yearSpan(shown.start, shown.end)
-            let isRelation = isConfirmedRelation(item.range)
+            let isRelation = item.range.isConfirmedRelation
             let qualifier = !isRelation && (mark == .dashedDot || item.range.displayText == around + " " + years) ? around : nil
             let period = LifePeriod.containing(year: placingDate(of: item.range)!.year, birthYear: birthYear)  // isDated guarantees a date
             let stop = Stop(
@@ -119,12 +119,6 @@ public enum SpineLayout {
     private static func shownYears(of range: TimeRange) -> (start: Int, end: Int) {
         if let start = range.likelyStart, let end = range.likelyEnd { return (start.year, end.year) }
         return (range.earliest?.year ?? 0, range.latest?.year ?? 0)  // isDated guarantees both
-    }
-
-    /// A confirmed relation ("before Graduation (2004)"): the case where `displayText` is the evidence.
-    private static func isConfirmedRelation(_ range: TimeRange) -> Bool {
-        guard range.origin == .confirmed, let evidence = range.evidenceText else { return false }
-        return TimeRange.isRelationEvidence(evidence)
     }
 
     /// Decision 5: more than one shown year is a capsule; one year is solid only when it reads as said.

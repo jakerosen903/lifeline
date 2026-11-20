@@ -67,11 +67,12 @@ Changed 2026-11-20 by ruling R5.
 
 ### A guess that decides the group
 
-1. A tile is placed by a guess when no dated moment in its period is settled (`TimeRange.isSettled`: stated, confirmed, or from a photo). An inferred or derived date is the app's guess.
-2. The person's own hedge ("around 1998", origin `stated`) is not the app's guess. It does not give the line.
-3. A tile placed by a guess shows one line in the ochre text colour: "Placed by a guess" **(invented copy)**.
-4. The line is a word, not a colour alone. VoiceOver reads it in the tile's value.
-5. A stated span is settled. It never gives the line.
+1. A tile is placed by a guess when no dated moment in its period is settled by the person's word. Settled is `TimeRange.isSettled`: stated, confirmed, or from a photo. An inferred or derived date is the app's guess.
+2. A confirmed relation ("before Graduation (2004)", `TimeRange.isConfirmedRelation`) does not clear the line. The person confirmed the relation, but its year comes from the builder's slack, so the period is the app's arithmetic. The Timeline uses the same test to show such a date as words. Changed 2026-11-20 by ruling R4.
+3. The person's own hedge ("around 1998", origin `stated`) is not the app's guess. It does not give the line.
+4. A tile placed by a guess shows one line in the ochre text colour: "Placed by a guess" **(invented copy)**.
+5. The line is a word, not a colour alone. VoiceOver reads it in the tile's value.
+6. A stated span is settled. It never gives the line.
 
 ### The flat grid
 
@@ -169,7 +170,7 @@ Each one is decided. Each one is one rule in one place, so an overrule changes o
 4. **The quote is the oldest told detail that has words after the cleanup, cut at 20 words.** Cost: a later, better line does not show. The person cannot choose the line.
 5. **A detail from a heavy session never gives the quote.** Cost: an ordinary line told in a heavy session never shows on the shelf.
 6. **Both kinds of tile show the moment count.** The mock-up draws it on both. The bullet names it for the photo tile only. A thing with no moment shows no count. Cost: the tile without a photo is one line fuller than the bullet says.
-7. **A tile placed by a guess says "Placed by a guess"** **(invented copy)**. A guess is an unsettled origin (`inferred`, `derived`), not the person's own "around". Cost: one more line on some tiles, and new copy. A tile placed by the person's "around 1998" shows no line; the page shows the "around".
+7. **A tile placed by a guess says "Placed by a guess"** **(invented copy)**. A guess is an unsettled origin (`inferred`, `derived`) or a confirmed relation's year (R4), not the person's own "around". Cost: one more line on some tiles, and new copy. A tile placed by the person's "around 1998" shows no line; the page shows the "around".
 8. **Headings are the Timeline's waypoint text, with no year range.** Cost: the mock-up's year ranges ("1994–2006") are gone. They came from spans the person did not state.
 9. **Order: life order for groups; by placing date for tiles in a period; by title under "Not placed in time yet".** Cost: no "most told" order and no sort menu.
 10. **The flat grid has no heading.** Cost: none known.
