@@ -58,8 +58,9 @@ struct YouScreen: View {
                 .padding(.horizontal, 16)
                 .padding(.vertical, 12)
             }
-            // A new cover is the page's news: the page goes back to the top, where the cover is.
-            .onChange(of: viewModel.shelf?.cover?.id) { withAnimation { proxy.scrollTo(Self.top, anchor: .top) } }
+            // A new cover is the page's news: the page goes back to the top, where the cover is. The first read's
+            // cover is not news (`coverChanges`); a new shelf starts at 0, so its making scrolls nothing either.
+            .onChange(of: viewModel.shelf?.coverChanges ?? 0) { withAnimation { proxy.scrollTo(Self.top, anchor: .top) } }
         }
         // One slot, pinned above the record bar: "Hidden." with Undo, or why something failed. Wherever the line
         // was on the page, its message is on screen, and the page does not jump.

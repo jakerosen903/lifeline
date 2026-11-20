@@ -53,12 +53,13 @@ public enum OpeningChooser {
         if let photo {
             return Opening(main: .photo(photo, text: photoOpeningText), alternates: scenes.prefix(alternateCount).map(OpeningPrompt.scene))
         }
-        if let subject, !subject.excludedFromAI {
+        // A subject with no name the model may hear (PB10) gets the plain tab opening, as one kept from the AI does.
+        if let subject, !subject.excludedFromAI, let subjectOpening = subject.openingText {
             let main = curiosity
                 .filter { $0.status == .open && $0.entityID == subject.entityID }
                 .min { a, b in a.payoffCount != b.payoffCount ? a.payoffCount > b.payoffCount : a.text < b.text }
                 .map { OpeningPrompt.curiosity($0, text: phrase(for: $0)) }
-                ?? .subject(subject, text: subject.openingText)
+                ?? .subject(subject, text: subjectOpening)
             return Opening(main: main, alternates: scenes.prefix(alternateCount).map(OpeningPrompt.scene))
         }
         let lead = curiosity

@@ -484,3 +484,41 @@ private func storied(_ refs: [(title: String, ref: String?, hint: String?)], quo
     #expect(try env.store.memories.people(of: kept.memory.id).map(\.displayName) == ["Marcel"])
     #expect(try env.store.entities.links(of: kept.memory.id).filter { $0.entity.type == .person }.map(\.link.origin) == [.new])
 }
+
+// PC-b, PB10: nothing from a contact reaches the model, through the real packet. Robyn is made from a contact
+// by a fact card (so she has no moment and a curiosity question); Tomas is made from a contact by a moment and
+// then renamed. The packet of a later segment holds neither contact's family name anywhere.
+@Test func noContactNameReachesTheRealPacket() async throws {
+    let texts = ["Robyn is the kindest person I know", "Tomas and I painted the fence", "we drove to the lake"]
+    let env = try Env(texts: texts, script: [.success(ExtractorOutput(memories: [], mentions: [], flags: .none))])
+    let contacts = [PersonGuess.Contact(identifier: "c-vale", fullName: "Robyn Vale", givenName: "Robyn", nickname: ""),
+                    PersonGuess.Contact(identifier: "c-okafor", fullName: "Tomas Okafor", givenName: "Tomas", nickname: "")]
+    var keep = CandidateActions(store: env.store)
+    keep.contactsForGuess = { contacts }
+    func card(_ index: Int, kind: MemoryKind, person: String) throws -> Candidate {
+        let text = texts[index]
+        let out = MemoryOut(ref: "m\(index)", kind: kind, title: "A title", quote: text,
+                            segmentSpan: WordSpan(startWord: 0, endWord: text.split(separator: " ").count - 1),
+                            peopleRefs: [person], placeText: nil, anchors: [], collectionHint: nil, chapterHint: nil, confidence: 0.9)
+        let row = StoreFixtures.candidate(env.segments[index].id, ordinal: 0, payload: try CandidatePayload.encode(out))
+        try env.store.candidates.insert(row)
+        return row
+    }
+    let fact = try keep.acceptMemory(try card(0, kind: .fact, person: "Robyn"), joinStory: false)
+    let moment = try keep.acceptMemory(try card(1, kind: .event, person: "Tomas"), joinStory: false)
+    let robyn = try #require(try env.store.personLinks.links(of: fact.memory.id).first?.person)
+    let tomas = try #require(try env.store.personLinks.links(of: moment.memory.id).first?.person)
+    #expect(robyn.contactIdentifier == "c-vale" && tomas.contactIdentifier == "c-okafor")
+    try env.store.people.rename(tomas.id, to: "Tommy")
+    _ = try ResolverRunner(store: env.store).run()
+    #expect(try env.store.curiosity.open().contains { $0.text == "Is there one time with Robyn that stands out?" })
+
+    let queue = env.queue()
+    await queue.enqueue(env.segments[2].id)
+    await queue.drain()
+    let packet = try #require(env.service.requests.first?.packet)
+    #expect(Set(packet.people.map(\.name)) == ["Robyn", "Tommy"])
+    let text = String(decoding: try packet.encodedJSON(), as: UTF8.self)
+    #expect(!text.contains("Vale") && !text.contains("Okafor"), "no contact's name in the packet: people, curiosity and all")
+    #expect(text.contains("Is there one time with Robyn that stands out?"))
+}

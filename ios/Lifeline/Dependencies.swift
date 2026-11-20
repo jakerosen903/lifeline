@@ -46,6 +46,12 @@ struct Dependencies {
     let photos: PhotoLibrary
     /// Decoded photos for display, shared by every screen so each image decodes once.
     let photoImages: PhotoImageCache
+    /// The phone's contacts: the system's in the app; under `-uiTesting` a scripted one, so no test touches `CNContactStore`.
+    let contacts: any ContactsDirectory
+    /// The contacts' names in memory, for every name guess. Empty until the launch check fills it after the first screen.
+    let contactsCache: ContactsCache
+    /// Link, unlink, copy a picture, the check of linked contacts, and the look again after access.
+    let contactLinks: ContactLinkActions
     /// Under `-uiTesting-pickPhoto <path>`: "Add a photo" adds this file without the picker (decision 22), and
     /// "Tell a story about a photo" starts with it.
     var pickPhotoPath: String? = nil
@@ -62,6 +68,8 @@ struct Dependencies {
     var restoreFromPath: String? = nil
     /// Under `-uiTesting`: Export keeps the file in Documents and shows no share sheet, which a UI test cannot drive.
     var exportWithoutShareSheet = false
+    /// Under `-uiTesting`: the contacts search shows a plain stand-in for `ContactAccessButton`, which a UI test cannot drive.
+    var contactAccessButtonStandIn = false
     /// What the launch repair joined, in one sentence for the person, or nil when it joined nothing. The shell shows it once.
     var launchNotice: String? = nil
 
@@ -118,6 +126,31 @@ struct Dependencies {
         }
     }
 
+    /// The one way the app makes `PersonLinkActions`: its preview runs Keep's guess, which must see the contacts.
+    func personLinkActions() -> PersonLinkActions {
+        var actions = PersonLinkActions(store: extractionStore)
+        let cache = contactsCache
+        actions.contactsForGuess = { cache.forGuess }
+        return actions
+    }
+
+    /// Keep's actions, guessing against `cache`. Both compositions build `actions` with it.
+    private static func candidateActions(store: ExtractionStore, matcher: MemoryMatcher, cache: ContactsCache) -> CandidateActions {
+        var actions = CandidateActions(store: store, matcher: matcher)
+        actions.contactsForGuess = { cache.forGuess }
+        return actions
+    }
+
+    /// What a "New" chip says about the contacts (PB1). `held` is `heldContactIdentifiers()`, read once per screen read.
+    func contactsSeen(saidName: String?, held: Set<String>) -> PersonChipLine.ContactsSeen {
+        .of(saidName: saidName, access: contacts.access(), cards: contactsCache.cards, held: held)
+    }
+
+    /// The contacts a person holds: they are not free for a new name.
+    func heldContactIdentifiers() -> Set<String> {
+        Set(((try? extractionStore.people.linkedPersons()) ?? []).compactMap(\.contactIdentifier))
+    }
+
     func makeExtractionQueue(for session: SessionID) -> ExtractionQueue {
         ExtractionQueue(session: session, service: extraction, store: extractionStore, matcher: matcher, reporter: reporter, log: { print("[extract] \($0)") })
     }
@@ -153,10 +186,12 @@ struct Dependencies {
         let launchNotice = repairArchive(store)
         let extraction = AnthropicExtractionService(apiKey: { try? secrets.read(.anthropicAPIKey) })
         let matcher = MemoryMatcher(store: store, embedder: NLSentenceEmbedder())
-        let actions = CandidateActions(store: store, matcher: matcher)
+        let contactsCache = ContactsCache()
+        let actions = candidateActions(store: store, matcher: matcher, cache: contactsCache)
         let reconcile = AnthropicReconcileService(apiKey: { try? secrets.read(.anthropicAPIKey) })
         let reporter = SortingReporter()
         let library = PhotoLibrary(root: root, photos: store.photos)
+        let contacts = SystemContactsDirectory()
         return Dependencies(
             sessions: sessions,
             profile: ProfileRepository(db),
@@ -201,6 +236,9 @@ struct Dependencies {
             reporter: reporter,
             photos: library,
             photoImages: PhotoImageCache(library: library),
+            contacts: contacts,
+            contactsCache: contactsCache,
+            contactLinks: ContactLinkActions(store: store, photos: library, directory: contacts),
             launchNotice: launchNotice)
     }
 
@@ -243,12 +281,17 @@ struct Dependencies {
         // Word-overlap vectors under test: deterministic, and enough for the scripted retelling
         // to be retrieved into the packet so the scripted extractor can name it.
         let matcher = MemoryMatcher(store: store, embedder: HashingEmbedder())
-        let actions = CandidateActions(store: store, matcher: matcher)
+        let contactsCache = ContactsCache()
+        let actions = candidateActions(store: store, matcher: matcher, cache: contactsCache)
         let reconcile = ScriptedReconcileService()
         let reporter = SortingReporter()
         // Every UI test starts from the default "Lifeline speaks"; a test that turns it off must not leave it off.
         UserDefaults.standard.removeObject(forKey: LifelineSpeaks.key)
+        // Each UI test starts with the contacts prompt not yet shown, so the landing's one ask is repeatable.
+        UserDefaults.standard.removeObject(forKey: ContactsAccessPrompt.askedKey)
         let library = PhotoLibrary(root: root, photos: store.photos)
+        // `-uiTesting-contacts <full|limited|notAsked|denied>`: the scripted contacts and their access. Never `CNContactStore`.
+        let contacts = try UITestSeed.contactsDirectory(arguments: args, folder: root.appending(path: "scripted-contacts"))
         var deps = Dependencies(
             sessions: SessionRepository(db),
             profile: ProfileRepository(db),
@@ -296,9 +339,13 @@ struct Dependencies {
             }),
             reporter: reporter,
             photos: library,
-            photoImages: PhotoImageCache(library: library))
+            photoImages: PhotoImageCache(library: library),
+            contacts: contacts,
+            contactsCache: contactsCache,
+            contactLinks: ContactLinkActions(store: store, photos: library, directory: contacts))
         if let i = args.firstIndex(of: "-uiTesting-restoreFrom"), i + 1 < args.count { deps.restoreFromPath = args[i + 1] }
         deps.exportWithoutShareSheet = true
+        deps.contactAccessButtonStandIn = true
         if let i = args.firstIndex(of: "-uiTesting-pickPhoto"), i + 1 < args.count { deps.pickPhotoPath = args[i + 1] }
         if args.contains("-uiTesting-slowPhotoFile") { deps.addPhotoDelay = .seconds(3) }
         if let i = args.firstIndex(of: "-uiTesting-pickPhotos"), i + 1 < args.count {
@@ -310,6 +357,7 @@ struct Dependencies {
         if args.contains("-uiTesting-seed") { try UITestSeed.write(sessions: deps.sessions, store: store) }
         if args.contains("-uiTesting-seedPerson") { try UITestSeed.writePersonOnly(store: store) }
         if args.contains("-uiTesting-seedPeople") { try UITestSeed.writePeople(store: store, profile: deps.profile, sessions: deps.sessions) }
+        if args.contains("-uiTesting-seedContactLink") { try UITestSeed.linkLenaToAContact(store: store, links: deps.contactLinks) }
         if args.contains("-uiTesting-seedPhotos") {
             try UITestSeed.writePhotos(store: store, profile: deps.profile, sessions: deps.sessions, library: deps.photos)
         }

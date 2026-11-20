@@ -21,19 +21,29 @@ public struct PersonMoveReceipt: Sendable, Equatable {
     var createdName: PersonName?
     /// The page links of the story's photo that followed the name. Nil: the move touched no photo link.
     public var photoPages: PhotoPageChange?
+    /// The removed person's link to the picture the app copied from their contact (PB12), to put it back.
+    var removedContactPhoto: ContactPhotoLink?
 
     /// A person's name and where it came from, so Undo can tell the owner renamed them since.
     struct PersonName: Sendable, Equatable {
         var id: PersonID; var name: String; var origin: NameOrigin?
     }
 
+    /// The contact's copied picture as the removed person's page held it. The role is the stored text, kept
+    /// as it was, so Undo writes back exactly what the move took away.
+    struct ContactPhotoLink: Sendable, Equatable {
+        var photo: PhotoID; var role: String; var sortOrder: Int
+    }
+
     init(before: [MomentEntity], after: [MomentEntity], removedPerson: Person?, addedAliases: [Alias], createdPerson: PersonID?, newName: String,
          removedEntity: Entity? = nil, removedAliases: [Alias] = [], spansBefore: [EntitySpan] = [], spansAfter: [EntitySpan] = [],
-         clearedGuess: PersonName? = nil, createdName: PersonName? = nil, photoPages: PhotoPageChange? = nil) {
+         clearedGuess: PersonName? = nil, createdName: PersonName? = nil, photoPages: PhotoPageChange? = nil,
+         removedContactPhoto: ContactPhotoLink? = nil) {
         self.before = before; self.after = after; self.removedPerson = removedPerson; self.addedAliases = addedAliases
         self.createdPerson = createdPerson; self.newName = newName; self.removedEntity = removedEntity; self.removedAliases = removedAliases
         self.spansBefore = spansBefore; self.spansAfter = spansAfter; self.clearedGuess = clearedGuess; self.createdName = createdName
         self.photoPages = photoPages
+        self.removedContactPhoto = removedContactPhoto
     }
 }
 
@@ -49,10 +59,17 @@ public struct PreviewChip: Sendable, Equatable, Identifiable {
     public var saidName: String; public var name: String; public var origin: LinkOrigin; public var person: PersonID?
     /// The owner marked this name "Not a person": Keep links nothing, and the quiet chip reopens the sheet (R37).
     public var isNotAPerson: Bool
+    /// Keep will make the person from a contact, or did in this recording (`PersonLink.personFromContact`).
+    public var fromContact: Bool
+    /// The contact Keep will make the person from, when Keep makes a person (`person` nil). The sheet opens on it,
+    /// so "Done" with nothing changed keeps that contact (I-1). Nil for a person on file or a person with no contact.
+    public var contactIdentifier: String?
     public var id: String { SaidName.key(saidName) }
 
-    public init(saidName: String, name: String, origin: LinkOrigin, person: PersonID?) {
-        self.saidName = saidName; self.name = name; self.origin = origin; self.person = person; self.isNotAPerson = false
+    public init(saidName: String, name: String, origin: LinkOrigin, person: PersonID?, fromContact: Bool = false,
+                contactIdentifier: String? = nil) {
+        self.saidName = saidName; self.name = name; self.origin = origin; self.person = person
+        self.isNotAPerson = false; self.fromContact = fromContact; self.contactIdentifier = contactIdentifier
     }
 
     /// The chip shows the said name with no line and no mark: the owner's own answer (`confirmed`).
@@ -67,10 +84,11 @@ public struct PreviewChip: Sendable, Equatable, Identifiable {
 /// another person, and can take a move back. Nothing here runs without a tap.
 public struct PersonLinkActions: Sendable {
     public enum Error: Swift.Error, Equatable { case stale, notFound }
-    public enum Target: Sendable, Equatable { case person(PersonID), someoneNew, notAPerson }
+    /// `contact`: the person who holds that contact, or a new person made from it (`Person.fromContact`).
+    public enum Target: Sendable, Equatable { case person(PersonID), someoneNew, notAPerson, contact(ContactCard) }
 
     private let store: ExtractionStore
-    /// The contacts Keep's guess may match against, so a preview shows what Keep will do. PC-b sets it.
+    /// The contacts Keep's guess may match against, so a preview shows what Keep will do.
     public var contactsForGuess: @Sendable () -> [PersonGuess.Contact] = { [] }
 
     public init(store: ExtractionStore) { self.store = store }
@@ -80,7 +98,8 @@ public struct PersonLinkActions: Sendable {
         try store.personLinks.settle(link, wholeGroup: wholeGroup)
     }
 
-    /// The sheet's "Done" with another choice. One transaction.
+    /// The sheet's "Done" with another choice. One transaction. A contact a person holds is a move to that person;
+    /// a contact no one holds makes a person the owner chose, and Undo removes them.
     @discardableResult public func move(_ link: PersonLink, to target: Target, wholeGroup: Bool) throws -> PersonMoveReceipt {
         try store.personLinks.move(link, to: target, wholeGroup: wholeGroup)
     }
@@ -89,7 +108,7 @@ public struct PersonLinkActions: Sendable {
         try store.personLinks.undo(receipt)
     }
 
-    /// The sheet used on a card that waits: stored, applied on Keep.
+    /// The sheet used on a card that waits: stored, applied on Keep. A contact a person holds is stored as that person.
     public func choose(_ target: Target, for saidName: String, on candidate: CandidateID) throws {
         try store.personLinks.storeChoice(target, for: saidName, on: candidate)
     }
@@ -107,13 +126,20 @@ public struct PersonLinkActions: Sendable {
             if let o = CandidatePayload.memory(row) { edges.merge(try keep.edges(of: o, for: unwritten, segment: row.segmentID, card: candidate.id)) }
         }
         let planned = Dictionary(edges.entityWrite.persons.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        let recording = try store.sessions.fetchSegment(candidate.segmentID)?.sessionID
         let linked: [PreviewChip] = try edges.people.compactMap { link in
             // Keep's guess gives every person link its said name and an origin.
             guard let origin = link.origin else { return nil }
             let said = link.roleText ?? ""
-            if let new = planned[link.personID] { return PreviewChip(saidName: said, name: new.displayName, origin: origin, person: nil) }
+            if let new = planned[link.personID] {
+                return PreviewChip(saidName: said, name: new.displayName, origin: origin, person: nil, fromContact: new.isGuessFromContact,
+                                   contactIdentifier: new.contactIdentifier)
+            }
             guard let person = try store.people.person(id: link.personID) else { return nil }
-            return PreviewChip(saidName: said, name: person.displayName, origin: origin, person: person.id)
+            // As `PersonLink.personFromContact`: only in the recording of the person's first link (PB11).
+            let first = try store.personLinks.firstSession(of: person.id)
+            let fromContact = person.isGuessFromContact && (first == nil || first == recording)
+            return PreviewChip(saidName: said, name: person.displayName, origin: origin, person: person.id, fromContact: fromContact)
         }
         let refs = out.peopleRefs + (try store.candidates.continuations(of: candidate.id).compactMap(CandidatePayload.memory).flatMap(\.peopleRefs))
         return Self.withNotAPerson(linked, refs: refs, choices: try store.personLinks.choices(for: candidate.id))

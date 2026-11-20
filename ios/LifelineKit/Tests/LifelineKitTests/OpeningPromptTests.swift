@@ -159,3 +159,15 @@ private func entityItem(_ text: String, entity: EntityID?, payoff: Int = 1, stat
     let opening = OpeningChooser.choose(photo: PhotoID(), subject: maya, curiosity: [], bank: bank, lastUsed: [:], now: now)
     #expect(opening.main.logID == "photo")
 }
+
+// PB10: the opening goes to the interviewer's model, so a person from a contact is named by what the owner said.
+@Test func aSubjectFromAContactOpensWithTheSaidNameOrPlainly() throws {
+    let bank = try PromptBank.load()
+    let robyn = SessionSubject(entityID: .init(), title: "Robyn Vale", isOwner: false, modelTitle: "Robyn")
+    #expect(OpeningChooser.choose(subject: robyn, curiosity: [], bank: bank, lastUsed: [:], now: now).main.text == "Tell me about Robyn.")
+    #expect(SessionSubject.barLabel(robyn) == "Tell a story about Robyn Vale", "the screen still shows the page's name")
+    let unnamed = SessionSubject(entityID: .init(), title: "Robyn Vale", isOwner: false, modelTitle: nil)
+    let opening = OpeningChooser.choose(subject: unnamed, curiosity: [], bank: bank, lastUsed: [:], now: now)
+    #expect(!opening.main.text.contains("Vale"))
+    #expect(opening.main == OpeningChooser.choose(curiosity: [], bank: bank, lastUsed: [:], now: now).main, "the plain tab opening")
+}

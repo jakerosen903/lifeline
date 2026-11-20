@@ -3,19 +3,32 @@ import Foundation
 /// The words under a person chip and on the landing page. Pure text; the views choose the colour.
 /// The copy is a draft until the owner writes the final copy.
 public enum PersonChipLine {
-    /// nil for a link with no line (said, confirmed, older).
-    public static func text(origin: LinkOrigin?, saidName: String?) -> String? {
+    /// What the app saw of the contacts for a new name: `none` when it sees no contacts (no access, or
+    /// not asked yet), `noMatch` when none fits the said name, `someMatch` when one or more fit.
+    public enum ContactsSeen: Sendable { case none, noMatch, someMatch }
+
+    /// nil for a link with no line (said, confirmed, older). `fromContact` is a person Keep made from a
+    /// contact (`PersonLink.personFromContact`, `PreviewChip.fromContact`).
+    public static func text(origin: LinkOrigin?, saidName: String?, fromContact: Bool, contacts: ContactsSeen) -> String? {
         switch origin {
         case .assumed:
+            if fromContact { return "Assumed \u{00B7} new, from your contacts" }
             guard let said = clean(saidName) else { return "Assumed" }
             return "Assumed \u{00B7} you said \u{201C}\(said)\u{201D}"
-        case .new: return "New"
+        case .new:
+            switch contacts {
+            case .none: return "New"
+            case .noMatch: return "New \u{00B7} not in your contacts"
+            case .someMatch: return "New \u{00B7} not linked yet"
+            }
         case .said, .confirmed, nil: return nil
         }
     }
 
-    public static func accessibilityLabel(name: String, origin: LinkOrigin?, saidName: String?) -> String {
+    /// `fromContact` as in `text`: the chip's line, read aloud.
+    public static func accessibilityLabel(name: String, origin: LinkOrigin?, saidName: String?, fromContact: Bool = false) -> String {
         guard origin == .assumed else { return "\(name). Change who this is." }
+        if fromContact { return "\(name), assumed, new, from your contacts. Change who this is." }
         guard let said = clean(saidName) else { return "\(name), assumed. Change who this is." }
         return "\(name), assumed, you said \(said). Change who this is."
     }
@@ -49,6 +62,15 @@ public enum PersonChipLine {
 
     /// The notice when Undo is refused because a row the move left changed since.
     public static let staleUndo = "That changed since. Open the name to change it again."
+
+    /// The sheet's sentence when "Done" is refused: `stale` when a row changed since the sheet opened; `notFound` when
+    /// the person or the contact the change needs is not there (PB42, PB40). Draft copy for `notFound`, for the owner's sign-off.
+    public static func refusal(_ error: PersonLinkActions.Error) -> String {
+        switch error {
+        case .stale: staleUndo
+        case .notFound: "That person is not here any more."
+        }
+    }
 
     /// The notice when Undo failed for any other reason. The error's own text never reaches the person.
     public static let failedUndo = "Could not undo that."

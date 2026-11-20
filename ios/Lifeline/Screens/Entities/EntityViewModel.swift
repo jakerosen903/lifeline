@@ -31,6 +31,9 @@ final class EntityViewModel {
     private(set) var isLoaded = false
     /// The owner's own page ("About you"): a session from here is about "yourself".
     private(set) var isOwner = false
+    /// The name the interviewer's model may hear for this page (`NameForModel`). A person's is read in
+    /// `refresh()`; until then nil, so a session started early opens plainly and names no contact.
+    private(set) var modelTitle: String?
     private(set) var error: String?
     /// Why the last photo action failed, for the pinned slot (decision 21). Cleared when the next one starts.
     private(set) var photoError: String?
@@ -41,17 +44,29 @@ final class EntityViewModel {
     private(set) var guessed: [MemoryID: PersonLink] = [:]
     /// "Changed to {name}." with Undo, after the sheet moved a moment off this page.
     let personMove: PersonMoveUndo
+    /// The contact row (PC3, PC4); it shows nothing on the owner's page or a page that is not a person's.
+    let contact: PersonContactViewModel
     let player = SegmentPlayer()
     let deps: Dependencies
 
     init(entity: Entity, deps: Dependencies) {
         self.entity = entity
         self.deps = deps
-        personMove = PersonMoveUndo(store: deps.extractionStore)
+        personMove = PersonMoveUndo(actions: deps.personLinkActions())
+        contact = PersonContactViewModel(entity: entity, deps: deps)
         // The shelf reports to this page, which exists only once the shelf is stored: the closure is bound after.
         var report: (String) -> Void = { _ in }
         self.shelf = PhotoShelf(subject: .entity(entity.id), deps: deps, onError: { report($0) })
         report = { [weak self] in self?.photoError = $0 }
+        contact.onChanged = { [weak self] in self?.refresh() }
+        contact.onMessage = { [weak self] in self?.personMove.say($0) }
+        contact.onClearMessage = { [weak self] in self?.personMove.clearMessage() }
+    }
+
+    /// True while the first picture is the copy the app took from the contact: it says "picture from your contacts".
+    var coverIsFromContacts: Bool {
+        guard let copy = contact.contactPhotoID else { return false }
+        return shelf.cover?.id == copy
     }
 
     /// "Photo of Maya", or "Photo of you" on the owner's page (decision 19).
@@ -61,7 +76,10 @@ final class EntityViewModel {
     var canAddDates: Bool { entity.type == .place || entity.type == .thing }
     var isPlaying: Bool { player.isPlaying }
     /// What a session started from this page is about.
-    var subject: SessionSubject { SessionSubject(entityID: entity.id, title: entity.title, isOwner: isOwner, excludedFromAI: entity.excludedFromAI) }
+    var subject: SessionSubject {
+        SessionSubject(entityID: entity.id, title: entity.title, isOwner: isOwner, excludedFromAI: entity.excludedFromAI,
+                       modelTitle: entity.type == .person ? modelTitle : entity.title)
+    }
 
     func refresh() {
         defer { isLoaded = true }
@@ -73,6 +91,8 @@ final class EntityViewModel {
             entity = current
             // A failed owner lookup costs only the bar's wording, never the page.
             isOwner = (try? store.profile.owner()?.entityID) == entity.id
+            // A failed read leaves no name for the model: the opening is the plain one (PB10).
+            modelTitle = entity.type == .person ? (try? store.people.nameForModel(of: PersonID(rawValue: entity.id.rawValue))) ?? nil : nil
             let details = try store.entities.details(of: entity.id)
             let mentions = try store.entities.moments(of: entity.id)
             let sections = EntityPage.sections(details: details, mentions: mentions)
@@ -108,6 +128,7 @@ final class EntityViewModel {
         } catch {
             self.error = error.localizedDescription
         }
+        contact.refresh()
         shelf.load()
     }
 
@@ -117,7 +138,7 @@ final class EntityViewModel {
     func confirm(_ memory: MemoryID) {
         guard let link = guessed[memory] else { return }
         do {
-            try PersonLinkActions(store: deps.extractionStore).settle(link, wholeGroup: false)
+            try deps.personLinkActions().settle(link, wholeGroup: false)
             refresh()
         } catch {
             self.error = "Could not save that: \(error.localizedDescription)"
@@ -159,6 +180,9 @@ final class EntityViewModel {
 
     func removePhoto(_ photo: PhotoID) async {
         photoError = nil
+        // The app's copy of a contact's picture, removed by the owner, stays removed (I-3). The kit writes nothing
+        // for any other photo. A failed write is dropped: the photo is still removed, and only the copy can come back.
+        if entity.type == .person { try? deps.contactLinks.pictureRemoved(photo, from: PersonID(rawValue: entity.id.rawValue)) }
         await shelf.remove(photo)
     }
 
