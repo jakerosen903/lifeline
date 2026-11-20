@@ -51,6 +51,14 @@ Rulings, by range:
 - `v8` is not the default. The switch waits for the owner's yes on the comparison's table.
 - The Task 6 UI tests are built and not run. The ledger says the simulator was held by the PR #35 suite. To run: `PeopleGuessUITests` (with the new `testTwoPeopleWithOneNameGetTwoChips`), `PeopleContactsUITests`, `LandingUITests`, `ExtractionUITests`, `FollowUpUITests`, `EntityPageUITests`, `KindsUITests`, `InterviewerUITests`.
 
+## 2026-11-19 · A page's first read of its photos does not scroll it
+
+**Status:** Decided by the builder (a bug fix). The owner can overrule it.
+
+**Decision.** A person's page and You go back to the top only when a later read of the photos finds another cover (`PhotoShelf.coverChanges`). The first read sets the cover the page opens with. It must not scroll the page.
+
+**Why.** The pages watched the cover's id. The id changes from nil to the first cover on the page's first read, so each page with a photo scrolled "back to the top" during its first layout. With the PC-b contact row, at the largest text size on an iPhone 17 Pro Max, the List then opened at its bottom: the cover and the name were off screen and out of the accessibility tree. On an iPhone 17 Pro the page opened correctly. `PhotosUITests.testAPageWithPhotosOpensAtItsTopAtTheLargestText` guards it; it fails on the Pro Max without the fix.
+
 ## 2026-11-19 · PC-b: a person can be linked to a contact — decisions and rulings made while building
 
 **Status:** Decided by the builder and the controller. The owner must confirm plan decisions 4, 5, 6 and 8, and the new copy and identifier listed at the end. The owner can overrule each one. Source: `docs/plans/2026-11-18-people-contacts-b.md`, ledger `.superpowers/sdd/2026-11-18-people-contacts-b/rulings.md` (PB1 to PB67). Narrows `docs/specs/2026-11-18-people-contacts.md` in five places, each marked in the spec.
