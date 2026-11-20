@@ -50,6 +50,25 @@ extension XCUIApplication {
         return settled() && element.isHittable
     }
 
+    /// An alert focuses its text field and raises the keyboard by itself. A second tap on the field only opens
+    /// the edit menu, so tap it only when the keyboard did not come up.
+    func focusAlertField(_ field: XCUIElement) {
+        if !keyboards.firstMatch.waitForExistence(timeout: 2) { field.tap() }
+    }
+
+    /// While typing, the keyboard can hide and come back, and an alert moves with it. A tap aimed while it was
+    /// centred then lands outside it. Taps `button` once it holds still, then waits for `container` to go;
+    /// tries again (the query finds the button anew) while it is still there.
+    func tapUntilGone(_ button: XCUIElement, closing container: XCUIElement, tries: Int = 3, timeout: TimeInterval = 2) -> Bool {
+        let gone = NSPredicate(format: "exists == false")
+        for _ in 0..<tries {
+            guard container.exists else { return true }
+            if waitHittable(button, timeout: timeout) { button.tap() }
+            if XCTWaiter().wait(for: [XCTNSPredicateExpectation(predicate: gone, object: container)], timeout: timeout) == .completed { return true }
+        }
+        return !container.exists
+    }
+
     /// Lists are lazy: a row below the fold is not in the tree until it scrolls into view.
     func reveal(_ element: XCUIElement, swipes: Int = 6) -> Bool {
         for _ in 0..<swipes {
@@ -319,5 +338,44 @@ extension XCUIApplication {
         XCTAssertTrue(waitHittable(settle, timeout: 5), "Settle in is in the bar's menu")
         settle.tap()
         XCTAssertTrue(buttons["session.finish"].waitForExistence(timeout: 5))
+    }
+}
+
+// MARK: - The Timeline's whole spine
+
+extension XCUIApplication {
+    /// Calls `visit` on every screen of the lazy Timeline, from its top to its last row, "The blue kite" (the spine seed).
+    func eachScreenOfTheTimeline(_ visit: () -> Void) {
+        let app = self
+        func memoryRow(_ title: String) -> XCUIElement {
+            app.buttons.matching(identifier: "timeline.memory").matching(NSPredicate(format: "label BEGINSWITH %@", title)).firstMatch
+        }
+        let first = memoryRow("The tree house")
+        for _ in 0..<10 where !(first.exists && app.waitHittable(first, timeout: 1)) { app.swipeDown() }
+        let last = memoryRow("The blue kite")
+        for _ in 0..<10 {
+            visit()
+            if last.exists && app.waitHittable(last, timeout: 1) { break }
+            app.swipeUp()
+        }
+        visit()
+        XCTAssertTrue(last.exists, "the scroll reached the last row, so every row above it was on screen once")
+    }
+
+    /// Every tag on the whole Timeline as (row title: tag label). A tag belongs to the row whose top is the nearest above it.
+    func tagsOnTheWholeTimeline() -> [String: String] {
+        let app = self
+        var seen: [String: String] = [:]
+        eachScreenOfTheTimeline {
+            let rows = app.buttons.matching(identifier: "timeline.memory").allElementsBoundByIndex
+                .filter { $0.exists && !$0.frame.isEmpty }
+                .map { (title: $0.label.components(separatedBy: " · ")[0], y: $0.frame.minY) }
+            let tags = app.descendants(matching: .any).matching(identifier: "timeline.tag")
+            for tag in tags.allElementsBoundByIndex where tag.exists && !tag.frame.isEmpty {
+                guard let row = rows.filter({ $0.y <= tag.frame.minY }).max(by: { $0.y < $1.y }) else { continue }
+                seen[row.title] = tag.label
+            }
+        }
+        return seen
     }
 }
