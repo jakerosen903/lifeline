@@ -289,3 +289,18 @@ private extension Person {
 @Test func anAliasIsTrimmedLikeARoleText() {
     #expect(OwnWords.choose(title: "Maya", aliases: ["  my sister "], roleTexts: []) == "my sister")
 }
+
+// Ruling R7: a relation phrase said beside a guessed name is saved only when the owner settles the guess.
+
+@Test func ownWordsNeverComeFromAnAssumedLink() throws {
+    var f = try Fixture()
+    let robin = try f.person("Robin")
+    try f.store.entities.link(try f.memory("Moving in").id, robin.id, relation: .mention, roleText: "my roommate, Robin", origin: .assumed)
+    #expect(try f.store.entities.ownWords(of: robin.id) == nil, "a guessed link's phrase is not the person's own words")
+    #expect(try f.store.entities.ownWords(type: .person)[robin.id] == nil)
+    for origin in [LinkOrigin.said, .confirmed, .new, nil] {
+        let other = try f.person("Other \(String(describing: origin))")
+        try f.store.entities.link(try f.memory("Told \(String(describing: origin))").id, other.id, relation: .mention, roleText: "my roommate", origin: origin)
+        #expect(try f.store.entities.ownWords(of: other.id) == "my roommate", "origin \(String(describing: origin)) still gives the words")
+    }
+}
