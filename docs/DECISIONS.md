@@ -59,6 +59,17 @@ The builder's defaults, as they stand after rulings R4 and R5:
 - The two-week watch of the sections plan had not ended when the shelf was built (R1).
 - Search (PR 39, branch `sections-search`) is not merged. A merge has one conflict, in `ios/LifelineUITests/UITestHelpers.swift`: both branches add a block after `launchWithSpine`. Keep both blocks whole, the Things shelf block first and then the Search block, and remove the markers. No names collide. Then run `swift test`, `ThingsUITests`, `SearchUITests`, `ShellUITests`, `EntitiesUITests` and `KindsUITests`.
 
+## 2026-11-19 · Picker scroll: one tile redraws per thumbnail, and the picker holds the sheet
+
+**Status:** Decided by the builder. The owner can overrule each one. Source: `docs/specs/2026-11-19-picker-scroll.md`.
+
+**Decision.** The owner reported that a swipe in the photos picker sometimes runs on without control (iOS 27, on the phone). We did not reproduce the fault. We have no iOS 27 device, and the UI tests cannot drive the system picker. The two causes below are inferences from the code.
+
+1. Each Favorites tile owns its thumbnail. Before, every tile read one observed dictionary, so each arrival redrew every visible tile during a fling. Now one arrival redraws one tile. The view model keeps the thumbnails in a cache that no view observes, so a tile that scrolls back shows its image at once.
+2. The sheet does not close with a swipe while the system picker shows (route `.picker`, or "All photos"). The picker's grid runs in another process, and a downward swipe can fight between the picker and the sheet. "Cancel" still closes the sheet. The explanation and the grid keep swipe-to-dismiss. The rule is `PhotoStoryStart.allowsSwipeToDismiss` in the kit, with a test.
+
+If the owner still sees the fault, neither cause was the real one, and we need a screen recording from the phone.
+
 ## 2026-11-18 · S6b: a pinned card with the life strip, a frame and a During line
 
 **Status:** Decided by the builder. The owner can overrule each one. Source: `docs/plans/2026-11-18-timeline-card.md`, ledger `.superpowers/sdd/2026-11-18-timeline-card/rulings.md`.
