@@ -27,13 +27,13 @@ struct ThingTile: View {
                 .frame(height: fitsText ? nil : height, alignment: .top)
                 .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                 .contentShape(Rectangle())
-                // The link itself is the one element VoiceOver reads; its words are its label and value.
-                .accessibilityHidden(true)
+                // As `PersonLink`: one element, the title its label, the count, guess and quote its value.
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(title)
+                .accessibilityValue(ThingTileText.accessibilityValue(moments: tile.summary.momentCount,
+                                                                     placedByGuess: tile.placedByGuess, quote: quote))
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(title)
-        .accessibilityValue(ThingTileText.accessibilityValue(moments: tile.summary.momentCount,
-                                                             placedByGuess: tile.placedByGuess, quote: quote))
         .accessibilityIdentifier("entities.row")
     }
 
@@ -43,6 +43,8 @@ struct ThingTile: View {
                 // A photo that cannot load leaves the sand fill; the tile keeps its size.
                 PhotoImageView(photo: keyPhoto, size: .small, cache: deps.photoImages) { Theme.sand }
                     .frame(maxWidth: .infinity, minHeight: fitsText ? 120 : 0)
+                    // Hidden alone, the image stayed in the automation tree; an empty representation removes it there too.
+                    .accessibilityRepresentation { Color.clear }
                     .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title)

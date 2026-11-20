@@ -46,6 +46,7 @@ final class ThingsUITests: XCTestCase {
         let app = XCUIApplication.launchWithThings()
         XCTAssertEqual(app.shelfTile("The radiator").value as? String, "1 moment. Placed by a guess")
         XCTAssertFalse((app.shelfTile("The red bike").value as? String ?? "").contains("guess"))
+        XCTAssertFalse((app.shelfTile("The piano").value as? String ?? "x guess").contains("guess"), "a stated span is not a guess")
     }
 
     @MainActor func testAHiddenMemoryGivesNoQuoteAndNoPlace() {
@@ -113,8 +114,12 @@ final class ThingsUITests: XCTestCase {
         XCTAssertTrue(volvo.waitForExistence(timeout: 5))
         XCTAssertEqual(volvo.elementType, .button)
         XCTAssertEqual(volvo.label, "Dad's Volvo")
-        XCTAssertFalse(volvo.staticTexts.firstMatch.exists, "the tile's texts are one element")
-        XCTAssertFalse(volvo.images.firstMatch.exists, "no photo is described")
+        // Ruling R3: XCUITest lists a button's texts even when VoiceOver reads one element, so this checks
+        // what VoiceOver reads (the label and the spoken value) and that the tile is one button.
+        XCTAssertEqual(volvo.value as? String, "1 moment. “It smelled like oranges and wet dog”", "the count and the quote are the spoken value")
+        XCTAssertEqual(volvo.buttons.count, 0, "no button inside the tile")
+        XCTAssertEqual(app.buttons.matching(NSPredicate(format: "label == %@", "Dad's Volvo")).count, 1, "one button for the tile")
+        XCTAssertFalse(app.shelfTile("The red bike").images.firstMatch.exists, "no photo is described")
     }
 
     @MainActor func testTheLargestTextIsOneColumnAndNothingIsCut() {

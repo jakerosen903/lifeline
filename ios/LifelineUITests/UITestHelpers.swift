@@ -224,7 +224,7 @@ extension XCUIApplication {
 
     /// The shelf's headings and tile labels in reading order, from its top to its end. The grid is lazy, so this
     /// scrolls down and places each element it sees at its spot in the content: its frame, moved by how far the
-    /// shelf has scrolled, which an element seen on both screens measures. One element at one spot counts once;
+    /// shelf has scrolled, which an element seen on both screens measures. One element at one spot (x and y) counts once;
     /// a label at two spots counts twice, so a thing on the shelf twice is never hidden.
     func shelfLabels() -> [String] {
         let grid = any("things.grid")
@@ -251,7 +251,8 @@ extension XCUIApplication {
             var added = false
             for item in current {
                 let y = item.frame.minY + scrolled
-                if !placed.contains(where: { $0.label == item.label && abs($0.y - y) < 2 }) {
+                // The spot is x and y: two tiles with one label in one row are two tiles.
+                if !placed.contains(where: { $0.label == item.label && abs($0.x - item.frame.minX) < 2 && abs($0.y - y) < 2 }) {
                     placed.append((item.label, item.frame.minX, y))
                     added = true
                 }
