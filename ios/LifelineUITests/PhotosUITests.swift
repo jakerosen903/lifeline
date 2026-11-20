@@ -165,6 +165,17 @@ final class PhotosUITests: XCTestCase {
         for thumb in thumbs(app).allElementsBoundByIndex { XCTAssertGreaterThanOrEqual(thumb.frame.height, 44) }
     }
 
+    /// The page opens at its top, the cover and the name on screen. The first read of the shelf once scrolled "back to
+    /// the top" in the page's first layout, and at this size on a wide phone (iPhone 17 Pro Max) the List landed at its
+    /// bottom instead.
+    @MainActor
+    func testAPageWithPhotosOpensAtItsTopAtTheLargestText() {
+        let app = XCUIApplication.launchWithPhotos(["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"])
+        app.openEntityPage("Maya")
+        XCTAssertTrue(app.buttons["photo.header"].isHittable, "the cover is on screen")
+        XCTAssertTrue(app.staticTexts["entity.title"].isHittable, "the name is on screen")
+    }
+
     @MainActor
     private func openMayasShelf(_ extra: [String] = []) -> XCUIApplication {
         let app = XCUIApplication.launchWithPhotos(extra)
