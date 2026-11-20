@@ -52,7 +52,7 @@ public enum SpineLayout {
             let years = TimeRange.yearSpan(shown.start, shown.end)
             let isRelation = isConfirmedRelation(item.range)
             let qualifier = !isRelation && (mark == .dashedDot || item.range.displayText == around + " " + years) ? around : nil
-            let period = LifePeriod.containing(year: shown.start, birthYear: birthYear)
+            let period = LifePeriod.containing(year: placingDate(of: item.range)!.year, birthYear: birthYear)  // isDated guarantees a date
             let stop = Stop(
                 id: item.id, mark: mark, years: years,
                 yearSpan: isRelation ? nil : min(shown.start, shown.end)...max(shown.start, shown.end),
@@ -86,6 +86,14 @@ public enum SpineLayout {
         guard let earliest = span.earliest, let latest = span.latest else { return .unplaced }
         guard earliest.year == latest.year, dated.allSatisfy(\.readsAsSaid) else { return span }
         return .year(earliest.year, origin: .stated, evidence: nil)
+    }
+
+    /// The date the spine starts a dated range at: the likely start when the likely band has both ends,
+    /// else the earliest. Nil when the range is not dated. The Things shelf groups by the same date.
+    public static func placingDate(of range: TimeRange) -> CivilDate? {
+        guard range.isDated else { return nil }
+        if range.likelyStart != nil, range.likelyEnd != nil { return range.likelyStart }
+        return range.earliest
     }
 
     /// The gap table (decision 6): units 0, 0, 1, 2, 3, 4 by years; a label from three years,

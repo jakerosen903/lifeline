@@ -46,3 +46,8 @@ import Testing
     // Decade of a year before 1 CE: floor division, not truncation toward zero.
     #expect(LifePeriod.containing(year: -5, birthYear: nil).name == "The -10s")
 }
+
+@Test func headingTextSaysByYourAgeOnlyForAnAgePeriod() {
+    #expect(LifePeriod.containing(year: 2005, birthYear: 1990).headingText == "Teens · by your age")
+    #expect(LifePeriod.containing(year: 2005, birthYear: nil).headingText == "The 2000s")
+}

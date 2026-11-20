@@ -160,9 +160,6 @@ private struct SpineWaypoint: View {
     /// False above the first stop: the spine starts at its mark.
     let drawsSpine: Bool
 
-    /// What follows the name: " · by your age" for a period of the person's age, nothing for a decade.
-    private var suffix: String { period.byAge ? " · by your age" : "" }
-
     var body: some View {
         label
             .font(.footnote)
@@ -172,14 +169,14 @@ private struct SpineWaypoint: View {
             .padding(.leading, geometry.contentLeading)
             .frame(maxWidth: .infinity, alignment: .leading)
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel(period.name + suffix)
+            .accessibilityLabel(period.headingText)
             .accessibilityAddTraits(.isHeader)
             .accessibilityIdentifier("timeline.period")
             .background(alignment: .leading) { if drawsSpine { SpineLine(dashed: false, x: geometry.spineX) } }
     }
 
     /// The same words as the accessibility label, with the name in semibold.
-    private var label: Text { Text("\(Text(period.name).fontWeight(.semibold))\(suffix)") }
+    private var label: Text { Text("\(Text(period.name).fontWeight(.semibold))\(String(period.headingText.dropFirst(period.name.count)))") }
 }
 
 /// A piece of the spine: the full height of whatever it is behind, centred on `x`.

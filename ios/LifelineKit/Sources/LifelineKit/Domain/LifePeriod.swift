@@ -1,6 +1,6 @@
 /// A stretch of life named by the person's age, or by its decade when the age is unknown.
 /// The name states an age or a decade, never a life event. Pure.
-public struct LifePeriod: Equatable, Sendable {
+public struct LifePeriod: Hashable, Sendable {
     public let name: String
     /// True when the name comes from the birth date: the waypoint then says "by your age".
     public let byAge: Bool
@@ -24,4 +24,7 @@ public struct LifePeriod: Equatable, Sendable {
         let decade = Int((Double(year) / 10).rounded(.down)) * 10
         return LifePeriod(name: "The \(decade)s", byAge: false)
     }
+
+    /// "Teens · by your age" for a period by age; "The 1990s" for a decade. One text for the Timeline and the shelf.
+    public var headingText: String { byAge ? name + " · by your age" : name }
 }
