@@ -259,6 +259,8 @@ struct EntityScreen: View {
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        // A contact link that is running may open its own sheet; the merge waits until it ends.
+        .disabled(viewModel.contact.isWorking)
         .accessibilityIdentifier("entity.merge")
     }
 

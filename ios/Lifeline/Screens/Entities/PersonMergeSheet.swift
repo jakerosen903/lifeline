@@ -38,10 +38,13 @@ struct PersonMergeSheet: View {
     private var pickerList: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
-                Text("Who is \(leaving?.displayName ?? "") the same as?")
-                    .font(.system(.title2, design: .serif).weight(.medium)).foregroundStyle(Theme.ink)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .accessibilityAddTraits(.isHeader)
+                // With no person that goes, a tap closes the sheet (`pick`), so the title is left out, not shown with no name.
+                if let leaving {
+                    Text("Who is \(leaving.displayName) the same as?")
+                        .font(.system(.title2, design: .serif).weight(.medium)).foregroundStyle(Theme.ink)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .accessibilityAddTraits(.isHeader)
+                }
                 if viewModel.others.isEmpty {
                     Text("No other people yet.").font(.body).foregroundStyle(Theme.secondaryText)
                 } else {
