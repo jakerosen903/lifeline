@@ -304,4 +304,23 @@ final class PeopleMergeUITests: XCTestCase {
         XCTAssertTrue(gridRow(app, "Sam").waitForExistence(timeout: 5), "Undo brings Sam back")
         XCTAssertTrue(gridRow(app, "Maya").exists)
     }
+
+    /// Ruling C14: while the line offers Undo, a second drop on the grid does nothing, so the merge just made keeps its
+    /// only way back.
+    func testASecondDropWhileUndoShowsDoesNothing() {
+        let app = XCUIApplication.launchWithPeople()
+        app.openTab("People")
+        let sam = gridRow(app, "Sam"), maya = gridRow(app, "Maya")
+        XCTAssertTrue(app.waitHittable(sam, timeout: 10), "Sam's tile is on screen")
+        XCTAssertTrue(app.waitHittable(maya, timeout: 5), "Maya's tile is on screen")
+        sam.press(forDuration: 1.5, thenDragTo: maya, withVelocity: .slow, thenHoldForDuration: 1.0)
+        expectConfirm(app, leaving: "Sam", staying: "Maya")
+        tapMerge(app, into: "Maya")
+        // The second drag must land well inside the 6 seconds, so it is quicker than the first.
+        let dad = gridRow(app, "Dad"), lena = gridRow(app, "Lena")
+        dad.press(forDuration: 0.8, thenDragTo: lena, withVelocity: .default, thenHoldForDuration: 0.3)
+        XCTAssertFalse(app.any("merge.confirm").waitForExistence(timeout: 1), "no confirm opens")
+        XCTAssertTrue(app.buttons["notice.undo"].exists, "the merge's Undo is still there")
+        XCTAssertEqual(notice(app).label, "Merged into Maya.")
+    }
 }

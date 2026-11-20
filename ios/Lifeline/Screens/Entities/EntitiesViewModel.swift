@@ -51,9 +51,10 @@ final class EntitiesViewModel {
     // MARK: - Merge (People only)
 
     /// `leaving` was dropped onto `staying`, who stays (plan decision 2). Returns true when the pair may merge and the
-    /// confirm should open; a refused pair says why in the slot. Nothing is written here.
+    /// confirm should open; a refused pair says why in the slot. Nothing is written here. While the slot offers Undo, a
+    /// drop does nothing (ruling C14): a refusal would replace the only way back from the merge just made.
     func askMerge(_ leaving: EntityID, into staying: EntityID) -> Bool {
-        guard let merge else { return false }
+        guard let merge, notice?.canUndo != true else { return false }
         notice?.clearMessage()
         merge.openConfirm(PersonID(rawValue: leaving.rawValue), into: PersonID(rawValue: staying.rawValue))
         if merge.preview != nil { return true }
