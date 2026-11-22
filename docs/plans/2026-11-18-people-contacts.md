@@ -20,7 +20,7 @@
 
 The spec leaves these open. The owner can overrule each one before work starts.
 
-1. **v15 adds every column of the spec's data model now.** PC-b then needs no migration. The contact columns stay null in this PR. The migration was first built as `v14` and renamed to `v15` after the final review (R36): the unmerged photo branches register their own `v14`.
+1. **v15 adds every column of the spec's data model now.** PC-b then needs no migration. The contact columns stay null in this PR. The migration was first built as `v14` and renamed to `v15` after the final review (R36): the photo story registered its own `v14` first.
 2. **`PersonGuess` has all seven rules now, with tests.** The app passes an empty contact list until PC-b, so rules 5 and 6 cannot fire on the phone yet.
 3. **The line for a new person is "New" in this PR.** "New · not in your contacts" would be a claim the app has not checked. PC-b adds the second half.
 4. **The relation phrase for a said name** comes from two places: the comma form of the ref ("my mom, Marcel"), and the `relation_text` of a person mention in the same segment with the same text.

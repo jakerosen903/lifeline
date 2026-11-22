@@ -366,3 +366,47 @@ private struct SeedSession {
         return memory.id
     }
 }
+
+// MARK: - Contacts (PC-b)
+
+extension UITestSeed {
+    /// The scripted phone's contacts, invented. Tests that need more cards add them here.
+    /// - "Robyn Okafor" goes by "Robin", so she fits the guessed "Robin" of `-uiTesting-seedGuesses` (a contact row in its sheet).
+    /// - "Dara Quinn" is the one contact that fits "Dara" of `-uiTesting-followUps`, so Keep makes her from the contact.
+    ///   She has a picture, so a test sees it copied after Keep (I-2).
+    static let contactCards: [ContactCard] = [
+        ContactCard(identifier: "ui-contact-vale", fullName: "Robyn Vale", givenName: "Robyn", familyName: "Vale", nickname: "", hasPicture: true),
+        ContactCard(identifier: "ui-contact-reyes", fullName: "Tomas Reyes", givenName: "Tomas", familyName: "Reyes", nickname: "", hasPicture: false),
+        ContactCard(identifier: "ui-contact-okafor", fullName: "Robyn Okafor", givenName: "Robyn", familyName: "Okafor", nickname: "Robin", hasPicture: false),
+        ContactCard(identifier: "ui-contact-quinn", fullName: "Dara Quinn", givenName: "Dara", familyName: "Quinn", nickname: "", hasPicture: true),
+    ]
+
+    /// Under `-uiTesting-seedContactLink`, after `-uiTesting-seedPeople`: Lena is linked to "Robyn Okafor", as a restore to
+    /// a new phone leaves a person whose contact the app has not been allowed to see yet. The card has no picture.
+    static func linkLenaToAContact(store: ExtractionStore, links: ContactLinkActions) throws {
+        guard let lena = try store.entities.entities(type: .person).first(where: { $0.title == "Lena" })?.id,
+              let card = contactCards.first(where: { $0.identifier == "ui-contact-okafor" }) else { return }
+        try waitFor { try await links.link(PersonID(rawValue: lena.rawValue), to: card) }
+    }
+
+    /// The colour of each card's generated picture, for the cards with `hasPicture`.
+    private static let contactPictureColours: [String: Int] = ["ui-contact-vale": 0x5A7D9A, "ui-contact-quinn": 0x9A7D5A]
+
+    /// `-uiTesting-contacts <full|limited|notAsked|denied>` picks the access. Without it (or with an unknown value) the
+    /// app has not asked and a request is refused, so a test that does not name contacts sees none. `notAsked` named
+    /// on purpose answers a request with `full`. The pictures are small generated JPEGs written under `folder`.
+    static func contactsDirectory(arguments: [String], folder: URL) throws -> ScriptedContactsDirectory {
+        let named = arguments.firstIndex(of: "-uiTesting-contacts").flatMap { $0 + 1 < arguments.count ? arguments[$0 + 1] : nil }
+            .flatMap(ContactsAccess.init(rawValue:))
+        let access = named ?? .notAsked
+        let afterRequest: ContactsAccess = named == nil ? .denied : (access == .notAsked ? .full : access)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        var pictures: [String: Data] = [:]
+        for (identifier, rgb) in contactPictureColours {
+            let url = folder.appending(path: "\(identifier).jpg")
+            try GeneratedPhoto.write(to: url, width: 96, height: 96, rgb: rgb)
+            pictures[identifier] = try Data(contentsOf: url)
+        }
+        return ScriptedContactsDirectory(cards: contactCards, pictures: pictures, access: access, accessAfterRequest: afterRequest)
+    }
+}

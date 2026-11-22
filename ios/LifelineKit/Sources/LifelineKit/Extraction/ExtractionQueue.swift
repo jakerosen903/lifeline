@@ -172,7 +172,7 @@ public actor ExtractionQueue {
         // People named in this or the previous segments first, then by most recent link (M5).
         let recentText = ([segment] + previous.filter { $0.index < segment.index }.suffix(2)).map(\.text).joined(separator: " ")
         let people = try store.people.peopleByRecentLink()
-            .map { ($0, (try? store.people.aliases(of: $0.id)) ?? []) }
+            .map { ($0, (try? store.people.aliasesOldestFirst(of: $0.id)) ?? []) }
             .sorted { Self.isNamed($0, in: recentText) && !Self.isNamed($1, in: recentText) }
         // This session's cards still waiting, except this segment's own, so a continuation can name one (M5).
         let pending = try store.candidates.pending(in: session).filter { $0.kind == .memory && $0.segmentID != segment.id }

@@ -15,8 +15,9 @@ final class EntityPageUITests: XCTestCase {
         XCTAssertEqual(app.buttons.matching(identifier: "entity.oftenWith").allElementsBoundByIndex.map(\.label),
                        ["Dad, 3 moments together", "Alder Street, 2 moments together"])
         let moments = app.buttons.matching(identifier: "entity.moment")
-        XCTAssertTrue(app.reveal(app.staticTexts["Moments with Maya"]))
+        // Before the scroll: the contact row under the header (PC-b) can push the strip off screen once the moments show.
         XCTAssertLessThan(app.any("entity.strip").frame.minY, app.buttons["entity.detail"].firstMatch.frame.minY)
+        XCTAssertTrue(app.reveal(app.staticTexts["Moments with Maya"]))
         XCTAssertLessThan(app.buttons["entity.detail"].firstMatch.frame.minY, app.buttons["entity.oftenWith"].firstMatch.frame.minY)
         XCTAssertLessThan(app.buttons["entity.oftenWith"].firstMatch.frame.minY, moments.firstMatch.frame.minY)
         XCTAssertFalse(app.staticTexts["Jordan"].exists, "the owner is never often with anyone")

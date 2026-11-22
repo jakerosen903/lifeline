@@ -35,7 +35,8 @@ import Testing
 @Test func noEntityQuestionAsksForADateOrAnOpinion() {
     let entities = EntityType.allCases.map { Entity(type: $0, title: "Example") }
     let links = entities.map { MomentEntity(memoryID: MemoryID(), entityID: $0.id, relation: .detail) }
-    let drafts = EntityCuriosity.drafts(entities: entities, links: links, memories: [:], owner: nil)
+    let names = Dictionary(uniqueKeysWithValues: entities.filter { $0.type == .person }.map { ($0.id, $0.title) })
+    let drafts = EntityCuriosity.drafts(entities: entities, links: links, memories: [:], owner: nil, personNames: names)
     #expect(drafts.count == 4)
     for draft in drafts {
         let lower = draft.text.lowercased()
@@ -53,7 +54,8 @@ import Testing
     var excluded = Entity(type: .person, title: "Rosa")
     excluded.excludedFromAI = true
     let bare = Entity(type: .thing, title: "the car")
-    #expect(EntityCuriosity.drafts(entities: [owner, hidden, excluded, bare], links: [], memories: [:], owner: owner.id).isEmpty,
+    #expect(EntityCuriosity.drafts(entities: [owner, hidden, excluded, bare], links: [], memories: [:], owner: owner.id,
+                                   personNames: [owner.id: "Sam", excluded.id: "Rosa"]).isEmpty,
             "a thing with nothing said about it does not ask either")
 }
 
@@ -65,4 +67,32 @@ import Testing
     #expect(opening.main == .curiosity(dated, text: "Tell me about Zebra summer."))
     let alone = OpeningChooser.choose(curiosity: [entity], bank: [], lastUsed: [:], now: .now)
     #expect(alone.main == .curiosity(entity, text: "Is there a moment that brought that to mind?"), "the question is asked as written")
+}
+
+// PC-b, PB10: a question goes to the interviewer's model, so a person is named only by a name the owner said.
+@Test func aPersonIsAskedAboutByTheirNameForTheModelOnly() {
+    let robyn = Entity(type: .person, title: "Robyn Vale")
+    let unnamed = Entity(type: .person, title: "Tomas Okafor")
+    let drafts = EntityCuriosity.drafts(entities: [robyn, unnamed], links: [], memories: [:], owner: nil, personNames: [robyn.id: "Robyn"])
+    #expect(drafts.map(\.text) == ["Is there one time with Robyn that stands out?"], "a person with no name for the model is not asked about")
+    #expect(drafts.map(\.entityID) == [robyn.id])
+}
+
+@Test func namesForTheModelUseTheOldestSaidNameOfAPersonFromAContact() throws {
+    let db = try AppDatabase.inMemory()
+    let store = ExtractionStore(db)
+    let maya = try store.people.insertPerson(displayName: "Maya")
+    let robyn = Person(id: .init(), displayName: "Robyn Vale", notes: nil, isOwner: false, birthDate: nil, birthDateOrigin: nil,
+                       nameOrigin: .contact, createdByGuess: true, contactIdentifier: "c-vale", contactName: "Robyn Vale", contactState: "linked")
+    let bare = Person(id: .init(), displayName: "Tomas Okafor", notes: nil, isOwner: false, birthDate: nil, birthDateOrigin: nil,
+                      nameOrigin: .contact, createdByGuess: true, contactIdentifier: "c-okafor", contactName: "Tomas Okafor", contactState: "linked")
+    try db.writer.write { db in
+        try robyn.insertWithEntity(db); try bare.insertWithEntity(db)
+        _ = try PeopleRepository.insertAlias("Robyn", robyn.id, db)
+        _ = try PeopleRepository.insertAlias("Bee", robyn.id, db)
+    }
+    #expect(try store.people.namesForModel() == [maya.entityID: "Maya", robyn.entityID: "Robyn"])
+    #expect(try store.people.nameForModel(of: robyn.id) == "Robyn")
+    #expect(try store.people.nameForModel(of: bare.id) == nil)
+    #expect(NameForModel.of(bare, aliasesOldestFirst: []) == nil)
 }

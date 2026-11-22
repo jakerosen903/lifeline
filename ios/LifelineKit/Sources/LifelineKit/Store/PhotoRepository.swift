@@ -105,9 +105,15 @@ public struct PhotoRepository: Sendable {
 
     /// One transaction: the row, then its link. The first photo on a subject is its cover (decision 8).
     public func insert(_ photo: Photo, linkingTo subject: PhotoSubject) throws {
+        try insert(photo, linkingTo: subject, alsoWriting: { _ in })
+    }
+
+    /// `insert(_:linkingTo:)`, and `alsoWriting` in the same transaction. When it throws, nothing is written.
+    func insert(_ photo: Photo, linkingTo subject: PhotoSubject, alsoWriting: (Database) throws -> Void) throws {
         try db.writer.write { db in
             try photo.insert(db)
             try Self.link(photo.id, to: subject, in: db)
+            try alsoWriting(db)
         }
     }
 
@@ -131,13 +137,24 @@ public struct PhotoRepository: Sendable {
 
     /// Moves the photo to the front: `reorder([photo], of: subject)`. A photo the page does not hold changes nothing.
     public func setCover(_ photo: PhotoID, of subject: PhotoSubject) throws {
-        try db.writer.write { db in
-            let (column, value) = subject.key
-            let linked = try Int.fetchOne(db, sql: "select count(*) from photo_link where \(column) = ? and photo_id = ?",
-                                          arguments: [value, photo.rawValue]) ?? 0
-            guard linked == 1 else { return }
-            try Self.writeOrder([photo], of: subject, in: db)
-        }
+        try db.writer.write { try Self.setCover(photo, of: subject, in: $0) }
+    }
+
+    /// `setCover` inside a caller's transaction. A photo the subject does not hold: nothing changes.
+    static func setCover(_ photo: PhotoID, of subject: PhotoSubject, in db: Database) throws {
+        let (column, value) = subject.key
+        let linked = try Int.fetchOne(db, sql: "select count(*) from photo_link where \(column) = ? and photo_id = ?",
+                                      arguments: [value, photo.rawValue]) ?? 0
+        guard linked == 1 else { return }
+        try Self.writeOrder([photo], of: subject, in: db)
+    }
+
+    /// The subject's first photo in the order `photos(of:)` gives: the cover, then the order added.
+    static func firstPhoto(of subject: PhotoSubject, in db: Database) throws -> PhotoID? {
+        let (column, value) = subject.key
+        return try String.fetchOne(db, sql: """
+            select photo_id from photo_link where \(column) = ? order by role = 'cover' desc, sort_order, rowid limit 1
+            """, arguments: [value]).map(PhotoID.init(rawValue:))
     }
 
     /// The five steps, in this order, because the unique cover index allows one cover per page and is checked per statement:
@@ -258,7 +275,7 @@ public struct PhotoRepository: Sendable {
             """, arguments: [session.rawValue])
     }
 
-    private static func deleteIfHomeless(_ photo: PhotoID, in db: Database) throws -> Photo? {
+    static func deleteIfHomeless(_ photo: PhotoID, in db: Database) throws -> Photo? {
         guard let row = try Photo.fetchOne(db, sql: "select * from photo where id = ? and \(homeless)", arguments: [photo.rawValue]) else { return nil }
         _ = try Photo.deleteOne(db, key: photo.rawValue)
         return row

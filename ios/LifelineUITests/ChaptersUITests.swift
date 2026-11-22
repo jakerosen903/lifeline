@@ -169,12 +169,12 @@ final class ChaptersUITests: XCTestCase {
         app.buttons["chapter.rename"].tap()
         let field = app.alerts.textFields.firstMatch
         XCTAssertTrue(field.waitForExistence(timeout: 5), "the rename alert is up")
-        field.tap()
+        app.focusAlertField(field)
         field.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: 20))
         XCTAssertFalse(app.alerts.buttons["Save"].firstMatch.isEnabled, "an empty name cannot be saved")
         field.typeText("Maple St")
         XCTAssertTrue(app.alerts.buttons["Save"].firstMatch.isEnabled)
-        app.alerts.buttons["Save"].firstMatch.tap()
+        XCTAssertTrue(app.tapUntilGone(app.alerts.buttons["Save"].firstMatch, closing: app.alerts.firstMatch), "Save closes the rename alert")
         let name = app.staticTexts["chapter.name"]
         XCTAssertEqual(XCTWaiter().wait(for: [XCTNSPredicateExpectation(predicate: NSPredicate(format: "label == 'Maple St'"), object: name)], timeout: 5),
                        .completed, "the sheet shows the new name: \(name.label)")
@@ -276,9 +276,9 @@ final class ChaptersUITests: XCTestCase {
         app.buttons["chapter.rename"].tap()
         let field = app.alerts.textFields.firstMatch
         XCTAssertTrue(field.waitForExistence(timeout: 5))
-        field.tap()
+        app.focusAlertField(field)
         field.typeText("Mr. Okafor's class")
-        app.alerts.buttons["Save"].firstMatch.tap()
+        XCTAssertTrue(app.tapUntilGone(app.alerts.buttons["Save"].firstMatch, closing: app.alerts.firstMatch), "Save closes the rename alert")
         let name = app.staticTexts["chapter.name"]
         XCTAssertEqual(XCTWaiter().wait(for: [XCTNSPredicateExpectation(predicate: NSPredicate(format: "label BEGINSWITH 'Mr. Okafor'"), object: name)], timeout: 5),
                        .completed, "the sheet shows the name: \(name.label)")

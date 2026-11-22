@@ -165,6 +165,17 @@ final class PhotosUITests: XCTestCase {
         for thumb in thumbs(app).allElementsBoundByIndex { XCTAssertGreaterThanOrEqual(thumb.frame.height, 44) }
     }
 
+    /// The page opens at its top, the cover and the name on screen. The first read of the shelf once scrolled "back to
+    /// the top" in the page's first layout, and at this size on a wide phone (iPhone 17 Pro Max) the List landed at its
+    /// bottom instead.
+    @MainActor
+    func testAPageWithPhotosOpensAtItsTopAtTheLargestText() {
+        let app = XCUIApplication.launchWithPhotos(["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"])
+        app.openEntityPage("Maya")
+        XCTAssertTrue(app.buttons["photo.header"].isHittable, "the cover is on screen")
+        XCTAssertTrue(app.staticTexts["entity.title"].isHittable, "the name is on screen")
+    }
+
     @MainActor
     private func openMayasShelf(_ extra: [String] = []) -> XCUIApplication {
         let app = XCUIApplication.launchWithPhotos(extra)
@@ -354,7 +365,7 @@ final class PhotosUITests: XCTestCase {
         XCTAssertTrue(waitForAddingLine(app, "Adding photo 1 of 2…", timeout: 5), "the first photo")
         XCTAssertTrue(waitForAddingLine(app, "Adding photo 2 of 2…", timeout: 10), "the line moves to the next photo")
         XCTAssertTrue(waitForAbsence(app.any("photo.adding"), timeout: 30), "both photos are done")
-        XCTAssertTrue(app.staticTexts["Photos"].waitForExistence(timeout: 5), "both photos were added")
+        XCTAssertTrue(app.reveal(app.staticTexts["Photos"]), "both photos were added")  // the contact row can push the row off a lazy list
     }
 
     /// Each file waits three seconds (`-uiTesting-slowPhotoFile`), so the page is seen while the photos are added.
@@ -374,7 +385,7 @@ final class PhotosUITests: XCTestCase {
         XCTAssertEqual(add.label, "Add a photo")
         closeMenu(app)
         XCTAssertTrue(waitForAbsence(app.any("photo.adding"), timeout: 30), "both photos are done")
-        XCTAssertTrue(app.staticTexts["Photos"].waitForExistence(timeout: 5), "both photos were added")
+        XCTAssertTrue(app.reveal(app.staticTexts["Photos"]), "both photos were added")  // the contact row can push the row off a lazy list
         app.buttons["entity.more"].tap()
         XCTAssertTrue(app.waitHittable(add, timeout: 5))
         XCTAssertTrue(add.isEnabled, "Add a photo works again once the photos are added")

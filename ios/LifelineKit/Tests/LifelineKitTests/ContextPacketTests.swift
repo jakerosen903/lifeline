@@ -135,3 +135,33 @@ private func pendingCandidate(_ segment: SegmentID, title: String, quote: String
 @Test func estimateIsCharactersOverFour() {
     #expect(ContextPacketBuilder.estimate("") == 1 && ContextPacketBuilder.estimate(String(repeating: "a", count: 400)) == 100)
 }
+
+// PC-b Task 2, Review Focus 5: nothing from a contact goes to the model. A person whose name came from a
+// contact is sent by the oldest name the owner said; the contact's name never appears in the packet.
+@Test func aPersonFromAContactIsSentByTheOldestSaidName() throws {
+    let robyn = Person(id: .init(), displayName: "Robyn Vale", notes: nil, isOwner: false, birthDate: nil, birthDateOrigin: nil,
+                       nameOrigin: .contact, createdByGuess: true, contactIdentifier: "c-vale", contactName: "Robyn Vale", contactState: "linked")
+    let aliases = [Alias(personID: robyn.id, text: "Robyn"), Alias(personID: robyn.id, text: "my roommate")]   // oldest first
+    let packet = ContextPacketBuilder.build(segment: seg(0, "x"), previous: [], people: [(robyn, aliases)], memories: [],
+                                            profileFreeText: nil, stage: "open")
+    #expect(packet.people == [ContextPacket.PersonEntry(id: robyn.id.rawValue, name: "Robyn", aliases: ["my roommate"])])
+    let text = String(decoding: try packet.encodedJSON(), as: UTF8.self)
+    #expect(!text.contains("Vale"), "the contact's name never reaches the model")
+}
+
+@Test func aPersonFromAContactWithNoSaidNameIsLeftOut() throws {
+    let robyn = Person(id: .init(), displayName: "Robyn Vale", notes: nil, isOwner: false, birthDate: nil, birthDateOrigin: nil,
+                       nameOrigin: .contact, createdByGuess: true, contactIdentifier: "c-vale", contactName: "Robyn Vale", contactState: "linked")
+    let packet = ContextPacketBuilder.build(segment: seg(0, "x"), previous: [], people: [(robyn, []), person("Maya")], memories: [],
+                                            profileFreeText: nil, stage: "open")
+    #expect(packet.people.map(\.name) == ["Maya"])
+    #expect(!String(decoding: try packet.encodedJSON(), as: UTF8.self).contains("Vale"))
+}
+
+@Test func aliasesReadOldestFirstForThePacket() throws {
+    let store = ExtractionStore(try AppDatabase.inMemory())
+    let robyn = try store.people.insertPerson(displayName: "Robyn")
+    try store.people.addAlias("Bee", to: robyn.id)
+    try store.people.addAlias("Abby", to: robyn.id)
+    #expect(try store.people.aliasesOldestFirst(of: robyn.id).map(\.text) == ["Robyn", "Bee", "Abby"])
+}

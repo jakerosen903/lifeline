@@ -396,6 +396,7 @@ enum Migrations {
 
         // v15 (people and contacts): a link records how it was made; a person can be backed by a contact.
         // Additive: no existing row or column changes. An old link has a nil origin.
+        // It is v15, not v14: the photo story took v14 on its own branch first, and GRDB records a migration by name.
         m.registerMigration("v15") { db in
             try db.alter(table: "person") { t in
                 t.add(column: "contact_identifier", .text)
