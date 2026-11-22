@@ -115,6 +115,75 @@ enum UITestSeed {
         }
     }
 
+    /// Under `-uiTesting-seedThings`: Jordan, born 1990-06-01, and things for the Things shelf, all told in one session.
+    /// Placed by stated years: "The red bike" (1999 and 2004; a key photo), "Dad's Volvo" (2001; a detail with a quote).
+    /// "The piano" has no moment, only a stated span (1996 to 2002). "The radiator" is placed by a guess (2012, inferred)
+    /// and its only detail is hidden. Not placed: "Grandpa's watch" (an undated moment; a key photo whose file is gone),
+    /// "The guitar" (a detail only), "The blue kite" (its only moment hidden) and a long-titled armchair (undated).
+    /// "The shoebox" is hidden. With `undatedOnly` (`-uiTesting-thingsUndatedOnly`): the watch, without its photo, and the guitar.
+    static func writeThings(store: ExtractionStore, profile: ProfileRepository, sessions: SessionRepository, library: PhotoLibrary,
+                            photosDirectory: URL, undatedOnly: Bool) throws {
+        let birth = Calendar.current.date(from: DateComponents(year: 1990, month: 6, day: 1))
+        try profile.save(Profile(displayName: "Jordan", birthDate: birth, birthPlaceText: nil, freeText: nil, updatedAt: .now))
+        let session = Session(id: .init(), startedAt: .now, endedAt: .now, audioPath: "seed.m4a", stageLog: "[]", landingChoiceMade: true)
+        try sessions.insert(session)
+        var seed = SeedSession(session: session, store: store, sessions: sessions)
+        let folder = FileManager.default.temporaryDirectory.appending(path: "seed-things-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        func thing(_ title: String) throws -> EntityID { try store.entities.insert(type: .thing, title: title).id }
+
+        let watch = try thing("Grandpa's watch")
+        try seed.keep("Grandpa's last visit", kind: .event, relation: .mention, links: [(watch, nil)])
+        let guitar = try thing("The guitar")
+        try seed.keep("Three chords", kind: .fact, quote: "I never learned more than three chords", links: [(guitar, nil)])
+        if undatedOnly { return }
+
+        // A key photo that cannot load: it is stored, then its file is removed.
+        let gone = try addPhoto(library, in: folder, named: "watch", rgb: 0x5F7046, to: watch)
+        try FileManager.default.removeItem(at: photosDirectory.appending(path: gone.fileName))
+
+        let bike = try thing("The red bike")
+        try seed.keep("Riding to the quarry", kind: .event, year: 1999, relation: .mention, links: [(bike, nil)])
+        try seed.keep("Selling the red bike", kind: .event, year: 2004, relation: .mention, links: [(bike, nil)])
+        _ = try addPhoto(library, in: folder, named: "bike", rgb: 0xC8893F, to: bike)
+
+        let volvo = try thing("Dad's Volvo")
+        try seed.keep("The drive to Dayton", kind: .event, year: 2001, relation: .mention, links: [(volvo, nil)])
+        try seed.keep("The smell of the Volvo", kind: .fact, quote: "um, it smelled like oranges and wet dog", links: [(volvo, nil)])
+
+        // "Add dates" writes a stated span: settled, so it never reads as a guess.
+        let piano = try thing("The piano")
+        try store.entities.setStatedSpan(piano, .stated(between: 1996, and: 2002))
+
+        let radiator = try thing("The radiator")
+        let cold = try seed.keep("The cold flat", kind: .event, relation: .mention, links: [(radiator, nil)])
+        try store.memories.updateRange(cold, .year(2012, origin: .inferred, evidence: "when I was 22"))
+        let clank = try seed.keep("The clanking radiator", kind: .fact, quote: "he clanked all night", links: [(radiator, nil)])
+        try store.memories.setHidden(clank, true)
+
+        let kite = try thing("The blue kite")
+        let tree = try seed.keep("The kite in the tree", kind: .event, year: 2000, relation: .mention, links: [(kite, nil)])
+        try store.memories.setHidden(tree, true)
+
+        let chair = try thing("The enormous green armchair that came with the flat on Hemenway Street")
+        try seed.keep("Carrying the armchair upstairs", kind: .event, relation: .mention, links: [(chair, nil)])
+
+        let shoebox = try thing("The shoebox")
+        try seed.keep("The shoebox under the bed", kind: .event, year: 1999, relation: .mention, links: [(shoebox, nil)])
+        try store.entities.setHidden(shoebox, true)
+    }
+
+    /// A generated photo (a solid colour with a circle), added to a thing's page as a pick would add it.
+    private static func addPhoto(_ library: PhotoLibrary, in folder: URL, named name: String, rgb: Int, to thing: EntityID) throws -> Photo {
+        let file = folder.appending(path: "\(name).jpg")
+        try GeneratedPhoto.write(to: file, width: 1600, height: 1200, rgb: rgb, takenAt: nil, gps: nil)
+        let box = PhotoBox()
+        try waitFor { box.set(try await library.add(fileAt: file, assetLocalID: nil, to: .entity(thing))) }
+        guard let photo = box.get() else { throw CocoaError(.fileReadUnknown) }
+        return photo
+    }
+
     /// Under `-uiTesting-seedPhotoStory`: the family, then two landed photo sessions, each about a generated photo.
     /// The first (two moments, told 2 hours ago) is about a dated photo (14 June 2012) and has two kept memories that both hold it:
     /// "The beach" (unplaced; names Maya and Dad) and "The drive home" (stated 2012; names Dad). The real Keep write puts the photo

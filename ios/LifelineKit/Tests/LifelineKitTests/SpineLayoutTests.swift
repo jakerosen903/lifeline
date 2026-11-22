@@ -256,3 +256,13 @@ private func storyStop(_ members: [TimeRange]) -> SpineLayout.Stop {
         if let span = stop.yearSpan { #expect(stop.years.hasPrefix(String(span.lowerBound))) }
     }
 }
+
+@Test func placingDateIsTheLikelyStartWhenTheBandHasBothEnds() {
+    let band = TimeRange(earliest: CivilDate(iso: "1998-01-01"), latest: CivilDate(iso: "2006-12-31"), likelyStart: CivilDate(iso: "2003-01-01"),
+                         likelyEnd: CivilDate(iso: "2004-12-31"), granularity: .year, origin: .inferred, evidenceText: nil)
+    #expect(SpineLayout.placingDate(of: band) == CivilDate(iso: "2003-01-01"))
+}
+@Test func placingDateIsTheEarliestOtherwiseAndNilWhenNotDated() {
+    #expect(SpineLayout.placingDate(of: .stated(year: 1999)) == CivilDate(iso: "1999-01-01"))
+    #expect(SpineLayout.placingDate(of: .unplaced) == nil)
+}

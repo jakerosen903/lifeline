@@ -5,7 +5,7 @@ import LifelineKit
 /// A free-text tag narrows any of them. The owner is never a row: their page is "About you" on You.
 @MainActor
 @Observable
-final class EntitiesViewModel {
+final class EntitiesViewModel: TagFiltering {
     let type: EntityType
     var tagFilter: String? { didSet { refresh() } }
     private(set) var rows: [EntitySummary] = []

@@ -188,6 +188,113 @@ extension XCUIApplication {
         return app
     }
 
+    // MARK: - The Things shelf
+
+    /// Launches with `-uiTesting-seedThings` (Jordan, born 1990, and the shelf's things), then opens Things.
+    /// First open is done; do not call `skipFirstOpen()`.
+    static func launchWithThings(_ extra: [String] = []) -> XCUIApplication {
+        let app = XCUIApplication()
+        app.launchArguments += ["-uiTesting", "-uiTesting-seedThings"] + extra
+        app.launch()
+        XCTAssertTrue(app.waitHittable(app.buttons["home.start"], timeout: 15), "the seeded app lands on the timeline")
+        app.openTab("Things")
+        return app
+    }
+
+    /// The shelf's tile for a thing: the `entities.row` button with this label, scrolled onto the screen.
+    /// The grid is lazy: a tile below the fold is not in the tree, and one scrolled far above it leaves the tree.
+    /// So this scrolls down the shelf until the tile shows, then back up. A tile it cannot find is returned as is,
+    /// and the caller's assertion on it fails.
+    func shelfTile(_ title: String) -> XCUIElement {
+        let tile = buttons.matching(identifier: "entities.row").matching(NSPredicate(format: "label == %@", title)).firstMatch
+        let grid = any("things.grid")
+        guard grid.waitForExistence(timeout: 10) else { return tile }
+        for direction in [CGFloat(1), -1] {
+            for _ in 0..<12 {
+                if shelfShows(tile) { return tile }
+                // An existing tile says which way it lies; past it, only the other direction can help.
+                if tile.exists, (tile.frame.minY < shelfBand.minY) == (direction > 0) { break }
+                let before = shelfSnapshot().map(\.frame.minY)
+                scrollShelf(grid, by: direction)
+                if shelfSnapshot().map(\.frame.minY) == before { break }  // the end of the shelf
+            }
+        }
+        return tile
+    }
+
+    /// The part of the screen the shelf shows: under the navigation bar, above the record bar.
+    private var shelfBand: CGRect {
+        let window = windows.firstMatch.frame
+        let top = navigationBars.firstMatch.exists ? navigationBars.firstMatch.frame.maxY : window.minY
+        let bar = buttons["home.start"]
+        let bottom = bar.exists ? bar.frame.minY - 8 : window.maxY
+        return CGRect(x: window.minX, y: top, width: window.width, height: max(0, bottom - top))
+    }
+
+    /// The tile is in the tree and on the screen: whole when it fits, else its top.
+    private func shelfShows(_ tile: XCUIElement) -> Bool {
+        guard tile.exists else { return false }
+        let frame = tile.frame, band = shelfBand
+        guard !frame.isEmpty else { return false }
+        return frame.height <= band.height ? band.contains(frame) : (frame.minY >= band.minY && frame.minY < band.maxY)
+    }
+
+    /// Scrolls the shelf about a third of a screen (`direction` 1: further down the shelf) and stops it there.
+    private func scrollShelf(_ grid: XCUIElement, by direction: CGFloat) {
+        let (from, to) = direction > 0 ? (0.65, 0.4) : (0.4, 0.65)
+        grid.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: from))
+            .press(forDuration: 0.05, thenDragTo: grid.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: to)),
+                   withVelocity: .slow, thenHoldForDuration: 0.3)
+    }
+
+    /// The shelf's headings and tile labels in reading order, from its top to its end. The grid is lazy, so this
+    /// scrolls down and places each element it sees at its spot in the content: its frame, moved by how far the
+    /// shelf has scrolled, which an element seen on both screens measures. One element at one spot (x and y) counts once;
+    /// a label at two spots counts twice, so a thing on the shelf twice is never hidden.
+    func shelfLabels() -> [String] {
+        let grid = any("things.grid")
+        XCTAssertTrue(grid.waitForExistence(timeout: 10), "the shelf is up")
+        for _ in 0..<30 {  // to the top of the shelf
+            let before = shelfSnapshot().map(\.frame.minY)
+            scrollShelf(grid, by: -1)
+            if shelfSnapshot().map(\.frame.minY) == before { break }
+        }
+        var previous = shelfSnapshot()
+        var placed = previous.map { (label: $0.label, x: $0.frame.minX, y: $0.frame.minY) }
+        var scrolled: CGFloat = 0
+        for _ in 0..<30 {
+            scrollShelf(grid, by: 1)
+            let current = shelfSnapshot()
+            // An anchor: a label once on each screen, so the two frames are the same element.
+            let anchors = current.filter { item in
+                current.filter { $0.label == item.label }.count == 1 && previous.filter { $0.label == item.label }.count == 1
+            }
+            guard let anchor = anchors.first, let before = previous.first(where: { $0.label == anchor.label }) else {
+                XCTFail("the shelf scrolled past every element it knew"); break
+            }
+            scrolled += before.frame.minY - anchor.frame.minY
+            var added = false
+            for item in current {
+                let y = item.frame.minY + scrolled
+                // The spot is x and y: two tiles with one label in one row are two tiles.
+                if !placed.contains(where: { $0.label == item.label && abs($0.x - item.frame.minX) < 2 && abs($0.y - y) < 2 }) {
+                    placed.append((item.label, item.frame.minX, y))
+                    added = true
+                }
+            }
+            previous = current
+            if !added && before.frame.minY == anchor.frame.minY { break }  // the end of the shelf
+        }
+        return placed.sorted { abs($0.y - $1.y) > 1 ? $0.y < $1.y : $0.x < $1.x }.map(\.label)
+    }
+
+    /// The headings and tiles in the tree now, with their frames.
+    private func shelfSnapshot() -> [(label: String, frame: CGRect)] {
+        let tiles = buttons.matching(identifier: "entities.row").allElementsBoundByIndex
+        let headings = ["things.period", "things.unplaced"].flatMap { descendants(matching: .any).matching(identifier: $0).allElementsBoundByIndex }
+        return (tiles + headings).filter { $0.exists && !$0.frame.isEmpty }.map { (label: $0.label, frame: $0.frame) }
+    }
+
     /// Launches with `-uiTesting-seedSearch`: the invented family, then Zoë, Lena's alias "Linny", "Dad's Volvo",
     /// "São Paulo", and moments and a fact with words of their own (one hidden, one kept from AI). First open is done.
     static func launchWithSearch(_ extra: [String] = []) -> XCUIApplication {

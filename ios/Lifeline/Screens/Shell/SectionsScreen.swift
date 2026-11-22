@@ -50,7 +50,7 @@ struct SectionsScreen: View {
         case .timeline: TimelineScreen(viewModel: timeline)
         case .people: PeopleTabRoot(deps: deps)
         case .places: EntityListScreen(deps: deps, type: .place)
-        case .things: EntityListScreen(deps: deps, type: .thing)
+        case .things: ThingsShelfScreen(deps: deps)
         case .you: YouScreen(deps: deps, isSessionLive: { home.presented != nil })
         }
     }

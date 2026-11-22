@@ -2,6 +2,63 @@
 
 One entry per decision. Newest first. Status is Decided, Open, or Superseded.
 
+## 2026-11-20 · S7: Things is a shelf of tiles grouped by life period
+
+**Status:** Decided by the builder. The owner said to build with the builder's recommendations, and can overrule each one. Source: `docs/specs/2026-11-20-things-shelf.md`, `docs/plans/2026-11-20-things-shelf.md`, ledger `.superpowers/sdd/2026-11-20-things-shelf/rulings.md`.
+
+**Decision.** The Things tab is a shelf, not a list. Each visible thing is one tile. A tile shows the thing's key photo, or, with no key photo, one quote in the person's own words on a sand face. Both kinds show the moment count ("1 moment", "3 moments"). The tiles are in groups by life period, with the Timeline's waypoint text as the heading ("Teens · by your age", or "The 1990s" with no birth date). "Not placed in time yet" is the last group. A tile placed by a guess says "Placed by a guess" in words. A tile never shows a year, a year range or a date (PRINCIPLES 5). The shelf shows no count of things and no "add" control (PRINCIPLES 9). The grouping, the order, the guess line and the quote choice are pure functions in the kit (`ThingShelf`, `ThingQuote`, `ThingTileText`).
+
+The builder's defaults, as they stand after rulings R4 and R5:
+
+1. A thing shows once, in one period. Cost: a thing that runs through several periods shows in one only: the period of its stated span, or else of its earliest moment.
+2. A dated stated span ("Add dates") places the thing before any moment. Dated moments place only a thing with no dated span (R5). Cost: a stated span and a settled moment outside it put the thing in the span's period.
+3. "A memory about the thing" is a `detail` link, not a `mention`. Cost: few tiles show a quote until the extractor writes more detail links.
+4. The quote is the oldest told detail that has words after the filler cleanup, cut at 20 words. Cost: a later, better line does not show, and the person cannot choose it.
+5. A detail first told in a heavy session never gives the quote. Cost: an ordinary line from a heavy session never shows on the shelf.
+6. Both kinds of tile show the moment count. Cost: the tile without a photo is one line fuller than the five-sections bullet.
+7. A tile placed by a guess says "Placed by a guess" (invented copy). A guess is an inferred or derived date, or a confirmed relation's year (R4). Cost: one more line on some tiles, and new copy.
+8. Headings are the Timeline's waypoint text, with no year range. Cost: the mock-up's year ranges are gone.
+9. Groups are in life order. Tiles in a period are by placing date, then title, then id. Tiles under "Not placed in time yet" are by title, then id. Cost: no "most told" order and no sort menu.
+10. The flat grid (no placed thing) has no heading. Cost: none known.
+11. One column at the accessibility text sizes, and tiles grow to fit. Cost: at those sizes the tiles are not one height.
+12. A key photo that cannot load leaves a sand area under the title and count. Cost: that tile shows no quote, though no photo shows.
+13. The tag filter stays on Things. Cost: one control the mock-up does not draw.
+14. No summary count and no "By when" control. Cost: the mock-up's top line is not built.
+15. A tile is 176 points high at the default size. The title has at most 3 lines and the quote at most 4. Cost: a long title is cut with "…" at the default sizes. VoiceOver reads it in full.
+
+**Rulings made while building.** Each ruling has its cost.
+
+- R1. S7 started before the two-week watch of the sections plan (`docs/plans/2026-11-15-sections.md`) ended. The owner said to continue. Cost: the shelf was built before use of S2 to S6 could change it.
+- R2. `ThingQuote.choose` skips a detail that has no first telling. The heavy-session rule is a safety rule, so it fails closed. Cost: a detail with a missing telling row never gives a quote.
+- R3. The UI test asserts that a tile is one button, with the title as its label and the tile's other lines as its value, and no button inside it. It does not assert that the automation tree has no static texts, because that tests XCUITest and not VoiceOver. Cost: a grouping fault that only VoiceOver shows is found on the device, not in CI.
+- R4. A date from a confirmed relation ("before Graduation") does not clear "Placed by a guess". The year inside the relation comes from the builder's slack, so the period is the app's arithmetic (non-negotiable 3). The shelf uses the Timeline's own test, `TimeRange.isConfirmedRelation`. Cost: a tile the person feels they dated still says "Placed by a guess".
+- R5. A thing's own dated stated span places it whenever the span is dated. Before, one guessed moment could move a thing out of the years the person gave (PRINCIPLES 1). Cost: a thing with a stated span and a settled moment outside it sits in the span's period, not the moment's.
+
+**Differs from the mock-up.** The Things phone in `docs/design/Sections.html` predates S6c. The shelf does not build its named periods ("From childhood", "From the Boston years"), the year range beside each heading, the count line ("11 things you've talked about") or the "By when" control. A chapter never replaces a period (S6c), and nothing the person said gives a year range for most things.
+
+**Why.** A list of titles made every thing look the same. A key photo or one line in the person's own words makes a thing recognisable at a glance (PRINCIPLES 1). The periods and their headings are the Timeline's own. A guess that decides the group says so in words (PRINCIPLES 5).
+
+**Consequences.**
+
+- No migration and no new table or column. The shelf only reads, in a fixed number of statements however many things there are. Backup and restore do not change.
+- One new read, `EntityRepository.details(type:)`. It reads only told, visible details. `ExtractionStore.thingShelfSource()` is new too: it batches the shelf's reads.
+- `SpineLayout.placingDate(of:)` is public, and the Timeline and the shelf use it. `LifePeriod` gains `headingText` and `headingSuffix`. `TimeRange` gains `isConfirmedRelation`, moved from `SpineLayout`. The Timeline's behaviour does not change.
+- This supersedes, for Things tiles, the S4 line "No Timeline row, Things tile, search result or map uses a photo yet". A Things tile shows the key photo.
+- New accessibility identifiers: `things.grid`, `things.period`, `things.unplaced`, `things.empty`, `things.error`.
+
+**Known costs.**
+
+- A thing shows once, in one period, also when its moments run through several periods.
+- Few tiles show a quote until the extractor writes more detail links.
+- A line from a heavy session never shows. A line whose first telling is missing never shows (R2).
+- A thing with no key photo, no quote and no moment is a tile with only its title.
+- The thing's page does not show which date was guessed. From a "Placed by a guess" tile, the person must find the deciding moment on the page by hand (final review, finding 3).
+- A story member or a collection member can sit in a different period on the shelf than its story row on the Timeline. The Timeline places a story by the span of its members. The shelf places a thing by each moment's own range (final review, finding 4).
+- The shelf reads the first telling of every memory, on the main actor, each time it appears. On a large archive this can cause a hitch when the tab opens. The device check measures it (final review, Minor 5).
+- The error line ("Could not show your things: …") uses the system red. Its contrast on linen is under 4.5:1, as for every error line in the app. The dark and contrast colour PR must fix it.
+- The two-week watch of the sections plan had not ended when the shelf was built (R1).
+- Search (PR 39) merged into `main` first. This branch then merged `main`. The conflicts were `docs/DECISIONS.md`, `docs/OVERVIEW.md` and `ios/LifelineUITests/UITestHelpers.swift`, where both branches add a block after `launchWithSpine`; both sides are kept. The Search button sits at the top-leading spot of the shelf, and the shelf's tag menu is trailing.
+
 ## 2026-11-19 · S5: search, from a Search button on every tab
 
 **Status:** Decided by the builder. The owner can overrule each one. Source: `docs/plans/2026-11-16-sections-search.md`, ledger `.superpowers/sdd/2026-11-16-sections-search/rulings.md`. This entry changes one line of `docs/specs/2026-11-15-five-sections.md` and one line of S4 (see "Differs from the spec").
@@ -691,7 +748,7 @@ Rulings made while building:
 - **A pre-S4 build refuses a post-S4 copy.** The copy has schema v13. A build from before S4 shows “This copy was made by a newer version of Lifeline.” A copy from before S4 restores and has no photos.
 - **One copy per photo (decision 7).** The SHA-256 of the picked file identifies a photo. The same photo added to a second page links the one copy to both pages. The same photo added again to the same page changes nothing. Cost: two pages share one file, so removing the photo from one page must keep the file for the other.
 - **A merge moves photos (decision 11).** A merge of two memories moves the source memory’s photos to the target. A source cover becomes an attached photo when the target has a cover. Undoing the merge does not move the photos back. Cost: an undone merge leaves the photos on the target.
-- **Photos stay on their pages for now.** No Timeline row, Things tile, search result or map uses a photo yet (S5 to S8).
+- **Photos stay on their pages for now.** No Timeline row, Things tile, search result or map uses a photo yet (S5 to S8). Superseded for Things tiles by S7 (2026-11-20): a Things tile shows the key photo.
 
 **Rulings made while building (2026-11-16).** Each ruling has its cost.
 

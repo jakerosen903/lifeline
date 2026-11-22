@@ -501,6 +501,26 @@ public struct EntityRepository: Sendable {
         }
     }
 
+    /// Told, visible memories linked to each entity of a type by `detail`, oldest told first
+    /// (`created_at`, then id). One statement. An entity with none is absent. Hidden entities are
+    /// not filtered: pair it with `entities(type:)`. A detail link to a non-person carries no origin,
+    /// so this read needs no guess filter.
+    public func details(type: EntityType) throws -> [EntityID: [Memory]] {
+        try db.writer.read { db in
+            let rows = try Row.fetchAll(db, sql: """
+                select memory.*, me.entity_id as link_entity_id
+                from moment_entity me
+                join entity on entity.id = me.entity_id
+                join memory on memory.id = me.memory_id
+                where me.relation = 'detail' and entity.type = ? and \(Self.toldAndVisible)
+                order by memory.created_at, memory.id
+                """, arguments: [type.rawValue])
+            var details: [EntityID: [Memory]] = [:]
+            for row in rows { details[EntityID(rawValue: row["link_entity_id"]), default: []].append(try Memory(row: row)) }
+            return details
+        }
+    }
+
     // MARK: - Spans
 
     /// Derived, never asked: the earliest and latest of everything linked, moments and details

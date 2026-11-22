@@ -59,6 +59,12 @@ public struct TimeRange: Codable, Sendable, Equatable {
     public var isConfirmed: Bool { origin == .confirmed }
     /// Stated by the person or confirmed by them: the resolver and the questions leave it alone.
     public var isSettled: Bool { origin == .confirmed || origin == .stated || origin == .photo }
+    /// A confirmed relation ("before Graduation (2004)"): the case where `displayText` is the evidence.
+    /// The person settled the relation; the band's far edge is the builder's slack, not a year they said.
+    public var isConfirmedRelation: Bool {
+        guard origin == .confirmed, let evidenceText else { return false }
+        return Self.isRelationEvidence(evidenceText)
+    }
     /// The date is the day of a photo the person chose to date the memory by.
     public var isFromPhoto: Bool { origin == .photo }
     /// The words behind the date, when the date came from words. A date from a photo has none: the person tapped an offer.

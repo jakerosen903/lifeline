@@ -369,6 +369,10 @@ struct Dependencies {
         if args.contains("-uiTesting-seedPhotos") {
             try UITestSeed.writePhotos(store: store, profile: deps.profile, sessions: deps.sessions, library: deps.photos)
         }
+        if args.contains("-uiTesting-seedThings") {
+            try UITestSeed.writeThings(store: store, profile: deps.profile, sessions: deps.sessions, library: deps.photos,
+                                       photosDirectory: try PhotoLocation.directory(under: root), undatedOnly: args.contains("-uiTesting-thingsUndatedOnly"))
+        }
         if args.contains("-uiTesting-seedPhotoStory") {
             let landing = args.firstIndex(of: "-uiTesting-photoStoryLanding").flatMap { $0 + 1 < args.count ? args[$0 + 1] : nil }
             try UITestSeed.writePhotoStory(store: store, profile: deps.profile, sessions: deps.sessions, library: deps.photos,
