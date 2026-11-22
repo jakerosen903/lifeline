@@ -26,10 +26,13 @@ public struct Session: Codable, Sendable, Equatable, Identifiable {
     /// The photo a photo-started session is about. A session is a home for the photo; nil when none, or once the photo row is gone.
     public var subjectPhotoID: PhotoID?
     public var startedFrom: SessionOrigin
+    /// The owner tapped "Done" on this photo story's "Also show this photo on" part. A new story starts open.
+    public var photoPagesDone: Bool
 
     public init(id: SessionID, startedAt: Date, endedAt: Date?, audioPath: String, stageLog: String, landingChoiceMade: Bool,
                 kind: SessionKind = .quick, hiddenFromTimeline: Bool = false,
-                subjectEntityID: EntityID? = nil, subjectPhotoID: PhotoID? = nil, startedFrom: SessionOrigin = .tab) {
+                subjectEntityID: EntityID? = nil, subjectPhotoID: PhotoID? = nil, startedFrom: SessionOrigin = .tab,
+                photoPagesDone: Bool = false) {
         self.id = id
         self.startedAt = startedAt
         self.endedAt = endedAt
@@ -41,6 +44,7 @@ public struct Session: Codable, Sendable, Equatable, Identifiable {
         self.subjectEntityID = subjectEntityID
         self.subjectPhotoID = subjectPhotoID
         self.startedFrom = startedFrom
+        self.photoPagesDone = photoPagesDone
     }
 }
 

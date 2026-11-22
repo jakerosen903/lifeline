@@ -274,6 +274,149 @@ final class PhotosUITests: XCTestCase {
         XCTAssertTrue(app.any("you.error").waitForExistence(timeout: 10))
         XCTAssertEqual(app.any("you.error").label, "Could not add this photo: Lifeline cannot read this file as a photo.")
     }
+
+    // MARK: - Several photos at one time (part 4)
+
+    @MainActor
+    func testSeveralPhotosAreAddedInTheOrderPicked() throws {
+        let app = XCUIApplication.launchWithPhotos(try pickPhotos(["photo-orange", "photo-green"]))
+        app.openEntityPage("Maya")
+        XCTAssertTrue(app.reveal(app.staticTexts["Photos"]))
+        XCTAssertEqual(thumbValues(app), ["taken 14 June 2012", ""])
+        app.addPhotoFromMenu("entity.more", "entity.addPhoto")
+        XCTAssertTrue(waitForCount(thumbs(app), 4, timeout: 20), "the row gains two thumbs")
+        XCTAssertEqual(thumbValues(app), ["taken 14 June 2012", "", "taken 14 June 2012", "taken 2 March 2005"],
+                       "the picked photos follow the ones the page had, in the order picked; the key photo stays first")
+        XCTAssertFalse(app.any("photo.error").exists)
+    }
+
+    @MainActor
+    func testOneBadPhotoDoesNotStopTheOthers() throws {
+        let app = XCUIApplication.launchWithPhotos(try pickPhotos(["photo-orange", "not-a-photo", "photo-green"]))
+        app.openEntityPage("Maya")
+        app.addPhotoFromMenu("entity.more", "entity.addPhoto")
+        let error = app.any("photo.error")
+        XCTAssertTrue(error.waitForExistence(timeout: 20))
+        XCTAssertEqual(error.label, "Could not add this photo: Lifeline cannot read this file as a photo.", "one failure keeps today's line")
+        XCTAssertEqual(app.descendants(matching: .any).matching(identifier: "photo.error").count, 1, "one error line")
+        XCTAssertTrue(app.reveal(app.staticTexts["Photos"]))
+        XCTAssertTrue(waitForCount(thumbs(app), 4, timeout: 10), "the two good photos are added")
+        XCTAssertEqual(thumbValues(app), ["taken 14 June 2012", "", "taken 14 June 2012", "taken 2 March 2005"])
+    }
+
+    /// More than one failure in a pick: one line that says how many (PhotoAddProgress.failureLine, verbatim).
+    @MainActor
+    func testTwoBadPhotosSayHowManyCouldNotBeAdded() throws {
+        let app = XCUIApplication.launchWithPeople(try pickPhotos(["not-a-photo", "not-a-photo"]))
+        app.openEntityPage("Lena")
+        app.addPhotoFromMenu("entity.more", "entity.addPhoto")
+        let error = app.any("photo.error")
+        XCTAssertTrue(error.waitForExistence(timeout: 20))
+        XCTAssertEqual(error.label, "2 photos could not be added.")
+        XCTAssertEqual(app.descendants(matching: .any).matching(identifier: "photo.error").count, 1, "one error line")
+        XCTAssertFalse(app.buttons["photo.header"].exists, "nothing is added")
+    }
+
+    @MainActor
+    func testTheFirstPickedPhotoIsTheKeyPhotoOnAnEmptyPage() throws {
+        let app = XCUIApplication.launchWithPeople(try pickPhotos(["photo-green", "photo-orange"]))
+        app.openEntityPage("Lena")
+        XCTAssertFalse(app.buttons["photo.header"].exists, "no photo, no frame")
+        app.addPhotoFromMenu("entity.more", "entity.addPhoto")
+        // The header is read before the scroll to the row: a scrolled page can drop it from the tree.
+        XCTAssertTrue(app.staticTexts["Photos"].waitForExistence(timeout: 20), "two photos make a row")
+        XCTAssertEqual(app.buttons["photo.header"].value as? String, "taken 2 March 2005", "the first picked photo is the key photo")
+        XCTAssertTrue(app.reveal(app.staticTexts["Photos"]))
+        XCTAssertTrue(waitForCount(thumbs(app), 2, timeout: 20))
+        XCTAssertEqual(thumbValues(app), ["taken 2 March 2005", "taken 14 June 2012"])
+    }
+
+    @MainActor
+    func testTheSamePhotoPickedTwiceIsAddedOnce() throws {
+        // Two copies of one image: the library finds the stored photo by its hash.
+        let app = XCUIApplication.launchWithPeople(try pickPhotos(["photo-orange", "photo-orange"]))
+        app.openEntityPage("Lena")
+        app.addPhotoFromMenu("entity.more", "entity.addPhoto")
+        XCTAssertTrue(app.buttons["photo.header"].waitForExistence(timeout: 20))
+        XCTAssertTrue(waitForAbsence(app.any("photo.adding"), timeout: 20), "both photos are done")
+        XCTAssertEqual(app.buttons["photo.header"].value as? String, "taken 14 June 2012")
+        XCTAssertFalse(app.staticTexts["Photos"].exists, "one photo is the header, not a row")
+        XCTAssertFalse(thumbs(app).firstMatch.exists)
+        XCTAssertFalse(app.any("photo.error").exists, "the second is no failure")
+    }
+
+    /// The line counts the photos of a pick (PhotoAddProgress.line(adding:of:), verbatim). Each file waits three seconds.
+    @MainActor
+    func testTheAddingLineCountsThePhotos() throws {
+        let app = XCUIApplication.launchWithPeople(try pickPhotos(["photo-orange", "photo-green"]) + ["-uiTesting-slowPhotoFile"])
+        app.openEntityPage("Lena")
+        app.addPhotoFromMenu("entity.more", "entity.addPhoto")
+        XCTAssertTrue(waitForAddingLine(app, "Adding photo 1 of 2…", timeout: 5), "the first photo")
+        XCTAssertTrue(waitForAddingLine(app, "Adding photo 2 of 2…", timeout: 10), "the line moves to the next photo")
+        XCTAssertTrue(waitForAbsence(app.any("photo.adding"), timeout: 30), "both photos are done")
+        XCTAssertTrue(app.staticTexts["Photos"].waitForExistence(timeout: 5), "both photos were added")
+    }
+
+    /// Each file waits three seconds (`-uiTesting-slowPhotoFile`), so the page is seen while the photos are added.
+    @MainActor
+    func testAddAPhotoWaitsWhilePhotosAreAdded() throws {
+        let app = XCUIApplication.launchWithPeople(try pickPhotos(["photo-orange", "photo-green"]) + ["-uiTesting-slowPhotoFile"])
+        app.openEntityPage("Lena")
+        app.addPhotoFromMenu("entity.more", "entity.addPhoto")
+        let adding = app.any("photo.adding")
+        XCTAssertTrue(adding.waitForExistence(timeout: 5), "the photos are being added")
+        // PhotoAddProgress.line(adding:of:), verbatim. The line and its spinner are one activity indicator.
+        XCTAssertTrue(waitForAddingLine(app, "Adding photo 1 of 2…", timeout: 5), "the line counts the photos")
+        app.buttons["entity.more"].tap()
+        let add = app.buttons["entity.addPhoto"]
+        XCTAssertTrue(add.waitForExistence(timeout: 5), "Add a photo stays in the menu")
+        XCTAssertFalse(add.isEnabled, "a second pick cannot start while photos are added")
+        XCTAssertEqual(add.label, "Add a photo")
+        closeMenu(app)
+        XCTAssertTrue(waitForAbsence(app.any("photo.adding"), timeout: 30), "both photos are done")
+        XCTAssertTrue(app.staticTexts["Photos"].waitForExistence(timeout: 5), "both photos were added")
+        app.buttons["entity.more"].tap()
+        XCTAssertTrue(app.waitHittable(add, timeout: 5))
+        XCTAssertTrue(add.isEnabled, "Add a photo works again once the photos are added")
+    }
+
+    /// A tap away from the menu closes it and does nothing else. Lena's page is empty there: she has no moment.
+    @MainActor
+    private func closeMenu(_ app: XCUIApplication) {
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.55)).tap()
+        XCTAssertTrue(app.waitHittable(app.buttons["entity.more"], timeout: 5), "the menu closed")
+    }
+
+    /// `-uiTesting-pickPhotos` with a fresh copy of each fixture, in this order.
+    @MainActor
+    private func pickPhotos(_ names: [String]) throws -> [String] {
+        ["-uiTesting-pickPhotos", try names.map { try XCUIApplication.fixturePath($0, ext: "jpg") }.joined(separator: ",")]
+    }
+
+    @MainActor
+    private func waitForCount(_ query: XCUIElementQuery, _ count: Int, timeout: TimeInterval) -> Bool {
+        let expectation = XCTNSPredicateExpectation(predicate: NSPredicate(format: "count == %d", count), object: query)
+        return XCTWaiter().wait(for: [expectation], timeout: timeout) == .completed
+    }
+
+    /// Polls the adding line until its label reads `text`. The line is found again on each read: an element found once
+    /// stays bound to its first match, and a key-path predicate on `label` did not match this activity indicator.
+    @MainActor
+    private func waitForAddingLine(_ app: XCUIApplication, _ text: String, timeout: TimeInterval) -> Bool {
+        let deadline = Date().addingTimeInterval(timeout)
+        repeat {
+            let line = app.any("photo.adding")
+            if line.exists && line.label == text { return true }
+            RunLoop.current.run(until: Date().addingTimeInterval(0.25))
+        } while Date() < deadline
+        return false
+    }
+
+    @MainActor
+    private func waitForAbsence(_ element: XCUIElement, timeout: TimeInterval) -> Bool {
+        let expectation = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: element)
+        return XCTWaiter().wait(for: [expectation], timeout: timeout) == .completed
+    }
 }
 
 private extension XCUIElement {
@@ -282,4 +425,5 @@ private extension XCUIElement {
         let expectation = XCTNSPredicateExpectation(predicate: NSPredicate(format: "value == %@", value), object: self)
         return XCTWaiter().wait(for: [expectation], timeout: timeout) == .completed
     }
+
 }

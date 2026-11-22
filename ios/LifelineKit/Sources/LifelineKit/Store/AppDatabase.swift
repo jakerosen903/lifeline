@@ -35,6 +35,7 @@ extension Session: FetchableRecord, PersistableRecord {
         case id, startedAt = "started_at", endedAt = "ended_at", audioPath = "audio_path"
         case stageLog = "stage_log", landingChoiceMade = "landing_choice_made", kind, hiddenFromTimeline = "hidden_from_timeline"
         case subjectEntityID = "subject_entity_id", subjectPhotoID = "subject_photo_id", startedFrom = "started_from"
+        case photoPagesDone = "photo_pages_done"
     }
 }
 

@@ -2,6 +2,87 @@
 
 One entry per decision. Newest first. Status is Decided, Open, or Superseded.
 
+## 2026-11-18 · A photo story's photo goes on the pages of its people
+
+**Status:** Decided. Parts 1 to 4 of the spec are built on the branch `photo-people`: part 3 is “Done” and “Edit”, part 4 is several photos at one time. The branch is not merged. Nobody has run the device check. The open items for the owner are at the end of this entry. This entry changes the 2026-11-18 photo card entry below. It reverses one rule of that spec: “a page link is always the person’s tap”. It also reverses point 4 of that entry, “Photos do not move with a name”. Part 3 reverses the rule of that entry that the card has one layout (spec part 3, point 11): “Also show this photo on” has two layouts, open and done. The owner asked for it.
+
+**Source:** `docs/specs/2026-11-18-photo-on-people-pages.md` (approved by the owner on 2026-11-18, approach A) and `docs/plans/2026-11-18-photo-on-people-pages.md`, decisions 1 to 18. One migration (`v16`). No new network call.
+
+**Why.** The owner told a photo story about a person two times on the phone. Each time, the person’s page did not show the photo. The card waited for a tap on a chip. The owner’s rule: the app can make an assumption, but it must say that it made it, and the assumption must be easy to change.
+
+**Decision.** When the owner keeps a moment of a photo story, the photo goes on the page of each person the moment names. The card shows which pages the story chose. One tap takes the photo off a page. The app never reverses a choice the owner made. When the owner moves a name to another person, a photo the story put on the first page moves with the name.
+
+- **The chosen approach: A, store the fact.** `photo_link.origin` is `story` for a link a photo story made, and null for every other link. `photo_page_declined (photo_id, entity_id)` records each page the owner took a photo off. The card can say “added by this story”, and a move never removes a link the owner made.
+- **Not chosen: B, store nothing.** The write adds the photo only for the first kept moment that names the person. The card cannot tell the story’s choice from the owner’s tap, and a move must either remove the owner’s photo or never remove one.
+- **Not chosen: C, offer, do not add.** The card puts the people’s chips first with “Add to all {n}”. It does not fix the reported problem: the owner must still tap after each story.
+
+**The eighteen decisions of the plan.**
+
+1. The migration is `v16`. It follows `v14` (photo story) and `v15` (people and contacts). If another `v16` reaches `main` first, this one gets a new number before the PR.
+2. `photo_link.origin` is text. `story` marks a link a photo story made. Null marks every other link. An owner’s tap never writes `story`.
+3. `photo_page_declined` has both columns as its primary key. Each column references its table with `on delete cascade`.
+4. Every public removal of a photo from an entity’s page is the owner’s action, so it records the decline. This covers the card’s chip and the page’s own photo row.
+5. Every public add of a photo to an entity’s page is the owner’s action. It deletes the decline for that pair and writes a null origin.
+6. Only the Keep of a card writes page links. “Same story” writes none. The people of that memory show as empty chips.
+7. A person is skipped when the person is the owner, when the entity is hidden, when the page holds the photo, or when the pair is declined.
+8. The link goes through the existing link write. The photo is last in the page’s order, and it is the key photo on a page with no photo.
+9. “Remove the photo from this story” (`letGo`) deletes the photo’s `story` links in the same write, but only when no other session points at the photo.
+10. The move acts only when the session of the moved memories has a subject photo and those memories hold it.
+11. Undo of a move restores the photo links only where they are still as the move left them. A link the owner changed after the move stays.
+12. The chip’s VoiceOver value is “added by this story” for a `story` link, “added” for the owner’s, and “not added” for none.
+13. The UI test seed keeps its photo story through the real Keep write, so its person chips start filled. Tests that started from an empty person chip changed their first step.
+14. Moments kept before this build get no link. There is no backfill.
+15. Part 3: `v16` also adds `session.photo_pages_done`, boolean, not null, default 0.
+16. Part 3: in the done state the card keeps a chip the owner emptied on screen until the part is closed again or the card is built again when the owner leaves the screen. The view model holds the set of such pages. The set is not stored.
+17. Part 4: the picker's selection is `[PhotosPickerItem]` with `maxSelectionCount: 20` and `selectionBehavior: .ordered`. The app receives and adds the photos one after the other, never at the same time, so memory holds one image.
+18. Part 4: UI tests cannot drive the picker. The launch argument `-uiTesting-pickPhoto <path>` keeps its meaning. A new launch argument, `-uiTesting-pickPhotos <path>,<path>`, gives several files to the same flow.
+
+**The spec’s calls made without the owner.**
+
+1. People only. Places, things and ideas stay a tap.
+2. Not the owner’s own page. The “You” chip stays a tap.
+3. An `assumed` name link also places the photo.
+4. The chip looks the same for both kinds. The line under the heading and VoiceOver carry the difference. The chip has no “Assumed” mark.
+5. Removing a moment from the photo does not take the photo off the people’s pages.
+6. Moments kept before this build get no link.
+7. Approach A, with one additive migration.
+8. Part 3: the button reads “Done”. The state is stored for the story, in the same migration.
+9. Part 3: a filled chip tapped in the done state stays on screen, empty, until the part is closed again.
+10. Part 4: the limit is 20 photos. The picker is the system picker. The app asks for no photo permission.
+11. Part 4: not for the start of a photo story.
+
+**The card.** The view reads `PhotoStoryCard.pagesLine` and `Page.stateValue`. It holds no rule and no copy of the text. While a page holds the photo by a story link, the line under “Also show this photo on” reads “The people in this story have this photo on their pages. Tap to take it off, or to add it to another page.” With no such page, it reads “Tap to add. Tap again to take it off.” The chip’s remove stays on its old path, `PhotoLibrary.remove`. That path records the decline and deletes the file when the page was the photo’s last home.
+
+**Rulings made while building (2026-11-18).** Each ruling has its cost.
+
+- **Every name link counts, `detail` as well as `mention`.** The spec says “each person the moment names”. A kept fact about a person in a photo story is about that person. Cost if wrong: one filter in one query.
+- **There is no undo of a Keep in the kit.** A deleted memory leaves the photo on the people’s pages, as the spec’s edge case for a removed moment says. The owner takes it off with the chip.
+- **`PhotoStoryReader.removeFromPage` is not added.** The app removes a photo from a page through `PhotoLibrary.remove`, which records the decline and deletes the file. A second path could leave a file with no row. The plan’s line “the chip’s remove goes through `removeFromPage`” is void. Cost if wrong: none; one path remains.
+- **A move removes the first person’s story link only when no memory that holds the photo names that person now, in any session.** The plan said “no memory of that session”. One photo can be the subject of two stories, and the spec forbids removing a link another story made. The same rule applies when Undo removes a link the move added. Cost if wrong: a photo stays on a page a little longer.
+- **The move adds to the new person only (`only:` on `linkToPeoplePages`).** A plain call would add the photo to other people the moment names who lack it, against decision 14.
+- **The session’s page reads its rows again after a move on a card there, and after its Undo** (`CardHandler.onPeopleMoved`, set by `SessionDetailViewModel`). Without it, the photo card above a kept card kept the chips from before the move. The landing already read its rows again. Cost: one more read after a move on the session’s page.
+- **`shownPageGroups(keeping:)` takes `Page` values, not ids (part 3).** The kit puts back an empty copy of a kept page that left `pageGroups`: a page listed only because it held the photo. The spec says a chip must not disappear under the finger. The id-only interface was a defect of the plan. The card draws the part while it shows a kept page (`showsPagesPart(keeping:)`), also when that page was the card's only page. The open state does not change. Cost if wrong: one signature and one view-model field.
+- **The open part reserves the height of the tallest line under the heading (`PhotoStoryCard.allPagesLines`).** The line changes when the last chip the story chose is taken off. With the height reserved, no chip moves under the finger.
+- **A story link to a hidden page is refused in the link write itself, next to the declined check.** The Undo of a move therefore does not put the photo on a page the owner hid after the move (decision 7).
+- **“Add a photo” is disabled while the shelf adds photos (part 4).** This applies on the three pages that add photos: an entity page, a memory page and You. It is the simplest rule, and the owner sees the count run. Cost if wrong: the owner waits for a pick to end before the next pick.
+- **There is no `PhotoShelf.add(files:)` (part 4).** The flow adds the items one at a time between `beginAdding(count:)`, `finishedOne()` and `endAdding()`. A list of files would hold every temporary copy at one time.
+- **`PhotoAddBatch` holds the count of a pick (part 4).** It counts the photos picked, the photos done and the failures. It gives the line “Adding photo {i} of {n}…” and, at the end, the one failure line.
+- **The seed’s owner’s link to Maya is gone.** The photo story seed linked Maya’s page by hand after the Keep, which made the link the owner’s. Keep now puts the photo on Maya’s and Dad’s pages, so both chips start as “added by this story”. A page that held the photo before the story is in the device check. A new flag, `-uiTesting-photoStoryAssumedName`, adds “The ferry” to the first story: Sam, assumed, said “Sammy”. It is for the test of a moved name.
+
+**Open items for the owner.**
+
+1. **“Same story” writes no page link (decision 6).** A telling merged into an older memory does not put the photo on the people’s pages. Their chips are empty. Cost if wrong: the merge write calls the same function as Keep.
+2. **The chip has no “Assumed” mark (call 4).** A photo that follows a guessed name looks the same as one the owner chose. The mark is on the memory’s people.
+3. **Moments kept before this build get no link (decision 14).** The owner taps the chip for an older story.
+4. **A kept fact about a person also places the photo** (the ruling above).
+5. **After a kept memory is deleted, the chip still reads “added by this story”,** although no kept memory names the person.
+6. **A restored link goes last.** After a move and its Undo, a photo that was the key photo is not the key photo when the page gained another photo meanwhile.
+7. **Deleting a photo story leaves its photo on the people’s pages.** The link stays a `story` link with no story. “Remove the photo from this story” acts differently: it takes the story’s links away.
+8. **A story link stays the story’s when the owner makes its photo the key photo.** A later move or photo removal takes it off the page.
+9. **The Undo notice after a name move can sit below the screen for its 6 seconds.** The owner must scroll down to reach it. One fix is to pin it above the record bar.
+
+The device check is `docs/plans/2026-11-18-photo-on-people-pages-device-check.md`. Its last part lists the small items the reviews deferred.
+
 ## 2026-11-19 · Picker scroll: one tile redraws per thumbnail, and the picker holds the sheet
 
 **Status:** Decided by the builder. The owner can overrule each one. Source: `docs/specs/2026-11-19-picker-scroll.md`.

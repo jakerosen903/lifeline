@@ -117,18 +117,21 @@ enum UITestSeed {
 
     /// Under `-uiTesting-seedPhotoStory`: the family, then two landed photo sessions, each about a generated photo.
     /// The first (two moments, told 2 hours ago) is about a dated photo (14 June 2012) and has two kept memories that both hold it:
-    /// "The beach" (unplaced; names Maya and Dad) and "The drive home" (stated 2012; names Dad). Maya's page holds the photo; Dad's
-    /// does not. The second (newer, one sorted moment) has no kept memory, and its photo has no other home.
+    /// "The beach" (unplaced; names Maya and Dad) and "The drive home" (stated 2012; names Dad). The real Keep write puts the photo
+    /// on Maya's and Dad's pages by a story link. The second (newer, one sorted moment) has no kept memory, and its photo has no other home.
     /// `unlanded` leaves one of them with no landing choice made, so the app opens on its landing (`-uiTesting-photoStoryLanding`).
     /// `withGuess` (`-uiTesting-photoStoryGuess`) adds a third kept memory to the first story: "The picnic", which names Maya and
     /// Alder Street, holds the photo, and has a guessed date from the age anchor "when I was 22" (the band holds 14 June 2012).
+    /// `assumedName` (`-uiTesting-photoStoryAssumedName`) adds "The ferry" (stated 2012) to the first story: it names Sam by a
+    /// guess (assumed, said "Sammy"), so Keep puts the photo on Sam's page, and a move of the name moves it.
     enum PhotoStoryLanding: String { case first, second }
 
     static func writePhotoStory(store: ExtractionStore, profile: ProfileRepository, sessions: SessionRepository, library: PhotoLibrary,
-                                unlanded: PhotoStoryLanding?, withGuess: Bool = false) throws {
+                                unlanded: PhotoStoryLanding?, withGuess: Bool = false, assumedName: Bool = false) throws {
         guard try people(store: store, profile: profile, sessions: sessions) != nil,
               let maya = try store.entities.entities(type: .person).first(where: { $0.title == person })?.id,
               let dad = try store.entities.entities(type: .person).first(where: { $0.title == "Dad" })?.id,
+              let sam = try store.entities.entities(type: .person).first(where: { $0.title == "Sam" })?.id,
               let alder = try store.entities.entities(type: .place).first(where: { $0.title == "Alder Street" })?.id else { return }
         let folder = FileManager.default.temporaryDirectory.appending(path: "seed-photo-story-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
@@ -144,7 +147,10 @@ enum UITestSeed {
         let drive = try seed.keep("The drive home", kind: .event, year: 2012, relation: .mention, links: [(dad, "my dad")])
         try store.photos.link(beachPhoto.id, to: .memory(beach))
         try store.photos.link(beachPhoto.id, to: .memory(drive))
-        try store.photos.link(beachPhoto.id, to: .entity(maya))
+        // No hand link to Maya's page: it would make the story's link the owner's (plan decision 13).
+        if assumedName {
+            try seed.keep("The ferry", kind: .event, year: 2012, relation: .mention, links: [(sam, "Sammy")], origins: [sam: .assumed])
+        }
         // The range is the one the resolver gives this anchor, so a resolver run (after Undo) puts back the same range.
         // `people` saved Jordan's birthday, so the birth date is there; the second story is written either way.
         let phrase = "when I was 22"

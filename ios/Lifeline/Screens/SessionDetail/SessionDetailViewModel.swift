@@ -40,6 +40,8 @@ final class SessionDetailViewModel {
         flow.onAutoClose = { [weak self] in self?.refresh() }
         // A date the card sets must show on the memory pages this screen opens: they start from its rows.
         photoCard.onAction = { [weak self] in self?.refresh() }
+        // A name moved on a kept card can move the story's photo: the card and the rows show it at once.
+        flow.handler.onPeopleMoved = { [weak self] in self?.refresh() }
     }
 
     func refresh() {

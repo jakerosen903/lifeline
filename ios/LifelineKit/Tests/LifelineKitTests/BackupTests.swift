@@ -473,6 +473,34 @@ private func stagedRestore() throws -> (target: Root, documents: URL) {
         #expect(try restored.entities.links(of: memory).filter { $0.entity.id == tomas.entityID }.map(\.link.origin) == [.assumed])
     }
 
+    /// v16: a link a story made, a page the owner took the photo off, and a story's "Done" ride along with the whole file.
+    @Test func aStoryLinkAndADeclineSurviveBackupAndRestore() throws {
+        let source = try Root(sessions: 1, memories: 1, photos: 1)
+        let maya = try #require(source.maya)
+        let photo = try #require(try source.store.photos.photos(of: .entity(maya.id)).first).photo
+        let dad = try source.store.entities.insert(type: .person, title: "Dad")
+        let grandpa = try source.store.entities.insert(type: .person, title: "Grandpa")
+        try source.db.writer.write { _ = try PhotoRepository.link(photo.id, to: .entity(dad.id), origin: .story, in: $0) }
+        try source.store.photos.link(photo.id, to: .entity(grandpa.id))
+        _ = try source.store.photos.unlink(photo.id, from: .entity(grandpa.id))
+        var session = try #require(try source.store.sessions.listSessions().first)
+        session.photoPagesDone = true
+        try source.store.sessions.update(session)
+        let archive = source.url.appending(path: "pages.lifeline")
+        _ = try Backup.export(root: source.url, appVersion: "1.0", to: archive, database: source.db)
+
+        let target = FileManager.default.temporaryDirectory.appending(path: "lifeline-restore-\(UUID().uuidString)")
+        _ = try AppDatabase.open(at: target.appending(path: "Lifeline/lifeline.sqlite"))
+        let documents = try docs()
+        _ = try Backup.stage(archive, root: target, appVersion: "1.0", safetyCopyDirectory: documents)
+        #expect(try Backup.applyPendingRestore(root: target, safetyCopyDirectory: documents))
+        let restored = ExtractionStore(try AppDatabase.open(at: target.appending(path: "Lifeline/lifeline.sqlite")))
+        #expect(try restored.photos.storyPages(of: photo.id) == [dad.id])
+        #expect(try restored.photos.isDeclined(photo.id, on: grandpa.id))
+        #expect(try !restored.photos.isDeclined(photo.id, on: maya.id))
+        #expect(try restored.sessions.fetch(session.id)?.photoPagesDone == true)
+    }
+
     @Test func exportCarriesThePhotosAndCountsThem() throws {
         let source = try Root(sessions: 1, memories: 1, photos: 2)
         let archive = source.url.appending(path: "photos.lifeline")

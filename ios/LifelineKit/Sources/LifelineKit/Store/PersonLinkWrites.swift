@@ -137,11 +137,17 @@ extension PersonLinkRepository {
         let moved = Set(scope.map(\.memoryID))
         try replaceFirstTelling(of: old.entityID, ifFrom: moved, in: db)
         if let person { try giveFirstTelling(to: person.entityID, fromOldestOf: moved, in: db) }
-        // 4. Last: an empty guess goes, with its entity, aliases and first telling (they are in `spansBefore`).
+        // 4. The story's photo follows the name. Before step 5: a link the story put on the first person's page
+        // must not keep an empty guess alive.
+        let photoPages = try session(of: current.memoryID, in: db).flatMap { session in
+            try PhotoRepository.followMovedName(moved, of: SessionID(rawValue: session), from: old.entityID, to: person?.entityID, in: db)
+        }
+        // 5. Last: an empty guess goes, with its entity, aliases and first telling (they are in `spansBefore`).
         let removed = try removeIfEmptyGuess(old.id, in: db)
         return PersonMoveReceipt(before: before, after: after, removedPerson: removed?.person, addedAliases: added, createdPerson: created?.id,
                                  newName: person?.displayName ?? "", removedEntity: removed?.entity, removedAliases: removed?.aliases ?? [],
-                                 spansBefore: spansBefore, spansAfter: try spans(of: touched, in: db), clearedGuess: cleared, createdName: created)
+                                 spansBefore: spansBefore, spansAfter: try spans(of: touched, in: db), clearedGuess: cleared, createdName: created,
+                                 photoPages: photoPages)
     }
 
     /// "Someone new": a person named by the said name. The owner chose them, so they are not a guess (R14).
@@ -284,7 +290,10 @@ extension PersonLinkRepository {
         if let created = r.createdPerson {
             touched.insert(EntityID(rawValue: created.rawValue))
             let links = try Int.fetchOne(db, sql: "select count(*) from moment_entity where entity_id = ?", arguments: [created.rawValue]) ?? 0
-            let photos = try Int.fetchOne(db, sql: "select count(*) from photo_link where entity_id = ?", arguments: [created.rawValue]) ?? 0
+            // The story link this move put on the new page goes with Undo; any other photo link holds the person.
+            let ownStoryPhoto = r.photoPages.flatMap { $0.added.contains(EntityID(rawValue: created.rawValue)) ? $0.photo.rawValue : nil }
+            let photos = try Int.fetchOne(db, sql: "select count(*) from photo_link where entity_id = ? and not (photo_id is ? and origin is ?)",
+                                          arguments: [created.rawValue, ownStoryPhoto, PhotoLinkOrigin.story.rawValue]) ?? 0
             if links != r.after.filter({ $0.entityID.rawValue == created.rawValue }).count || photos > 0 { throw Error.stale }
         }
         let touchedIDs = Array(touched).sorted { $0.rawValue < $1.rawValue }
@@ -300,6 +309,8 @@ extension PersonLinkRepository {
                        arguments: StatementArguments(touchedIDs.map(\.rawValue)))
         for span in r.spansBefore { try span.insert(db) }
         for row in r.before { try row.insert(db) }
+        // After the removed person exists again, and before a created person goes.
+        if let change = r.photoPages { try PhotoRepository.undo(change, in: db) }
         for alias in r.addedAliases {
             try db.execute(sql: "delete from alias where person_id = ? and text = ?", arguments: [alias.personID.rawValue, alias.text])
         }

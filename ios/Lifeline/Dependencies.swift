@@ -46,8 +46,16 @@ struct Dependencies {
     let photos: PhotoLibrary
     /// Decoded photos for display, shared by every screen so each image decodes once.
     let photoImages: PhotoImageCache
-    /// Under `-uiTesting-pickPhoto <path>`: "Add a photo" adds this file without the picker (decision 22).
+    /// Under `-uiTesting-pickPhoto <path>`: "Add a photo" adds this file without the picker (decision 22), and
+    /// "Tell a story about a photo" starts with it.
     var pickPhotoPath: String? = nil
+    /// Under `-uiTesting-pickPhotos <path>,<path>`: "Add a photo" adds these files in order without the picker (part 4).
+    var pickPhotoList: [String]? = nil
+    /// The files "Add a photo" adds without the picker: the list, else the one file; nil shows the picker.
+    var addPhotoPaths: [String]? { pickPhotoList ?? pickPhotoPath.map { [$0] } }
+    /// Under `-uiTesting-slowPhotoFile`: each of those files waits three seconds before it is added, as an iCloud
+    /// download can, so a test can see the page while photos are added.
+    var addPhotoDelay: Duration? = nil
     /// The photo library for "Tell a story about a photo": PhotoKit in the app, generated photos under `-uiTesting`.
     var photoPickSource: any PhotoPickSource = LibraryPhotoPickSource()
     /// Under `-uiTesting-restoreFrom <path>`: Restore stages this file without the picker.
@@ -292,6 +300,10 @@ struct Dependencies {
         if let i = args.firstIndex(of: "-uiTesting-restoreFrom"), i + 1 < args.count { deps.restoreFromPath = args[i + 1] }
         deps.exportWithoutShareSheet = true
         if let i = args.firstIndex(of: "-uiTesting-pickPhoto"), i + 1 < args.count { deps.pickPhotoPath = args[i + 1] }
+        if args.contains("-uiTesting-slowPhotoFile") { deps.addPhotoDelay = .seconds(3) }
+        if let i = args.firstIndex(of: "-uiTesting-pickPhotos"), i + 1 < args.count {
+            deps.pickPhotoList = args[i + 1].split(separator: ",").map(String.init)
+        }
         let photoAccess = args.firstIndex(of: "-uiTesting-photoAccess").flatMap { $0 + 1 < args.count ? args[$0 + 1] : nil }
         deps.photoPickSource = try ScriptedPhotoPickSource(mode: photoAccess, slowFile: args.contains("-uiTesting-slowPhotoFile"),
                                                            folder: root.appending(path: "scripted-photos"))
@@ -305,7 +317,8 @@ struct Dependencies {
             let landing = args.firstIndex(of: "-uiTesting-photoStoryLanding").flatMap { $0 + 1 < args.count ? args[$0 + 1] : nil }
             try UITestSeed.writePhotoStory(store: store, profile: deps.profile, sessions: deps.sessions, library: deps.photos,
                                            unlanded: landing.flatMap(UITestSeed.PhotoStoryLanding.init(rawValue:)),
-                                           withGuess: args.contains("-uiTesting-photoStoryGuess"))
+                                           withGuess: args.contains("-uiTesting-photoStoryGuess"),
+                                           assumedName: args.contains("-uiTesting-photoStoryAssumedName"))
         }
         if args.contains("-uiTesting-seedPortrait") { try UITestSeed.writePortrait(store: store, profile: deps.profile, sessions: deps.sessions) }
         if args.contains("-uiTesting-seedTaggedMoment") { try UITestSeed.tagOneMoment(store: store) }
