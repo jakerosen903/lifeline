@@ -299,6 +299,17 @@ final class PeopleGuessUITests: XCTestCase {
         app.openEntityPage("Priya")
         let someoneElse = app.buttons["entity.moment.someoneElse"]
         XCTAssertTrue(app.reveal(someoneElse))
+        // The held page is disabled, so it does not scroll, and the lazy List drops the title once it is off screen.
+        // The merge row (PC-c) makes the page longer: scroll back to the top, then up in short drags that stop dead (no fling), so the title
+        // is still in the tree when the move holds the page.
+        let title = app.staticTexts["entity.title"]
+        for _ in 0..<6 where !title.exists { app.swipeDown() }
+        for _ in 0..<6 where !app.waitHittable(someoneElse, timeout: 1) {
+            app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.6))
+                .press(forDuration: 0.05, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)),
+                       withVelocity: .slow, thenHoldForDuration: 0.3)
+        }
+        XCTAssertTrue(title.exists, "the title is still in the tree")
         openSheet(app, from: someoneElse)
         let options = app.buttons.matching(identifier: "who.option")
         XCTAssertEqual(options.allElementsBoundByIndex.map(\.label), ["Priya. In 1 of your stories \u{00B7} my guess"],

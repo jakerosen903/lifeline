@@ -25,6 +25,8 @@ final class PersonContactViewModel {
     var onMessage: (String) -> Void = { _ in }
     /// An action began: a message still showing goes.
     var onClearMessage: () -> Void = {}
+    /// A picked contact is held by another person (passed here): the page asks whether the two are the same person.
+    var onHeldByAnother: (PersonID) -> Void = { _ in }
 
     init(entity: Entity, deps: Dependencies) {
         person = entity.type == .person ? PersonID(rawValue: entity.id.rawValue) : nil
@@ -76,6 +78,11 @@ final class PersonContactViewModel {
             do { try await links.link(person, to: card); return nil } catch { return error }
         }.value
         isWorking = false
+        // Another person holds the contact: no link is made. The page asks "Same person?" (plan decision 4).
+        if case .heldByAnother(let holder, _) = failure as? ContactLinkActions.Error {
+            onHeldByAnother(holder)
+            return
+        }
         if let failure {
             onMessage(ContactLinkMessage.sentence(for: failure, fallback: "Could not link this contact. Try again."))
             Self.log("link", failure)

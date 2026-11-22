@@ -35,6 +35,17 @@ import Testing
     #expect(PersonChipLine.failedUndo == "Could not undo that.")
 }
 
+// Ruling C12: a merge has no name to open and no way back after its Undo, so its stale refusal says the merge stays.
+// A move's stale line is unchanged; any other failure is the failed line.
+@Test func aRefusedUndoSaysWhyForAMoveAndForAMerge() {
+    #expect(PersonChipLine.staleMergeUndo == "That changed since. The merge stays.")
+    #expect(PersonChipLine.undoRefused(PersonMergeActions.Error.stale) == "That changed since. The merge stays.")
+    #expect(PersonChipLine.undoRefused(PersonLinkActions.Error.stale) == PersonChipLine.staleUndo)
+    #expect(PersonChipLine.undoRefused(PersonLinkActions.Error.notFound) == PersonChipLine.staleUndo)
+    #expect(PersonChipLine.undoRefused(PersonMergeActions.Error.notFound) == PersonChipLine.failedUndo)
+    #expect(PersonChipLine.undoRefused(RowCopy.UpdateFailed(table: "person", key: "id")) == PersonChipLine.failedUndo)
+}
+
 // M-2 (fix wave): a refused change says what happened. Nothing changed for `notFound`, so it is not the stale sentence.
 @Test func aRefusedChangeSaysWhy() {
     #expect(PersonChipLine.refusal(.stale) == "That changed since. Open the name to change it again.")
