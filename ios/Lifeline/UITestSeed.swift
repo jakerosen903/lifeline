@@ -224,6 +224,31 @@ enum UITestSeed {
         return seed
     }
 
+    /// Under `-uiTesting-seedSearch`: the family, then what the search tests look for, all invented. Zoë (no moment);
+    /// Lena's alias "Linny"; the thing "Dad's Volvo"; the place "São Paulo"; "The long drive" (2004) with words of its own;
+    /// "The red kite" (around 1998, a guess); "The attic stairs", hidden, with words; "The quiet year" (2009), kept from AI;
+    /// and the fact "Took things apart" with its quote.
+    static func writeSearch(store: ExtractionStore, profile: ProfileRepository, sessions: SessionRepository) throws {
+        // Under `-uiTesting-db` a relaunch opens the same archive: it is already written.
+        guard try profile.owner() == nil else { return }
+        guard var seed = try people(store: store, profile: profile, sessions: sessions) else { return }
+        _ = try store.people.insertPerson(displayName: "Zoë")
+        // The alias test needs Lena: a family seed without her must stop here, not pass with no alias.
+        guard let lena = try store.entities.find(type: .person, title: "Lena") else { preconditionFailure("the family seed has Lena") }
+        try store.people.addAlias("Linny", to: PersonID(rawValue: lena.id.rawValue))
+        _ = try store.entities.insert(type: .thing, title: "Dad's Volvo")
+        _ = try store.entities.insert(type: .place, title: "São Paulo")
+        try seed.keep("The long drive", kind: .event, year: 2004, links: [],
+                      words: "we drove all night and he kept an old harmonica in the glove box".split(separator: " ").map(String.init))
+        try seed.keep("The red kite", kind: .event, range: .year(1998, origin: .inferred, evidence: nil), links: [])
+        let attic = try seed.keep("The attic stairs", kind: .event, links: [],
+                                  words: "the accordion on the attic stairs".split(separator: " ").map(String.init))
+        try store.memories.setHidden(attic, true)
+        let quiet = try seed.keep("The quiet year", kind: .event, year: 2009, links: [])
+        try store.memories.setExcluded(quiet, true)
+        try seed.keep("Took things apart", kind: .fact, quote: "I was always the kid who dismantled radios", links: [])
+    }
+
     /// Under `-uiTesting-seedDuplicates`: what the launch repair is for. Three stories whose titles differ only
     /// in case and a full stop, with one moment each, and one chapter with no title and no memory. It saves a
     /// profile, so first open is done.
@@ -339,17 +364,22 @@ private struct SeedSession {
 
     /// `ageAnchor` stores one resolved age anchor ("when I was 22") on the memory, so the resolver keeps its guessed range.
     /// `origins` gives a link its origin (none: a link older than v15). `plan` writes the people a link needs first.
+    /// `words` are the telling's `word` rows, evenly timed inside the segment's own window; the segment's text is them.
     @discardableResult
     mutating func keep(_ title: String, kind: MemoryKind, year: Int? = nil, range dated: TimeRange? = nil, relation: EntityRelation = .detail, quote: String? = nil,
                        links: [(EntityID, String?)], origins: [EntityID: LinkOrigin] = [:], plan: EntityRepository.Write = .init(),
-                       ageAnchor: (phrase: String, value: String)? = nil) throws -> MemoryID {
+                       ageAnchor: (phrase: String, value: String)? = nil, words: [String] = []) throws -> MemoryID {
         let text = quote ?? "\(title), as told"
-        let segment = Segment(id: .init(), sessionID: session.id, index: index, startMs: index * 5_000, endMs: index * 5_000 + 4_000,
-                              text: text, status: .extracted)
+        let startMs = index * 5_000, endMs = index * 5_000 + 4_000
+        let segment = Segment(id: .init(), sessionID: session.id, index: index, startMs: startMs, endMs: endMs,
+                              text: words.isEmpty ? text : words.joined(separator: " "), status: .extracted)
         // A second apart, so "oldest told first" has one answer.
         let told = start.addingTimeInterval(Double(index))
         index += 1
-        try sessions.insert(segment, words: [])
+        let step = words.isEmpty ? 0 : (endMs - startMs) / words.count
+        try sessions.insert(segment, words: words.enumerated().map { i, word in
+            Word(segmentID: segment.id, index: i, text: word, startMs: startMs + i * step, endMs: startMs + (i + 1) * step)
+        })
         let candidate = Candidate(id: .init(), segmentID: segment.id, extractorVersion: "seed", ordinal: 0, kind: .memory, payload: "{}",
                                   confidence: 1, status: .pending, rejection: nil, createdAt: .now)
         try store.candidates.insert(candidate)

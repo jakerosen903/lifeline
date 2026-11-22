@@ -2,6 +2,59 @@
 
 One entry per decision. Newest first. Status is Decided, Open, or Superseded.
 
+## 2026-11-19 · S5: search, from a Search button on every tab
+
+**Status:** Decided by the builder. The owner can overrule each one. Source: `docs/plans/2026-11-16-sections-search.md`, ledger `.superpowers/sdd/2026-11-16-sections-search/rulings.md`. This entry changes one line of `docs/specs/2026-11-15-five-sections.md` and one line of S4 (see "Differs from the spec").
+
+**Decision.** A Search button (a magnifying glass, "Search" to VoiceOver) is on the top bar of every tab. It opens the search screen in that tab's own stack. The person types a name or words they said. The app shows the people, places, things, ideas and memories that match, in groups. A tap opens the page. Nothing typed leaves the phone or is kept.
+
+The plan's decisions that the owner can see:
+
+1. **The engine is a scan in Swift, not SQLite FTS5.** The app reads an index when the search screen appears and scans it on each change of the query. Cost: every kept word is read on each appear.
+3. **What is searched.** A person's name and aliases; the title of a place, a thing or an idea; a moment's title and words; the words only of a fact, a feeling or a goal, because its heading is the quote, not the stored title. Cost: an alias older than v15 counts as the owner's words, so a wrong old alias can show.
+4. **The text of a memory is the person's own words.** It is the quote and the words of each telling inside the kept span. Cost: words cut by a trim are not found.
+6. **Hidden is not found. Kept from AI is found.** A hidden row is never a result; a floating stand-in and the owner are not results. Search uses no model, so a row kept from AI is found. Cost: search has no "Show hidden".
+7. **Every word typed must start a word of the result.** No spelling tolerance, no stemming, no "did you mean". Cost: "treehouse" does not find "tree house".
+11. **Results show in groups, in a fixed order:** "People", "Places", "Things", "What you think", "Memories". An empty group does not show. Cost: a strong memory match shows below every name match.
+18. **A story still being sorted is not found.** It is a memory only when its card is kept. Cost: a story told a minute ago is not found until its card is kept.
+19. **No history and no suggestions.** The app keeps no recent searches and writes the query nowhere. The field does not autocorrect. Cost: the person types the query again each time.
+21. **Copy, invented by the plan.** Prompt "Memories, people, places, things"; opening line "Search by a name, or by words you said."; "Nothing found" with "Search looks at names and at the words of memories you kept."; "Could not search: {reason}", which never holds the query. Cost: the owner has not read the copy yet.
+23. **A person result shows the key photo**, or the letter tile, as People does. Cost: none seen; nothing else from a photo shows.
+
+**Rulings made while building:**
+
+- R1. The store gains two read-only public reads (`allAliases`, `tellingWords`), because each repository keeps its database private. Cost: two more public reads to maintain.
+- R2. An alias whose folded form equals the title's is dropped from the index. Cost: none seen; an old spelling still finds the person.
+- R3. A fact, a feeling or a goal sorts by when it was told. A half-dated moment shows no date line. Cost: the order of facts in "Memories" differs from an entity page.
+- R4. Search is not a tab. With a sixth tab, iOS 26.3 puts You and Search under "More". The five tabs stay, and each tab's root has a Search button that pushes the search screen in its own stack. Cost: each tab's search keeps its own query.
+- R5. The field takes focus when search opens, and "X" closes search in one tap. Cost: "X" loses the typed query, which is what closing means.
+- R6. Three small fixes ride with the merge fixes; one allocation per memory per keystroke is parked. Cost: a little time per keystroke on a very large archive.
+- R7. A person's own words never come from an `assumed` link. This fixes the merged people-and-contacts code, in its own commit. Cost: it changes the People tile and the person's page too; a person whose only relation phrase came with an unsettled guess shows no own words until the owner settles it.
+- R8. A person row in search shows no guess mark, as a People tile shows none. Cost: an old wrong alias shows as a second line.
+
+**Differs from the spec.** The spec says "Search is the trailing search tab". An iPhone tab bar holds five tabs, and a sixth folds two tabs into "More". This entry supersedes that line of `docs/specs/2026-11-15-five-sections.md`. Decision 23 supersedes the search-result part of the S4 line "No Timeline row, Things tile, search result or map uses a photo yet" (2026-11-16, Photos on pages): a person result shows the key photo.
+
+**Why.** The person finds a story by a name or by words they said, from any tab, with no count and no task (PRINCIPLES 9). Results show the person's titles and words as stored, never a guess as a fact (PRINCIPLES 1 and 5). Search keeps the five tabs and keeps the record bar, so telling stays one tap away.
+
+**Consequences.**
+
+- No migration. Search writes no row. Backup, restore and the launch repair do not change.
+- The pure logic is in the kit: `SearchFold`, `SearchIndex`, `Search.run`, `SearchSnippet`. `ExtractionStore.searchIndex()` reads the index off the main actor, with the words folded once.
+- The People tile and the person's page change with R7.
+
+**Known costs.**
+
+- The index is read again on every appear, and the read takes every kept word.
+- The seven reads are not one snapshot. A race between them drops a row and never shows a hidden one. A row hidden or deleted in another tab still shows in the results until the next read returns.
+- Leaving search waits 500 ms for the bar to settle; a pop sent sooner is dropped.
+- Each tab's search has its own query.
+- The keyboard hides the record bar while the keyboard is up.
+- No spelling tolerance.
+- A story still being sorted is not found.
+- An old wrong alias can show.
+- R7 changes People and the person's page.
+- `YouUITests.testAPlayErrorLeavesAnOpenUndoInPlace` fails on main too. It is not from this work.
+
 ## 2026-11-19 · PC-c: two people can be merged — decisions and rulings made while building
 
 **Status:** Decided by the builder and the controller. The owner approved the plan on 2026-11-19 ("Yes, build both") without a review of each decision. The owner can overrule each one. Source: `docs/plans/2026-11-19-people-contacts-c.md`, ledger `.superpowers/sdd/2026-11-19-people-contacts-c/rulings.md` (C1 to C15). Narrows `docs/specs/2026-11-18-people-contacts.md`, section "Merging two people", and call 21, each marked in the spec.
