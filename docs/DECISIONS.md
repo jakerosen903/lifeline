@@ -51,6 +51,29 @@ Rulings, by range:
 - `v8` is not the default. The switch waits for the owner's yes on the comparison's table.
 - The Task 6 UI tests are built and not run. The ledger says the simulator was held by the PR #35 suite. To run: `PeopleGuessUITests` (with the new `testTwoPeopleWithOneNameGetTwoChips`), `PeopleContactsUITests`, `LandingUITests`, `ExtractionUITests`, `FollowUpUITests`, `EntityPageUITests`, `KindsUITests`, `InterviewerUITests`.
 
+## 2026-11-19 · The photo picker opens with the person's name
+
+**Status:** Decided. The owner approved the spec on 2026-11-19, tried the trial build on a phone with iOS 27 and said "Great looks good". The owner can overrule each call. Built on branch `photo-search-name`. The device check has not been run on the final build. Source: `docs/specs/2026-11-19-photo-search-name.md`, `docs/plans/2026-11-19-photo-search-name.md`.
+
+**Decision.**
+
+1. On iOS 27 or later, "Add a photo" on a person's page gives a name of that person to the system picker's search. iOS 26 has no such control, and the picker opens as before. The app's minimum stays iOS 26.0.
+2. The rule is `PhotoSearchName` in LifelineKit. A linked contact that the app can see gives the contact's full name. Every other person gives the name on the page. The owner's page, and a page that is not a person, give no text. A name of spaces gives no text.
+3. A contact that is not in the owner's contacts now gives the page's name. The kept contact name can be stale.
+4. The app adds no control of its own. The owner clears the search in the picker. The app does not remember a cleared search.
+5. Only "Add a photo" on a person's page. Not the picker that starts a photo story, and not the memory page or You.
+6. Nothing is stored. No migration.
+
+**What leaves the app.** The name goes to the system picker on the phone. It does not go to the model or to a server. The app does not see what the search finds, and it asks for no access to the photo library. A contact's name is still never saved as an alias.
+
+**Open for the owner.**
+
+1. A person with no linked contact also gets the text. The owner asked for the linked case.
+2. The contact's full name is used, not the given name.
+3. With no match the picker shows "No Results" first. One tap on the clear button shows the library.
+4. On the simulator the text "Sam O'Neil" showed as "Sam ONeil". The app passes the name as it is. The device check has a line for it.
+5. No setting turns this off.
+
 ## 2026-11-19 · A page's first read of its photos does not scroll it
 
 **Status:** Decided by the builder (a bug fix). The owner can overrule it.
@@ -227,6 +250,17 @@ Tests:
 9. **The Undo notice after a name move can sit below the screen for its 6 seconds.** The owner must scroll down to reach it. One fix is to pin it above the record bar.
 
 The device check is `docs/plans/2026-11-18-photo-on-people-pages-device-check.md`. Its last part lists the small items the reviews deferred.
+
+## 2026-11-19 · Picker scroll: one tile redraws per thumbnail, and the picker holds the sheet
+
+**Status:** Decided by the builder. The owner can overrule each one. Source: `docs/specs/2026-11-19-picker-scroll.md`.
+
+**Decision.** The owner reported that a swipe in the photos picker sometimes runs on without control (iOS 27, on the phone). We did not reproduce the fault. We have no iOS 27 device, and the UI tests cannot drive the system picker. The two causes below are inferences from the code.
+
+1. Each Favorites tile owns its thumbnail. Before, every tile read one observed dictionary, so each arrival redrew every visible tile during a fling. Now one arrival redraws one tile. The view model keeps the thumbnails in a cache that no view observes, so a tile that scrolls back shows its image at once.
+2. The sheet does not close with a swipe while the system picker shows (route `.picker`, or "All photos"). The picker's grid runs in another process, and a downward swipe can fight between the picker and the sheet. "Cancel" still closes the sheet. The explanation and the grid keep swipe-to-dismiss. The rule is `PhotoStoryStart.allowsSwipeToDismiss` in the kit, with a test.
+
+If the owner still sees the fault, neither cause was the real one, and we need a screen recording from the phone.
 
 ## 2026-11-18 · S6b: a pinned card with the life strip, a frame and a During line
 
