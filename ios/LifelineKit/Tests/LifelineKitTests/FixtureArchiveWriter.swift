@@ -35,7 +35,7 @@ func writeRestoreFixtureArchives() throws {
     try Backup.export(root: old, appVersion: "fixture", to: out.appending(path: "fixture-v7-missing-audio.lifeline"))
 }
 
-/// Writes the UI tests' photo to pick (`LIFELINE_WRITE_FIXTURES=<dir>`); a no-op otherwise. An invented image:
+/// Writes the UI tests' photos to pick (`LIFELINE_WRITE_FIXTURES=<dir>`); a no-op otherwise. The first, an invented image:
 /// orange with a white circle, a camera date, a GPS point and orientation 6, so the stored copy must turn upright.
 @Test(.enabled(if: ProcessInfo.processInfo.environment["LIFELINE_WRITE_FIXTURES"] != nil))
 func writePhotoFixture() throws {
@@ -43,4 +43,7 @@ func writePhotoFixture() throws {
     try FileManager.default.createDirectory(at: out, withIntermediateDirectories: true)
     try GeneratedPhoto.write(to: out.appending(path: "photo-orange.jpg"), width: 3000, height: 2000, rgb: 0xE07A2E,
                              takenAt: "2012:06:14 15:32:10", gps: (0.5, -30.0), orientation: 6)
+    // Part 4: a second photo to pick with the first. Another colour and date, so the two have different hashes and captions.
+    try GeneratedPhoto.write(to: out.appending(path: "photo-green.jpg"), width: 1600, height: 1200, rgb: 0x4E7D4A,
+                             takenAt: "2005:03:02 09:15:00")
 }

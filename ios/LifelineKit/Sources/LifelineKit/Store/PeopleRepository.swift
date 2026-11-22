@@ -8,7 +8,7 @@ public struct PeopleRepository: Sendable {
         case emptyName
     }
 
-    private let db: AppDatabase
+    let db: AppDatabase
 
     public init(_ db: AppDatabase) { self.db = db }
 
@@ -54,8 +54,44 @@ public struct PeopleRepository: Sendable {
         }
     }
 
+    /// The person linked to this contact, if any. The unique index allows at most one.
+    public func person(holding identifier: String) throws -> Person? {
+        try db.writer.read { try Person.fetchOne($0, sql: Person.selectSQL + "where person.contact_identifier = ?", arguments: [identifier]) }
+    }
+
+    /// Every person linked to a contact, by name.
+    public func linkedPersons() throws -> [Person] {
+        try db.writer.read {
+            try Person.fetchAll($0, sql: Person.selectSQL + "where person.contact_identifier is not null order by entity.title collate nocase")
+        }
+    }
+
     public func aliases(of person: PersonID) throws -> [Alias] {
         try db.writer.read { try Alias.filter(Column("person_id") == person.rawValue).order(Column("text")).fetchAll($0) }
+    }
+
+    /// Each non-owner person's name for a model (`NameForModel`), by entity. A person with none is absent.
+    public func namesForModel() throws -> [EntityID: String] {
+        try db.writer.read { db in
+            var aliases: [String: [Alias]] = [:]
+            for alias in try Alias.order(Column.rowID).fetchAll(db) { aliases[alias.personID.rawValue, default: []].append(alias) }
+            let people = try Person.fetchAll(db, sql: Person.selectSQL + "where person.is_owner = 0")
+            return people.reduce(into: [:]) { names, person in
+                names[person.entityID] = NameForModel.of(person, aliasesOldestFirst: aliases[person.id.rawValue] ?? [])
+            }
+        }
+    }
+
+    /// One person's name for a model; nil for a person whose name came from a contact and who has no alias.
+    public func nameForModel(of person: PersonID) throws -> String? {
+        guard let found = try self.person(id: person) else { return nil }
+        return NameForModel.of(found, aliasesOldestFirst: try aliasesOldestFirst(of: person))
+    }
+
+    /// The aliases in the order they were saved. The alias table has an implicit rowid, which grows with
+    /// each insert and survives the backup (a page copy); the app never runs VACUUM, which could renumber it.
+    public func aliasesOldestFirst(of person: PersonID) throws -> [Alias] {
+        try db.writer.read { try Alias.filter(Column("person_id") == person.rawValue).order(Column.rowID).fetchAll($0) }
     }
 
     /// The person whose display name or any alias equals `text`, ignoring case and outer
@@ -111,10 +147,12 @@ public struct PeopleRepository: Sendable {
     /// `name` is already trimmed and not empty.
     static func rename(_ person: PersonID, to name: String, in db: Database) throws {
         guard let old = try String.fetchOne(db, sql: "select title from entity where id = ?", arguments: [person.rawValue]) else { return }
+        let oldOrigin = try String.fetchOne(db, sql: "select name_origin from person where id = ?", arguments: [person.rawValue])
         try db.execute(sql: "update entity set title = ? where id = ?", arguments: [name, person.rawValue])
         try db.execute(sql: "update person set created_by_guess = 0, name_origin = ? where id = ?",
                        arguments: [NameOrigin.typed.rawValue, person.rawValue])
-        try insertAlias(old, person, db)
+        // A name that came from a contact is the contact's, never an alias (PB10): only the owner's words are kept.
+        if oldOrigin != NameOrigin.contact.rawValue { try insertAlias(old, person, db) }
         try insertAlias(name, person, db)
     }
 

@@ -136,6 +136,53 @@ import Testing
         #expect(r.choice == .person(priya.id)); #expect(r.origin == .assumed); #expect(r.rule == 4); #expect(r.others.isEmpty)
     }
 
+    // PC-d decision 6: the model's person id decides inside rule 4 only, and the link stays `assumed`.
+    @Test func aModelPickOfAnOlderPersonChoosesThem() {
+        let older = known("Robyn", last: early), recent = known("Robyn", last: late)
+        let r = PersonGuess.guess(SaidName(ref: "Robyn"), people: [older, recent], contacts: [], modelPick: older.id)
+        #expect(r.choice == .person(older.id)); #expect(r.origin == .assumed); #expect(r.rule == 4)
+        #expect(r.others == [.person(recent.id)])
+    }
+
+    @Test func aModelPickOfAPersonWithAnotherNameIsIgnored() {
+        let robyn = known("Robyn", last: early), kira = known("Kira", last: late)
+        let r = PersonGuess.guess(SaidName(ref: "Robyn"), people: [robyn, kira], contacts: [], modelPick: kira.id)
+        #expect(r.choice == .person(robyn.id)); #expect(r.rule == 4)
+        let none = PersonGuess.guess(SaidName(ref: "Tomas"), people: [robyn, kira], contacts: [], modelPick: kira.id)
+        #expect(none.choice == .newPerson); #expect(none.rule == 7, "an id that names no rule-4 candidate picks nobody")
+    }
+
+    @Test func rules1And2IgnoreTheModelPick() {
+        let sister = known("Danielle", aliases: ["my sister"]), other = known("Danielle", last: late)
+        let r1 = PersonGuess.guess(SaidName(ref: "Danielle", mentionRelation: "my sister"), people: [sister, other], contacts: [], modelPick: other.id)
+        #expect(r1.choice == .person(sister.id)); #expect(r1.rule == 1); #expect(r1.origin == .said)
+        let mom = known("Marcel", aliases: ["my mom"])
+        let r2 = PersonGuess.guess(SaidName(ref: "my mom"), people: [mom, other], contacts: [], modelPick: other.id)
+        #expect(r2.choice == .person(mom.id)); #expect(r2.rule == 2); #expect(r2.origin == .said)
+    }
+
+    // PC-d: a person another handle of the same said name holds in this recording is no candidate.
+    @Test func aTakenPersonGivesTheNextCandidate() {
+        let older = known("Robyn", last: early), recent = known("Robyn", last: late)
+        let r = PersonGuess.guess(SaidName(ref: "Robyn"), people: [older, recent], contacts: [], taken: [recent.id])
+        #expect(r.choice == .person(older.id)); #expect(r.origin == .assumed); #expect(r.rule == 4)
+        #expect(r.others.isEmpty, "a taken person is not on the sheet either")
+    }
+
+    @Test func everyCandidateTakenGivesANewPerson() {
+        let older = known("Robyn", last: early), recent = known("Robyn", last: late, contact: "c1")
+        let r = PersonGuess.guess(SaidName(ref: "Robyn"), people: [older, recent], contacts: [contact("c1", full: "Robyn Vale", given: "Robyn")],
+                                  taken: [older.id, recent.id])
+        #expect(r.choice == .newPerson); #expect(r.origin == .new); #expect(r.rule == 7)
+        #expect(r.others.isEmpty, "the contact a taken person holds counts as that person")
+    }
+
+    @Test func aTakenModelPickIsIgnored() {
+        let older = known("Robyn", last: early), recent = known("Robyn", last: late)
+        let r = PersonGuess.guess(SaidName(ref: "Robyn"), people: [older, recent], contacts: [], modelPick: older.id, taken: [older.id])
+        #expect(r.choice == .person(recent.id))
+    }
+
     @Test func commaFormNameAndRelationOnOnePersonIsRule1() {
         let marcel = known("Marcel", aliases: ["my mom"]), priya = known("Priya", aliases: ["my mom"])
         let r = PersonGuess.guess(SaidName(ref: "Priya, my mom"), people: [marcel, priya], contacts: [])

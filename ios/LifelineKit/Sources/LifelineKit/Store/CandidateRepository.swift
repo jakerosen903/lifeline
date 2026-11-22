@@ -28,7 +28,11 @@ public struct CandidateRepository: Sendable {
         /// The superseded row stored for it in this extraction.
         public var rowID: CandidateID
         public var span: ExtraSpan
-        public init(earlierID: CandidateID, rowID: CandidateID, span: ExtraSpan) { self.earlierID = earlierID; self.rowID = rowID; self.span = span }
+        /// The people the continuation's handles name (PC-d). The earlier card gains each handle it lacks.
+        public var people: [PersonOut]
+        public init(earlierID: CandidateID, rowID: CandidateID, span: ExtraSpan, people: [PersonOut] = []) {
+            self.earlierID = earlierID; self.rowID = rowID; self.span = span; self.people = people
+        }
     }
 
     /// Writes every candidate of one extraction, marks the segment extracted, and grows each
@@ -49,6 +53,11 @@ public struct CandidateRepository: Sendable {
                     if let earlier = try Candidate.fetchOne(db, key: continuation.earlierID.rawValue), earlier.status == .pending,
                        var out = CandidatePayload.memory(earlier) {
                         out.extraSpans.append(continuation.span)
+                        // A handle is one person in the recording: one already on the card is not added again.
+                        for person in continuation.people where !out.handlePeople.contains(where: { $0.handle == person.handle }) {
+                            out.handlePeople.append(person)
+                            if !out.personHandles.contains(person.handle) { out.personHandles.append(person.handle) }
+                        }
                         try db.execute(sql: "update candidate set payload = ? where id = ? and status = ?",
                                        arguments: [try CandidatePayload.encode(out), earlier.id.rawValue, CandidateStatus.pending.rawValue])
                         grown.insert(earlier.id)
@@ -173,6 +182,39 @@ public struct CandidateRepository: Sendable {
                 order by segment."index", candidate.ordinal
                 """, arguments: [session.rawValue])
         }
+    }
+
+    /// The people the extractor found in this session's segments other than `segment`, earlier and later (PC-d, D30):
+    /// a segment extracted again after a later one must not mint a handle the later one already used. First every
+    /// person of a handle that a memory card names, then every person of a handle that only a person mention gives
+    /// (D25). Within that, by segment index and ordinal. Waiting and kept rows count. A dismissed row does not, and
+    /// neither does a continuation row (its "continues" marker): its people join the earlier card. A mention gives its
+    /// text as the said name and no person id.
+    public func handlePeople(inSession session: SessionID, except segment: SegmentID) throws -> [PersonOut] {
+        let rows = try db.writer.read { db in
+            try Candidate.fetchAll(db, sql: """
+                select candidate.* from candidate
+                join segment on segment.id = candidate.segment_id
+                where segment.session_id = ? and candidate.status in ('pending', 'accepted')
+                  and ((candidate.kind = 'memory' and candidate.rejection is null) or candidate.kind = 'person')
+                  and segment."index" <> (select "index" from segment where id = ? and session_id = ?)
+                order by segment."index", candidate.ordinal
+                """, arguments: [session.rawValue, segment.rawValue, session.rawValue])
+        }
+        var cardPeople: [PersonOut] = []
+        let said: [PersonOut] = rows.flatMap { row -> [PersonOut] in
+            if let memory = CandidatePayload.memory(row) {
+                cardPeople += memory.handlePeople
+                return memory.handlePeople
+            }
+            guard let mention = CandidatePayload.mention(row), let handle = mention.handle else { return [] }
+            return [PersonOut(handle: handle, saidName: mention.text, relationText: mention.relationText, personID: nil)]
+        }
+        // Each handle's rank: its first place among the cards' people, else after them by its first place said.
+        var rank: [String: Int] = [:]
+        for person in cardPeople + said where rank[person.handle] == nil { rank[person.handle] = rank.count }
+        // A stable sort: the fold takes entries in rank order and each handle's said names in the order said.
+        return said.enumerated().sorted { (rank[$0.element.handle]!, $0.offset) < (rank[$1.element.handle]!, $1.offset) }.map(\.element)
     }
 
     /// True when any candidate of this version exists for the segment.

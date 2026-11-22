@@ -30,7 +30,7 @@ struct YouScreen: View {
                 VStack(alignment: .leading, spacing: 28) {
                     if let portrait = viewModel.portrait {
                         PortraitHeader(portrait: portrait, cover: viewModel.shelf?.cover, photos: viewModel.shelf?.photos ?? [],
-                                       isAdding: viewModel.shelf?.isAdding ?? false, label: viewModel.photoLabel,
+                                       addingLine: viewModel.shelf?.addingLine, label: viewModel.photoLabel,
                                        cache: viewModel.deps.photoImages, deps: viewModel.deps, onOpen: { viewing = $0 },
                                        onMove: { id, index in Task { await viewModel.movePhoto(id, to: index) } }, onChange: changed)
                             .id(Self.top)
@@ -58,8 +58,9 @@ struct YouScreen: View {
                 .padding(.horizontal, 16)
                 .padding(.vertical, 12)
             }
-            // A new cover is the page's news: the page goes back to the top, where the cover is.
-            .onChange(of: viewModel.shelf?.cover?.id) { withAnimation { proxy.scrollTo(Self.top, anchor: .top) } }
+            // A new cover is the page's news: the page goes back to the top, where the cover is. The first read's
+            // cover is not news (`coverChanges`); a new shelf starts at 0, so its making scrolls nothing either.
+            .onChange(of: viewModel.shelf?.coverChanges ?? 0) { withAnimation { proxy.scrollTo(Self.top, anchor: .top) } }
         }
         // One slot, pinned above the record bar: "Hidden." with Undo, or why something failed. Wherever the line
         // was on the page, its message is on screen, and the page does not jump.
@@ -89,8 +90,9 @@ struct YouScreen: View {
             // Photos hang on the owner's entity: with no owner yet there is nowhere to add one.
             if viewModel.shelf != nil {
                 Menu {
-                    Button("Add a photo", systemImage: "photo") { viewModel.clearError(); addingPhoto = true }
-                        .accessibilityIdentifier("you.addPhoto")
+                    AddPhotoButton(isAdding: viewModel.shelf?.isAdding ?? false, identifier: "you.addPhoto") {
+                        viewModel.clearError(); addingPhoto = true
+                    }
                 } label: { Image(systemName: "ellipsis.circle") }
                     .accessibilityLabel("More")
                     .accessibilityIdentifier("you.more")

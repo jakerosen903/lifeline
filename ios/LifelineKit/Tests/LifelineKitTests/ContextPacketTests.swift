@@ -135,3 +135,92 @@ private func pendingCandidate(_ segment: SegmentID, title: String, quote: String
 @Test func estimateIsCharactersOverFour() {
     #expect(ContextPacketBuilder.estimate("") == 1 && ContextPacketBuilder.estimate(String(repeating: "a", count: 400)) == 100)
 }
+
+// PC-b Task 2, Review Focus 5: nothing from a contact goes to the model. A person whose name came from a
+// contact is sent by the oldest name the owner said; the contact's name never appears in the packet.
+@Test func aPersonFromAContactIsSentByTheOldestSaidName() throws {
+    let robyn = Person(id: .init(), displayName: "Robyn Vale", notes: nil, isOwner: false, birthDate: nil, birthDateOrigin: nil,
+                       nameOrigin: .contact, createdByGuess: true, contactIdentifier: "c-vale", contactName: "Robyn Vale", contactState: "linked")
+    let aliases = [Alias(personID: robyn.id, text: "Robyn"), Alias(personID: robyn.id, text: "my roommate")]   // oldest first
+    let packet = ContextPacketBuilder.build(segment: seg(0, "x"), previous: [], people: [(robyn, aliases)], memories: [],
+                                            profileFreeText: nil, stage: "open")
+    #expect(packet.people == [ContextPacket.PersonEntry(id: robyn.id.rawValue, name: "Robyn", aliases: ["my roommate"])])
+    let text = String(decoding: try packet.encodedJSON(), as: UTF8.self)
+    #expect(!text.contains("Vale"), "the contact's name never reaches the model")
+}
+
+@Test func aPersonFromAContactWithNoSaidNameIsLeftOut() throws {
+    let robyn = Person(id: .init(), displayName: "Robyn Vale", notes: nil, isOwner: false, birthDate: nil, birthDateOrigin: nil,
+                       nameOrigin: .contact, createdByGuess: true, contactIdentifier: "c-vale", contactName: "Robyn Vale", contactState: "linked")
+    let packet = ContextPacketBuilder.build(segment: seg(0, "x"), previous: [], people: [(robyn, []), person("Maya")], memories: [],
+                                            profileFreeText: nil, stage: "open")
+    #expect(packet.people.map(\.name) == ["Maya"])
+    #expect(!String(decoding: try packet.encodedJSON(), as: UTF8.self).contains("Vale"))
+}
+
+@Test func aliasesReadOldestFirstForThePacket() throws {
+    let store = ExtractionStore(try AppDatabase.inMemory())
+    let robyn = try store.people.insertPerson(displayName: "Robyn")
+    try store.people.addAlias("Bee", to: robyn.id)
+    try store.people.addAlias("Abby", to: robyn.id)
+    #expect(try store.people.aliasesOldestFirst(of: robyn.id).map(\.text) == ["Robyn", "Bee", "Abby"])
+}
+
+// MARK: - PC-d Task 2: the handles of the recording so far
+
+@Test func handlesFoldToOneEntryEachWithEverySaidNameInOrder() {
+    let folded = ContextPacketBuilder.recordingPeople(from: [
+        PersonOut(handle: "p1", saidName: "Robyn", relationText: nil, personID: nil),
+        PersonOut(handle: "p2", saidName: "Theo", relationText: "my uncle", personID: "id-theo"),
+        PersonOut(handle: "p1", saidName: "my roommate", relationText: "roommate", personID: "id-robyn"),
+        PersonOut(handle: "p1", saidName: "Robyn", relationText: "friend", personID: "id-other"),
+    ])
+    #expect(folded == [
+        ContextPacket.RecordingPerson(handle: "p1", saidNames: ["Robyn", "my roommate"], relation: "roommate", personID: "id-robyn"),
+        ContextPacket.RecordingPerson(handle: "p2", saidNames: ["Theo"], relation: "my uncle", personID: "id-theo"),
+    ])
+}
+
+@Test func theEncodedPacketHoldsTheKeyRecordingPeople() throws {
+    let packet = ContextPacketBuilder.build(segment: seg(1, "x"), previous: [], people: [], memories: [], profileFreeText: nil, stage: "open",
+                                            recordingPeople: [.init(handle: "p1", saidNames: ["Robyn"], relation: nil, personID: nil)])
+    let text = String(decoding: try packet.encodedJSON(), as: UTF8.self)
+    #expect(text.contains("\"recordingPeople\""))
+    #expect(text.contains("\"saidNames\""))
+}
+
+@Test func aPersonIDThePacketsPeopleDoNotHoldIsLeftOut() {
+    let maya = person("Maya")
+    let packet = ContextPacketBuilder.build(segment: seg(1, "x"), previous: [], people: [maya], memories: [], profileFreeText: nil, stage: "open",
+                                            recordingPeople: [.init(handle: "p1", saidNames: ["Maya"], relation: nil, personID: maya.0.id.rawValue),
+                                                              .init(handle: "p2", saidNames: ["Theo"], relation: nil, personID: "not-in-the-packet")])
+    #expect(packet.recordingPeople.map(\.personID) == [maya.0.id.rawValue, nil])
+    #expect(packet.recordingPeople.map(\.saidNames) == [["Maya"], ["Theo"]], "the handle stays; only the id goes")
+}
+
+@Test func aPersonIDBeyondThePeopleCapIsLeftOut() {
+    let people = (0..<3).map { person("Person \($0)") }
+    let packet = ContextPacketBuilder.build(segment: seg(1, "x"), previous: [], people: people, memories: [], profileFreeText: nil, stage: "open",
+                                            limits: ContextPacketLimits(people: 2),
+                                            recordingPeople: [.init(handle: "p1", saidNames: ["Person 2"], relation: nil, personID: people[2].0.id.rawValue)])
+    #expect(packet.recordingPeople.first?.personID == nil)
+}
+
+@Test func underASmallBudgetPeopleTrimBeforeRecordingPeople() {
+    let people = (0..<20).map { person("Person number \($0)", aliases: ["alias \($0)"]) }
+    let handles = (0..<20).map { ContextPacket.RecordingPerson(handle: "p\($0)", saidNames: ["Someone called \($0)"], relation: "a friend", personID: nil) }
+    let packet = ContextPacketBuilder.build(segment: seg(1, "x"), previous: [], people: people, memories: [], profileFreeText: nil, stage: "open",
+                                            recordingPeople: handles, budgetTokens: 500)
+    #expect(packet.people.count == 1, "people are dropped first, down to their first entry")
+    #expect(packet.recordingPeople.count > 1 && packet.recordingPeople.count < 20, "then the recording's handles, whole entries at a time")
+    #expect(packet.recordingPeople.first?.handle == "p0")
+}
+
+@Test func aPersonIDWhosePersonWasTrimmedIsLeftOut() {
+    let people = (0..<20).map { person("Person number \($0)", aliases: ["alias \($0)"]) }
+    let handles = [ContextPacket.RecordingPerson(handle: "p1", saidNames: ["Person number 19"], relation: nil, personID: people[19].0.id.rawValue)]
+    let packet = ContextPacketBuilder.build(segment: seg(1, "x"), previous: [], people: people, memories: [], profileFreeText: nil, stage: "open",
+                                            recordingPeople: handles, budgetTokens: 100)
+    #expect(packet.people.map(\.id) == [people[0].0.id.rawValue], "the trim kept only the first person")
+    #expect(packet.recordingPeople == [.init(handle: "p1", saidNames: ["Person number 19"], relation: nil, personID: nil)])
+}

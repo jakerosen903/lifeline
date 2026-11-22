@@ -4,6 +4,7 @@ import GRDB
 /// The owner's answer for one said name on one waiting card (`candidate_person_choice`).
 /// `choice` is nil when the answer is "not a person".
 public struct PersonChoice: Sendable, Equatable {
+    /// `ChoiceKey.text(saidName:handle:)`: the said name's key, and the handle when the card has one (PC-d decision 8).
     public var saidKey: String
     public var choice: PersonGuess.Choice?
     public var notAPerson: Bool
@@ -49,7 +50,8 @@ public struct PersonLinkRepository: Sendable {
             try Row.fetchAll(db, sql: "select said_name, choice, person_id, contact_identifier from candidate_person_choice where candidate_id = ?",
                              arguments: [candidate.rawValue])
                 .compactMap { row -> PersonChoice? in
-                    let key = SaidName.key(row["said_name"] as String)
+                    // Stored as `ChoiceKey.text`, already normalized; keying it again would fold the handle's case.
+                    let key: String = row["said_name"]
                     switch row["choice"] as String {
                     case "person":
                         return (row["person_id"] as String?).map { PersonChoice(saidKey: key, choice: .person(PersonID(rawValue: $0)), notAPerson: false) }
@@ -60,6 +62,31 @@ public struct PersonLinkRepository: Sendable {
                     default: return nil
                     }
                 }
+        }
+    }
+
+    /// One kept link that carries the extractor's handle (PC-d): who the handle became in its recording.
+    /// `saidKey` is `SaidName.key` of the link's said name.
+    public typealias HandleLink = (handle: String, saidKey: String, person: PersonID, origin: LinkOrigin?)
+
+    /// The handle links of the kept memories of `segment`'s recording (the session of each memory's first span),
+    /// newest memory first. A handle means one person inside one recording only, so no other recording is read.
+    /// "Newest" is the memory's `created_at`, not the time of the owner's last move (D12, final review M6).
+    func handleLinks(inSessionOf segment: SegmentID) throws -> [HandleLink] {
+        try db.writer.read { db in
+            try Row.fetchAll(db, sql: """
+                select me.person_handle, me.role_text, me.origin, person.id as person_id
+                from moment_entity me
+                join person on person.entity_id = me.entity_id
+                join memory on memory.id = me.memory_id
+                where me.relation = 'mention' and me.person_handle is not null and person.is_owner = 0
+                  and \(Self.sessionSQL) = (select session_id from segment where id = ?)
+                order by memory.created_at desc, me.memory_id
+                """, arguments: [segment.rawValue]).map { row in
+                (handle: row["person_handle"], saidKey: SaidName.key(row["role_text"] as String? ?? ""),
+                           person: PersonID(rawValue: row["person_id"]),
+                           origin: (row["origin"] as String?).flatMap(LinkOrigin.init(rawValue:)))
+            }
         }
     }
 
@@ -76,21 +103,24 @@ public struct PersonLinkRepository: Sendable {
         try fetch(where: "person.id = ?", arguments: [person.rawValue], order: "memory.created_at desc, me.memory_id, me.relation")
     }
 
-    /// The links one answer can change together: the same person and relation in the same session,
-    /// said with the same name (`SaidName.key`). A link with no said name is a group of only itself.
-    /// Includes `link`.
+    /// The links one answer can change together: the same person and relation in the same session, and
+    /// - for a link with a handle (PC-d), the same handle, whatever words each link said: a handle is one person
+    ///   in one recording, and another handle of the same name is another person;
+    /// - for a link with no handle, the same said name (`SaidName.key`) among the links with no handle.
+    /// A link with neither is a group of only itself. Includes `link`.
     public func group(of link: PersonLink) throws -> [PersonLink] {
         try db.writer.read { try Self.group(of: link, in: $0) }
     }
 
     static func group(of link: PersonLink, in db: Database) throws -> [PersonLink] {
         let key = SaidName.key(link.saidName ?? "")
-        guard !key.isEmpty else { return [link] }
+        guard link.handle != nil || !key.isEmpty else { return [link] }
         guard let session = try session(of: link.memoryID, in: db) else { return [link] }
         let sameSession = try fetch(where: "person.id = ? and me.relation = ? and \(sessionSQL) = ?",
                                     arguments: [link.person.id.rawValue, link.relation.rawValue, session],
                                     order: "memory.created_at, me.memory_id", in: db)
-        return sameSession.filter { $0.saidName.map(SaidName.key) == key }
+        if let handle = link.handle { return sameSession.filter { $0.handle == handle } }
+        return sameSession.filter { $0.handle == nil && $0.saidName.map(SaidName.key) == key }
     }
 
     /// How many guesses the session's memories hold: assumed mentions, one per memory and person.
@@ -104,6 +134,18 @@ public struct PersonLinkRepository: Sendable {
         }
     }
 
+    /// How many links of the session's memories name a person other than the owner: mentions, any origin. The landing
+    /// asks for contacts once this is one or more (`ContactsPromptRule`).
+    public func keptPeopleCount(in session: SessionID) throws -> Int {
+        try db.writer.read { db in
+            try Int.fetchOne(db, sql: """
+                select count(*) from moment_entity me
+                join person on person.entity_id = me.entity_id
+                where me.relation = 'mention' and person.is_owner = 0 and \(Self.sessionSQL) = ?
+                """, arguments: [session.rawValue]) ?? 0
+        }
+    }
+
     // MARK: - Shared with the writes
 
     /// The session of the segment of a memory's first span (order 0). `me` is the link's table.
@@ -111,6 +153,25 @@ public struct PersonLinkRepository: Sendable {
         (select segment.session_id from memory_span ms join segment on segment.id = ms.segment_id
          where ms.memory_id = me.memory_id and ms."order" = 0)
         """
+
+    /// The session of a person's first link: the oldest linked memory's first span. `entity` is an SQL
+    /// expression for the person's entity id.
+    static func firstSessionSQL(entity: String) -> String {
+        """
+        (select segment.session_id from moment_entity first_me
+         join memory first_memory on first_memory.id = first_me.memory_id
+         join memory_span ms on ms.memory_id = first_memory.id and ms."order" = 0
+         join segment on segment.id = ms.segment_id
+         where first_me.entity_id = \(entity) order by first_memory.created_at, first_memory.id limit 1)
+        """
+    }
+
+    /// The recording of a person's first link, or nil when they have none.
+    public func firstSession(of person: PersonID) throws -> SessionID? {
+        try db.writer.read { db in
+            try String.fetchOne(db, sql: "select \(Self.firstSessionSQL(entity: "?"))", arguments: [person.rawValue]).map(SessionID.init(rawValue:))
+        }
+    }
 
     static func session(of memory: MemoryID, in db: Database) throws -> String? {
         try String.fetchOne(db, sql: """
@@ -126,7 +187,8 @@ public struct PersonLinkRepository: Sendable {
 
     static func fetch(where clause: String, arguments: StatementArguments, order: String, in db: Database) throws -> [PersonLink] {
         let rows = try Row.fetchAll(db, sql: """
-            select me.memory_id, me.relation, me.role_text, me.origin, person.id as person_id
+            select me.memory_id, me.relation, me.role_text, me.origin, me.person_handle, person.id as person_id,
+                   \(sessionSQL) as session_id, \(firstSessionSQL(entity: "me.entity_id")) as first_session_id
             from moment_entity me
             join person on person.entity_id = me.entity_id
             join entity on entity.id = person.entity_id
@@ -140,8 +202,11 @@ public struct PersonLinkRepository: Sendable {
                 people[personID] = try Person.fetchOne(db, sql: Person.selectSQL + " where person.id = ?", arguments: [personID])
             }
             guard let person = people[personID], let relation = EntityRelation(rawValue: row["relation"]) else { return nil }
+            // A link with no span to read a recording from counts as the first recording.
+            let session: String? = row["session_id"], first: String? = row["first_session_id"]
             return PersonLink(memoryID: MemoryID(rawValue: row["memory_id"]), person: person, saidName: row["role_text"],
-                              origin: (row["origin"] as String?).flatMap(LinkOrigin.init(rawValue:)), relation: relation)
+                              origin: (row["origin"] as String?).flatMap(LinkOrigin.init(rawValue:)), relation: relation,
+                              inPersonsFirstRecording: session == nil || first == nil || session == first, handle: row["person_handle"])
         }
     }
 }

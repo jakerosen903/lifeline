@@ -1,0 +1,21 @@
+{
+  "started_at": "2026-05-16T19:45:00Z",
+  "expected_people": [["Ottilie"]],
+  "segments": [
+    { "start_ms": 0, "end_ms": 5515, "words": [
+      { "text": "the", "start_ms": 0, "end_ms": 315 }, { "text": "winter", "start_ms": 355, "end_ms": 805 }, { "text": "we", "start_ms": 845, "end_ms": 1115 }, { "text": "lived", "start_ms": 1155, "end_ms": 1560 },
+      { "text": "above", "start_ms": 1600, "end_ms": 2005 }, { "text": "the", "start_ms": 2045, "end_ms": 2360 }, { "text": "bakery", "start_ms": 2400, "end_ms": 2850 }, { "text": "on", "start_ms": 2890, "end_ms": 3160 },
+      { "text": "Hale", "start_ms": 3200, "end_ms": 3560 }, { "text": "Street", "start_ms": 3600, "end_ms": 4050 }, { "text": "I", "start_ms": 4090, "end_ms": 4315 }, { "text": "had", "start_ms": 4355, "end_ms": 4670 },
+      { "text": "one", "start_ms": 4710, "end_ms": 5025 }, { "text": "friend", "start_ms": 5065, "end_ms": 5515 }
+    ]},
+    { "start_ms": 7715, "end_ms": 8210, "words": [
+      { "text": "Ottilie", "start_ms": 7715, "end_ms": 8210 }
+    ]},
+    { "start_ms": 10410, "end_ms": 16455, "words": [
+      { "text": "she", "start_ms": 10410, "end_ms": 10725 }, { "text": "taught", "start_ms": 10765, "end_ms": 11215 }, { "text": "me", "start_ms": 11255, "end_ms": 11525 }, { "text": "to", "start_ms": 11565, "end_ms": 11835 },
+      { "text": "play", "start_ms": 11875, "end_ms": 12235 }, { "text": "cards", "start_ms": 12275, "end_ms": 12680 }, { "text": "on", "start_ms": 12720, "end_ms": 12990 }, { "text": "the", "start_ms": 13030, "end_ms": 13345 },
+      { "text": "back", "start_ms": 13385, "end_ms": 13745 }, { "text": "stairs", "start_ms": 13785, "end_ms": 14235 }, { "text": "and", "start_ms": 14275, "end_ms": 14590 }, { "text": "she", "start_ms": 14630, "end_ms": 14945 },
+      { "text": "always", "start_ms": 14985, "end_ms": 15435 }, { "text": "let", "start_ms": 15475, "end_ms": 15790 }, { "text": "me", "start_ms": 15830, "end_ms": 16100 }, { "text": "win", "start_ms": 16140, "end_ms": 16455 }
+    ]}
+  ]
+}

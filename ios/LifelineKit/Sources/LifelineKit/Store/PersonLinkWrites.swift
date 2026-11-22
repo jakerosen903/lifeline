@@ -20,25 +20,28 @@ extension PersonLinkRepository {
         try db.writer.write { db in try Self.undo(receipt, in: db) }
     }
 
-    /// Stores the owner's answer for one said name on a waiting card; a second answer replaces it.
-    func storeChoice(_ target: PersonLinkActions.Target, for saidName: String, on candidate: CandidateID) throws {
-        let key = SaidName.key(saidName)
-        guard !key.isEmpty else { throw Error.notFound }   // no words, nothing Keep could match
+    /// Stores the owner's answer for one said name on a waiting card; a second answer replaces it. With a handle
+    /// the answer is that handle's alone (`ChoiceKey`): another handle of the same said name keeps its own guess.
+    func storeChoice(_ target: PersonLinkActions.Target, for saidName: String, handle: String? = nil, on candidate: CandidateID) throws {
+        guard !SaidName.key(saidName).isEmpty else { throw Error.notFound }   // no words, nothing Keep could match
+        let key = ChoiceKey.text(saidName: saidName, handle: handle)
         try db.writer.write { db in
             guard let card = try Candidate.fetchOne(db, key: candidate.rawValue), card.kind == .memory else { throw Error.notFound }
             guard card.status == .pending else { throw Error.stale }   // Keep has run: the answer would apply to nothing
-            let choice: String, person: PersonID?
-            switch target {
+            let choice: String, person: PersonID?, contact: String?
+            switch try Self.resolved(target, in: db) {
             case .person(let id):
                 guard try Person.exists(db, key: id.rawValue) else { throw Error.notFound }
-                (choice, person) = ("person", id)
-            case .someoneNew: (choice, person) = ("new", nil)
-            case .notAPerson: (choice, person) = ("not_a_person", nil)
+                (choice, person, contact) = ("person", id, nil)
+            case .someoneNew: (choice, person, contact) = ("new", nil, nil)
+            case .notAPerson: (choice, person, contact) = ("not_a_person", nil, nil)
+            // Keep makes the person from the contact (`guessedLink`), or names them by the said name if it is gone by then.
+            case .contact(let card): (choice, person, contact) = ("contact", nil, card.identifier)
             }
             try db.execute(sql: """
                 insert or replace into candidate_person_choice (candidate_id, said_name, choice, person_id, contact_identifier)
-                values (?, ?, ?, ?, null)
-                """, arguments: [candidate.rawValue, key, choice, person?.rawValue])
+                values (?, ?, ?, ?, ?)
+                """, arguments: [candidate.rawValue, key, choice, person?.rawValue, contact])
         }
     }
 
@@ -75,7 +78,17 @@ extension PersonLinkRepository {
 
     // MARK: - Move
 
-    private static func move(_ link: PersonLink, to target: PersonLinkActions.Target, wholeGroup: Bool, in db: Database) throws -> PersonMoveReceipt {
+    /// A contact a person holds is that person: one contact, one person. Read inside the write, so the unique index
+    /// is never the one to refuse.
+    private static func resolved(_ target: PersonLinkActions.Target, in db: Database) throws -> PersonLinkActions.Target {
+        guard case .contact(let card) = target,
+              let holder = try String.fetchOne(db, sql: "select id from person where contact_identifier = ?", arguments: [card.identifier])
+        else { return target }
+        return .person(PersonID(rawValue: holder))
+    }
+
+    private static func move(_ link: PersonLink, to asked: PersonLinkActions.Target, wholeGroup: Bool, in db: Database) throws -> PersonMoveReceipt {
+        let target = try resolved(asked, in: db)
         let current = try current(link, in: db)
         let old = current.person
         if case .person(let id) = target, id == old.id {
@@ -103,6 +116,9 @@ extension PersonLinkRepository {
             person = p
         case .someoneNew:
             let p = try newPerson(for: current, in: db)
+            (person, created) = (p, PersonMoveReceipt.PersonName(id: p.id, name: p.displayName, origin: p.nameOrigin))
+        case .contact(let card):
+            let p = try newPerson(from: card, in: db)
             (person, created) = (p, PersonMoveReceipt.PersonName(id: p.id, name: p.displayName, origin: p.nameOrigin))
         case .notAPerson:
             person = nil
@@ -137,18 +153,29 @@ extension PersonLinkRepository {
         let moved = Set(scope.map(\.memoryID))
         try replaceFirstTelling(of: old.entityID, ifFrom: moved, in: db)
         if let person { try giveFirstTelling(to: person.entityID, fromOldestOf: moved, in: db) }
-        // 4. Last: an empty guess goes, with its entity, aliases and first telling (they are in `spansBefore`).
+        // 4. The story's photo follows the name. Before step 5: a link the story put on the first person's page
+        // must not keep an empty guess alive.
+        let photoPages = try session(of: current.memoryID, in: db).flatMap { session in
+            try PhotoRepository.followMovedName(moved, of: SessionID(rawValue: session), from: old.entityID, to: person?.entityID, in: db)
+        }
+        // 5. Last: an empty guess goes, with its entity, aliases and first telling (they are in `spansBefore`).
         let removed = try removeIfEmptyGuess(old.id, in: db)
         return PersonMoveReceipt(before: before, after: after, removedPerson: removed?.person, addedAliases: added, createdPerson: created?.id,
                                  newName: person?.displayName ?? "", removedEntity: removed?.entity, removedAliases: removed?.aliases ?? [],
-                                 spansBefore: spansBefore, spansAfter: try spans(of: touched, in: db), clearedGuess: cleared, createdName: created)
+                                 spansBefore: spansBefore, spansAfter: try spans(of: touched, in: db), clearedGuess: cleared, createdName: created,
+                                 photoPages: photoPages, removedContactPhoto: removed?.contactPhoto)
     }
 
     /// "Someone new": a person named by the said name. The owner chose them, so they are not a guess (R14).
+    /// A link with no said name goes by the person's name for the model (`NameForModel`): for a person whose name
+    /// came from a contact, the oldest name the owner said, so a contact's name never becomes a said name (PB10).
+    /// Refused (`notFound`) when there is none: the app has no name of the owner's to give the new person.
     private static func newPerson(for link: PersonLink, in db: Database) throws -> Person {
-        let said = try saidName(of: link.memoryID, ref: link.saidName, in: db)
-        // An older link with no said name has only the person's name to go by.
-        let name = (said?.name ?? said?.relation ?? link.person.displayName).trimmingCharacters(in: .whitespacesAndNewlines)
+        let said = try saidName(of: link.memoryID, ref: link.saidName, handle: link.handle, in: db)
+        let aliases = try Alias.filter(Column("person_id") == link.person.id.rawValue).order(Column.rowID).fetchAll(db)
+        guard let found = said?.name ?? said?.relation ?? NameForModel.of(link.person, aliasesOldestFirst: aliases) else { throw Error.notFound }
+        let name = found.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty else { throw Error.notFound }
         let person = Person(id: .init(), displayName: name, notes: nil, isOwner: false, birthDate: nil, birthDateOrigin: nil,
                             nameOrigin: .said, createdByGuess: false)
         try person.insertWithEntity(db)
@@ -156,31 +183,55 @@ extension PersonLinkRepository {
         return person
     }
 
+    /// A move to a contact no one holds: a person made from it (`Person.fromContact`), whom the owner chose, so not a
+    /// guess (PB3). The contact's name is not saved as an alias; the move saves the said names (PB10). Refused
+    /// (`notFound`) for a contact with no full name: there is nothing to name the person by.
+    private static func newPerson(from card: ContactCard, in db: Database) throws -> Person {
+        guard let person = Person.fromContact(card.forGuess, createdByGuess: false) else { throw Error.notFound }
+        try person.insertWithEntity(db)
+        return person
+    }
+
     /// The facts, feelings and goals of the link's session that are details of its person, and either
     /// sit in a memory of `mentioned` (a detail the model linked by a person id, R38) or have a card
-    /// whose `about_ref` is a person mention with the link's said name. A detail placed by hand in
-    /// another memory has no such card ref and stays.
+    /// whose `about_ref` names the link's person (`names`). A detail placed by hand in another memory
+    /// has no such card ref and stays.
     private static func details(about link: PersonLink, mentionedIn mentioned: Set<MemoryID>, in db: Database) throws -> [MomentEntity] {
         guard let session = try session(of: link.memoryID, in: db) else { return [] }
         let said = link.saidName.map { SaidName(ref: $0) }
-        // An older link with no said name matches no card ref; only its own memories' details go.
+        // An older link with no said name matches no card ref by name; only its own memories' details go.
         let keys = Set(said.map { [SaidName.key($0.raw)] + ($0.name.map { [SaidName.key($0)] } ?? []) } ?? []).subtracting([""])
         let candidates = try fetch(where: "person.id = ? and me.relation = 'detail' and \(sessionSQL) = ?",
                                    arguments: [link.person.id.rawValue, session], order: "memory.created_at, me.memory_id", in: db)
         return try rows(of: try candidates.filter { candidate in
             if mentioned.contains(candidate.memoryID) { return true }
-            guard !keys.isEmpty else { return false }
-            return try aboutMentionText(of: candidate.memoryID, in: db).map { keys.contains(SaidName.key($0)) } == true
+            return try about(of: candidate.memoryID, in: db).map { names($0, handle: link.handle, saidKeys: keys) } == true
         }, in: db)
     }
 
-    /// The text of the person mention a memory's card is about, when its `about_ref` names one.
-    private static func aboutMentionText(of memory: MemoryID, in db: Database) throws -> String? {
+    /// What a detail's card is about: its `about_ref`, and the person mention of its segment with that ref, if any.
+    private typealias About = (ref: String, mention: MentionOut?)
+
+    /// Whether a detail's `about_ref` names the link's person. A link with a handle (PC-d): the ref is that handle
+    /// (decision D15 reads a handle first), or a person mention with that handle; a mention with another handle is
+    /// another person. A link with no handle, or a mention with none (v6): a mention said with the link's said name.
+    private static func names(_ about: About, handle: String?, saidKeys: Set<String>) -> Bool {
+        if let handle {
+            if about.ref == handle { return true }
+            if let other = about.mention?.handle { return other == handle }
+        }
+        guard let text = about.mention?.text else { return false }
+        return saidKeys.contains(SaidName.key(text))
+    }
+
+    /// The `about_ref` of a memory's card, with the person mention it names. Nil when the card has no `about_ref`.
+    private static func about(of memory: MemoryID, in db: Database) throws -> About? {
         guard let card = try Candidate.fetchOne(db, sql: "select candidate.* from candidate join memory on memory.created_from_candidate_id = candidate.id where memory.id = ?",
                                                 arguments: [memory.rawValue]),
-              let about = CandidatePayload.memory(card)?.aboutRef else { return nil }
-        return try Candidate.fetchAll(db, sql: "select * from candidate where segment_id = ? and kind = 'person'", arguments: [card.segmentID.rawValue])
-            .compactMap(CandidatePayload.mention).first { $0.ref == about }?.text
+              let ref = CandidatePayload.memory(card)?.aboutRef else { return nil }
+        let mention = try Candidate.fetchAll(db, sql: "select * from candidate where segment_id = ? and kind = 'person'", arguments: [card.segmentID.rawValue])
+            .compactMap(CandidatePayload.mention).first { $0.ref == ref }
+        return (ref, mention)
     }
 
     // MARK: - First tellings
@@ -233,27 +284,39 @@ extension PersonLinkRepository {
 
     // MARK: - The empty guess
 
-    /// Deletes a person the guess made that nothing holds any more: no link, photo, contact, name the
-    /// owner gave, mention, choice, tag, curiosity or session subject. A person the owner edited
-    /// (a typed name, stated dates, hidden or kept from the AI) stays (R39). Returns what Undo needs.
+    /// Deletes a person the guess made that nothing holds any more: no link, photo the owner added, contact
+    /// the owner linked, name the owner gave, mention, choice, tag, curiosity or session subject. A person the
+    /// owner edited (a typed name, stated dates, hidden or kept from the AI) stays (R39). A person Keep made from
+    /// a contact is still the app's guess and may go with that contact (PB2), and with the picture the app copied
+    /// from it (PB12): that photo's link goes with the entity, and its row waits for the sweep, as any homeless
+    /// photo does. Returns what Undo needs.
     /// The pre-v10 link table is not checked: only v15 Keep makes a guessed person, and it never writes there.
-    private static func removeIfEmptyGuess(_ id: PersonID, in db: Database) throws -> (person: Person, entity: Entity, aliases: [Alias])? {
+    private static func removeIfEmptyGuess(_ id: PersonID, in db: Database)
+        throws -> (person: Person, entity: Entity, aliases: [Alias], contactPhoto: PersonMoveReceipt.ContactPhotoLink?)? {
         guard let person = try Person.fetchOne(db, sql: Person.selectSQL + "where person.id = ?", arguments: [id.rawValue]),
-              person.createdByGuess, !person.isOwner, person.contactIdentifier == nil, person.contactPhotoID == nil,
-              person.nameOrigin == .said,
+              person.createdByGuess, !person.isOwner,
+              (person.nameOrigin == .said && person.contactIdentifier == nil) || person.isGuessFromContact,
               let entity = try Entity.fetchOne(db, key: person.entityID.rawValue),
               entity.range == .unplaced, !entity.hiddenFromTimeline, !entity.excludedFromAI else { return nil }
         let held = try Int.fetchOne(db, sql: """
-            select (select count(*) from moment_entity where entity_id = :e) + (select count(*) from photo_link where entity_id = :e)
+            select (select count(*) from moment_entity where entity_id = :e)
+                 + (select count(*) from photo_link where entity_id = :e and photo_id is not :c)
                  + (select count(*) from mention where person_id = :p)
                  + (select count(*) from candidate_person_choice where person_id = :p) + (select count(*) from contact_declined where person_id = :p)
                  + (select count(*) from curiosity_item where entity_id = :e) + (select count(*) from session where subject_entity_id = :e)
                  + (select count(*) from domain_tag where element_kind = 'entity' and element_id = :e)
-            """, arguments: ["e": entity.id.rawValue, "p": id.rawValue]) ?? 1
+            """, arguments: ["e": entity.id.rawValue, "p": id.rawValue, "c": person.contactPhotoID?.rawValue]) ?? 1
         guard held == 0 else { return nil }
-        let aliases = try Alias.filter(Column("person_id") == id.rawValue).fetchAll(db)
-        _ = try Entity.deleteOne(db, key: entity.id.rawValue)   // the person, aliases and spans go by cascade
-        return (person, entity, aliases)
+        // Oldest first, so Undo puts them back in the order the packet reads them.
+        let aliases = try Alias.filter(Column("person_id") == id.rawValue).order(Column.rowID).fetchAll(db)
+        let contactPhoto = try person.contactPhotoID.flatMap { photo in
+            try Row.fetchOne(db, sql: "select role, sort_order from photo_link where entity_id = ? and photo_id = ?",
+                             arguments: [entity.id.rawValue, photo.rawValue]).map { row in
+                PersonMoveReceipt.ContactPhotoLink(photo: photo, role: row["role"], sortOrder: row["sort_order"])
+            }
+        }
+        _ = try Entity.deleteOne(db, key: entity.id.rawValue)   // the person, aliases, spans and photo links go by cascade
+        return (person, entity, aliases, contactPhoto)
     }
 
     // MARK: - Undo
@@ -281,25 +344,44 @@ extension PersonLinkRepository {
             touched.insert(removed.id)
             if try Entity.exists(db, key: removed.id.rawValue) { throw Error.stale }
         }
+        // One contact, one person: refuse before the unique index does, when another person holds the contact now.
+        if let contact = r.removedPerson?.contactIdentifier,
+           (try Int.fetchOne(db, sql: "select count(*) from person where contact_identifier = ?", arguments: [contact]) ?? 0) > 0 { throw Error.stale }
         if let created = r.createdPerson {
             touched.insert(EntityID(rawValue: created.rawValue))
             let links = try Int.fetchOne(db, sql: "select count(*) from moment_entity where entity_id = ?", arguments: [created.rawValue]) ?? 0
-            let photos = try Int.fetchOne(db, sql: "select count(*) from photo_link where entity_id = ?", arguments: [created.rawValue]) ?? 0
+            // The story link this move put on the new page goes with Undo; any other photo link holds the person.
+            // The picture the app copied from the made person's contact is the app's act, not later work (PB12): it goes
+            // with the person, and its homeless row waits for the sweep. A photo the owner added keeps them.
+            let ownStoryPhoto = r.photoPages.flatMap { $0.added.contains(EntityID(rawValue: created.rawValue)) ? $0.photo.rawValue : nil }
+            let photos = try Int.fetchOne(db, sql: """
+                select count(*) from photo_link where entity_id = ? and not (photo_id is ? and origin is ?)
+                    and photo_id is not (select contact_photo_id from person where id = ?)
+                """, arguments: [created.rawValue, ownStoryPhoto, PhotoLinkOrigin.story.rawValue, created.rawValue]) ?? 0
             if links != r.after.filter({ $0.entityID.rawValue == created.rawValue }).count || photos > 0 { throw Error.stale }
         }
         let touchedIDs = Array(touched).sorted { $0.rawValue < $1.rawValue }
         if try spans(of: touchedIDs, in: db) != r.spansAfter.sorted(by: spanOrder) { throw Error.stale }
 
         for row in r.after { try delete(row, in: db) }
-        if let person = r.removedPerson, let entity = r.removedEntity {
+        if var person = r.removedPerson, let entity = r.removedEntity {
             try entity.insert(db)
+            // The copied picture comes back with the person (PB12), unless a sweep has taken its homeless row since.
+            let copyKept = try person.contactPhotoID.map { try Photo.exists(db, key: $0.rawValue) } ?? false
+            if !copyKept { person.contactPhotoID = nil }
             try person.insert(db)
             for alias in r.removedAliases { try alias.insert(db) }
+            if copyKept, let link = r.removedContactPhoto {
+                try db.execute(sql: "insert into photo_link (photo_id, entity_id, role, sort_order) values (?, ?, ?, ?)",
+                               arguments: [link.photo.rawValue, entity.id.rawValue, link.role, link.sortOrder])
+            }
         }
         try db.execute(sql: "delete from entity_span where entity_id in (\(touchedIDs.map { _ in "?" }.joined(separator: ",")))",
                        arguments: StatementArguments(touchedIDs.map(\.rawValue)))
         for span in r.spansBefore { try span.insert(db) }
         for row in r.before { try row.insert(db) }
+        // After the removed person exists again, and before a created person goes.
+        if let change = r.photoPages { try PhotoRepository.undo(change, in: db) }
         for alias in r.addedAliases {
             try db.execute(sql: "delete from alias where person_id = ? and text = ?", arguments: [alias.personID.rawValue, alias.text])
         }
@@ -350,7 +432,7 @@ extension PersonLinkRepository {
     private static func addAliases(from rows: [MomentEntity], to person: PersonID, in db: Database) throws -> [Alias] {
         var added: [Alias] = []
         for row in rows {
-            guard let said = try saidName(of: row.memoryID, ref: row.roleText, in: db) else { continue }
+            guard let said = try saidName(of: row.memoryID, ref: row.roleText, handle: row.personHandle, in: db) else { continue }
             for text in [said.name, said.relation].compactMap({ $0 }) where !GroupPhrase.isGroup(text) {
                 if try PeopleRepository.insertAlias(text, person, db) { added.append(Alias(personID: person, text: text.trimmingCharacters(in: .whitespacesAndNewlines))) }
             }
@@ -358,17 +440,43 @@ extension PersonLinkRepository {
         return added
     }
 
-    /// A link's said name, with the relation phrase a person card of the memory's segments gave it,
-    /// as Keep reads it (`GuessInputs.saidName`). Nil for a link with no words.
-    private static func saidName(of memory: MemoryID, ref: String?, in db: Database) throws -> SaidName? {
+    /// A link's said name, with its relation phrase, as Keep reads it. Nil for a link with no words.
+    /// - A link with a handle (PC-d): the relation of that handle, from a person mention with the handle or the card's
+    ///   `handlePeople` entry for it. Two people of one name ("Robyn and my cousin Robyn") keep their own relations.
+    /// - A link with no handle: the relation a person card of the memory's segments gave the said name (`GuessInputs.saidName`).
+    private static func saidName(of memory: MemoryID, ref: String?, handle: String?, in db: Database) throws -> SaidName? {
         guard let ref, !SaidName.key(ref).isEmpty else { return nil }
-        let relation = try Candidate.fetchAll(db, sql: """
+        let relation = try handle.map { try relation(ofHandle: $0, in: memory, db) } ?? relation(saying: ref, in: memory, db)
+        return SaidName(ref: ref, mentionRelation: relation)
+    }
+
+    private static func relation(saying ref: String, in memory: MemoryID, _ db: Database) throws -> String? {
+        try Candidate.fetchAll(db, sql: """
             select * from candidate where kind = 'person' and segment_id in (select segment_id from memory_span where memory_id = ?)
             order by ordinal
             """, arguments: [memory.rawValue])
             .compactMap(CandidatePayload.mention)
-            .first { PeopleRepository.normalize($0.text) == PeopleRepository.normalize(ref) && !($0.relationText ?? "").trimmingCharacters(in: .whitespaces).isEmpty }?
+            .first { PeopleRepository.normalize($0.text) == PeopleRepository.normalize(ref) && nonEmpty($0.relationText) != nil }?
             .relationText
-        return SaidName(ref: ref, mentionRelation: relation)
+    }
+
+    /// The handle's relation in the memory's own recording: a handle of another recording's telling is another person.
+    private static func relation(ofHandle handle: String, in memory: MemoryID, _ db: Database) throws -> String? {
+        guard let session = try session(of: memory, in: db) else { return nil }
+        let cards = try Candidate.fetchAll(db, sql: """
+            select candidate.* from candidate join segment on segment.id = candidate.segment_id
+            where segment.session_id = ? and candidate.segment_id in (select segment_id from memory_span where memory_id = ?)
+            order by segment."index", candidate.ordinal
+            """, arguments: [session, memory.rawValue])
+        if let mention = cards.compactMap(CandidatePayload.mention).first(where: { $0.kind == .person && $0.handle == handle && nonEmpty($0.relationText) != nil }) {
+            return nonEmpty(mention.relationText)
+        }
+        return cards.compactMap(CandidatePayload.memory).flatMap(\.handlePeople).lazy
+            .compactMap { $0.handle == handle ? nonEmpty($0.relationText) : nil }.first
+    }
+
+    private static func nonEmpty(_ text: String?) -> String? {
+        guard let trimmed = text?.trimmingCharacters(in: .whitespacesAndNewlines), !trimmed.isEmpty else { return nil }
+        return trimmed
     }
 }

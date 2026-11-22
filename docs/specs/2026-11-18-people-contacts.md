@@ -129,7 +129,7 @@ The rules run in order. The first rule that applies decides.
 4. **A person on file fits.** The app assumes the person on file, not a contact that also fits. With two or more persons on file, the app assumes the one most recently linked to a kept memory. Origin `assumed`.
 5. **Exactly one contact fits and no person does.** The app creates a person linked to that contact and assumes it. The mark reads "Assumed · new, from your contacts". Origin `assumed`.
 6. **Two or more contacts fit and no person does.** The app creates a person with the said name and no contact. The line reads "New · not linked yet". The sheet lists the contacts. Origin `new`.
-7. **Nothing fits.** The app creates a person with the said name. The line reads "New · not in your contacts". This is not a guess about who the person is, so the outline is solid. Origin `new`.
+7. **Nothing fits.** The app creates a person with the said name. The line reads "New · not in your contacts". When the app cannot see contacts, the line reads "New". (narrowed 2026-11-19, PC-b plan decision 5) This is not a guess about who the person is, so the outline is solid. Origin `new`.
 
 Every person chip opens the sheet, with or without a mark. A wrong link with no mark is still one tap from the repair.
 
@@ -139,7 +139,7 @@ Every person chip opens the sheet, with or without a mark. A wrong link with no 
 - **A choice before Keep.** When the owner uses the sheet on a card that waits, the app stores the choice with the card (table `candidate_person_choice`). Keep applies it with origin `confirmed`.
 - **On Keep.** The app runs `PersonGuess` for each said name of that card, creates the persons that rules 3 and 5 to 7 call for, and writes the links with their origins, in the same transaction as the memory.
 - **A name no memory carries.** A person the story names with no moment or detail about them gets no Keep. It keeps today's card, and the card opens the sheet. No person exists until the owner answers.
-- **Access given after a guess.** When the owner allows contacts on the landing, the app runs `PersonGuess` once more for the links of that recording whose origin is `assumed` or `new`. It runs for no other recording.
+- **Access given after a guess.** When the owner allows contacts on the landing, the app runs `PersonGuess` once more for the links of that recording whose origin is `new` and whose person the app made and nobody edited. A link with origin `assumed` does not change. The app does not link a contact that the owner declined for that person. It runs for no other recording. (Narrowed 2026-11-18, PC-b plan decision 7.)
 
 ### What changes from today
 
@@ -179,7 +179,7 @@ The sheet opens from a person chip. It shows:
 
 - An answer applies to the tapped link. With the checkbox on, it applies to every link in the group.
 - **Step 1:** the group is the links in the same recording with the same said name, by the comparison in "Candidates".
-- **Step 2:** the group is the links in the same recording with the same extractor handle.
+- **Step 2:** the group is the links in the same recording with the same extractor handle. (narrowed 2026-11-19, PC-d ruling D18) A link with no handle groups only with the links with no handle of the same said name.
 - An answer never carries to another recording. A said name in a later recording is a new guess.
 
 ### "Yes, this Robyn" and "Someone else…" (PC3)
@@ -191,27 +191,29 @@ The sheet opens from a person chip. It shows:
 When the owner changes the person, the app must do all of this in one transaction:
 
 1. **The link moves.** The row for the old person goes. A row for the new person is written with the same `role_text` and origin `confirmed`. When the new person already has a link to that memory, that link stays and its origin becomes `confirmed`.
-2. **Details move with it.** A fact, feeling or goal of the same recording that is a detail of the old person, and whose card names the same said name or handle, becomes a detail of the new person. A detail the owner placed by hand does not move.
+2. **Details move with it.** A fact, feeling or goal of the same recording that is a detail of the old person, and whose card names the same said name or handle, becomes a detail of the new person. A detail the owner placed by hand does not move. (narrowed 2026-11-19, PC-d ruling D19) A link with a handle also takes a detail whose mention has no handle, by the said name.
 3. **Photos do not move.** A photo belongs to a person's page or to a memory. It does not belong to a link.
 4. **The first telling follows.** When the old person's first telling came from a moved moment, the old person takes the first telling of their oldest remaining moment. The new person takes one only when they have none.
 5. **Names.** The said name and its relation phrase become aliases of the new person. The old person keeps their aliases; the owner removes one on that person's page, as today.
-6. **An empty guess goes.** When the old person was created by the app for this said name, and now has no moment, no detail, no photo, no contact and no name the owner gave, the app removes that person. Undo brings them back. A person the owner edited stays: a typed name, stated dates, hidden, or kept from the AI (R39).
+6. **An empty guess goes.** When the old person was created by the app for this said name, and now has no moment, no detail, no photo, no contact the owner linked and no name the owner gave, the app removes that person. A person the app made from a contact on Keep, and nobody settled, goes too. The picture the app copied from that contact does not keep them. (narrowed 2026-11-19, PC-b rulings PB2 and PB12) Undo brings them back. A person the owner edited stays: a typed name, stated dates, hidden, or kept from the AI (R39).
 7. **Undo.** The one message slot shows "Changed to {name}." with Undo for 6 seconds. Undo restores every row as it was. Undo is refused when a moved link changed in the meantime, as `unmerge` does today.
 
 A kill in the middle must leave either the old state or the new state.
 
 ## Merging two people
 
+Status: built on branch `people-contacts-c` (plan `docs/plans/2026-11-19-people-contacts-c.md`). The device check is `docs/plans/2026-11-19-people-contacts-c-device-check.md`. It has not run.
+
 Two entries can be one real person: "Robin" and "Robyn Vale".
 
-1. **Drag.** On the People grid, the owner drags one face onto another. The two tiles pull together into one.
-2. **A button.** A person's page has "Same as another person…" with a picker. VoiceOver and Switch Control use this path.
-3. **Confirm.** Both paths ask "Same person?" with both names and both pictures before anything changes. The person dropped onto is the one that stays.
-4. **Conflicts.** `EntityRepository.merge` refuses people today, so this is a new merge. Where both persons have a value (notes, birth date, the detail line, stated dates, the hidden and excluded flags), the staying person's value is kept. The other value is kept in the receipt for Undo and is not shown after it. Mentions that point at the other person point at the staying one. Declined contact suggestions of both are kept.
-5. **What joins.** The person that stays takes every moment, detail, alias and photo of the other. Each link keeps its origin. The person that stays keeps their name. The photos keep one order: the staying person's photos first, with their key photo at the front, then the other person's.
+1. **Drag.** On the People grid, the owner drags one face onto another. The two tiles pull together into one. (narrowed 2026-11-19, PC-c plan decision 10 and ruling C9) The person dropped onto stays. The drag carries the person's id as plain text with the prefix `lifeline-person:`, so the app declares no type. A drop of other text does nothing. The dragged tile shrinks toward the other tile and fades in 0.25 s. With Reduce Motion it only fades. At the largest text sizes the grid is a list, and the list has no drag. The button path is the way there.
+2. **A button.** A person's page has "Same as another person…" with a picker. VoiceOver and Switch Control use this path. The picker never lists the owner, and the grid takes no drop on or of the owner. (narrowed 2026-11-19, PC-c plan decision 5)
+3. **Confirm.** Both paths ask "Same person?" with both names and both pictures before anything changes. The person dropped onto is the one that stays. (narrowed 2026-11-19, PC-c plan decision 2) On the button path, the person the owner picks stays, and the page's person goes. After "Merge", the page shows "Merged into {name}." with Undo, reads only, and closes to the People grid when the line goes.
+4. **Conflicts.** `EntityRepository.merge` refuses people today, so this is a new merge. Where both persons have a value (notes, birth date, the detail line, stated dates), the staying person's value is kept. The other value is kept in the receipt for Undo and is not shown after it. (narrowed 2026-11-19, PC-c plan decision 1; this reverses the spec for the two flags) Hidden and kept-from-AI stay on: when either person is hidden, the result is hidden, and when either person is kept from the AI, the result is kept from the AI. The confirm says so in one line when it applies. (narrowed 2026-11-19, PC-c plan decision 3) The other person's name becomes an alias of the staying person, so a later story that says it finds the merged person. A name that came from a contact does not become an alias. (narrowed 2026-11-19, PC-c ruling C13) When the staying person's name came from a contact, an alias of the other person that equals that name does not become an alias either. (narrowed 2026-11-19, PC-c plan decision 6) A merge is the owner's act: the staying person's `created_by_guess` is cleared. Mentions that point at the other person point at the staying one. (narrowed 2026-11-19, PC-c ruling C15) An open question of the other person goes with them when the staying person has an open question of the same kind. Declined contact suggestions of both are kept. (narrowed 2026-11-19, PC-c ruling C4) The staying person keeps no decline row that disagrees with what they hold: the decline of the contact they now hold goes, and so does the "taken off this page" row of a photo they now hold. When both persons link one memory and the staying link has no role text, it takes the leaving link's role text.
+5. **What joins.** The person that stays takes every moment, detail, alias and photo of the other. Each link keeps its origin. The person that stays keeps their name. The photos keep one order: the staying person's photos first, with their key photo at the front, then the other person's. (narrowed 2026-11-19, PC-c ruling C2) A link keeps its extractor handle. When both persons link one memory, one link stays, with the stronger origin. It is the staying person's row, with its handle. The other row goes into the receipt. (narrowed 2026-11-19, PC-c ruling C11) The cost: when both persons were on one memory under two handles of one said name, a card of that recording that is still waiting and names the dropped handle becomes a new person with that name, marked as a guess. The owner must merge again.
 6. **Contacts.** When only one of the two has a contact, the result has it. When both have a contact and the contacts differ, the app must not merge. It says that they are linked to two different contacts.
-7. **Undo.** "Merged into {name}." with Undo for 6 seconds, in the one message slot. The receipt holds both persons as they were.
-8. **The forced case.** When the owner links a person to a contact that another person holds, the app asks "Same person?" for those two. The link is made only when the owner merges them.
+7. **Undo.** "Merged into {name}." with Undo for 6 seconds, in the one message slot. The receipt holds both persons as they were. (narrowed 2026-11-19, PC-c plan decision 7 and ruling C7) Undo lives in memory only. A kill inside the 6 seconds, or a page left inside them, keeps the merge. Undo restores every row, the legacy `memory_person` rows included. Undo is refused when a row the merge left has changed since. (narrowed 2026-11-19, PC-c ruling C12) A refused Undo of a merge shows "That changed since. The merge stays." A move keeps its own line, because a merge has no name to open and no way back.
+8. **The forced case.** When the owner links a person to a contact that another person holds, the app asks "Same person?" for those two. The link is made only when the owner merges them. Before PC-c, the app refused the link and said who held the contact (PC-b plan decision 4). (narrowed 2026-11-19, PC-c plan decision 4) On "Merge", the page's person joins the holder, and the holder keeps the contact. When the page's person has a contact of their own, the app refuses with "They are linked to two different contacts."
 
 The motion is tuned on the device. This spec fixes the behaviour only.
 
@@ -220,7 +222,7 @@ The motion is tuned on the device. This spec fixes the behaviour only.
 ### Access
 
 - The design assumes the owner gives access. With limited or no access, the app still works with fewer suggestions.
-- The app asks once. It asks when the first kept moment names a person, on the landing of that recording. It also asks when the owner taps "Link to a contact" or "Search your contacts" before that.
+- The app asks once. It asks when the first kept moment names a person, on the landing of that recording. The landing must be quiet: the recording was not heavy, no serious disclosure showed and sorting is done. Otherwise the prompt waits for the next landing that qualifies. (narrowed 2026-11-19, PC-b rulings PB36 and PB38) It also asks when the owner taps "Link to a contact" or "Search your contacts" before that.
 - The system prompt shows the usage string. Draft: "Lifeline matches the names in your stories to your contacts. It reads names and pictures only, and they stay on this phone."
 - The app must not ask at first launch. A prompt before the first story has no reason the owner can see.
 
@@ -272,7 +274,7 @@ The app checks the linked contacts at launch and when the system posts `CNContac
 
 - **Renamed.** The kept name is updated. The person's name changes only when it came from the contact and the owner has not renamed the person.
 - **New picture.** When the person's key photo is still the copy the app took from the contact, the app replaces it with the new picture. In every other case the app does nothing.
-- **Deleted, or no longer shared.** The app cannot tell these apart under limited access. The person keeps everything, including the picture. The linked row reads "This contact is not in your contacts now" with "Link to a contact" and "Unlink". The app tries the name match from "The identifier" first.
+- **Deleted, or no longer shared.** The app cannot tell these apart under limited access. The person keeps everything, including the picture. The linked row reads "This contact is not in your contacts now" with "Link to a contact" and "Unlink". Under full access the app tries the name match from "The identifier" first. Under limited access the app does not try it, because a card with that name can be a namesake. (narrowed 2026-11-19, PC-b ruling PB34)
 
 ### A contact that appears later (PC4)
 
@@ -280,13 +282,21 @@ At the same check, for each person with no contact, the app looks for contacts w
 
 ## Step 2: the extractor tells people apart
 
+Status: built on branch `people-contacts-d` (plan `docs/plans/2026-11-19-people-contacts-d.md`) with the prompt `v8`. `v8` is not the default prompt. The default stays `v6` until the owner reads the comparison in `docs/experiments/2026-11-19-extractor-v8-handles.md` and says yes. The comparison has not run yet.
+
 - The extractor returns, for each recording, the people it found. Each has a handle, the said name, the relation phrase when one was said, and the id of a person from the packet only when the story's own words point to that person.
-- A memory names its people by handle, not by text.
-- The packet carries the handles of the earlier segments of the same recording, so a handle holds across segments.
-- The person id replaces today's `likely_alias_of_person_id` on a mention.
-- The app treats the handle as the group. The app treats the person id as one more input to `PersonGuess`: it decides the choice in rule 4, and the link is still `assumed`.
+- A memory names its people by handle, not by text. (narrowed 2026-11-19, PC-d plan decision 5) The output keeps `people_refs`. The model leaves it empty. After validation the app fills it with the said name of each handle, and stores each handle's person on the memory card. So every part of the app that reads a said name works as before.
+- A handle of the recording so far is valid in a memory's `person_handles` and in `about_ref` without a `people` entry in that segment's output. The card then stores the recording's entry, and the chip shows the name said earlier in the recording. (narrowed 2026-11-19, PC-d ruling D17)
+- A handle in `about_ref` is always also one of that memory's people. When the model leaves it out of `person_handles`, the app adds it. (narrowed 2026-11-19, PC-d ruling D22)
+- The packet carries the handles of the other segments of the same recording, earlier and later, so a handle holds across segments. (narrowed 2026-11-19, PC-d rulings D25 and D30) A segment that is extracted again after a later segment must not make a handle that the later segment already used. The recording's handles come from the memory cards of those segments and from their person mentions that carry a handle. A dismissed card or mention adds nothing.
+- The person id replaces today's `likely_alias_of_person_id` on a mention. (narrowed 2026-11-19, PC-d plan decision 6 and ruling D1) As built, `likely_alias_of_person_id` left the schema and the prompt, and the decoder ignores it. The person id is on the `people` entry, not on the mention. A person mention carries the `handle` of its person.
+- The app treats the handle as the group. The app treats the person id as one more input to `PersonGuess`: it decides the choice in rule 4, and the link is still `assumed`. (narrowed 2026-11-19, PC-d plan decision 6) The person id is used only inside rule 4. When it names one of the persons that rule 4 already has, that person is chosen in place of the most recently linked one. An id that names no candidate of rule 4 has no effect. An id that the packet of that call does not hold is cleared.
+- A handle that the recording already linked keeps its person. A later card with that handle takes the same person. (narrowed 2026-11-19, PC-d plan decision 7 and rulings D12 and D29) The origin is the earlier link's origin only when both hold: the earlier origin is `said` or `new`, and the later card says the same name (`SaidName.key`) in its own segment. In every other case the origin is `assumed`: another said name ("my roommate" after "Robyn"), a card that stores the recording's entry for a pronoun (D17), and a detail that follows a handle through `about_ref`. A `confirmed` earlier link gives `assumed`: the owner confirmed that card, not this one. A link made only from such a handle never changes the origin of a link that the target memory already has. When the handle has several kept links, the newest link decides. "Newest" is the most recently kept memory, not the owner's most recent move.
+- A stored choice before Keep is keyed by the said name and the handle. (narrowed 2026-11-19, PC-d plan decision 8) For a card with handles, `candidate_person_choice.said_name` holds the normalized said name, the separator U+001F and the handle. So two people with one name on one card keep two answers. A card with no handle keys by the said name alone, as before.
 - Two handles with one said name become two guesses. The second is never assumed to be the first. It takes the next candidate in order. With no other candidate it is a new person (rule 7).
 - Two handles that the owner settles to one person in one memory share that memory's one link.
+- A handle has no meaning in another recording. "Same story" into a memory of another recording writes no handle on the link. (narrowed 2026-11-19, PC-d ruling D11)
+- A telling that is separated finds its people by handle when the links have handles (`MergeActions.separateTelling`). Two handles of one name in one memory are two links with one said name, so the said name would move both or neither. This applies only to a telling in the memory's own recording. (narrowed 2026-11-19, PC-d rulings D16 and D20; D16 reverses the part of plan decision 9 that left this on the said name)
 - The extractor can be wrong in both directions. "Someone else…" and merge repair it.
 - This is a new prompt version. It needs test stories: two people with one name in one recording, one person under two names, a name with no other words, and a known name with a new relation phrase.
 
@@ -294,7 +304,7 @@ Step 2 changes no screen. It gets its own plan after step 1 ships.
 
 ## Data model
 
-Migration v15 is additive. The phone's database is the only copy, so the migration drops nothing and rewrites no row. The migration is named `v15`, not `v14`: the unmerged photo branches register their own `v14`, and GRDB records a migration by name (R36).
+Migration v15 is additive. The phone's database is the only copy, so the migration drops nothing and rewrites no row. The migration is named `v15`, not `v14`: the photo story registered `v14` first, and GRDB records a migration by name (R36).
 
 `person`, new columns, all nullable:
 
@@ -403,13 +413,13 @@ The owner approved the spec with these calls on 2026-11-18. No call was discusse
 **Read from the owner's messages, which may have been meant for another session:**
 
 1. **Every guess from a name alone is marked** (rules 3 to 5), because the name can be a new person. The other option: mark only when more than one candidate fits.
-2. **Drag to merge two people**, with a button path, a confirm and Undo. The owner's message said "two things". This spec covers people only; the owner must say whether places and things merge the same way.
+2. **Drag to merge two people**, with a button path, a confirm and Undo. The owner's message said "two things". This spec covers people only; the owner must say whether places and things merge the same way. PC-c built the drag for people only. This call stays open.
 3. **The extractor gives each person in a recording a handle** (step 2).
 
 **Not yet asked:**
 
 20. **Names the app saved before this feature count as the owner's words**, so "Danielle, my sister" trusts an old alias. A wrong old alias stays until the owner removes it.
-21. **In a merge, the staying person's value wins** where both have one (notes, birth date, detail line, dates, hidden and excluded).
+21. **In a merge, the staying person's value wins** where both have one (notes, birth date, detail line, dates). (narrowed 2026-11-19, PC-c plan decision 1) Hidden and excluded are not the staying person's value: when either person has one, the result has it.
 22. **A choice made in the sheet before Keep is stored with the card** and applied on Keep.
 
 4. **A person on file wins over a contact with the same name** (rule 4), and the guess is marked. The app does not ask "which one?".

@@ -73,12 +73,13 @@ final class ExtractionUITests: XCTestCase {
         let alert = app.alerts.firstMatch
         XCTAssertTrue(alert.waitForExistence(timeout: 5))
         let field = alert.textFields.firstMatch
-        field.tap()
+        app.focusAlertField(field)
         field.typeText(XCUIKeyboardKey.delete.rawValue + "ra")   // Maya -> Mayra
-        alert.buttons["Save"].firstMatch.tap()
+        XCTAssertTrue(app.tapUntilGone(alert.buttons["Save"].firstMatch, closing: alert), "Save closes the rename alert")
         let renamed = app.buttons["people.row"].firstMatch
         XCTAssertTrue(renamed.waitForExistence(timeout: 5))
-        XCTAssertTrue(renamed.label.contains("Mayra") && renamed.label.contains("Maya"), "new name shown, old spelling kept: \(renamed.label)")
+        let bothNames = XCTNSPredicateExpectation(predicate: NSPredicate(format: "label CONTAINS 'Mayra' AND label CONTAINS 'Maya'"), object: renamed)
+        XCTAssertEqual(XCTWaiter().wait(for: [bothNames], timeout: 5), .completed, "new name shown, old spelling kept: \(renamed.label)")
     }
 
     @MainActor

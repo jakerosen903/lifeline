@@ -56,6 +56,25 @@ extension XCUIApplication {
         return XCTWaiter().wait(for: [match], timeout: timeout) == .completed
     }
 
+    /// An alert focuses its text field and raises the keyboard by itself. A second tap on the field only opens
+    /// the edit menu, so tap it only when the keyboard did not come up.
+    func focusAlertField(_ field: XCUIElement) {
+        if !keyboards.firstMatch.waitForExistence(timeout: 2) { field.tap() }
+    }
+
+    /// While typing, the keyboard can hide and come back, and an alert moves with it. A tap aimed while it was
+    /// centred then lands outside it. Taps `button` once it holds still, then waits for `container` to go;
+    /// tries again (the query finds the button anew) while it is still there.
+    func tapUntilGone(_ button: XCUIElement, closing container: XCUIElement, tries: Int = 3, timeout: TimeInterval = 2) -> Bool {
+        let gone = NSPredicate(format: "exists == false")
+        for _ in 0..<tries {
+            guard container.exists else { return true }
+            if waitHittable(button, timeout: timeout) { button.tap() }
+            if XCTWaiter().wait(for: [XCTNSPredicateExpectation(predicate: gone, object: container)], timeout: timeout) == .completed { return true }
+        }
+        return !container.exists
+    }
+
     /// Lists are lazy: a row below the fold is not in the tree until it scrolls into view.
     func reveal(_ element: XCUIElement, swipes: Int = 6) -> Bool {
         for _ in 0..<swipes {
@@ -133,7 +152,7 @@ extension XCUIApplication {
 
     /// Launches with `-uiTesting-seedPhotoStory`: the family, then two landed photo sessions. The first has the kept memories
     /// "The beach" (unplaced; Maya and Dad) and "The drive home" (stated 2012; Dad), both holding a photo dated 14 June 2012, which
-    /// Maya's page holds too and Dad's does not. The second has no kept memory, and its photo has no other home.
+    /// Keep put on Maya's and Dad's pages by a story link. The second has no kept memory, and its photo has no other home.
     /// `opening` leaves that session unlanded, so the app opens on its landing. First open is done.
     static func launchWithPhotoStory(opening: String? = nil, _ extra: [String] = []) -> XCUIApplication {
         let app = XCUIApplication()
