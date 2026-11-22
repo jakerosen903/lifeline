@@ -184,6 +184,9 @@ public struct EntityRepository: Sendable {
         /// contact, whose display name is the contact's and never an alias.
         public var aliases: [Alias] = []
         public var acceptingCandidate: CandidateID?
+        /// Persons planned for an extractor handle (PC-d). Such a person is that handle's alone: two handles of one
+        /// said name are two people, so no other plan joins them by name.
+        var handlePersons: Set<PersonID> = []
 
         public init() {}
 
@@ -199,14 +202,17 @@ public struct EntityRepository: Sendable {
         /// a contact is the same as the one planned from that contact, whatever the titles, and never one
         /// with another contact or none (PB13): the unique index allows one person per contact.
         /// Anything else joins by type and title.
-        func same(as entity: Entity, contact: String?) -> Entity? {
+        /// A person planned for a handle (`handled`, or one of this plan's `handlePersons`) joins by contact only.
+        func same(as entity: Entity, contact: String?, handled: Bool = false) -> Entity? {
             let contactOf = { (id: EntityID) in persons.first { $0.entityID == id }?.contactIdentifier }
             if let contact {
                 guard let person = persons.first(where: { $0.contactIdentifier == contact }) else { return nil }
                 return entities.first { $0.id == person.entityID }
             }
             guard entity.type == .person else { return planned(entity.type, entity.title) }
-            return entities.first { $0.type == .person && MatchKey.of($0.title) == MatchKey.of(entity.title) && contactOf($0.id) == nil }
+            guard !handled else { return nil }
+            return entities.first { $0.type == .person && MatchKey.of($0.title) == MatchKey.of(entity.title) && contactOf($0.id) == nil
+                && !handlePersons.contains(PersonID(rawValue: $0.id.rawValue)) }
         }
 
         /// The union with another plan; an entity both planned keeps this plan's id.
@@ -214,8 +220,10 @@ public struct EntityRepository: Sendable {
             var remap: [EntityID: EntityID] = [:]
             for entity in other.entities {
                 let contact = other.persons.first { $0.entityID == entity.id }?.contactIdentifier
-                if let mine = same(as: entity, contact: contact) { remap[entity.id] = mine.id } else { entities.append(entity) }
+                let handled = other.handlePersons.contains(PersonID(rawValue: entity.id.rawValue))
+                if let mine = same(as: entity, contact: contact, handled: handled) { remap[entity.id] = mine.id } else { entities.append(entity) }
             }
+            handlePersons.formUnion(other.handlePersons)
             // A joined person stays the app's guess only when both plans guessed: either plan may be the owner's choice (PB3).
             for theirs in other.persons {
                 guard let mine = remap[theirs.entityID], let index = persons.firstIndex(where: { $0.entityID == mine }) else { continue }

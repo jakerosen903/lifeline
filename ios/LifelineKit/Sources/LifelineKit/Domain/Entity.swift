@@ -74,7 +74,9 @@ public struct MomentEntity: Sendable, Equatable, Hashable {
     public var roleText: String?
     /// How the link was made. Nil for a link made before v15 and for a link to a thing or a place.
     public var origin: LinkOrigin?
-    /// The said name this link stands for, so a change can find the other moments that said it.
+    /// The extractor's handle for the person (PC-d), such as "p1": one person inside one recording. Links of one
+    /// recording with one handle are one group. Nil for a link from before `v8`, a link made by hand, and a link
+    /// moved into a memory of another recording.
     public var personHandle: String?
 
     public init(memoryID: MemoryID, entityID: EntityID, relation: EntityRelation, roleText: String? = nil,

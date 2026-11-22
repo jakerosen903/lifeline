@@ -387,6 +387,47 @@ final class PeopleGuessUITests: XCTestCase {
         XCTAssertFalse(card.buttons["person.chip.notPerson"].exists)
     }
 
+    /// PC-d: one line names "Robyn from work" and "my cousin Robyn". The extractor gives them two handles, so the card
+    /// shows two chips "Robyn"; the sheet of one chip changes that person only; Keep makes two people named Robyn.
+    @MainActor
+    func testTwoPeopleWithOneNameGetTwoChips() {
+        let app = XCUIApplication()
+        app.launchArguments = ["-uiTesting", "-uiTesting-twoRobyns"]
+        app.launch()
+        app.skipFirstOpen()
+        app.startSession()
+        let card = app.any("card.memory")
+        XCTAssertTrue(card.waitForExistence(timeout: 20), "the memory card arrives")
+        let robyns = card.buttons.matching(NSPredicate(format: "label == %@", plain("Robyn")))
+        XCTAssertTrue(waitCount(robyns, 2), "one chip for each Robyn")
+
+        openSheet(app, from: robyns.element(boundBy: 0))
+        XCTAssertTrue(app.staticTexts["Who is \u{201C}Robyn\u{201D} here?"].exists)
+        let notAPerson = app.buttons["who.notAPerson"]
+        XCTAssertTrue(revealInSheet(app, notAPerson))
+        notAPerson.tap()
+        tapDone(app)
+        let quiet = card.buttons["person.chip.notPerson"]
+        XCTAssertTrue(quiet.waitForExistence(timeout: 5), "the changed Robyn has a quiet chip")
+        XCTAssertTrue(waitCount(robyns, 1), "the other Robyn keeps her chip: the sheet changed one person only")
+        openSheet(app, from: quiet)
+        let someoneNew = app.buttons["who.new"]
+        XCTAssertTrue(revealInSheet(app, someoneNew))
+        someoneNew.tap()
+        tapDone(app)
+        XCTAssertTrue(waitCount(robyns, 2), "both Robyns are people again")
+
+        // The card carries both Robyns, so it has no follow-ups: Keep makes it leave, with no kept card
+        // (cards-follow-ups spec, rule 3). The People grid below shows what Keep wrote.
+        card.buttons["card.add"].firstMatch.tap()
+        XCTAssertTrue(waitGone(card, timeout: 5), "Keep takes the card away")
+        XCTAssertFalse(app.any("card.kept").exists, "a card with no follow-ups leaves no kept card")
+        app.finishSession()
+        app.openTab("People")
+        let tiles = app.buttons.matching(identifier: "entities.row").matching(NSPredicate(format: "label == %@", "Robyn"))
+        XCTAssertTrue(waitCount(tiles, 2, timeout: 10), "two people named Robyn: \(app.entityRowLabels())")
+    }
+
     /// Regression (task 7): "Change…" keeps the memory and edits its people in its own sheet; the kept card it
     /// leaves must show those people, not the ones read before the sheet opened.
     @MainActor

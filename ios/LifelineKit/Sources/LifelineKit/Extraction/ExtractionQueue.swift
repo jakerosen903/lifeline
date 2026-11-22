@@ -128,11 +128,17 @@ public actor ExtractionQueue {
                 response = try await service.extract(request)
                 if Self.isBlank(response.output) { throw ExtractionError.badOutput("blank answer") }
             }
-            var validated = OutputValidator.validate(response.output, segmentText: segment.text, words: words)
+            // A handle of another segment of the recording may be named with no `people` entry in this answer (D17).
+            let recording = request.packet.recordingPeople
+            let recordingHandles = Set(recording.map(\.handle))
+            var validated = OutputValidator.validate(response.output, segmentText: segment.text, words: words, recordingHandles: recordingHandles)
             // The speaker is the owner: their own name is never a person to ask about (audit F10).
             validated = try store.people.ownerNames().removingOwner(from: validated)
             // An about_ref that names nothing the model was given is cleared; the memory is kept.
-            validated = AboutRefCheck.cleared(validated, knownIDs: Set(request.packet.people.map(\.id) + request.packet.entities.map(\.id)))
+            validated = AboutRefCheck.cleared(validated, knownIDs: Set(request.packet.people.map(\.id) + request.packet.entities.map(\.id)),
+                                              recordingHandles: recordingHandles)
+            // Each memory stores the people its handles name, and their said names as people refs (PC-d).
+            validated = HandleResolve.resolved(validated, knownPeople: Set(request.packet.people.map(\.id)), recording: recording)
             try mintStoryRefs(&validated)
             let shown = try storeCandidates(validated, segment: segmentID, version: response.version)
             lastFailure[segmentID] = nil
@@ -176,6 +182,8 @@ public actor ExtractionQueue {
             .sorted { Self.isNamed($0, in: recentText) && !Self.isNamed($1, in: recentText) }
         // This session's cards still waiting, except this segment's own, so a continuation can name one (M5).
         let pending = try store.candidates.pending(in: session).filter { $0.kind == .memory && $0.segmentID != segment.id }
+        // The handles found in the other segments of this recording, so the same person keeps one handle (PC-d, D30).
+        let handlePeople = try store.candidates.handlePeople(inSession: session, except: segment.id)
         var storyIDs: [StoryID] = []
         var stories: [(Story, [Memory])] = []
         for memory in related + memories {
@@ -188,7 +196,8 @@ public actor ExtractionQueue {
                                           chapters: try store.chapters.chapters(), curiosity: try store.curiosity.open(),
                                           excludedMemoryIDs: try store.memories.excludedIDs(), related: related,
                                           pending: pending, stories: stories,
-                                          entities: try Self.packetEntities(store))
+                                          entities: try Self.packetEntities(store),
+                                          recordingPeople: ContextPacketBuilder.recordingPeople(from: handlePeople))
     }
 
     private static func isNamed(_ entry: (Person, [Alias]), in text: String) -> Bool {
@@ -233,7 +242,8 @@ public actor ExtractionQueue {
                 c.status = .superseded
                 rows.append(c)
                 extended.append(.init(earlierID: earlier.id, rowID: c.id,
-                                      span: ExtraSpan(segmentID: segment.rawValue, startWord: memory.segmentSpan.startWord, endWord: memory.segmentSpan.endWord)))
+                                      span: ExtraSpan(segmentID: segment.rawValue, startWord: memory.segmentSpan.startWord, endWord: memory.segmentSpan.endWord),
+                                      people: memory.handlePeople))
                 rows += try hintRows(for: memory, keyedTo: earlier.id, row: row)
                 continue
             }

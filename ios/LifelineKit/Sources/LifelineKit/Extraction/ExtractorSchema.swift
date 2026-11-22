@@ -3,12 +3,13 @@ import Foundation
 /// JSON Schema for `ExtractorOutput`, sent as `output_config.format`. Structured outputs need
 /// `additionalProperties: false` on every object, every property listed in `required`, and
 /// nullable types for optional fields. The API allows at most 16 union-typed parameters in one
-/// schema, so handles and hints (`about_ref`, `domain_hint`, a mention's `ref` and `title`) are
+/// schema, so handles and hints (the `people` fields, a mention's `handle`, `about_ref`, `domain_hint`, a mention's `ref` and `title`) are
 /// plain strings where "" means none; the decoders read "" as nil. Keep this in step with `ExtractorOutput`.
 /// Computed, not stored: `[String: Any]` is not Sendable, so a stored static would be shared state.
 public enum ExtractorSchema {
     public static var json: [String: Any] {
         object([
+            "people": array(person),
             "memories": array(memory),
             "mentions": array(mention),
             "flags": object([
@@ -27,6 +28,7 @@ public enum ExtractorSchema {
             "quote": string,
             "segment_span": object(["start_word": integer, "end_word": integer]),
             "people_refs": array(string),
+            "person_handles": array(string),
             "place_text": nullableString,
             "anchors": array(object([
                 "phrase": string,
@@ -55,13 +57,23 @@ public enum ExtractorSchema {
         object([
             "text": string,
             "kind": ["type": "string", "enum": MentionKind.allCases.map(\.rawValue)],
-            "likely_alias_of_person_id": nullableString,
             "confidence": number,
             "relation_text": nullableString,
             "ref": string,           // "" when none
             "likely_entity_id": nullableString,
             "title": string,         // "" when none
             "domain_hint": string,   // "" when none
+            "handle": string,        // "" when none
+        ])
+    }
+
+    /// One person of the segment (v8). Every key is a plain string so the union count does not grow.
+    private static var person: [String: Any] {
+        object([
+            "handle": string,
+            "said_name": string,
+            "relation_text": string, // "" when none
+            "person_id": string,     // "" when none
         ])
     }
 
