@@ -71,6 +71,8 @@ final class EntityViewModel {
 
     /// "Photo of Maya", or "Photo of you" on the owner's page (decision 19).
     var photoLabel: String { PhotoCaption.label(title: entity.title, isOwner: isOwner, isMemory: false) }
+    /// What "Add a photo" gives to the picker's search: a name of this person, or nil.
+    var photoSearchName: String? { PhotoSearchName.text(type: entity.type, isOwner: isOwner, title: entity.title, contact: contact.state) }
 
     /// "Add dates" is offered only on a place or a thing, and only as the person's own action.
     var canAddDates: Bool { entity.type == .place || entity.type == .thing }
