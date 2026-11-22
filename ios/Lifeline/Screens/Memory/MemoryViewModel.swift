@@ -43,7 +43,7 @@ final class MemoryViewModel {
     init(memory: Memory, deps: Dependencies) {
         self.memory = memory
         self.deps = deps
-        personMove = PersonMoveUndo(store: deps.extractionStore)
+        personMove = PersonMoveUndo(actions: deps.personLinkActions())
         refresh()
     }
 

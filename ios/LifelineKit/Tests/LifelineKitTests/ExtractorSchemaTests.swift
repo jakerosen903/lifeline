@@ -102,6 +102,36 @@ import Testing
     #expect(unions <= 12, "\(unions) union-typed parameters; the API's limit is 16")
 }
 
+@Test func schemaAsksForPeopleWithHandles() {
+    let top = (ExtractorSchema.json["properties"] as? [String: Any]) ?? [:]
+    let person = ((top["people"] as? [String: Any])?["items"] as? [String: Any]) ?? [:]
+    let personProps = (person["properties"] as? [String: Any]) ?? [:]
+    #expect(Set(personProps.keys) == ["handle", "said_name", "relation_text", "person_id"])
+    #expect(personProps.values.allSatisfy { ($0 as? [String: Any])?["type"] as? String == "string" }, "plain strings: \"\" means none")
+    let memoryProps = (((top["memories"] as? [String: Any])?["items"] as? [String: Any])?["properties"] as? [String: Any]) ?? [:]
+    #expect((memoryProps["person_handles"] as? [String: Any])?["type"] as? String == "array")
+    #expect(memoryProps["people_refs"] != nil)
+    #expect(memoryProps["handle_people"] == nil, "app-written, never asked of the model")
+    let mentionProps = (((top["mentions"] as? [String: Any])?["items"] as? [String: Any])?["properties"] as? [String: Any]) ?? [:]
+    #expect((mentionProps["handle"] as? [String: Any])?["type"] as? String == "string")
+    #expect(mentionProps["likely_alias_of_person_id"] == nil)
+}
+
+@Test func promptV8LoadsAndNamesTheHandles() throws {
+    let v8 = try ExtractorPrompt.system(version: "v8")
+    #expect(v8.contains("recordingPeople") && v8.contains("person_handles") && v8.contains("two handles"))
+    #expect(!v8.contains("likely_alias_of_person_id"))
+    let v6 = try ExtractorPrompt.system(version: "v6")
+    #expect(v6.contains("`people` as an empty list"), "v6 shares the schema, so it must return the new keys empty")
+}
+
+@Test func promptV8PutsAHandleOfAnAboutRefInPersonHandles() throws {
+    let v8 = try ExtractorPrompt.system(version: "v8")
+    #expect(v8.contains("use that person's handle in `person_handles`, and also in `about_ref` when the fact, feeling or goal is about them"))
+    #expect(v8.contains("A handle in `about_ref` is also listed in that memory's `person_handles`."))
+    #expect(!v8.contains("in `person_handles` or `about_ref`"), "D22: the handle always goes in person_handles")
+}
+
 @Test func emptyHandlesAndHintsDecodeAsNone() throws {
     let json = """
     {"memories":[{"ref":"m1","kind":"fact","title":"The fence was white","quote":"the fence was white","segment_span":{"start_word":0,"end_word":3},

@@ -40,11 +40,29 @@ final class CardHandler {
     /// The memory each kept card stands for. Its links are read on every render (one query).
     @ObservationIgnored private var keptMemories: [String: MemoryID] = [:]
     private var peopleVersion = 0
+    /// Called after the sheet moved a name on a card, and after that move's Undo: a move can also move the story's
+    /// photo, so a host that shows the photo card reads it again.
+    @ObservationIgnored var onPeopleMoved: () -> Void = {}
     let deps: Dependencies
 
     init(deps: Dependencies) {
         self.deps = deps
-        personMove = PersonMoveUndo(store: deps.extractionStore)
+        personMove = PersonMoveUndo(actions: deps.personLinkActions())
+        watchContacts()
+    }
+
+    /// A waiting card's chips come from the contacts cache. When a check refilled it, or the owner just gave access,
+    /// they are read again, so a chip says what Keep will write (M-3). Each watch ends at the first notice after
+    /// this handler is gone.
+    private func watchContacts() {
+        for name in [ContactsCheck.finished, ContactsAccessPrompt.accessGiven] {
+            Task { [weak self] in
+                for await _ in NotificationCenter.default.notifications(named: name).map({ _ in () }) {
+                    guard let self else { return }
+                    self.peopleChanged()
+                }
+            }
+        }
     }
 
     /// Called when a card is first shown. Writes the mention row for a who-is-this card so the
@@ -65,8 +83,25 @@ final class CardHandler {
         var memory: Memory?
         let join = storyLineShown.contains(card.id) && !optedOutOfStory.contains(card.id)
         _ = attempt("Could not keep that") { memory = try deps.actions.acceptMemory(candidate, joinStory: join).memory }
-        if memory != nil { Task { await deps.duplicates.requestRun() } }
+        if let memory {
+            Task { await deps.duplicates.requestRun() }
+            copyContactPictures(of: [memory.id])
+        }
         return memory
+    }
+
+    /// Keep and "Same story" can make a person from a contact; the picture is copied after the write, off the main
+    /// actor (I-2). The chips read again when a copy lands, so a face shows the picture.
+    private func copyContactPictures(of memories: [MemoryID]) {
+        let links = deps.contactLinks
+        Task { [weak self] in
+            var copied = false
+            for memory in memories {
+                let people = await Task.detached(priority: .utility) { await links.copyMissingPictures(of: memory) }.value
+                copied = copied || !people.isEmpty
+            }
+            if copied { self?.peopleChanged() }
+        }
     }
 
     // MARK: - Stories on a card (M5)
@@ -254,6 +289,7 @@ final class CardHandler {
             merged = targets.count > 1 ? try deps.actions.mergeGroup(candidate, into: targets) : try deps.actions.mergeCandidate(candidate, into: first)
         }
         guard done, let merged else { return false }
+        copyContactPictures(of: [merged.receipt.target])
         recentMerge = (card, merged.receipt)
         mergedNotice = "Added to \(merged.receipt.targetTitle)."
         suggestionCache[card.id] = nil
@@ -356,7 +392,7 @@ final class CardHandler {
         // A continuation that arrives later grows the card; its names may add a chip.
         let key = "\(card.id)|\(out.extraSpans.count)"
         if let cached = previews[key] { return cached }
-        let chips = (try? PersonLinkActions(store: deps.extractionStore).preview(candidate)) ?? []
+        let chips = (try? deps.personLinkActions().preview(candidate)) ?? []
         previews[key] = chips
         return chips
     }
@@ -388,12 +424,16 @@ final class CardHandler {
         if case .unchanged = outcome { return }
         personMove.note(outcome)
         peopleChanged()
+        onPeopleMoved()
     }
 
     /// Undo under "Changed to {name}.". Returns true when the move was taken back.
     func undoPersonMove() -> Bool {
         let done = personMove.undo()
-        if done { peopleChanged() }
+        if done {
+            peopleChanged()
+            onPeopleMoved()
+        }
         return done
     }
 

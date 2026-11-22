@@ -1,40 +1,67 @@
 import LifelineKit
 import SwiftUI
 
-/// PC2: who is this name? Radio rows for the people it could be, "Someone new", "Someone else" for the rest,
-/// "Not a person" as a quiet row, one checkbox for the other moments, and Done. The presenter sets the
-/// detents' host (`.sheet`); this view asks for medium and large.
+/// PC2: who is this name? Radio rows for the people it could be and the contacts that fit, "Someone new",
+/// "Search your contacts" (or "Allow contacts in Settings" when access is denied), "Someone else" for the rest,
+/// "Not a person" as a quiet row, one checkbox for the other moments, and Done. The search opens inside the sheet;
+/// a contact picked there becomes the selected row. The presenter sets the detents' host (`.sheet`); this view asks
+/// for medium and large.
 struct WhoIsThisSheet: View {
     @State var viewModel: WhoIsThisViewModel
     let onDone: (WhoIsThisViewModel.Outcome) -> Void
     @State private var showsEveryone = false
     @State private var errorText: String?
+    @State private var searching = false
 
     private var options: WhoIsThisOptions { viewModel.options }
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
-                header
-                VStack(spacing: 8) {
-                    ForEach(options.rows) { optionRow($0) }
-                    newRow
-                    everyoneElse
-                }
-                notAPersonRow
-                if options.otherMoments > 0 { groupRow }
-                if let errorText { ErrorLine(text: errorText) }
-                doneButton
-                Text("Nothing is deleted. You can change this again at any time.")
-                    .font(.footnote).foregroundStyle(Theme.secondaryText)
-                    .frame(maxWidth: .infinity).multilineTextAlignment(.center)
-            }
-            .padding(.horizontal, 24).padding(.top, 24).padding(.bottom, 16)
+            if searching { search } else { choices }
         }
         .background(Theme.linen)
         .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)
         .accessibilityIdentifier("who.sheet")
+    }
+
+    private var choices: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            header
+            VStack(spacing: 8) {
+                ForEach(options.rows) { optionRow($0) }
+                newRow
+                searchRow
+                everyoneElse
+            }
+            notAPersonRow
+            if options.otherMoments > 0 { groupRow }
+            if let errorText { ErrorLine(text: errorText) }
+            doneButton
+            Text("Nothing is deleted. You can change this again at any time.")
+                .font(.footnote).foregroundStyle(Theme.secondaryText)
+                .frame(maxWidth: .infinity).multilineTextAlignment(.center)
+        }
+        .padding(.horizontal, 24).padding(.top, 24).padding(.bottom, 16)
+    }
+
+    /// The search inside the sheet: "Back" returns to the choices; a pick returns with the contact selected.
+    private var search: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Button { searching = false } label: {
+                Label("Back", systemImage: "chevron.left").font(.body.weight(.medium))
+                    .frame(minHeight: 44, alignment: .leading)
+            }
+            .tint(Theme.oliveText)
+            Text("Search your contacts")
+                .font(.system(.title2, design: .serif).weight(.medium)).foregroundStyle(Theme.ink)
+                .accessibilityAddTraits(.isHeader)
+            ContactSearchList(deps: viewModel.deps, heldBy: viewModel.heldNames) { card in
+                viewModel.pick(card)
+                searching = false
+            }
+        }
+        .padding(.horizontal, 24).padding(.top, 24).padding(.bottom, 16)
     }
 
     private var header: some View {
@@ -50,7 +77,8 @@ struct WhoIsThisSheet: View {
 
     private func optionRow(_ row: WhoIsThisOptions.Row) -> some View {
         let person: PersonID? = if case .person(let id) = row.target { id } else { nil }
-        return choiceRow(row.target, identifier: "who.option", title: row.title, line: row.line, label: "\(row.title). \(row.line)") {
+        let identifier = if case .contact = row.target { "who.contact" } else { "who.option" }
+        return choiceRow(row.target, identifier: identifier, title: row.title, line: row.line, label: "\(row.title). \(row.line)") {
             PersonFace(id: person.map { EntityID(rawValue: $0.rawValue) } ?? EntityID(rawValue: row.title), name: row.title,
                        cover: person.flatMap(viewModel.cover(of:)), cache: viewModel.photoImages, size: 40)
         }
@@ -63,6 +91,28 @@ struct WhoIsThisSheet: View {
                 .overlay(Circle().strokeBorder(Theme.secondaryText, style: StrokeStyle(lineWidth: 1.5, dash: [3, 3])))
                 .accessibilityHidden(true)
         }
+    }
+
+    /// "Search your contacts", or, with access denied, "Allow contacts in Settings": the app does not ask again.
+    @ViewBuilder private var searchRow: some View {
+        if viewModel.access == .denied {
+            linkRow("Allow contacts in Settings", systemImage: "gear", identifier: "who.settings") { viewModel.deps.openSettings() }
+        } else {
+            linkRow("Search your contacts", systemImage: "magnifyingglass", identifier: "who.search") {
+                Task { if await viewModel.prepareSearch() { searching = true } }
+            }
+        }
+    }
+
+    private func linkRow(_ title: String, systemImage: String, identifier: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Label(title, systemImage: systemImage)
+                .font(.body.weight(.medium)).foregroundStyle(Theme.oliveText)
+                .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier(identifier)
     }
 
     private func choiceRow<Face: View>(_ target: PersonLinkActions.Target, identifier: String, title: String, line: String?,

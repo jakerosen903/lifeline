@@ -13,6 +13,18 @@ struct PeopleGridScreen: View {
     @Environment(HomeViewModel.self) private var home: HomeViewModel?
     /// The top page of its stack. Under a cover it stays visible: the cover sends no onDisappear.
     @State private var isVisible = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// The tile a face is dragged over: it shows the drop ring.
+    @State private var dropTarget: EntityID?
+    /// Open while the owner is asked "Same person?" about a dropped pair.
+    @State private var askingSamePerson = false
+    /// The merge "Merge" wrote, held until the sheet is gone so the motion shows on the grid.
+    @State private var merged: PersonMergeReceipt?
+    /// The pair just merged, while the tile that left shrinks into the one that stays (plan decision 10).
+    @State private var vanishing: (leaving: EntityID, staying: EntityID)?
+    /// Each tile's frame in the grid, read only to aim the tile that leaves at the one that stays.
+    @State private var tileFrames: [EntityID: CGRect] = [:]
+    private static let gridSpace = "people.grid.space"
 
     init(deps: Dependencies) {
         _viewModel = State(initialValue: EntitiesViewModel(deps: deps, type: .person))
@@ -38,6 +50,20 @@ struct PeopleGridScreen: View {
         .onDisappear { isVisible = false }
         // A session started from this tab lands under a cover; when it closes, read what it added.
         .onChange(of: home?.coverClosings) { if isVisible { viewModel.refresh() } }
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            if let notice = viewModel.notice {
+                PersonMoveNoticeSlot(notice: notice) { viewModel.undoMerge() }
+            }
+        }
+        .animation(.default, value: viewModel.notice?.text)
+        .sheet(isPresented: $askingSamePerson, onDismiss: samePersonClosed) {
+            if let merge = viewModel.merge {
+                PersonMergeSheet(viewModel: merge, leaving: nil, picker: false) { receipt in
+                    merged = receipt
+                    askingSamePerson = false
+                }
+            }
+        }
     }
 
     private var columns: [GridItem] {
@@ -50,12 +76,58 @@ struct PeopleGridScreen: View {
             VStack(alignment: .leading, spacing: 0) {
                 sortMenu.padding(.horizontal, 16)
                 LazyVGrid(columns: columns, alignment: .leading, spacing: 20) {
-                    ForEach(people) { PersonTile(summary: $0, cover: viewModel.covers[$0.id], deps: viewModel.deps) { viewModel.refresh() } }
+                    ForEach(people) { tile($0) }
                 }
+                .coordinateSpace(.named(Self.gridSpace))
                 .padding(.horizontal, 16).padding(.vertical, 12)
                 .accessibilityIdentifier("people.grid")
                 errorLine
             }
+        }
+    }
+
+    /// A tile that can be dragged onto another, and take a drop. The list at the largest text sizes has neither: there
+    /// the button on the person's page merges.
+    private func tile(_ summary: EntitySummary) -> some View {
+        let leaves = vanishing?.leaving == summary.id
+        return PersonTile(summary: summary, cover: viewModel.covers[summary.id], deps: viewModel.deps,
+                          isDropTarget: dropTarget == summary.id) { viewModel.refresh() }
+            .onGeometryChange(for: CGRect.self) { $0.frame(in: .named(Self.gridSpace)) } action: { tileFrames[summary.id] = $0 }
+            .scaleEffect(leaves && !reduceMotion ? 0.2 : 1)
+            .offset(leaves && !reduceMotion ? offsetToStaying(from: summary.id) : .zero)
+            .opacity(leaves ? 0 : 1)
+            .zIndex(leaves ? 1 : 0)
+            .personDragAndDrop(PersonID(rawValue: summary.id.rawValue)) { dragged in
+                dropTarget = nil
+                askingSamePerson = viewModel.askMerge(EntityID(rawValue: dragged.rawValue), into: summary.id)
+                return true
+            } isTargeted: { over in
+                if over { dropTarget = summary.id } else if dropTarget == summary.id { dropTarget = nil }
+            }
+    }
+
+    /// From the centre of the tile that leaves to the centre of the one that stays. Zero when either frame is unknown.
+    private func offsetToStaying(from leaving: EntityID) -> CGSize {
+        guard let staying = vanishing?.staying, let from = tileFrames[leaving], let to = tileFrames[staying] else { return .zero }
+        return CGSize(width: to.midX - from.midX, height: to.midY - from.midY)
+    }
+
+    /// The confirm closed: after "Merge" the motion runs; after a refusal the slot says why; after "Cancel" nothing.
+    private func samePersonClosed() {
+        guard let receipt = merged else { viewModel.mergeRefused(); return }
+        merged = nil
+        vanish(receipt)
+    }
+
+    /// After "Merge": the tile that left shrinks into the one that stays and fades (with Reduce Motion it only fades),
+    /// then the grid reads again and the notice offers Undo. The merge is already written; the motion only shows it.
+    private func vanish(_ receipt: PersonMergeReceipt) {
+        let pair = (leaving: EntityID(rawValue: receipt.leaving.rawValue), staying: EntityID(rawValue: receipt.staying.rawValue))
+        withAnimation(.easeIn(duration: 0.25)) {
+            vanishing = pair
+        } completion: {
+            viewModel.merged(receipt)
+            vanishing = nil
         }
     }
 

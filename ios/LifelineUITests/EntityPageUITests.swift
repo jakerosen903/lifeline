@@ -12,11 +12,14 @@ final class EntityPageUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["What you've said about them"].exists)
         XCTAssertEqual(app.buttons.matching(identifier: "entity.detail").allElementsBoundByIndex.map(\.label),
                        ["Two years younger than me", "She was always the brave one"])
-        XCTAssertEqual(app.buttons.matching(identifier: "entity.oftenWith").allElementsBoundByIndex.map(\.label),
-                       ["Dad, 3 moments together", "Alder Street, 2 moments together"])
         let moments = app.buttons.matching(identifier: "entity.moment")
-        XCTAssertTrue(app.reveal(app.staticTexts["Moments with Maya"]))
+        // Before the scroll: the contact row under the header (PC-b) can push the strip off screen once the moments show.
         XCTAssertLessThan(app.any("entity.strip").frame.minY, app.buttons["entity.detail"].firstMatch.frame.minY)
+        // The merge row (PC-c) makes the page longer: Often with is below the fold of the lazy List until it scrolls.
+        let oftenWith = app.buttons.matching(identifier: "entity.oftenWith")
+        XCTAssertTrue(app.reveal(oftenWith.element(boundBy: 1)), "both Often with chips are in the tree")
+        XCTAssertEqual(oftenWith.allElementsBoundByIndex.map(\.label), ["Dad, 3 moments together", "Alder Street, 2 moments together"])
+        XCTAssertTrue(app.reveal(app.staticTexts["Moments with Maya"]))
         XCTAssertLessThan(app.buttons["entity.detail"].firstMatch.frame.minY, app.buttons["entity.oftenWith"].firstMatch.frame.minY)
         XCTAssertLessThan(app.buttons["entity.oftenWith"].firstMatch.frame.minY, moments.firstMatch.frame.minY)
         XCTAssertFalse(app.staticTexts["Jordan"].exists, "the owner is never often with anyone")
@@ -29,6 +32,8 @@ final class EntityPageUITests: XCTestCase {
     func testThePagesControlsAreFullSize() {
         let app = XCUIApplication.launchWithPeople(); app.openEntityPage("Maya")
         XCTAssertGreaterThanOrEqual(app.buttons["entity.play"].frame.height, 44)
+        // The merge row (PC-c) makes the page longer: Often with is below the fold of the lazy List until it scrolls.
+        XCTAssertTrue(app.reveal(app.buttons.matching(identifier: "entity.oftenWith").element(boundBy: 1)), "both chips are in the tree")
         let chips = app.buttons.matching(identifier: "entity.oftenWith").allElementsBoundByIndex
         XCTAssertEqual(chips.count, 2)
         for chip in chips { XCTAssertGreaterThanOrEqual(chip.frame.height, 44, chip.label) }
@@ -53,7 +58,10 @@ final class EntityPageUITests: XCTestCase {
     @MainActor
     func testOftenWithOpensThatPage() {
         let app = XCUIApplication.launchWithPeople(); app.openEntityPage("Maya")
-        app.buttons.matching(identifier: "entity.oftenWith").firstMatch.tap()
+        // The merge row (PC-c) makes the page longer: Often with is below the fold until it scrolls.
+        let dad = app.buttons.matching(identifier: "entity.oftenWith").firstMatch
+        XCTAssertTrue(app.reveal(dad) && app.scrollIntoView(dad), "Often with is on screen")
+        dad.tap()
         let title = app.staticTexts["entity.title"]
         XCTAssertTrue(title.waitForExistence(timeout: 5)); XCTAssertEqual(title.label, "Dad")
         XCTAssertEqual(app.buttons["home.start"].label, "Tell a story about Dad")

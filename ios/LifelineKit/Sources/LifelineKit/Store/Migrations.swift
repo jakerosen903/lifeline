@@ -396,6 +396,7 @@ enum Migrations {
 
         // v15 (people and contacts): a link records how it was made; a person can be backed by a contact.
         // Additive: no existing row or column changes. An old link has a nil origin.
+        // It is v15, not v14: the photo story took v14 on its own branch first, and GRDB records a migration by name.
         m.registerMigration("v15") { db in
             try db.alter(table: "person") { t in
                 t.add(column: "contact_identifier", .text)
@@ -426,6 +427,24 @@ enum Migrations {
                 t.column("person_id", .text).references("person", onDelete: .cascade)
                 t.column("contact_identifier", .text)
                 t.primaryKey(["candidate_id", "said_name"])
+            }
+        }
+
+        // v16 (photo on people's pages): which page link a photo story made, which page the owner took a photo off,
+        // and whether the owner closed the story's page chips with "Done". Additive: no existing row or column changes.
+        m.registerMigration("v16") { db in
+            // `story`: a photo story made the link. Null: every other link, and every link made before v16.
+            try db.alter(table: "photo_link") { t in
+                t.add(column: "origin", .text)
+            }
+            // The owner took this photo off this page, so a story does not put it back. Goes with the photo or the entity.
+            try db.create(table: "photo_page_declined") { t in
+                t.column("photo_id", .text).notNull().references("photo", onDelete: .cascade)
+                t.column("entity_id", .text).notNull().references("entity", onDelete: .cascade).indexed()
+                t.primaryKey(["photo_id", "entity_id"])
+            }
+            try db.alter(table: "session") { t in
+                t.add(column: "photo_pages_done", .boolean).notNull().defaults(to: false)
             }
         }
         return m

@@ -28,9 +28,18 @@ struct EntityScreen: View {
         let id: String
         let model: WhoIsThisViewModel
     }
+    /// The open "Same as another person…" sheet, with the person that goes, read at the tap. Without `picker` it opens
+    /// on the confirm: a contact another person holds was picked.
+    @State private var merging: Merging?
+    private struct Merging: Identifiable {
+        let id = UUID()
+        let leaving: Person?
+        var picker = true
+    }
     /// The photo open in the viewer.
     @State private var viewing: PlacedPhoto?
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.scenePhase) private var scenePhase
     /// Absent outside the shell (a preview): then nothing watches the session cover.
     @Environment(HomeViewModel.self) private var home: HomeViewModel?
     /// The top page of its stack. A page under a cover stays visible: the cover sends no onDisappear.
@@ -71,6 +80,16 @@ struct EntityScreen: View {
                     }
                     .listRowBackground(Color.clear)
                     .id(Self.top)
+                }
+
+                // The contact row (PC3, PC4) under the name: a person's page only, never the owner's.
+                if viewModel.contact.state != nil {
+                    Section {
+                        PersonContactRow(viewModel: viewModel.contact, onChange: onChange)
+                            .listRowBackground(Color.clear)
+                        mergeRow
+                            .listRowBackground(Color.clear)
+                    }
                 }
 
                 if viewModel.entity.type == .idea {
@@ -136,8 +155,9 @@ struct EntityScreen: View {
 
                 if let error = viewModel.error { Text(error).foregroundStyle(.red) }
             }
-            // A new cover is the page's news: the page goes back to the top, where the cover is.
-            .onChange(of: viewModel.shelf.cover?.id) { withAnimation { proxy.scrollTo(Self.top, anchor: .top) } }
+            // A new cover is the page's news: the page goes back to the top, where the cover is. The first read's
+            // cover is not news: the page opens at the top.
+            .onChange(of: viewModel.shelf.coverChanges) { withAnimation { proxy.scrollTo(Self.top, anchor: .top) } }
         }
         .scrollContentBackground(.hidden)
         // The person is gone and the notice is still up: the page shows what it last read, and writes nothing.
@@ -150,8 +170,9 @@ struct EntityScreen: View {
         .toolbar {
             Menu {
                 if hasPhotos {
-                    Button("Add a photo", systemImage: "photo") { viewModel.clearPhotoError(); addingPhoto = true }
-                        .accessibilityIdentifier("entity.addPhoto")
+                    AddPhotoButton(isAdding: viewModel.shelf.isAdding, identifier: "entity.addPhoto") {
+                        viewModel.clearPhotoError(); addingPhoto = true
+                    }
                 }
                 Button("Change the name", systemImage: "pencil") { draftTitle = viewModel.entity.title; renaming = true }
                     .accessibilityIdentifier("entity.rename")
@@ -177,7 +198,7 @@ struct EntityScreen: View {
             TellMeWhenSheet(title: viewModel.entity.title, birthDate: try? viewModel.deps.extractionStore.profile.ownerBirthDate(),
                             heading: "From when to when?") { viewModel.addDates($0) }
         }
-        .addPhotoFlow(isPresented: $addingPhoto, deps: viewModel.deps, shelf: viewModel.shelf,
+        .addPhotoFlow(isPresented: $addingPhoto, deps: viewModel.deps, shelf: viewModel.shelf, searchText: viewModel.photoSearchName,
                       onFile: { file, assetID in await viewModel.addPhoto(fileAt: file, assetLocalID: assetID); onChange() },
                       onError: { viewModel.photoFailed($0) })
         .photoViewerSheet(item: $viewing, home: home) { placed, tellStory in
@@ -198,7 +219,23 @@ struct EntityScreen: View {
                 onChange()
             }
         }
+        .sheet(item: $merging, onDismiss: { viewModel.mergeRefused() }) { merging in
+            PersonMergeSheet(viewModel: viewModel.merge, leaving: merging.leaving, picker: merging.picker) { receipt in
+                self.merging = nil
+                viewModel.merged(receipt)
+                onChange()
+            }
+        }
+        .onChange(of: viewModel.asksSamePerson) {
+            guard viewModel.asksSamePerson else { return }
+            viewModel.samePersonAsked()
+            merging = Merging(leaving: nil, picker: false)
+        }
         .onAppear { isVisible = true; viewModel.refresh() }
+        // The check can follow a rename and copy or replace the picture: the whole page reads again, not only the row.
+        .onReceive(NotificationCenter.default.publisher(for: ContactsCheck.finished)) { _ in if isVisible { viewModel.refresh() } }
+        // The app came back (access may have changed in Settings): the row reads again.
+        .onChange(of: scenePhase) { if scenePhase == .active, isVisible { viewModel.contact.refresh() } }
         .onDisappear { isVisible = false; viewModel.stop(); viewModel.clearPhotoError() }
         // A session started here lands under a cover; when it closes, read what it added.
         .onChange(of: home?.coverClosings) { if isVisible { viewModel.refresh() } }
@@ -209,15 +246,38 @@ struct EntityScreen: View {
     /// The header row's id, for the scroll back to the cover.
     private static let top = "entity.top"
 
+    /// "Same as another person…" under the contact row: a plain button. The person picked in the sheet stays.
+    private var mergeRow: some View {
+        Button {
+            viewModel.personMove.clearMessage()
+            let person = PersonID(rawValue: viewModel.entity.id.rawValue)
+            viewModel.merge.openPicker(for: person)
+            merging = Merging(leaving: try? viewModel.deps.extractionStore.people.person(id: person))
+        } label: {
+            Label("Same as another person\u{2026}", systemImage: "person.2")
+                .font(.body.weight(.medium)).foregroundStyle(Theme.oliveText)
+                .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        // A contact link that is running may open its own sheet; the merge waits until it ends.
+        .disabled(viewModel.contact.isWorking)
+        .accessibilityIdentifier("entity.merge")
+    }
+
     /// Photos hang on a person, place or thing. An idea keeps its layout.
     private var hasPhotos: Bool { viewModel.entity.type != .idea }
 
-    /// The cover, or "Adding the photo…" where a first photo will go. Neither shows on a page without a photo.
+    /// The cover, or the adding line where a first photo will go. Neither shows on a page without a photo.
     @ViewBuilder private var photoHeader: some View {
-        if viewModel.shelf.isAdding { PhotoAddingLine() }
+        if let line = viewModel.shelf.addingLine { PhotoAddingLine(text: line) }
         if let cover = viewModel.shelf.cover {
             PhotoHeader(cover: cover, label: viewModel.photoLabel, cache: viewModel.deps.photoImages) {
                 viewing = viewModel.shelf.photos.first(where: \.isCover)
+            }
+            if viewModel.coverIsFromContacts {
+                Text("picture from your contacts").font(.footnote).foregroundStyle(Theme.secondaryText)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
     }
@@ -266,7 +326,9 @@ struct EntityScreen: View {
                 NavigationLink { open(memory) } label: {
                     VStack(alignment: .leading, spacing: 4) {
                         label()
-                        if let line = PersonChipLine.text(origin: link.origin, saidName: link.saidName) {
+                        if let line = PersonChipLine.text(origin: link.origin, saidName: link.saidName, fromContact: link.personFromContact,
+                                                          // `guessed` holds only `assumed` links, whose line never names the contacts.
+                                                          contacts: .none) {
                             Text(line).font(.footnote).foregroundStyle(Theme.ochreText)
                                 .fixedSize(horizontal: false, vertical: true)
                         }

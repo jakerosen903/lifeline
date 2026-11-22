@@ -1,0 +1,28 @@
+{
+  "started_at": "2026-05-02T16:10:00Z",
+  "expected_people": [["Robyn"], ["Robyn"]],
+  "segments": [
+    { "start_ms": 0, "end_ms": 8000, "words": [
+      { "text": "Robyn", "start_ms": 0, "end_ms": 405 }, { "text": "from", "start_ms": 445, "end_ms": 805 }, { "text": "work", "start_ms": 845, "end_ms": 1205 }, { "text": "drove", "start_ms": 1245, "end_ms": 1650 },
+      { "text": "me", "start_ms": 1690, "end_ms": 1960 }, { "text": "up", "start_ms": 2000, "end_ms": 2270 }, { "text": "to", "start_ms": 2310, "end_ms": 2580 }, { "text": "the", "start_ms": 2620, "end_ms": 2935 },
+      { "text": "lake", "start_ms": 2975, "end_ms": 3335 }, { "text": "the", "start_ms": 3375, "end_ms": 3690 }, { "text": "summer", "start_ms": 3730, "end_ms": 4180 }, { "text": "I", "start_ms": 4220, "end_ms": 4445 },
+      { "text": "turned", "start_ms": 4485, "end_ms": 4935 }, { "text": "thirty", "start_ms": 4975, "end_ms": 5425 }, { "text": "and", "start_ms": 5465, "end_ms": 5780 }, { "text": "we", "start_ms": 5820, "end_ms": 6090 },
+      { "text": "swam", "start_ms": 6130, "end_ms": 6490 }, { "text": "until", "start_ms": 6530, "end_ms": 6935 }, { "text": "it", "start_ms": 6975, "end_ms": 7245 }, { "text": "got", "start_ms": 7285, "end_ms": 7600 },
+      { "text": "dark", "start_ms": 7640, "end_ms": 8000 }
+    ]},
+    { "start_ms": 10200, "end_ms": 17535, "words": [
+      { "text": "the", "start_ms": 10200, "end_ms": 10515 }, { "text": "other", "start_ms": 10555, "end_ms": 10960 }, { "text": "Robyn", "start_ms": 11000, "end_ms": 11405 }, { "text": "my", "start_ms": 11445, "end_ms": 11715 },
+      { "text": "cousin", "start_ms": 11755, "end_ms": 12205 }, { "text": "was", "start_ms": 12245, "end_ms": 12560 }, { "text": "already", "start_ms": 12600, "end_ms": 13095 }, { "text": "at", "start_ms": 13135, "end_ms": 13405 },
+      { "text": "the", "start_ms": 13445, "end_ms": 13760 }, { "text": "cabin", "start_ms": 13800, "end_ms": 14205 }, { "text": "with", "start_ms": 14245, "end_ms": 14605 }, { "text": "a", "start_ms": 14645, "end_ms": 14870 },
+      { "text": "pot", "start_ms": 14910, "end_ms": 15225 }, { "text": "of", "start_ms": 15265, "end_ms": 15535 }, { "text": "lentil", "start_ms": 15575, "end_ms": 16025 }, { "text": "soup", "start_ms": 16065, "end_ms": 16425 },
+      { "text": "on", "start_ms": 16465, "end_ms": 16735 }, { "text": "the", "start_ms": 16775, "end_ms": 17090 }, { "text": "stove", "start_ms": 17130, "end_ms": 17535 }
+    ]},
+    { "start_ms": 19735, "end_ms": 26675, "words": [
+      { "text": "she", "start_ms": 19735, "end_ms": 20050 }, { "text": "always", "start_ms": 20090, "end_ms": 20540 }, { "text": "made", "start_ms": 20580, "end_ms": 20940 }, { "text": "too", "start_ms": 20980, "end_ms": 21295 },
+      { "text": "much", "start_ms": 21335, "end_ms": 21695 }, { "text": "and", "start_ms": 21735, "end_ms": 22050 }, { "text": "Robyn", "start_ms": 22090, "end_ms": 22495 }, { "text": "from", "start_ms": 22535, "end_ms": 22895 },
+      { "text": "work", "start_ms": 22935, "end_ms": 23295 }, { "text": "ate", "start_ms": 23335, "end_ms": 23650 }, { "text": "three", "start_ms": 23690, "end_ms": 24095 }, { "text": "bowls", "start_ms": 24135, "end_ms": 24540 },
+      { "text": "before", "start_ms": 24580, "end_ms": 25030 }, { "text": "anyone", "start_ms": 25070, "end_ms": 25520 }, { "text": "else", "start_ms": 25560, "end_ms": 25920 }, { "text": "sat", "start_ms": 25960, "end_ms": 26275 },
+      { "text": "down", "start_ms": 26315, "end_ms": 26675 }
+    ]}
+  ]
+}

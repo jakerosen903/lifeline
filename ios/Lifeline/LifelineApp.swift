@@ -33,6 +33,10 @@ final class AppModel {
     private(set) var hasProfile = false
     /// What the launch repair did, said once by the shell.
     private(set) var notice = ShellNotice(nil)
+    /// The check of linked contacts; made when the first screen shows, never on the launch path before it.
+    @ObservationIgnored private var contactsCheck: ContactsCheck?
+    @ObservationIgnored private var contactsObserver: (any NSObjectProtocol)?
+    @ObservationIgnored private var checkRequestObserver: (any NSObjectProtocol)?
 
     init() {
         do {
@@ -70,12 +74,34 @@ final class AppModel {
     }
 
     func profileSaved() { hasProfile = true }
+
+    /// After the first screen shows: the contacts are read and the linked ones checked, off the main thread, and
+    /// again each time the system says contacts changed (the notice comes only while the app runs, so the launch
+    /// check is required). Scripted contacts post no notice. A failure is logged inside the check.
+    func firstScreenShown() {
+        guard let deps, contactsCheck == nil else { return }
+        let check = ContactsCheck(deps: deps)
+        contactsCheck = check
+        Task.detached(priority: .utility) { await check.request() }
+        // A screen asks for a check now (access given on a person's page); scripted contacts too.
+        checkRequestObserver = NotificationCenter.default.addObserver(forName: ContactsCheck.requested, object: nil, queue: nil) { _ in
+            Task.detached(priority: .utility) { await check.request() }
+        }
+        guard deps.contacts is SystemContactsDirectory else { return }
+        contactsObserver = NotificationCenter.default.addObserver(forName: SystemContactsDirectory.didChange, object: nil, queue: nil) { _ in
+            Task.detached(priority: .utility) { await check.request() }
+        }
+    }
 }
 
 struct RootView: View {
     let model: AppModel
 
     var body: some View {
+        content.task { model.firstScreenShown() }
+    }
+
+    @ViewBuilder private var content: some View {
         if let deps = model.deps, model.timeline != nil, let home = model.home {
             if model.hasProfile {
                 SectionsScreen(model: model)

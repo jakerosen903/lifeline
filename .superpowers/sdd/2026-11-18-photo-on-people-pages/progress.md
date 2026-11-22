@@ -1,0 +1,91 @@
+# SDD ledger — plan: docs/plans/2026-11-18-photo-on-people-pages.md
+
+Spec: docs/specs/2026-11-18-photo-on-people-pages.md (approved 2026-11-18, parts 1-4). Base: 4389cbc.
+Pre-flight: Task 6 needs a column that Task 1 owns: Task 1 text now carries it (agrees). Tasks 2 and 4 both change PhotoRepository (sequential, agrees). Tasks 3, 5 and 6 all change the card model and view (sequential). Task 7 is independent.
+
+## Tasks
+- Task 1: complete (commits 07d510d..e0b05cf, review clean). Kit 1358. Reviewer read every caller of the public `link` and `unlink`: all are owner taps or the seed.
+- Task 1: minor, carried into Task 2's dispatch: the static `link(… origin: .story …)` does not refuse a declined pair itself; the rule is a comment.
+- Task 1: minor (deferred): `v16FromV13` does not assert `photo_pages_done = 0` or that `photo_page_declined` exists.
+- Task 1: minor (deferred): a comment that unlinking from the owner's own page records a harmless decline.
+- Task 2: built at 6f8a78a (base b07c5d7), DONE_WITH_CONCERNS. Kit 1373 (one known flake).
+- Task 2: Ruling: every name link counts, `detail` as well as `mention` — the spec says "each person the moment names", and a kept fact about a person in a photo story is about that person — if wrong, one filter in one query.
+- Task 2: Ruling: Undo of a Keep takes back the story's page links that Keep left without a reason: after the memory is gone, a `story` link of the session's photo is removed when no memory that holds the photo names that person; an owner's link stays; no decline is recorded — the spec's rule is that the app shows and can take back its own assumption; a photo left on a page by an undone Keep is an assumption with no source — if wrong, the photo stays on a page after an Undo. Sent back to the implementer before review (correctness).
+- Task 2: accepted: `aFailedKeepWritesNothing` forces the failure with a trigger after the links, because a duplicate span fails before any link exists.
+- Task 2: Ruling withdrawn: there is no undo of a Keep in the kit (the implementer checked `CandidateActions.restore`, `CardHandler.undo`, `MergeActions.unmerge`, `MemoryRepository.delete`). A deleted memory leaves the photo on the people's pages, as the spec's edge case for a removed moment says; the owner takes it off with the chip. Nothing built for it. Comment commit 56d7c00.
+- Task 2: complete (commits b07c5d7..56d7c00, review clean). Kit 1373. No existing test changed.
+- Task 2: minor (deferred): no test where `letGo` makes the photo homeless after it removed story links (delete the memory, then let go).
+- Task 2: minor (deferred): the returned order of `linkToPeoplePages` is promised in the doc and not asserted.
+- Task 2: minor (deferred): `aFailedKeepWritesNothing` has no control assertion that the same card without the trigger writes the page link.
+- Task 2: minor (deferred): `undoingAKeepLeavesNoLinkAndKeepsThePhoto` (PhotoRepositoryTests) is misnamed; it is a plain delete.
+- Open for the owner: a kept fact about a person also places the photo; after a kept memory is deleted the chip still reads "added by this story" though no kept memory names the person.
+- Task 3: built at 5aca2f1 (base 62ca0d7). Review: approved; one stated deviation.
+- Task 3: Ruling: `PhotoStoryReader.removeFromPage` is not added — the app removes a photo from a page through `PhotoLibrary.remove`, which calls `unlink` (records the decline) and deletes the file; a reader method would be a second path that leaves an orphan file — the plan's Task 5 line "the chip's remove goes through `removeFromPage`" is void: the chip keeps `PhotoLibrary.remove`. Carried into Task 5's dispatch. Cost if wrong: none; one path remains.
+- Task 3: process deviation recorded: tests were written after the code; the failing run was a compile error. The reviewer's mutation check found the tests fail on wrong behavior.
+- Task 3: minor (deferred): `stateValue` trusts `byStory` without `isChosen` (only `PhotoStory.card` builds pages).
+- Task 3: complete (commits 62ca0d7..5aca2f1, approved).
+- Task 4: built at 8a22002 (base 84abc4b). Review: spec ok; one Important, plan-mandated.
+- Task 4: Ruling: the move removes the first person's story link only when NO memory that holds the photo names that person now, in any session — the plan said "no memory of that session", but one photo can be the subject of two stories, and the spec forbids removing a link another story placed; `letGo` already keeps story links while another session points at the photo — cost if wrong: a photo stays on a page a little longer. The same guard applies to Undo's removal of an added link (the reviewer's Minor 1): one rule, one function.
+- Task 4: accepted: `only:` on `linkToPeoplePages` (a move adds to the new person only; a plain call would backfill other people, against decision 14).
+- Task 4: minor (deferred): Undo restores a story link to a page the owner hid after the move.
+- Task 4: minor (deferred): a restored link goes last; a photo that was the key photo is not the key photo after Undo when the page gained another photo. Open for the owner.
+- Task 4: minor (deferred): `photoPages` is `public var`; make it `public internal(set)`.
+- Task 4: minor (deferred): no test pins what `only:` is for (the moved moment also names a person who lacks the photo).
+- Task 4: fix round 1/5 (2 addressed, 0 open — still-named rule across sessions, same guard on Undo; commits 5ee1193..43dd1e3)
+- Task 4: complete (commits 84abc4b..43dd1e3, review clean after one fix round). Kit 1394.
+- Task 5: dispatched from 43dd1e3, in parallel with the Task 4 re-review (different files).
+- Task 5: complete (commits f958e1e..bdd5fa1, approved). UI: PhotoCard 26/0, PeopleGuess 15/0, Landing 14/0, PhotoStory 7/0, Photos 21/0. Kit 1394. Reviewer read every changed line of existing tests: each forced by chips that start filled, none weakened or deleted.
+- Task 5: accepted outside the brief: `CardHandler.onPeopleMoved` so the session's page refreshes the card after a move and its Undo (a real gap, with a UI test); the seed's hand link to Maya removed; the flag `-uiTesting-photoStoryAssumedName`.
+- Task 5: Ruling: the spec's status line gains what is built at the end of the build, not per task (the dispatch said to leave it) — goes in the final fix wave.
+- Task 5: minor (deferred): no UI test asserts that a page that held the photo before the story keeps the owner's link ("added") after Keep.
+- Task 5: minor (deferred): the card's height changes when the last story chip is taken off (two-line story line becomes the one-line tap line), against OVERVIEW's "a choice changes the state of a control, not the layout". Open for the owner, or reserve the height.
+- Task 5: minor (deferred): the device check's move ruling leaves out the Undo half; one line is not STE ("No older story must…").
+- Task 5: minor (deferred): `sam` is in the seed's function-level guard; look it up inside `if assumedName`.
+- Checked: the Task 1 minor (static `link` refusing a declined pair) was closed in Task 2 (`aStoryLinkToADeclinedPageWritesNothing`).
+- Task 7: dispatched from bdd5fa1 while Task 5 was in review (independent files). Task 6 waits for Task 7 (one simulator, one implementer at a time).
+- Task 7: built at fc39a09 (base 5041ae9), in review. Task 6 dispatched from fc39a09 in parallel with that review (different files).
+- Task 7: review: spec gap, one Important: "Add a photo" stays enabled while photos are added, so a second pick runs alongside the first (two images in memory, order interleaved; against decision 17 and spec part 4 item 2).
+- Task 7: Ruling: "Add a photo" is disabled while the shelf is adding, on the three pages — simplest, and the owner sees the count running — cost if wrong: the owner waits for a pick to end before the next. Fix round waits for Task 6 (the simulator and the worktree are in use).
+- Task 7: accepted: no `PhotoShelf.add(files:)`; items are added one at a time between `beginAdding(count:)` / `finishedOne()` / `endAdding()` (a file list would hold every temporary copy at once). Accepted: `PhotoAddBatch`. The reviewer found no crash path in `PhotoAddingLine`; the stale-build explanation holds; the full UI run must start from a clean build.
+- Task 7: minor (deferred): `PhotoShelf` comment on `adds` is wrong and its "outside a pick" branch is nearly dead.
+- Task 7: minor (deferred): the failure line is lost when the owner leaves the page during a pick (the adds still finish). Known small item.
+- Task 7: minor (deferred): device check has no line for the app going to the background during a pick.
+- Task 7: minor (deferred): with no shelf, failures use the one-photo text; no UI test for "{k} photos could not be added."; `-uiTesting-pickPhotos` splits on a comma.
+- Task 6: built at 7880143 (base 3530a38). DONE_WITH_CONCERNS: the card is about 90 pt taller, so three existing UI tests gained a scroll step or a weaker precondition (listed in the report); `showsNoOtherPageSentence` is a function `(keeping:)`; a page that holds the photo with no kept memory naming it still leaves the list when emptied; the Undo notice after a name move can sit below the screen. Sent to review as built.
+- Task 6: review of 3530a38..7880143: spec ❌ in one case, one Important: a page that only holds the photo (no kept memory names it) leaves `pageGroups` when emptied in the done state, so its chip disappears under the finger (Part 3 point 6).
+- Task 6: Ruling: `keeping:` widens from ids to `Page` values, so the kit puts back an empty copy of a kept page that left `pageGroups` — the spec says "must not disappear" and the id-only interface was the plan's defect — cost if wrong: one signature and one view-model field. The open state keeps today's behaviour (not in the spec).
+- Task 6: fix round 1 also takes Minor 2 (drag only until Undo is hittable) and Minor 5 (device-check line 25's missing result) and adds the off-screen Undo notice to the device check's known small items.
+- Task 6: minor (deferred): `testTheCardKeepsItsLayoutAfterEachChoice` precondition is now "in the tree", not "on screen": the card (about 740 pt) no longer fits. Open for the owner.
+- Task 6: minor (deferred): after a name move on the session's page the Undo notice can sit below the screen for its 6 seconds. Open for the owner.
+- Task 6: minor (deferred): `card(for:)` reads the session row a second time for one flag.
+- Task 6: cannot verify from diff: the line-height reservation was in the brief (Task 5's open item) — controller confirms; `keptPages` drops when the screen is left (a new view model per visit) and the done state after a kill — device check lines 23 and 25.
+- Task 6: fix round 1 queued behind the Task 7 fix (one writer at a time in the worktree).
+- Task 7: fix round 1/5 (1 addressed, 0 open — two picks at the same time; commit 6e050fd)
+- Task 7: minor (deferred): the `PhotoAddBatch` merge path (a second pick joins the first) is no longer reachable through the UI; kept as defence.
+- Task 7: minor (deferred): `-uiTesting-slowPhotoFile` now has two meanings (slow file, and a 3 s wait in the test pick path).
+- Task 7: minor (deferred): the disabled state has a UI test on the entity page only; Memory and You share `AddPhotoButton`.
+- Task 7: complete (commits 5041ae9..6e050fd, review clean after one fix round; minors deferred above)
+- Task 6: fix round 1/5 (1 addressed, 0 open — a chip that only held the photo disappeared in the done state; commit 68278f9)
+- Task 6: minor (deferred): `testMovingANameOnTheSessionsPageShowsOnTheCard` still races the 6-second Undo notice (about 3 s left after the drag on a loaded machine).
+- Task 6: minor (deferred): a kept chip shows the page's title as it was at the tap until the next Done or Edit.
+- Task 6: complete (commits 3530a38..68278f9, review clean after one fix round; minors deferred above)
+
+## Final review
+- Whole-branch package 00f14c2..HEAD dispatched.
+- Verdict: ready with fixes. No Critical. Important 1: `PhotoCard.swift:35` hides the whole pages part when `pageGroups` is empty, so a kept chip that was the card's only page still disappears. Important 2: DECISIONS, the spec status, OVERVIEW and the device check do not cover parts 3 and 4.
+- Fix wave takes (findings file `final-findings.md`): Important 1 and 2; Undo must not restore a story link to a hidden person; UI assertions for the multi-photo lines; the `adds` comment; two assertions in `v16FromV13`.
+- Ruling: the two geometry- and time-dependent UI tests stay as they are in this wave — their cause is where the Undo notice sits, which is the owner's call — cost if wrong: a flake in the full run, rerun alone.
+- Owner's call, from the final review: deleting a photo story leaves its photo on the people's pages (a `story` link with no story), unlike "Remove the photo from this story".
+- Owner's call: a story link whose photo the owner made the key photo is still the story's; a later move or photo removal takes it off the page.
+- Owner's call: the Undo notice after a name move can sit below the screen for its 6 seconds; pin it above the record bar?
+- Owner's call: spec Part 4 lists "an idea", but an idea page has no "Add a photo" (from before this branch).
+- Closed by the final review: Task 5's card height change (reserved line), Task 5's missing UI test for a page that held the photo before the story, Task 1's static link refusing a declined pair.
+- Final fix wave: commits 55991d7..7a0ee5f (ef58fcb, fcf8dc5, 0a22820, 7a0ee5f). Kit 1416 (one known flake), PhotoCardUITests 33/0, PhotosUITests 28/0, guards pass. Re-review dispatched.
+- Final fix wave: concern: in `testAddAPhotoWaitsWhilePhotosAreAdded` a fresh query does not find `photo.adding` after the menu closes, so its last check proves little; "2 of 2" is checked in `testTheAddingLineCountsThePhotos`. F1 has a kit test and device-check line 34, no UI test (no seed).
+- Whole UI suite: started on 7a0ee5f from a clean build.
+- Final re-review (55991d7..7a0ee5f): F1 to F6 addressed. One new Important: device-check line 34 asked for "Done" and a sentence the code does not show after "Edit" when the kept page was the card's only page.
+- Ruling: line 34 is corrected to what the code does (docs only, by the controller; there is no second fix wave), and the behaviour — after "Edit" the whole part goes away when the card has no page left — is an open item for the owner — the open state with no page has never drawn the part — cost if wrong: one rule in `showsPagesPart` and one test.
+- Parked — straight apostrophes in the new DECISIONS lines; a stray blank line in `PhotosUITests.swift`; Task 6's deferred minors are not in the device check's known items; device-check line 22 (two files the app cannot add) is hard to do with the system picker on a phone — Ruling: real and small; nothing builds on them.
+- The fixer's concern on `testAddAPhotoWaitsWhilePhotosAreAdded`: the re-reviewer read the view code and finds a test artefact, not a product defect (the line is drawn for the whole pick).
+- Whole UI suite on 7a0ee5f, clean build: 238 tests, 1 failure (`EntitiesUITests.testThingsFilterByDomainTag`, "Failed to determine hittability of home.start"); it passed when run alone. Guards pass on 9a2a153.
+- `phone/photos-contacts` fast-forwarded to 9a2a153 (local only). Nothing pushed.

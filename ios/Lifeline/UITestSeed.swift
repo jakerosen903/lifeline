@@ -186,18 +186,21 @@ enum UITestSeed {
 
     /// Under `-uiTesting-seedPhotoStory`: the family, then two landed photo sessions, each about a generated photo.
     /// The first (two moments, told 2 hours ago) is about a dated photo (14 June 2012) and has two kept memories that both hold it:
-    /// "The beach" (unplaced; names Maya and Dad) and "The drive home" (stated 2012; names Dad). Maya's page holds the photo; Dad's
-    /// does not. The second (newer, one sorted moment) has no kept memory, and its photo has no other home.
+    /// "The beach" (unplaced; names Maya and Dad) and "The drive home" (stated 2012; names Dad). The real Keep write puts the photo
+    /// on Maya's and Dad's pages by a story link. The second (newer, one sorted moment) has no kept memory, and its photo has no other home.
     /// `unlanded` leaves one of them with no landing choice made, so the app opens on its landing (`-uiTesting-photoStoryLanding`).
     /// `withGuess` (`-uiTesting-photoStoryGuess`) adds a third kept memory to the first story: "The picnic", which names Maya and
     /// Alder Street, holds the photo, and has a guessed date from the age anchor "when I was 22" (the band holds 14 June 2012).
+    /// `assumedName` (`-uiTesting-photoStoryAssumedName`) adds "The ferry" (stated 2012) to the first story: it names Sam by a
+    /// guess (assumed, said "Sammy"), so Keep puts the photo on Sam's page, and a move of the name moves it.
     enum PhotoStoryLanding: String { case first, second }
 
     static func writePhotoStory(store: ExtractionStore, profile: ProfileRepository, sessions: SessionRepository, library: PhotoLibrary,
-                                unlanded: PhotoStoryLanding?, withGuess: Bool = false) throws {
+                                unlanded: PhotoStoryLanding?, withGuess: Bool = false, assumedName: Bool = false) throws {
         guard try people(store: store, profile: profile, sessions: sessions) != nil,
               let maya = try store.entities.entities(type: .person).first(where: { $0.title == person })?.id,
               let dad = try store.entities.entities(type: .person).first(where: { $0.title == "Dad" })?.id,
+              let sam = try store.entities.entities(type: .person).first(where: { $0.title == "Sam" })?.id,
               let alder = try store.entities.entities(type: .place).first(where: { $0.title == "Alder Street" })?.id else { return }
         let folder = FileManager.default.temporaryDirectory.appending(path: "seed-photo-story-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
@@ -213,7 +216,10 @@ enum UITestSeed {
         let drive = try seed.keep("The drive home", kind: .event, year: 2012, relation: .mention, links: [(dad, "my dad")])
         try store.photos.link(beachPhoto.id, to: .memory(beach))
         try store.photos.link(beachPhoto.id, to: .memory(drive))
-        try store.photos.link(beachPhoto.id, to: .entity(maya))
+        // No hand link to Maya's page: it would make the story's link the owner's (plan decision 13).
+        if assumedName {
+            try seed.keep("The ferry", kind: .event, year: 2012, relation: .mention, links: [(sam, "Sammy")], origins: [sam: .assumed])
+        }
         // The range is the one the resolver gives this anchor, so a resolver run (after Undo) puts back the same range.
         // `people` saved Jordan's birthday, so the birth date is there; the second story is written either way.
         let phrase = "when I was 22"
@@ -427,5 +433,49 @@ private struct SeedSession {
                                                                    targetID: nil, value: $0.value, resolved: true)] } ?? [],
                                   acceptingCandidate: candidate.id)
         return memory.id
+    }
+}
+
+// MARK: - Contacts (PC-b)
+
+extension UITestSeed {
+    /// The scripted phone's contacts, invented. Tests that need more cards add them here.
+    /// - "Robyn Okafor" goes by "Robin", so she fits the guessed "Robin" of `-uiTesting-seedGuesses` (a contact row in its sheet).
+    /// - "Dara Quinn" is the one contact that fits "Dara" of `-uiTesting-followUps`, so Keep makes her from the contact.
+    ///   She has a picture, so a test sees it copied after Keep (I-2).
+    static let contactCards: [ContactCard] = [
+        ContactCard(identifier: "ui-contact-vale", fullName: "Robyn Vale", givenName: "Robyn", familyName: "Vale", nickname: "", hasPicture: true),
+        ContactCard(identifier: "ui-contact-reyes", fullName: "Tomas Reyes", givenName: "Tomas", familyName: "Reyes", nickname: "", hasPicture: false),
+        ContactCard(identifier: "ui-contact-okafor", fullName: "Robyn Okafor", givenName: "Robyn", familyName: "Okafor", nickname: "Robin", hasPicture: false),
+        ContactCard(identifier: "ui-contact-quinn", fullName: "Dara Quinn", givenName: "Dara", familyName: "Quinn", nickname: "", hasPicture: true),
+    ]
+
+    /// Under `-uiTesting-seedContactLink`, after `-uiTesting-seedPeople`: Lena is linked to "Robyn Okafor", as a restore to
+    /// a new phone leaves a person whose contact the app has not been allowed to see yet. The card has no picture.
+    static func linkLenaToAContact(store: ExtractionStore, links: ContactLinkActions) throws {
+        guard let lena = try store.entities.entities(type: .person).first(where: { $0.title == "Lena" })?.id,
+              let card = contactCards.first(where: { $0.identifier == "ui-contact-okafor" }) else { return }
+        try waitFor { try await links.link(PersonID(rawValue: lena.rawValue), to: card) }
+    }
+
+    /// The colour of each card's generated picture, for the cards with `hasPicture`.
+    private static let contactPictureColours: [String: Int] = ["ui-contact-vale": 0x5A7D9A, "ui-contact-quinn": 0x9A7D5A]
+
+    /// `-uiTesting-contacts <full|limited|notAsked|denied>` picks the access. Without it (or with an unknown value) the
+    /// app has not asked and a request is refused, so a test that does not name contacts sees none. `notAsked` named
+    /// on purpose answers a request with `full`. The pictures are small generated JPEGs written under `folder`.
+    static func contactsDirectory(arguments: [String], folder: URL) throws -> ScriptedContactsDirectory {
+        let named = arguments.firstIndex(of: "-uiTesting-contacts").flatMap { $0 + 1 < arguments.count ? arguments[$0 + 1] : nil }
+            .flatMap(ContactsAccess.init(rawValue:))
+        let access = named ?? .notAsked
+        let afterRequest: ContactsAccess = named == nil ? .denied : (access == .notAsked ? .full : access)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        var pictures: [String: Data] = [:]
+        for (identifier, rgb) in contactPictureColours {
+            let url = folder.appending(path: "\(identifier).jpg")
+            try GeneratedPhoto.write(to: url, width: 96, height: 96, rgb: rgb)
+            pictures[identifier] = try Data(contentsOf: url)
+        }
+        return ScriptedContactsDirectory(cards: contactCards, pictures: pictures, access: access, accessAfterRequest: afterRequest)
     }
 }

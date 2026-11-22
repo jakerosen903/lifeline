@@ -38,12 +38,19 @@ struct PersonTile: View {
     let summary: EntitySummary
     let cover: Photo?
     let deps: Dependencies
+    /// True while another face is dragged over this one (PC-c): the face shows a 2-point ring.
+    var isDropTarget = false
     let onChange: () -> Void
 
     var body: some View {
         PersonLink(summary: summary, deps: deps, onChange: onChange) {
             VStack(alignment: .leading, spacing: 6) {
                 TileFace(summary: summary, cover: cover, cache: deps.photoImages)
+                    .overlay {
+                        if isDropTarget {
+                            RoundedRectangle(cornerRadius: 22, style: .continuous).strokeBorder(Theme.olive, lineWidth: 2)
+                        }
+                    }
                 Text(summary.entity.title)
                     .font(.system(.headline, design: .serif)).foregroundStyle(Theme.ink)
                     .lineLimit(2).multilineTextAlignment(.leading)

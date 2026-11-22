@@ -180,7 +180,13 @@ public struct EntityRepository: Sendable {
         public var links: [MomentEntity] = []
         public var spans: [EntitySpan] = []
         public var tags: [EntityTag] = []
+        /// Aliases of planned persons beyond their own name: the said name of a person made from a
+        /// contact, whose display name is the contact's and never an alias.
+        public var aliases: [Alias] = []
         public var acceptingCandidate: CandidateID?
+        /// Persons planned for an extractor handle (PC-d). Such a person is that handle's alone: two handles of one
+        /// said name are two people, so no other plan joins them by name.
+        var handlePersons: Set<PersonID> = []
 
         public init() {}
 
@@ -192,17 +198,45 @@ public struct EntityRepository: Sendable {
             return entities.first { $0.type == type && MatchKey.of($0.title) == MatchKey.of(title) }
         }
 
+        /// The entity of this plan that `entity`, from another plan, is the same as. A person planned from
+        /// a contact is the same as the one planned from that contact, whatever the titles, and never one
+        /// with another contact or none (PB13): the unique index allows one person per contact.
+        /// Anything else joins by type and title.
+        /// A person planned for a handle (`handled`, or one of this plan's `handlePersons`) joins by contact only.
+        func same(as entity: Entity, contact: String?, handled: Bool = false) -> Entity? {
+            let contactOf = { (id: EntityID) in persons.first { $0.entityID == id }?.contactIdentifier }
+            if let contact {
+                guard let person = persons.first(where: { $0.contactIdentifier == contact }) else { return nil }
+                return entities.first { $0.id == person.entityID }
+            }
+            guard entity.type == .person else { return planned(entity.type, entity.title) }
+            guard !handled else { return nil }
+            return entities.first { $0.type == .person && MatchKey.of($0.title) == MatchKey.of(entity.title) && contactOf($0.id) == nil
+                && !handlePersons.contains(PersonID(rawValue: $0.id.rawValue)) }
+        }
+
         /// The union with another plan; an entity both planned keeps this plan's id.
         mutating func merge(_ other: Write) -> [EntityID: EntityID] {
             var remap: [EntityID: EntityID] = [:]
             for entity in other.entities {
-                if let mine = planned(entity.type, entity.title) { remap[entity.id] = mine.id } else { entities.append(entity) }
+                let contact = other.persons.first { $0.entityID == entity.id }?.contactIdentifier
+                let handled = other.handlePersons.contains(PersonID(rawValue: entity.id.rawValue))
+                if let mine = same(as: entity, contact: contact, handled: handled) { remap[entity.id] = mine.id } else { entities.append(entity) }
+            }
+            handlePersons.formUnion(other.handlePersons)
+            // A joined person stays the app's guess only when both plans guessed: either plan may be the owner's choice (PB3).
+            for theirs in other.persons {
+                guard let mine = remap[theirs.entityID], let index = persons.firstIndex(where: { $0.entityID == mine }) else { continue }
+                persons[index].createdByGuess = persons[index].createdByGuess && theirs.createdByGuess
             }
             // A person both plans made for one name is this plan's person; the other's row would have no entity.
             persons += other.persons.filter { p in !persons.contains { $0.id == p.id } && remap[p.entityID] == nil }
             links += other.links.map { var l = $0; l.entityID = remap[l.entityID] ?? l.entityID; return l }
             spans += other.spans.map { var s = $0; s.entityID = remap[s.entityID] ?? s.entityID; return s }
             tags += other.tags.map { EntityTag(entityID: remap[$0.entityID] ?? $0.entityID, text: $0.text) }
+            aliases += other.aliases.map { alias in
+                Alias(personID: remap[EntityID(rawValue: alias.personID.rawValue)].map { PersonID(rawValue: $0.rawValue) } ?? alias.personID, text: alias.text)
+            }
             return remap
         }
     }
@@ -221,8 +255,10 @@ public struct EntityRepository: Sendable {
         for entity in write.entities where try !Entity.exists(db, key: entity.id.rawValue) { try entity.insert(db) }
         for person in write.persons where try !Person.exists(db, key: person.id.rawValue) {
             try person.insert(db)
-            try PeopleRepository.insertAlias(person.displayName, person.id, db)
+            // A contact's name is never saved as an alias: nothing from a contact goes to the model.
+            if person.nameOrigin != .contact { try PeopleRepository.insertAlias(person.displayName, person.id, db) }
         }
+        for alias in write.aliases { try PeopleRepository.insertAlias(alias.text, alias.personID, db) }
         for link in write.links { try link.insertKeepingStrongerOrigin(db) }
         for span in write.spans { try span.insertIgnoringDuplicate(db) }
         for tag in write.tags { try DomainTagRepository.tag(.entity, tag.entityID.rawValue, tag.text, in: db) }

@@ -129,10 +129,8 @@ public struct CandidateActions: Sendable {
                                 startMs: words[out.segmentSpan.startWord].startMs, endMs: words[out.segmentSpan.endWord].endMs, order: 0)]
         spans += try continuationSpans(of: out, for: memory.id)
 
-        // The card's edges and every continuation's, as one telling (M5).
         let continuations = try store.candidates.continuations(of: candidate.id)
-        var edges = try edges(of: out, for: memory.id, segment: candidate.segmentID, card: candidate.id)
-        for row in continuations { if let o = CandidatePayload.memory(row) { edges.merge(try self.edges(of: o, for: memory.id, segment: row.segmentID, card: candidate.id)) } }
+        let edges = try tellingEdges(of: out, card: candidate, continuations: continuations, for: memory.id)
         // The memory, its continuation cards' status and its story line land together (M5).
         let storyRef = joinStory ? out.storyRef.flatMap { $0.isEmpty ? nil : StoryID(rawValue: $0) } : nil
         try store.memories.insert(memory, spans: spans, people: edges.people, places: edges.places, links: edges.links, entities: edges.entityWrite, anchors: edges.anchors,
@@ -162,6 +160,10 @@ public struct CandidateActions: Sendable {
         var links: [MomentEntity] = []
         /// New entities and their tags, written in the memory's own transaction (M7).
         var entityWrite = EntityRepository.Write()
+        /// The people and detail entities that only a handle the recording linked before reached (D29). Same story
+        /// leaves the origin of a link the target already has as it is (`keepingTargetOrigins`).
+        var carriedPeople: Set<PersonID> = []
+        var carriedDetails: Set<EntityID> = []
 
         /// The union with another segment's edges, deduplicated as one segment's are.
         mutating func merge(_ other: Edges) {
@@ -169,8 +171,9 @@ public struct CandidateActions: Sendable {
             let remap = entityWrite.merge(other.entityWrite)
             func mapped(_ id: PersonID) -> PersonID { remap[EntityID(rawValue: id.rawValue)].map { PersonID(rawValue: $0.rawValue) } ?? id }
             for var person in other.people {
+                let carried = other.carriedPeople.contains(person.personID)
                 person.personID = mapped(person.personID)
-                add(person)
+                add(person, carried: carried)
             }
             for name in other.unknown where !unknown.contains(where: { CandidateActions.same($0, name) }) { unknown.append(name) }
             carriedPersonCards += other.carriedPersonCards.filter { !carriedPersonCards.contains($0) }
@@ -181,22 +184,28 @@ public struct CandidateActions: Sendable {
             }
             anchors += other.anchors.filter { a in !anchors.contains { $0.phrase == a.phrase && $0.relation == a.relation } }
             for var link in other.links {
+                let carried = link.relation == .detail && other.carriedDetails.contains(link.entityID)
                 link.entityID = remap[link.entityID] ?? link.entityID
                 if let i = links.firstIndex(where: { $0.entityID == link.entityID && $0.relation == link.relation }) {
                     links[i].origin = LinkOrigin.stronger(links[i].origin, link.origin)
+                    if !carried { carriedDetails.remove(link.entityID) }
                 } else {
                     links.append(link)
+                    if carried { carriedDetails.insert(link.entityID) }
                 }
             }
         }
 
         /// A memory has one link per person: a second ref that reaches the same person keeps the
-        /// first ref's words and the stronger of the two origins.
-        mutating func add(_ person: MemoryPerson) {
+        /// first ref's words and handle, and the stronger of the two origins. A person stays carried
+        /// only while every ref that reached them was a carried handle.
+        mutating func add(_ person: MemoryPerson, carried: Bool = false) {
             if let i = people.firstIndex(where: { $0.personID == person.personID }) {
                 people[i].origin = LinkOrigin.stronger(people[i].origin, person.origin)
+                if !carried { carriedPeople.remove(person.personID) }
             } else {
                 people.append(person)
+                if carried { carriedPeople.insert(person.personID) }
             }
         }
     }
@@ -215,25 +224,50 @@ public struct CandidateActions: Sendable {
         return spans
     }
 
+    /// The edges of a card and of each of its continuation rows, as one telling (M5). Shared by Keep, Same story and
+    /// the preview. One `HandlePlan` runs through every row, so a handle is decided once (D8).
+    func tellingEdges(of out: MemoryOut, card: Candidate, continuations: [Candidate], for memory: MemoryID) throws -> Edges {
+        var handles = HandlePlan()
+        handles.telling = ([out] + continuations.compactMap(CandidatePayload.memory)).flatMap(\.handlePeople)
+        var edges = try edges(of: out, for: memory, segment: card.segmentID, card: card.id, handles: &handles)
+        for row in continuations {
+            if let o = CandidatePayload.memory(row) { edges.merge(try self.edges(of: o, for: memory, segment: row.segmentID, card: card.id, handles: &handles)) }
+        }
+        return edges
+    }
+
     /// `card` is the card the owner sees: its stored answers apply to every segment it carries.
-    func edges(of out: MemoryOut, for memory: MemoryID, segment: SegmentID? = nil, card: CandidateID? = nil) throws -> Edges {
+    /// A card links each said name in `people_refs` that no handle covers (an older card: all of them), then each
+    /// handle (v8). A `v6` card that a `v8` row continued has both (M2).
+    func edges(of out: MemoryOut, for memory: MemoryID, segment: SegmentID? = nil, card: CandidateID? = nil,
+               handles: inout HandlePlan) throws -> Edges {
         let currentSegment = segment
         var e = Edges()
-        let inputs = try guessInputs(card: card, segment: segment)
+        let inputs = try guessInputs(card: card, segment: segment, readingHandles: !out.handlePeople.isEmpty || Self.mayFollowAHandle(out))
         // What each people ref became (nil: "not a person"), so a fact about that name follows it.
         var refLinks: [(ref: String, link: GuessedLink?)] = []
+        func addGroup(_ ref: String) { if !e.unknown.contains(where: { Self.same($0, ref) }) { e.unknown.append(ref) } }
         // A card stored before the owner filter can still name the owner. The speaker is not
         // someone to ask about, so the name is left out here too (audit F10).
-        for ref in out.peopleRefs where !inputs.owner.isOwner(ref) {
+        for ref in Self.saidNamesNoHandleCovers(out) where !inputs.owner.isOwner(ref) {
             // A phrase for several people is never one person: it waits as a mention (unchanged).
-            if GroupPhrase.isGroup(ref) {
-                if !e.unknown.contains(where: { Self.same($0, ref) }) { e.unknown.append(ref) }
-                continue
-            }
+            if GroupPhrase.isGroup(ref) { addGroup(ref); continue }
             let guessed = guessedLink(for: inputs.saidName(ref), inputs, plan: &e.entityWrite)
             refLinks.append((ref, guessed))
             guard let link = guessed else { continue }
             e.add(MemoryPerson(memoryID: memory, personID: link.person, roleText: ref, origin: link.origin))
+            e.roleAliases += link.aliases.map { (link.person, $0) }
+        }
+        // The relation phrase of a handle is its own (`handlePeople`), not a person card's.
+        for person in out.handlePeople where !inputs.owner.isOwner(person.saidName, relation: person.relationText) {
+            if GroupPhrase.isGroup(person.saidName) { addGroup(person.saidName); continue }
+            let decided = handles.entry(person.handle) != nil
+            let guessed = handleLink(for: person, inputs, handles: &handles, plan: &e.entityWrite)
+            refLinks.append((person.saidName, guessed))
+            // A handle decided on an earlier row of this telling is linked there already (D8).
+            guard !decided, let link = guessed else { continue }
+            e.add(MemoryPerson(memoryID: memory, personID: link.person, roleText: person.saidName, origin: link.origin, handle: person.handle),
+                  carried: link.carried)
             e.roleAliases += link.aliases.map { (link.person, $0) }
         }
         // Extraction before Task 3 left a carried name as a pending person card under its memory.
@@ -257,8 +291,9 @@ public struct CandidateActions: Sendable {
         }
         // A fact, feeling or goal is a detail of what it is about; a moment never is (M7).
         if let kind = out.kind, !kind.isMoment, let about = try aboutEntity(out.aboutRef, segment: currentSegment, inputs: inputs,
-                                                                               refLinks: refLinks, plan: &e.entityWrite) {
+                                                                               refLinks: refLinks, handles: handles, plan: &e.entityWrite) {
             e.links.append(MomentEntity(memoryID: memory, entityID: about.id, relation: .detail, origin: about.origin))
+            if about.carried { e.carriedDetails.insert(about.id) }
         }
         e.anchors = out.anchors.map {
             Anchor(id: .init(), memoryID: memory, phrase: $0.phrase, relation: $0.relation, targetKind: .none, targetID: nil,
@@ -291,18 +326,23 @@ public struct CandidateActions: Sendable {
     /// in the same segment becomes its entity. Nil when it names nothing the app can find. The
     /// origin is the person link's, for a person (`assumed` for a person id no mention reached);
     /// nil for the owner and anything else.
-    /// `refLinks` is what each of the card's people refs became.
+    /// `refLinks` is what each of the card's people refs became; `handles`, what each handle of the telling became.
     private func aboutEntity(_ ref: String?, segment currentSegment: SegmentID?, inputs: GuessInputs,
-                             refLinks: [(ref: String, link: GuessedLink?)],
-                             plan: inout EntityRepository.Write) throws -> (id: EntityID, origin: LinkOrigin?)? {
+                             refLinks: [(ref: String, link: GuessedLink?)], handles: HandlePlan,
+                             plan: inout EntityRepository.Write) throws -> (id: EntityID, origin: LinkOrigin?, carried: Bool)? {
+        func detail(_ link: GuessedLink) -> (id: EntityID, origin: LinkOrigin?, carried: Bool) {
+            (EntityID(rawValue: link.person.rawValue), link.origin, link.carried)
+        }
         guard let ref = ref?.trimmingCharacters(in: .whitespacesAndNewlines), !ref.isEmpty else { return nil }
-        if ref == "self" { return try store.profile.owner().map { ($0.entityID, nil) } }
+        if ref == "self" { return try store.profile.owner().map { ($0.entityID, nil, false) } }
+        // A handle (v8): the detail follows that handle's link, so the mention and the detail reach one person.
+        if let link = handleLink(ref, handles: handles, inputs: inputs) { return link.map(detail) }
         if let known = try store.entities.entity(id: EntityID(rawValue: ref)) {
-            guard known.type == .person, try store.profile.owner()?.entityID != known.id else { return (known.id, nil) }
+            guard known.type == .person, try store.profile.owner()?.entityID != known.id else { return (known.id, nil, false) }
             // A person id the model picked is still a guess (spec step 2, R38): the origin of the
             // card's mention that reached the same person, else `assumed`.
             let reached = refLinks.compactMap(\.link).first { $0.person.rawValue == known.id.rawValue }
-            return (known.id, reached?.origin ?? .assumed)
+            return (known.id, reached?.origin ?? .assumed, false)
         }
         // About a person named in this segment: the same guess as the name in `people_refs`, so
         // the detail and the mention reach one person with one origin. A group phrase waits for
@@ -311,20 +351,52 @@ public struct CandidateActions: Sendable {
            let named = try store.candidates.candidates(for: segment).first(where: { $0.kind == .person && CandidatePayload.mention($0)?.ref == ref }),
            let mention = CandidatePayload.mention(named) {
             guard !GroupPhrase.isGroup(mention.text), !inputs.owner.isOwner(mention.text, relation: mention.relationText) else { return nil }
+            // A person mention carries its handle (v8): the detail follows that handle, not the said name.
+            if let handle = mention.handle, let link = handleLink(handle, handles: handles, inputs: inputs) {
+                return link.map(detail)
+            }
             // The card names the person too ("my roommate, Robin"): the detail follows that link, so a
             // stored choice keyed on the whole ref reaches the mention and the detail alike.
             let key = SaidName.key(mention.text)
-            if let carried = refLinks.first(where: { SaidName.key($0.ref) == key || SaidName(ref: $0.ref).name.map(SaidName.key) == key }) {
-                return carried.link.map { (EntityID(rawValue: $0.person.rawValue), $0.origin) }
+            if let named = refLinks.first(where: { SaidName.key($0.ref) == key || SaidName(ref: $0.ref).name.map(SaidName.key) == key }) {
+                return named.link.map(detail)
             }
             let said = SaidName(ref: mention.text, mentionRelation: mention.relationText)
-            return guessedLink(for: said, inputs, plan: &plan).map { (EntityID(rawValue: $0.person.rawValue), $0.origin) }
+            return guessedLink(for: said, inputs, plan: &plan).map(detail)
         }
         guard let segment = currentSegment,
               let row = try store.candidates.candidates(for: segment).first(where: { ($0.kind == .entity || $0.kind == .place) && CandidatePayload.mention($0)?.ref == ref }),
               let mention = CandidatePayload.mention(row), mention.kind != .person,
               !(mention.kind == .place && GenericPhrase.isGeneric(mention.text)) else { return nil }
-        return (try proposeEntity(from: mention, candidate: row, plan: &plan).id, nil)
+        return (try proposeEntity(from: mention, candidate: row, plan: &plan).id, nil, false)
+    }
+
+    /// The card's `people_refs` that no `handlePeople` entry stands for, in order. A `v8` card fills `people_refs`
+    /// with its handles' said names, so none is left; an older card has no handles, so all are. A `v6` card that a
+    /// `v8` continuation row grew keeps its own names here, beside the handles the row gave it (D8, M2).
+    static func saidNamesNoHandleCovers(_ out: MemoryOut) -> [String] {
+        var covering = out.handlePeople.map(\.saidName)
+        return out.peopleRefs.filter { ref in
+            guard let i = covering.firstIndex(of: ref) else { return true }
+            covering.remove(at: i)
+            return false
+        }
+    }
+
+    /// A fact, feeling or goal whose `about_ref` may be a handle of the recording's other segments, said in an earlier
+    /// segment ("She was always late"). The card may name no people of its own, so the recording's handle
+    /// links are read for it too (D17). An `about_ref` that is no handle finds no handle link and reads on as before.
+    static func mayFollowAHandle(_ out: MemoryOut) -> Bool {
+        guard let kind = out.kind, !kind.isMoment, let about = out.aboutRef?.trimmingCharacters(in: .whitespacesAndNewlines) else { return false }
+        return !about.isEmpty && about != "self"
+    }
+
+    /// What a handle became on this Keep, else in a kept memory of this recording. Nil when `ref` is no handle;
+    /// `.some(nil)` when the owner said that handle is not a person. A detail that follows a handle of the recording
+    /// through `about_ref` alone is the model's opinion, so `assumed` (D29).
+    private func handleLink(_ ref: String, handles: HandlePlan, inputs: GuessInputs) -> GuessedLink?? {
+        if let entry = handles.entry(ref) { return .some(entry.link) }
+        return inputs.handleLinks.first { $0.handle == ref }.map { GuessedLink(person: $0.person, origin: .assumed, aliases: [], carried: true) }
     }
 
     /// An entity from a mention, planned: an idea's title is the person's words or the dated default.

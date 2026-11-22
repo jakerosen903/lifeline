@@ -98,7 +98,13 @@ final class PeopleGuessUITests: XCTestCase {
         openRobinsPage(app)
         let older = momentRow(app, "Robin's first car")
         XCTAssertTrue(app.reveal(older))
+        // The contact row makes the page longer: after the reveal of the last moment, the first can sit above the
+        // fold, and a tap while the list still glides only stops it. Swipe back until it is on screen and still.
+        for _ in 0..<4 where !app.waitHittable(older, timeout: 1) { app.swipeDown() }
+        XCTAssertTrue(app.waitHittable(older, timeout: 5), "the row is on screen and still")
         older.tap()
+        // Under load the first tap after the scroll is sometimes swallowed (the page stays up): tap once more.
+        if !app.buttons["memory.range"].waitForExistence(timeout: 3), older.exists { older.tap() }
         let robin = chip(app, plain("Robin Okafor"))
         XCTAssertTrue(robin.waitForExistence(timeout: 5), "the memory page shows Robin Okafor")
         XCTAssertEqual(robin.identifier, "person.chip", "a link older than the guess has no origin, so no mark")
@@ -178,6 +184,43 @@ final class PeopleGuessUITests: XCTestCase {
         XCTAssertTrue(waitGone(app.any("who.sheet"), timeout: 5))
     }
 
+    // MARK: - The story's photo follows the name
+
+    /// The first photo story's landing, with "The ferry" kept from it: Sam, assumed, said "Sammy". Keep put the photo on
+    /// Sam's page. "Someone new" moves the name and the photo with it; Undo puts both back. The notice's Undo lasts six
+    /// seconds, so the first move is undone at once and the card is read after; the second move is read after. A card
+    /// that misses the refresh after a move or after its Undo shows the wrong chips.
+    @MainActor
+    func testMovingANameMovesThePhoto() {
+        let app = XCUIApplication.launchWithPhotoStory(opening: "first", ["-uiTesting-photoStoryAssumedName"])
+        let page = { (title: String) in
+            app.buttons.matching(identifier: "photoCard.page").matching(NSPredicate(format: "label == %@", title)).firstMatch
+        }
+        XCTAssertTrue(page("Sam").waitForExistence(timeout: 10), "the card lists Sam")
+        XCTAssertEqual(page("Sam").value as? String, "added by this story", "Keep followed the guess")
+        let sam = chip(app, "Sam, assumed, you said Sammy. Change who this is.")
+
+        openSheet(app, from: sam)
+        app.buttons["who.new"].tap()
+        tapDone(app)
+        XCTAssertTrue(notice(app).waitForExistence(timeout: 5))
+        XCTAssertEqual(notice(app).label, "Changed to Sammy.")
+        let undo = app.buttons["notice.undo"]
+        XCTAssertTrue(app.waitHittable(undo, timeout: 3), "Undo is on screen")
+        undo.tap()
+        XCTAssertTrue(waitGone(notice(app), timeout: 3), "the notice leaves with Undo")
+        XCTAssertTrue(waitGone(page("Sammy"), timeout: 5), "the new person is gone from the card")
+        XCTAssertTrue(page("Sam").waitForExistence(timeout: 5))
+        XCTAssertEqual(page("Sam").value as? String, "added by this story", "Undo put the photo back on Sam's page")
+
+        openSheet(app, from: sam)
+        app.buttons["who.new"].tap()
+        tapDone(app)
+        XCTAssertTrue(page("Sammy").waitForExistence(timeout: 5), "the card lists the new person")
+        XCTAssertEqual(page("Sammy").value as? String, "added by this story", "the photo moved with the name")
+        XCTAssertTrue(!page("Sam").exists || page("Sam").value as? String == "not added", "the photo left Sam's page")
+    }
+
     // MARK: - A person's page
 
     @MainActor
@@ -210,9 +253,13 @@ final class PeopleGuessUITests: XCTestCase {
         tapDone(app)
         XCTAssertTrue(waitCount(app.buttons.matching(identifier: "entity.moment"), 3), "the moved moment leaves Robin's page")
         XCTAssertEqual(app.descendants(matching: .any).matching(identifier: "entity.moment.assumed").count, 1, "the other guess stays")
-        XCTAssertEqual(app.staticTexts["entity.title"].label, "Robin Okafor")
         XCTAssertTrue(notice(app).waitForExistence(timeout: 5))
         XCTAssertEqual(notice(app).label, "Changed to Robin.")
+        // The page is a lazy List and the contact row (PC-b) makes it longer: the title is out of the tree until it
+        // scrolls back into view.
+        let title = app.staticTexts["entity.title"]
+        for _ in 0..<6 where !title.exists { app.swipeDown() }
+        XCTAssertEqual(title.label, "Robin Okafor", "the page stays on Robin Okafor")
     }
 
     /// R34: the move empties Priya, whom the guess made, so it removes her. Her page stays up with the notice and
@@ -252,6 +299,17 @@ final class PeopleGuessUITests: XCTestCase {
         app.openEntityPage("Priya")
         let someoneElse = app.buttons["entity.moment.someoneElse"]
         XCTAssertTrue(app.reveal(someoneElse))
+        // The held page is disabled, so it does not scroll, and the lazy List drops the title once it is off screen.
+        // The merge row (PC-c) makes the page longer: scroll back to the top, then up in short drags that stop dead (no fling), so the title
+        // is still in the tree when the move holds the page.
+        let title = app.staticTexts["entity.title"]
+        for _ in 0..<6 where !title.exists { app.swipeDown() }
+        for _ in 0..<6 where !app.waitHittable(someoneElse, timeout: 1) {
+            app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.6))
+                .press(forDuration: 0.05, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)),
+                       withVelocity: .slow, thenHoldForDuration: 0.3)
+        }
+        XCTAssertTrue(title.exists, "the title is still in the tree")
         openSheet(app, from: someoneElse)
         let options = app.buttons.matching(identifier: "who.option")
         XCTAssertEqual(options.allElementsBoundByIndex.map(\.label), ["Priya. In 1 of your stories \u{00B7} my guess"],
@@ -338,6 +396,47 @@ final class PeopleGuessUITests: XCTestCase {
         tapDone(app)
         XCTAssertTrue(chip(app, plain("Dara"), in: card).waitForExistence(timeout: 5), "Dara is a person again")
         XCTAssertFalse(card.buttons["person.chip.notPerson"].exists)
+    }
+
+    /// PC-d: one line names "Robyn from work" and "my cousin Robyn". The extractor gives them two handles, so the card
+    /// shows two chips "Robyn"; the sheet of one chip changes that person only; Keep makes two people named Robyn.
+    @MainActor
+    func testTwoPeopleWithOneNameGetTwoChips() {
+        let app = XCUIApplication()
+        app.launchArguments = ["-uiTesting", "-uiTesting-twoRobyns"]
+        app.launch()
+        app.skipFirstOpen()
+        app.startSession()
+        let card = app.any("card.memory")
+        XCTAssertTrue(card.waitForExistence(timeout: 20), "the memory card arrives")
+        let robyns = card.buttons.matching(NSPredicate(format: "label == %@", plain("Robyn")))
+        XCTAssertTrue(waitCount(robyns, 2), "one chip for each Robyn")
+
+        openSheet(app, from: robyns.element(boundBy: 0))
+        XCTAssertTrue(app.staticTexts["Who is \u{201C}Robyn\u{201D} here?"].exists)
+        let notAPerson = app.buttons["who.notAPerson"]
+        XCTAssertTrue(revealInSheet(app, notAPerson))
+        notAPerson.tap()
+        tapDone(app)
+        let quiet = card.buttons["person.chip.notPerson"]
+        XCTAssertTrue(quiet.waitForExistence(timeout: 5), "the changed Robyn has a quiet chip")
+        XCTAssertTrue(waitCount(robyns, 1), "the other Robyn keeps her chip: the sheet changed one person only")
+        openSheet(app, from: quiet)
+        let someoneNew = app.buttons["who.new"]
+        XCTAssertTrue(revealInSheet(app, someoneNew))
+        someoneNew.tap()
+        tapDone(app)
+        XCTAssertTrue(waitCount(robyns, 2), "both Robyns are people again")
+
+        // The card carries both Robyns, so it has no follow-ups: Keep makes it leave, with no kept card
+        // (cards-follow-ups spec, rule 3). The People grid below shows what Keep wrote.
+        card.buttons["card.add"].firstMatch.tap()
+        XCTAssertTrue(waitGone(card, timeout: 5), "Keep takes the card away")
+        XCTAssertFalse(app.any("card.kept").exists, "a card with no follow-ups leaves no kept card")
+        app.finishSession()
+        app.openTab("People")
+        let tiles = app.buttons.matching(identifier: "entities.row").matching(NSPredicate(format: "label == %@", "Robyn"))
+        XCTAssertTrue(waitCount(tiles, 2, timeout: 10), "two people named Robyn: \(app.entityRowLabels())")
     }
 
     /// Regression (task 7): "Change…" keeps the memory and edits its people in its own sheet; the kept card it
