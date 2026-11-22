@@ -61,7 +61,7 @@ Three ways to give the archive more than one screen were compared. Four reviewer
 ### Shell
 
 - The root is a tab view with five tabs: Timeline, People, Places, Things, You. Each tab has a symbol and a label.
-- Search is the trailing search tab. It matches the titles of memories, people, places, things and ideas, and the text of memories. It does not use embeddings. It is its own build step. **(my call)**
+- Search is the trailing search tab. It matches the titles of memories, people, places, things and ideas, and the text of memories. It does not use embeddings. It is its own build step. **(my call)** Changed 2026-11-19: search is a Search button on every tab's top bar; see DECISIONS.
 - The record bar is the tab view's bottom accessory. It shows on every tab and on pushed pages.
   - On a tab it reads "Tell a story". On an entity page it reads "Tell a story about {title}". On You it reads "Tell a story about yourself".
   - A session started from a page stores that entity as its subject. The opening line is the entity's scene question from the curiosity list, or "Tell me about {title}." when there is none. The app does not link the session's memories to the subject; the extractor links only what the person says. **(my call; see Owner's calls)**

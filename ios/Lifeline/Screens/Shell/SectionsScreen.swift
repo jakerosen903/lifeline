@@ -1,7 +1,7 @@
 import LifelineKit
 import SwiftUI
 
-/// The app's root: five tabs, each with its own navigation stack, and the record bar under them.
+/// The app's root: five tabs, each with its own navigation stack and Search button, and the record bar under them.
 /// The one live session or landing covers every tab.
 struct SectionsScreen: View {
     let model: AppModel
@@ -13,7 +13,8 @@ struct SectionsScreen: View {
             TabView(selection: $tab) {
                 ForEach(AppTab.allCases, id: \.self) { tab in
                     Tab(tab.title, systemImage: tab.systemImage, value: tab) {
-                        NavigationStack { root(of: tab, deps: deps, timeline: timeline, home: home) }
+                        // Every root has a Search button: a sixth tab would fold You into "More" (ruling R4).
+                        NavigationStack { root(of: tab, deps: deps, timeline: timeline, home: home).searchButton(deps: deps) }
                             // The shell's notice, above the record bar on every tab. A page's own slot (You) stacks above it.
                             .safeAreaInset(edge: .bottom, spacing: 0) { ShellNoticeBar(notice: model.notice) }
                     }

@@ -50,6 +50,12 @@ extension XCUIApplication {
         return settled() && element.isHittable
     }
 
+    /// A label set as a page appears (the record bar's) can lag the page: waits until it reads `label`.
+    func waitForLabel(_ element: XCUIElement, _ label: String, timeout: TimeInterval = 5) -> Bool {
+        let match = XCTNSPredicateExpectation(predicate: NSPredicate(format: "label == %@", label), object: element)
+        return XCTWaiter().wait(for: [match], timeout: timeout) == .completed
+    }
+
     /// An alert focuses its text field and raises the keyboard by itself. A second tap on the field only opens
     /// the edit menu, so tap it only when the keyboard did not come up.
     func focusAlertField(_ field: XCUIElement) {
@@ -289,6 +295,100 @@ extension XCUIApplication {
         return (tiles + headings).filter { $0.exists && !$0.frame.isEmpty }.map { (label: $0.label, frame: $0.frame) }
     }
 
+    /// Launches with `-uiTesting-seedSearch`: the invented family, then Zoë, Lena's alias "Linny", "Dad's Volvo",
+    /// "São Paulo", and moments and a fact with words of their own (one hidden, one kept from AI). First open is done.
+    static func launchWithSearch(_ extra: [String] = []) -> XCUIApplication {
+        let app = XCUIApplication()
+        app.launchArguments += ["-uiTesting", "-uiTesting-seedSearch"] + extra
+        app.launch()
+        XCTAssertTrue(app.waitHittable(app.buttons["home.start"], timeout: 15), "the seeded app lands on the timeline")
+        return app
+    }
+
+    // MARK: - Search
+
+    /// Search, from the Search button in the open tab's top bar. Already on search, it stays there.
+    func openSearch() {
+        if searchFields.firstMatch.exists { return }
+        let button = buttons["shell.search"]
+        XCTAssertTrue(waitHittable(button, timeout: 10), "the Search button is on screen")
+        button.tap()
+    }
+
+    /// Search, then its field, then `text` typed into it.
+    func search(_ text: String) {
+        openSearch()
+        let field = searchFields.firstMatch
+        XCTAssertTrue(waitHittable(field, timeout: 10), "the search field is on screen")
+        field.tap()
+        field.typeText(text)
+    }
+
+    /// Empties the search field, keeping it active.
+    func clearSearch() {
+        let field = searchFields.firstMatch
+        XCTAssertTrue(waitHittable(field, timeout: 5), "the search field is on screen")
+        let typed = (field.value as? String) ?? ""
+        field.tap()
+        field.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: typed.count))
+    }
+
+    /// The keyboard's Search key: the keyboard goes and the query stays in the field.
+    func dismissSearchKeyboard() {
+        searchFields.firstMatch.typeText("\n")
+    }
+
+    /// The one control that closes search while its field is active (ruling R5): it leads back to the tab.
+    func leaveSearch() {
+        let close = navigationBars.buttons["Close"].firstMatch
+        XCTAssertTrue(waitHittable(close, timeout: 5), "the close control is on screen")
+        close.tap()
+    }
+
+    /// The search result whose label (its first line) is `label`.
+    func searchResult(_ label: String) -> XCUIElement {
+        buttons.matching(identifier: "search.result").matching(NSPredicate(format: "label == %@", label)).firstMatch
+    }
+
+    /// An entity page's "…" menu, then "Change the name": the field holds the title, so it is emptied before `title` is typed.
+    func renameEntity(to title: String) {
+        let more = buttons["entity.more"]
+        XCTAssertTrue(waitHittable(more, timeout: 10), "the page's menu is on screen")
+        more.tap()
+        let rename = buttons["entity.rename"]
+        XCTAssertTrue(waitHittable(rename, timeout: 5), "Change the name is in the menu")
+        rename.tap()
+        // An alert's field loses its identifier in the tree (as ChaptersUITests finds): it is the alert's only field.
+        let field = alerts.textFields.firstMatch
+        XCTAssertTrue(waitHittable(field, timeout: 5), "the name field is on screen")
+        field.tap()
+        let typed = (field.value as? String) ?? ""
+        field.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: typed.count) + title)
+        alerts.buttons["Save"].firstMatch.tap()
+    }
+
+    /// Timeline, the row whose label begins with `title`, its "…" menu, Delete, then the confirmation.
+    func deleteTimelineMemory(_ title: String) {
+        openTab("Timeline")
+        let row = buttons.matching(identifier: "timeline.memory").matching(NSPredicate(format: "label BEGINSWITH %@", title)).firstMatch
+        XCTAssertTrue(scrollIntoView(row), "\(title) is on the Timeline")
+        // A row under the record bar still counts as hittable, but a tap there misses it: keep its middle above the bar.
+        let bar = buttons["home.start"]
+        for _ in 0..<4 where bar.exists && row.frame.midY >= bar.frame.minY { swipeUp() }
+        let more = buttons.matching(identifier: "row.more").allElementsBoundByIndex
+            .first { $0.exists && abs($0.frame.midY - row.frame.midY) < row.frame.height / 2 }
+        guard let more else { return XCTFail("\(title) has its own menu: \(row.frame)") }
+        more.tap()
+        let delete = buttons["row.delete"]
+        XCTAssertTrue(waitHittable(delete, timeout: 5), "Delete is in the row's menu")
+        delete.tap()
+        // The iOS 26 dialog lists its button twice in the tree: take the first.
+        let confirm = buttons["row.confirmDelete"].firstMatch
+        XCTAssertTrue(confirm.waitForExistence(timeout: 5), "the delete dialog is up")
+        confirm.tap()
+        XCTAssertTrue(confirm.waitForNonExistence(timeout: 5), "the dialog goes")
+    }
+
     /// Launches with `-uiTesting-seedGuesses`: Robin Okafor guessed for "Robin" in two moments of the latest session,
     /// with two older moments of his own; Tomas (new) and Danielle (said) in a third; Priya, made by a guess, in one
     /// older moment. With `landing` the latest session's landing is open; otherwise the app is on the timeline.
@@ -387,6 +487,8 @@ extension XCUIApplication {
 
     /// Select a tab by its title. Tapping the tab the app is already on is harmless.
     func openTab(_ title: String) {
+        // An active search field's keyboard covers the tab bar: put it away first; the query stays.
+        if keyboards.count > 0, searchFields.firstMatch.exists { dismissSearchKeyboard() }
         let tab = tabBars.buttons[title]
         XCTAssertTrue(waitHittable(tab, timeout: 10), "the \(title) tab is on screen")
         tab.tap()

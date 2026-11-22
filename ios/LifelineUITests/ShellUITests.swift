@@ -25,12 +25,6 @@ final class ShellUITests: XCTestCase {
     }
 
     @MainActor
-    private func waitForLabel(_ element: XCUIElement, _ label: String) {
-        let match = XCTNSPredicateExpectation(predicate: NSPredicate(format: "label == %@", label), object: element)
-        XCTAssertEqual(XCTWaiter().wait(for: [match], timeout: 5), .completed, "label is “\(label)”, was “\(element.label)”")
-    }
-
-    @MainActor
     func testFiveLabeledTabs() {
         let app = launch()
         for title in ["Timeline", "People", "Places", "Things", "You"] {
@@ -51,7 +45,7 @@ final class ShellUITests: XCTestCase {
     func testTheBarNamesThePageAndTheSessionOpensAboutIt() {
         let app = launch(["-uiTesting-seed"])
         openMaya(app)
-        waitForLabel(app.buttons["home.start"], "Tell a story about Maya")
+        XCTAssertTrue(app.waitForLabel(app.buttons["home.start"], "Tell a story about Maya"), "the bar reads “Tell a story about Maya”, was “\(app.buttons["home.start"].label)”")
         let shot = XCTAttachment(screenshot: app.screenshot())
         shot.name = "task-5-person"
         shot.lifetime = .keepAlways
@@ -64,9 +58,9 @@ final class ShellUITests: XCTestCase {
     func testTheBarForgetsThePageWhenTheTabChanges() {
         let app = launch(["-uiTesting-seed"])
         openMaya(app)
-        waitForLabel(app.buttons["home.start"], "Tell a story about Maya")
+        XCTAssertTrue(app.waitForLabel(app.buttons["home.start"], "Tell a story about Maya"), "the bar reads “Tell a story about Maya”, was “\(app.buttons["home.start"].label)”")
         app.tabBars.buttons["Timeline"].tap()
-        waitForLabel(app.buttons["home.start"], "Tell a story")
+        XCTAssertTrue(app.waitForLabel(app.buttons["home.start"], "Tell a story"), "the bar reads “Tell a story”, was “\(app.buttons["home.start"].label)”")
     }
 
     @MainActor
@@ -87,7 +81,7 @@ final class ShellUITests: XCTestCase {
         XCTAssertTrue(app.any("timeline.error.settings").exists, "the bar still shows the error and the app stays up")
         app.tabBars.buttons["Things"].tap()
         XCTAssertTrue(app.waitHittable(app.buttons["home.start"], timeout: 5), "the bar shows its label again")
-        waitForLabel(app.buttons["home.start"], "Tell a story")
+        XCTAssertTrue(app.waitForLabel(app.buttons["home.start"], "Tell a story"), "the bar reads “Tell a story”, was “\(app.buttons["home.start"].label)”")
         XCTAssertFalse(app.any("timeline.error.settings").exists)
     }
 
@@ -96,7 +90,7 @@ final class ShellUITests: XCTestCase {
         // `-uiTesting-seedPerson`: no earlier session, so this is the first and its landing offers "Tell another".
         let app = launch(["-uiTesting-seedPerson"])
         openMaya(app)
-        waitForLabel(app.buttons["home.start"], "Tell a story about Maya")
+        XCTAssertTrue(app.waitForLabel(app.buttons["home.start"], "Tell a story about Maya"), "the bar reads “Tell a story about Maya”, was “\(app.buttons["home.start"].label)”")
         app.buttons["home.start"].tap()
         XCTAssertTrue(app.staticTexts["Tell me about Maya."].waitForExistence(timeout: 5))
         app.openReview()
@@ -147,15 +141,15 @@ final class ShellUITests: XCTestCase {
         // The owner's page is reached through the strip, which shows only with an owner moment: Jordan has two.
         let app = XCUIApplication.launchWithPeople()
         app.tabBars.buttons["You"].tap()
-        waitForLabel(app.buttons["home.start"], "Tell a story about yourself")
+        XCTAssertTrue(app.waitForLabel(app.buttons["home.start"], "Tell a story about yourself"), "the bar reads “Tell a story about yourself”, was “\(app.buttons["home.start"].label)”")
         app.buttons["entities.aboutYou"].tap()
         XCTAssertTrue(app.staticTexts["entity.title"].waitForExistence(timeout: 5))
-        waitForLabel(app.buttons["home.start"], "Tell a story about yourself")
+        XCTAssertTrue(app.waitForLabel(app.buttons["home.start"], "Tell a story about yourself"), "the bar reads “Tell a story about yourself”, was “\(app.buttons["home.start"].label)”")
         app.navigationBars.buttons.firstMatch.tap()
         XCTAssertTrue(app.buttons["entities.aboutYou"].waitForExistence(timeout: 5))
-        waitForLabel(app.buttons["home.start"], "Tell a story about yourself")
+        XCTAssertTrue(app.waitForLabel(app.buttons["home.start"], "Tell a story about yourself"), "the bar reads “Tell a story about yourself”, was “\(app.buttons["home.start"].label)”")
         app.tabBars.buttons["Places"].tap()
-        waitForLabel(app.buttons["home.start"], "Tell a story")
+        XCTAssertTrue(app.waitForLabel(app.buttons["home.start"], "Tell a story"), "the bar reads “Tell a story”, was “\(app.buttons["home.start"].label)”")
     }
 
     /// A profile with no owner page: You has nothing to be about.
@@ -168,7 +162,7 @@ final class ShellUITests: XCTestCase {
         app.tabBars.buttons["You"].tap()
         XCTAssertTrue(app.navigationBars["You"].waitForExistence(timeout: 5))
         XCTAssertFalse(app.buttons["entities.aboutYou"].exists, "no owner, no About you")
-        waitForLabel(app.buttons["home.start"], "Tell a story")
+        XCTAssertTrue(app.waitForLabel(app.buttons["home.start"], "Tell a story"), "the bar reads “Tell a story”, was “\(app.buttons["home.start"].label)”")
     }
 
     @MainActor

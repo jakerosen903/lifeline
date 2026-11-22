@@ -37,6 +37,23 @@ public struct PeopleRepository: Sendable {
         try db.writer.read { try Person.fetchOne($0, sql: Person.selectSQL + "where person.id = ?", arguments: [id.rawValue]) }
     }
 
+    /// Every alias of every person who is not the owner and whose entity is not hidden, by the person's entity, in one statement.
+    public func allAliases() throws -> [EntityID: [String]] {
+        try db.writer.read { db in
+            let rows = try Row.fetchAll(db, sql: """
+                select person.entity_id as entity_id, alias.text as text
+                from alias
+                join person on person.id = alias.person_id
+                join entity on entity.id = person.entity_id
+                where person.is_owner = 0 and entity.hidden_from_timeline = 0
+                order by alias.text
+                """)
+            var out: [EntityID: [String]] = [:]
+            for row in rows { out[EntityID(rawValue: row["entity_id"]), default: []].append(row["text"]) }
+            return out
+        }
+    }
+
     /// The person linked to this contact, if any. The unique index allows at most one.
     public func person(holding identifier: String) throws -> Person? {
         try db.writer.read { try Person.fetchOne($0, sql: Person.selectSQL + "where person.contact_identifier = ?", arguments: [identifier]) }
